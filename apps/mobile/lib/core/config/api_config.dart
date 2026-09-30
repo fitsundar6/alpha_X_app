@@ -175,15 +175,13 @@ class ApiConfig {
       }
 
       // 7. Mobile platforms (iOS and Android)
-      // Production builds (Play Store & App Store release) MUST use HTTPS production API
+      // Defaults to the deployed cloud production API (https://alpha-x-app.vercel.app/api/v1)
+      // so testing on real devices works immediately without local server requirements.
       if (Platform.isIOS || Platform.isAndroid) {
-        if (kReleaseMode) {
-          return productionUrl;
-        }
-        return physicalLanUrl;
+        return productionUrl;
       }
     } catch (_) {}
 
-    return kReleaseMode ? productionUrl : physicalLanUrl;
+    return productionUrl;
   }
 }

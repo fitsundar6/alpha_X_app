@@ -97,7 +97,7 @@ app.use((req: Request, _res: Response, next) => {
   next();
 });
 
-// Base Health Check Endpoints (Available on /health, /api/health, and /api/v1/health)
+// Base Health Check Endpoints (Available on /, /api, /health, /api/health, and /api/v1/health)
 const healthHandler = (_req: Request, res: Response) => {
   sendSuccess(res, {
     status: 'healthy',
@@ -109,6 +109,45 @@ const healthHandler = (_req: Request, res: Response) => {
     port: env.PORT,
   });
 };
+
+app.get('/', (_req: Request, res: Response) => {
+  const accept = _req.headers.accept || '';
+  if (accept.includes('text/html')) {
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Alpha X Gym API — Online</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; }
+            .card { background: rgba(255,255,255,0.04); padding: 48px 36px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); max-width: 480px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+            h1 { color: #f59e0b; margin: 0 0 12px; font-size: 26px; letter-spacing: 1px; }
+            p { color: #9ca3af; font-size: 15px; line-height: 1.6; margin: 12px 0 24px; }
+            .badge { display: inline-flex; align-items: center; gap: 8px; background: #10b981; color: #042f1a; font-weight: 700; padding: 8px 18px; border-radius: 30px; font-size: 13px; letter-spacing: 0.5px; }
+            .badge span { display: inline-block; width: 8px; height: 8px; background: #042f1a; border-radius: 50%; }
+            .endpoint { margin-top: 24px; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 10px; font-family: monospace; font-size: 13px; color: #38bdf8; word-break: break-all; }
+            a { color: #38bdf8; text-decoration: none; font-size: 13px; }
+            a:hover { text-decoration: underline; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>ALPHA X GYM API</h1>
+            <p>Production serverless REST API & managed PostgreSQL database are running healthy.</p>
+            <div class="badge"><span></span> SYSTEM ONLINE</div>
+            <div class="endpoint">Base URL: /api/v1</div>
+            <p style="margin-top: 20px; margin-bottom: 0;"><a href="/api/v1/health">View JSON Health Check →</a></p>
+          </div>
+        </body>
+      </html>
+    `);
+    return;
+  }
+  healthHandler(_req, res);
+});
+app.get('/api', healthHandler);
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/v1/health', healthHandler);
