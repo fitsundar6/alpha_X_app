@@ -97,10 +97,12 @@ export class FoodService {
     const skip = (page - 1) * limit;
 
     try {
+      const userId = params.userId;
       const whereClause: any = {
         OR: [
           { isPublic: true, status: 'APPROVED' },
           { isPublic: true },
+          ...(userId ? [{ createdBy: userId }] : []),
         ],
       };
 
@@ -181,8 +183,18 @@ export class FoodService {
       // In-memory fallback
       let list = Array.from(this.fallbackMemoryFoods.values());
 
+      if (params.userId) {
+        list = list.filter((f) => f.isPublic !== false || f.createdBy === params.userId);
+      } else {
+        list = list.filter((f) => f.isPublic !== false);
+      }
+
       if (category && category.toLowerCase() !== 'all') {
-        list = list.filter((f) => f.category.toLowerCase() === category.toLowerCase());
+        if (category.toLowerCase() === 'custom' || category.toLowerCase() === 'user added') {
+          list = list.filter((f) => f.isCustom);
+        } else {
+          list = list.filter((f) => f.category.toLowerCase() === category.toLowerCase());
+        }
       }
       if (query && query.trim().length > 0) {
         const cleanQ = query.trim().toLowerCase();

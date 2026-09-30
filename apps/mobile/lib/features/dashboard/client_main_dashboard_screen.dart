@@ -15,6 +15,8 @@ import 'package:alpha_x_gym/features/macro_planner/presentation/screens/macro_pl
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_log_entry.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/daily_macro_summary.dart';
 import 'package:alpha_x_gym/features/exercise/presentation/client/client_exercise_library_tab.dart';
+import 'package:alpha_x_gym/features/macro_planner/presentation/widgets/add_food_bottom_sheet.dart';
+import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart';
 
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -220,6 +222,15 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           _drawerItem(3, 'Nutrition & Macros', Icons.pie_chart_outline),
           _drawerItem(4, 'Steps & Activity', Icons.directions_walk_outlined),
           const Divider(color: AppColors.border),
+          _drawerSubPageItem('Food Library', Icons.restaurant_menu_outlined, () {
+            Navigator.of(context).pop();
+            AddFoodBottomSheet.show(
+              context,
+              repository: widget.macroRepository,
+              mealType: MealType.snack,
+              dateString: widget.macroRepository.getTodayDateString(),
+            );
+          }),
           _drawerSubPageItem('Attendance Pass', Icons.qr_code_scanner_outlined, () {
             Navigator.of(context).pop();
             _openAttendanceSubPage(context);

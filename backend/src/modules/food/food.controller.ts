@@ -17,12 +17,15 @@ export class FoodController {
         page,
         limit,
       } = req.query;
+      const user = (req as any).user || {};
+      const userId = user.clientId || user.id || (req.query.userId as string | undefined);
 
       const result = await foodService.searchFoods({
         query: query as string | undefined,
         category: category as string | undefined,
         source: source as string | undefined,
         isCustom: isCustom !== undefined ? isCustom === 'true' : undefined,
+        userId: userId || undefined,
         page: page ? parseInt(page as string, 10) : 1,
         limit: limit ? parseInt(limit as string, 10) : 100,
       });
@@ -81,6 +84,10 @@ export class FoodController {
       }
 
       const user = (req as any).user || {};
+      const clientIdHeader = (req.headers['x-client-id'] || req.headers['x-user-id'] || req.body.createdBy) as string | undefined;
+      if (clientIdHeader && !user.clientId) {
+        user.clientId = clientIdHeader;
+      }
 
       const result = await foodService.createCustomFood(
         {

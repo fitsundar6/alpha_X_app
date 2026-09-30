@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
+import 'package:alpha_x_gym/core/network/network_exceptions.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 
-/// Modal dialog allowing athletes and administrators on physical devices to
-/// inspect, test, and dynamically configure the backend server API URL.
+/// Modal dialog allowing athletes and administrators on physical devices (iPhone & Android)
+/// to inspect, test, and dynamically configure the backend server API URL.
 class ServerConfigDialog extends StatefulWidget {
   const ServerConfigDialog({super.key});
 
@@ -49,37 +50,50 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
       return;
     }
 
+    final normalized = ApiConfig.normalizeUrl(rawUrl);
     setState(() {
       _isTesting = true;
       _testResult = null;
+      _urlController.text = normalized;
     });
 
     final stopwatch = Stopwatch()..start();
     try {
-      final base = rawUrl.endsWith('/') ? rawUrl.substring(0, rawUrl.length - 1) : rawUrl;
-      final healthUri = Uri.parse('$base/health');
-
-      final res = await http.get(healthUri).timeout(const Duration(seconds: 5));
+      // 1. Try health check on normalized API path: /api/v1/health
+      Uri healthUri = Uri.parse('$normalized/health');
+      http.Response res;
+      try {
+        res = await http.get(healthUri).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // 2. Fallback to origin root /health (e.g. http://192.168.1.5:5000/health)
+        final uri = Uri.parse(normalized);
+        final portPart = uri.hasPort ? ':${uri.port}' : '';
+        final baseOrigin = '${uri.scheme}://${uri.host}$portPart';
+        healthUri = Uri.parse('$baseOrigin/health');
+        res = await http.get(healthUri).timeout(const Duration(seconds: 5));
+      }
       stopwatch.stop();
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
         final service = decoded['data']?['service'] ?? 'Alpha X Gym Server';
+        final env = decoded['data']?['environment'] ?? '';
         setState(() {
           _testSuccess = true;
-          _testResult = 'Connected to $service (${stopwatch.elapsedMilliseconds}ms)';
+          _testResult = 'Connected to $service [$env] (${stopwatch.elapsedMilliseconds}ms)';
         });
       } else {
         setState(() {
           _testSuccess = false;
-          _testResult = 'Server responded with HTTP ${res.statusCode}';
+          _testResult = 'Server responded with HTTP ${res.statusCode} at $healthUri';
         });
       }
     } catch (e) {
       stopwatch.stop();
+      final err = NetworkExceptions.handle(e, requestUrl: normalized);
       setState(() {
         _testSuccess = false;
-        _testResult = 'Cannot connect: ${e.toString().replaceAll('Exception: ', '')}';
+        _testResult = err.userMessage;
       });
     } finally {
       setState(() {
@@ -90,13 +104,16 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
 
   Future<void> _saveAndApply() async {
     final cleanUrl = _urlController.text.trim();
-    await AuthService().updateServerUrl(cleanUrl);
+    final normalized = cleanUrl.isNotEmpty ? ApiConfig.normalizeUrl(cleanUrl) : '';
+    await AuthService().updateServerUrl(normalized);
     if (mounted) {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            cleanUrl.isNotEmpty ? 'Server configured: $cleanUrl' : 'Server reset to default',
+            normalized.isNotEmpty
+                ? 'Server configured: $normalized'
+                : 'Server reset to default (${ApiConfig.baseUrl})',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           backgroundColor: AppColors.surfaceElevated,
@@ -147,7 +164,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                 ),
                 SizedBox(height: 2),
                 Text(
-                  'Physical Android Device & API Routing',
+                  'iPhone, Android & Multi-Target Routing',
                   style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
                 ),
               ],
@@ -169,7 +186,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               controller: _urlController,
               style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
               decoration: InputDecoration(
-                hintText: 'http://192.168.1.5:5000/api/v1',
+                hintText: ApiConfig.physicalLanUrl,
                 hintStyle: TextStyle(color: AppColors.textTertiary.withOpacity(0.6)),
                 filled: true,
                 fillColor: AppColors.background,
@@ -188,7 +205,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
 
             // Quick Preset Buttons
             const Text(
-              'Quick Presets:',
+              'Target Presets:',
               style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
@@ -196,10 +213,45 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                _presetChip('Local Wi-Fi PC', AppConstants.defaultLanUrl),
-                _presetChip('Android Emulator', AppConstants.defaultBaseUrl),
-                _presetChip('Localhost', AppConstants.defaultLocalhostUrl),
+                _presetChip('Physical Phone (LAN)', ApiConfig.physicalLanUrl),
+                _presetChip('Android Emulator', ApiConfig.emulatorUrl),
+                _presetChip('Localhost', ApiConfig.localhostUrl),
+                _presetChip('Production Cloud', ApiConfig.productionUrl),
               ],
+            ),
+            const SizedBox(height: 14),
+
+            // Physical Device Guidance Card
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.wifi_tethering, size: 14, color: AppColors.primaryRed),
+                      SizedBox(width: 6),
+                      Text(
+                        'Physical Device Testing Guide',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• Connect your phone and Windows PC to the SAME Wi-Fi.\n'
+                    '• Put your Windows PC LAN IP (e.g. 192.168.1.5).\n'
+                    '• Windows Firewall must allow inbound TCP port 5000.\n'
+                    '• Note: 10.0.2.2 only works inside Android emulators.',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 10, height: 1.4),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
 
@@ -217,7 +269,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
                     )
-                  : const Icon(Icons.wifi_tethering, size: 16, color: AppColors.textPrimary),
+                  : const Icon(Icons.wifi_find, size: 16, color: AppColors.textPrimary),
               label: Text(
                 _isTesting ? 'Testing Connection...' : 'Test Connection',
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
@@ -236,11 +288,15 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
                   ),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      _testSuccess ? Icons.check_circle : Icons.error_outline,
-                      color: _testSuccess ? Colors.greenAccent : AppColors.primaryRed,
-                      size: 16,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        _testSuccess ? Icons.check_circle : Icons.error_outline,
+                        color: _testSuccess ? Colors.greenAccent : AppColors.primaryRed,
+                        size: 16,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(

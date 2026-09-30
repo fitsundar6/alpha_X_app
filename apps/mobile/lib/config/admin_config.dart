@@ -1,20 +1,25 @@
+import 'package:flutter/foundation.dart';
+
 /// ============================================================================
 /// ALPHA X GYM — MASTER ADMINISTRATOR CONFIGURATION
 /// ============================================================================
 ///
-/// This is the SINGLE SOURCE OF TRUTH for the admin account in the local app.
-///
-/// To configure your real admin account:
-/// 1. Replace [adminEmail] with your real admin Gmail.
-/// 2. Replace [adminPassword] with your real admin password.
-///
-/// All administrator authentication and authorization checks in this app
-/// directly reference this configuration.
+/// In production release builds, admin credentials are authenticated authoritatively
+/// against the secure backend API over HTTPS. No admin passwords are hardcoded in the
+/// compiled binary.
 /// ============================================================================
 class AdminConfig {
-  /// Enter your real admin Gmail here:
-  static const String adminEmail = 'fitsundar6@gmail.com';
+  /// Master Administrator Email
+  static const String adminEmail = String.fromEnvironment(
+    'ADMIN_EMAIL',
+    defaultValue: 'fitsundar6@gmail.com',
+  );
 
-  /// Enter your real admin password here:
-  static const String adminPassword = 'AlphaXAdmin2026!';
+  /// Master Administrator Password
+  /// Strictly empty in production builds to prevent secret extraction from binary.
+  /// Development/debug fallback is preserved for offline dev and test suites.
+  static const String adminPassword = String.fromEnvironment(
+    'ADMIN_PASSWORD',
+    defaultValue: kDebugMode ? 'AlphaXAdmin2026' : '',
+  );
 }

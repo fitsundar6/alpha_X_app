@@ -51,6 +51,7 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
 
   final List<String> _categories = [
     'All',
+    'Snacks',
     'Indian Foods',
     'Protein',
     'Carbohydrates',
@@ -60,7 +61,6 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
     'Grains',
     'Legumes',
     'Nuts & Seeds',
-    'Snacks',
     'Custom',
   ];
 
@@ -136,7 +136,16 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
       dateString: widget.dateString,
     );
     if (newFood != null && mounted) {
-      Navigator.of(context).pop();
+      final loggedEntries = widget.repository.getMealEntries(widget.dateString, widget.mealType);
+      final wasLogged = loggedEntries.any((e) => e.foodId == newFood.id);
+      if (wasLogged) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _selectedFood = newFood;
+          _selectedCategory = 'Custom';
+        });
+      }
     }
   }
 
@@ -169,9 +178,9 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
             ),
           ),
 
-          // Header
+          // Header: Food Library                         [+ Custom]  (X)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(16, 4, 12, 6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -179,20 +188,75 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
                   children: [
                     Text(widget.mealType.iconEmoji, style: const TextStyle(fontSize: 20)),
                     const SizedBox(width: 8),
-                    Text(
-                      'ADD TO ${widget.mealType.displayName.toUpperCase()}',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.1,
-                        color: Colors.white,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Food Library',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Logging to ${widget.mealType.displayName}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textSecondary, size: 20),
-                  onPressed: () => Navigator.of(context).pop(),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Prominent Top-Right [+ Custom] Button
+                    InkWell(
+                      key: const Key('add_custom_food_top_button'),
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _openCustomFoodDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryRed,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primaryRed.withOpacity(0.35),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Custom',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.textSecondary, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
               ],
             ),

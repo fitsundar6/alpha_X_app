@@ -52,11 +52,23 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
   final _fiberController = TextEditingController(text: '0');
 
   String _selectedUnit = 'grams';
-  final List<String> _units = ['grams', 'piece', 'cup', 'ml', 'scoop', 'tablespoon', 'slice'];
+  final List<String> _units = [
+    'grams',
+    'piece',
+    'sandwich',
+    'slice',
+    'cup',
+    'ml',
+    'scoop',
+    'tablespoon',
+    'bowl',
+    'serving',
+  ];
 
   String _selectedCategory = 'Custom';
   final List<String> _categories = [
     'Custom',
+    'Snacks',
     'Indian Foods',
     'Protein',
     'Carbohydrates',
@@ -66,7 +78,6 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
     'Grains',
     'Legumes',
     'Nuts & Seeds',
-    'Snacks',
   ];
 
   bool _alsoLogToMeal = true;
@@ -174,7 +185,7 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
       category: _selectedCategory,
       source: 'USER',
       createdBy: widget.repository.resolveClientId(null),
-      isPublic: true,
+      isPublic: false,
       isVerified: false,
       status: 'APPROVED',
     );
@@ -200,7 +211,7 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✓ Saved "$name" to Global Food Library'),
+        content: Text('✓ Saved "$name" to Food Library'),
         backgroundColor: AppColors.primaryRed,
         duration: const Duration(seconds: 2),
       ),
@@ -256,7 +267,7 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Saved foods are added to the Global Central Database for all clients & coach review.',
+                  'Saved foods are added to your personal Food Library and saved to your account.',
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 16),

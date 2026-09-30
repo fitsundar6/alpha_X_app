@@ -4,11 +4,13 @@
   "description": "Production-ready backend API for Alpha X Gym",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "postinstall": "prisma generate",
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "hash-password": "ts-node src/utils/hash_password.ts",
     "prisma:generate": "prisma generate",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:migrate": "prisma migrate dev"
   },
   "keywords": [

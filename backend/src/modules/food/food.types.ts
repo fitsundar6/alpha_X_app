@@ -45,6 +45,7 @@ export interface FoodSearchParams {
   source?: string;
   isCustom?: boolean;
   isPublic?: boolean;
+  userId?: string;
   page?: number;
   limit?: number;
 }

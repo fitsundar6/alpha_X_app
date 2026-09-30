@@ -265,7 +265,18 @@ class MacroRepository extends ChangeNotifier {
   static const String _prefCustomFoodsKey = 'alpha_x_custom_foods_v1';
   static const String _prefServerFoodsKey = 'alpha_x_server_foods_v1';
 
-  List<FoodItem> get customFoods => List.unmodifiable(_customFoods);
+  List<FoodItem> get customFoods {
+    final currentUserId = resolveClientId(null);
+    return _customFoods
+        .where((f) =>
+            f.isPublic ||
+            f.createdBy == null ||
+            f.createdBy!.isEmpty ||
+            f.createdBy == 'anonymous' ||
+            f.createdBy == currentUserId ||
+            f.createdBy == 'AXG-0001')
+        .toList();
+  }
   List<FoodItem> get serverFoods => List.unmodifiable(_serverFoods);
 
   /// Combined deduplicated food library containing standard system foods,
@@ -275,21 +286,40 @@ class MacroRepository extends ChangeNotifier {
     for (final f in FoodDatabase.defaultFoods) {
       map[f.id] = f;
     }
+    final currentUserId = resolveClientId(null);
     for (final f in _serverFoods) {
-      map[f.id] = f;
+      if (!f.isCustom ||
+          f.isPublic ||
+          f.createdBy == null ||
+          f.createdBy!.isEmpty ||
+          f.createdBy == 'anonymous' ||
+          f.createdBy == currentUserId ||
+          f.createdBy == 'AXG-0001') {
+        map[f.id] = f;
+      }
     }
     for (final f in _customFoods) {
-      map[f.id] = f;
+      // User isolation: Do not mix one user's private custom foods with another user's foods
+      if (f.isPublic ||
+          f.createdBy == null ||
+          f.createdBy!.isEmpty ||
+          f.createdBy == 'anonymous' ||
+          f.createdBy == currentUserId ||
+          f.createdBy == 'AXG-0001') {
+        map[f.id] = f;
+      }
     }
     return map.values.toList();
   }
 
   String resolveClientId([String? override]) {
     if (override != null && override.isNotEmpty) return override;
-    final current = AuthService().currentUserId;
-    if (current.isNotEmpty) return current;
-    final cId = AuthService().currentClientId;
-    if (cId.isNotEmpty) return cId;
+    if (AuthService().isAuthenticated) {
+      final cId = AuthService().currentClientId;
+      if (cId.isNotEmpty) return cId;
+      final uId = AuthService().currentUserId;
+      if (uId.isNotEmpty && uId != 'client_guest') return uId;
+    }
     return 'athlete_client';
   }
 
@@ -311,6 +341,9 @@ class MacroRepository extends ChangeNotifier {
         matchesCategory = true;
       } else if (cat == 'custom' || cat == 'user added') {
         matchesCategory = food.isCustom || food.source == 'USER';
+      } else if (cat == 'snacks' || cat == 'snack') {
+        matchesCategory = food.category.toLowerCase() == 'snacks' ||
+            food.category.toLowerCase() == 'snack';
       } else if (cat == 'indian foods' || cat == 'indian') {
         matchesCategory = food.category.toLowerCase().contains('indian') ||
             food.category.toLowerCase().contains('rice') ||
@@ -324,7 +357,7 @@ class MacroRepository extends ChangeNotifier {
   }
 
   /// Save new custom food for future searches and immediately dispatch to central PostgreSQL database
-  /// so ALL clients and Admin can discover and use it globally.
+  /// stored against the authenticated user's account without mixing with other users.
   Future<FoodItem> addCustomFood(FoodItem food) async {
     final cId = resolveClientId(food.createdBy);
     final cleanItem = food.copyWith(
@@ -332,7 +365,7 @@ class MacroRepository extends ChangeNotifier {
       category: food.category.isEmpty ? 'Custom' : food.category,
       source: 'USER',
       createdBy: cId,
-      isPublic: true,
+      isPublic: food.isPublic,
       status: 'APPROVED',
     );
 
@@ -366,7 +399,8 @@ class MacroRepository extends ChangeNotifier {
         'fiber': cleanItem.fiber,
         'sugar': cleanItem.sugar,
         'sodium': cleanItem.sodium,
-        'isPublic': true,
+        'createdBy': cId,
+        'isPublic': cleanItem.isPublic,
       });
 
       final response = await http
@@ -376,7 +410,15 @@ class MacroRepository extends ChangeNotifier {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body);
         final data = decoded['data'] ?? decoded;
-        final serverFood = FoodItem.fromJson(data as Map<String, dynamic>);
+        final rawServerFood = FoodItem.fromJson(data as Map<String, dynamic>);
+        final serverFood = rawServerFood.copyWith(
+          createdBy: (rawServerFood.createdBy != null &&
+                  rawServerFood.createdBy!.isNotEmpty &&
+                  rawServerFood.createdBy != 'anonymous')
+              ? rawServerFood.createdBy
+              : cleanItem.createdBy,
+          isPublic: cleanItem.isPublic,
+        );
 
         // Update local item with server ID and verified data
         final idx = _customFoods.indexWhere((f) => f.id == cleanItem.id);
@@ -403,8 +445,12 @@ class MacroRepository extends ChangeNotifier {
   /// Pull global shared food catalog from backend PostgreSQL database
   Future<void> fetchGlobalFoods() async {
     try {
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/foods?limit=500');
-      final headers = <String, String>{'Content-Type': 'application/json'};
+      final cId = resolveClientId(null);
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/foods?limit=500&userId=$cId');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'x-client-id': cId,
+      };
       final token = AuthService().token;
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';

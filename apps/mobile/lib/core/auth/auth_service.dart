@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/config/admin_config.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
+import 'package:alpha_x_gym/core/network/network_exceptions.dart';
 
 /// Exception thrown when assessment is safely stored in local queue while device is offline.
 class OfflineAssessmentSyncException implements Exception {
@@ -85,13 +86,8 @@ class AuthService extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
     try {
+      await ApiConfig.initialize();
       final prefs = await SharedPreferences.getInstance();
-
-      // Load custom server URL if configured by user
-      final savedServerUrl = prefs.getString(AppConstants.serverUrlKey);
-      if (savedServerUrl != null && savedServerUrl.trim().isNotEmpty) {
-        AppConstants.customServerUrl = savedServerUrl.trim();
-      }
 
       // Purge any legacy mock/demo client accounts from local storage to ensure REAL data only
       final storedClients = await _loadClientAccounts();
@@ -163,15 +159,7 @@ class AuthService extends ChangeNotifier {
 
   /// Updates and persists the custom backend server API URL.
   Future<void> updateServerUrl(String url) async {
-    final cleanUrl = url.trim();
-    final prefs = await SharedPreferences.getInstance();
-    if (cleanUrl.isEmpty) {
-      AppConstants.customServerUrl = null;
-      await prefs.remove(AppConstants.serverUrlKey);
-    } else {
-      AppConstants.customServerUrl = cleanUrl;
-      await prefs.setString(AppConstants.serverUrlKey, cleanUrl);
-    }
+    await ApiConfig.setCustomUrl(url);
     notifyListeners();
   }
 
@@ -425,8 +413,14 @@ class AuthService extends ChangeNotifier {
           'assessmentCompleted': false,
         };
       }
-      if (e.toString().contains('Exception:')) rethrow;
-      throw Exception('Unable to reach Alpha X Gym server (${AppConstants.apiBaseUrl}). Please check your connection or server settings.');
+      final errorDetails = NetworkExceptions.handle(e, requestUrl: '${AppConstants.apiBaseUrl}/auth/register');
+      if (errorDetails.isConnectionError) {
+        throw Exception(errorDetails.toString());
+      }
+      if (e is Exception && !e.toString().contains('Unable to reach')) {
+        rethrow;
+      }
+      throw Exception(errorDetails.toString());
     }
   }
 
@@ -455,13 +449,14 @@ class AuthService extends ChangeNotifier {
     // 2. Authoritative Backend PostgreSQL Login
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/login');
+      final normalizedId = cleanId.contains('@') ? cleanId.toLowerCase() : cleanId;
       final res = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'clientIdOrEmail': cleanId,
-          'clientId': cleanId,
-          'email': cleanId,
+          'clientIdOrEmail': normalizedId,
+          'clientId': normalizedId,
+          'email': normalizedId,
           'password': password,
         }),
       ).timeout(const Duration(seconds: 12));
@@ -563,8 +558,14 @@ class AuthService extends ChangeNotifier {
           };
         }
       }
-      if (e.toString().contains('Exception:')) rethrow;
-      throw Exception('Unable to reach Alpha X Gym server (${AppConstants.apiBaseUrl}). Please check your connection or server settings.');
+      final errorDetails = NetworkExceptions.handle(e, requestUrl: '${AppConstants.apiBaseUrl}/auth/login');
+      if (errorDetails.isConnectionError) {
+        throw Exception(errorDetails.toString());
+      }
+      if (e is Exception && !e.toString().contains('Unable to reach')) {
+        rethrow;
+      }
+      throw Exception(errorDetails.toString());
     }
   }
 

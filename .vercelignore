@@ -1,0 +1,6 @@
+apps/
+.git
+.github
+*.bat
+*.md
+.dart_tool

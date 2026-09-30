@@ -86,8 +86,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final idOrEmail = _loginIdController.text.trim();
       final password = _loginPasswordController.text;
 
+      // Safely normalize email if user typed an email address
+      final normalizedIdentifier = idOrEmail.contains('@') ? idOrEmail.toLowerCase() : idOrEmail;
+
       final result = await _authService.loginWithCredentials(
-        identifier: idOrEmail,
+        identifier: normalizedIdentifier,
         password: password,
       );
 
@@ -131,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     try {
       final name = _regNameController.text.trim();
-      final email = _regEmailController.text.trim();
+      final email = _regEmailController.text.trim().toLowerCase();
       final phone = _regPhoneController.text.trim();
       final password = _regPasswordController.text;
       final confirmPassword = _regConfirmPasswordController.text;
@@ -378,16 +381,47 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.error_outline, color: AppColors.primaryRed, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.error_outline, color: AppColors.primaryRed, size: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         ),
+                        if (_errorMessage!.toLowerCase().contains('connection') ||
+                            _errorMessage!.toLowerCase().contains('server') ||
+                            _errorMessage!.toLowerCase().contains('reach') ||
+                            _errorMessage!.toLowerCase().contains('socket') ||
+                            _errorMessage!.toLowerCase().contains('timeout')) ...[
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => ServerConfigDialog.show(context),
+                              icon: const Icon(Icons.settings_ethernet, size: 14, color: AppColors.primaryRed),
+                              label: const Text(
+                                'Configure Server IP',
+                                style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -525,8 +559,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           // Note: Client ID is treated as STRING/TEXT (NOT number-only keyboard!)
           TextFormField(
             controller: _loginIdController,
-            keyboardType: TextInputType.text,
-            textCapitalization: TextCapitalization.characters,
+            keyboardType: TextInputType.emailAddress,
+            textCapitalization: TextCapitalization.none,
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
             decoration: InputDecoration(
               labelText: 'Client ID / Email',
@@ -659,6 +693,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           TextFormField(
             controller: _regEmailController,
             keyboardType: TextInputType.emailAddress,
+            textCapitalization: TextCapitalization.none,
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
             decoration: InputDecoration(
               labelText: 'Email Address',

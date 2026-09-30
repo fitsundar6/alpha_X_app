@@ -205,6 +205,176 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v1/auth/google
+ * Google Authentication & Auto Client ID Generation.
+ */
+router.post('/google', async (req: Request, res: Response) => {
+  const { googleUid, email, name, photoUrl } = req.body;
+
+  if (!googleUid || typeof googleUid !== 'string' || googleUid.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'Google UID is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    sendError(res, 'VALIDATION_ERROR', 'Valid email address is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const cleanGoogleUid = googleUid.trim();
+  const configuredAdminEmail = env.ADMIN_EMAIL.trim().toLowerCase();
+
+  // Admin email cannot be registered/signed in as a normal client via Google
+  if (normalizedEmail === configuredAdminEmail) {
+    sendError(res, 'FORBIDDEN', 'This email is reserved for administration. Please sign in via Admin Portal.', HttpStatus.FORBIDDEN);
+    return;
+  }
+
+  try {
+    // Check if user exists by googleUid or email
+    let existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { googleUid: cleanGoogleUid },
+          { email: normalizedEmail },
+          { clientProfile: { googleUid: cleanGoogleUid } },
+        ],
+      },
+      include: {
+        clientProfile: true,
+      },
+    });
+
+    if (existingUser) {
+      if (!existingUser.googleUid) {
+        existingUser = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            googleUid: cleanGoogleUid,
+            clientProfile: {
+              update: {
+                googleUid: cleanGoogleUid,
+              },
+            },
+          },
+          include: {
+            clientProfile: true,
+          },
+        });
+      }
+
+      const clientProfile = existingUser.clientProfile;
+      const resolvedClientId = clientProfile?.clientId || '';
+      const isAssessmentCompleted = clientProfile?.onboardingCompleted ?? false;
+      const currentAssessmentStep = clientProfile?.onboardingStep ?? 0;
+
+      const token = jwt.sign(
+        {
+          id: existingUser.id,
+          email: existingUser.email,
+          role: existingUser.role,
+        },
+        env.JWT_ACCESS_SECRET,
+        {
+          expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
+        }
+      );
+
+      sendSuccess(
+        res,
+        {
+          isNewClient: false,
+          token,
+          clientId: resolvedClientId,
+          assessmentCompleted: isAssessmentCompleted,
+          onboardingCompleted: isAssessmentCompleted,
+          onboardingStep: currentAssessmentStep,
+          user: {
+            id: existingUser.id,
+            clientId: resolvedClientId,
+            name: existingUser.name,
+            email: existingUser.email,
+            phone: clientProfile?.phone || null,
+            role: existingUser.role,
+          },
+          profile: clientProfile,
+        },
+        HttpStatus.OK
+      );
+      return;
+    }
+
+    // New Google client -> auto-generate unique sequential Client ID (AXG-XXXX)
+    const uniqueClientId = await generateNextClientId();
+    const cleanName = (name || 'Athlete Member').trim();
+
+    const newUser = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        name: cleanName,
+        googleUid: cleanGoogleUid,
+        role: UserRole.CLIENT,
+        clientProfile: {
+          create: {
+            clientId: uniqueClientId,
+            googleUid: cleanGoogleUid,
+            dailyStepGoal: 6000,
+            dailySteps: 6000,
+            onboardingCompleted: false,
+            onboardingStep: 0,
+          },
+        },
+      },
+      include: {
+        clientProfile: true,
+      },
+    });
+
+    const clientProfile = newUser.clientProfile!;
+    const token = jwt.sign(
+      {
+        id: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+      },
+      env.JWT_ACCESS_SECRET,
+      {
+        expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
+      }
+    );
+
+    sendSuccess(
+      res,
+      {
+        isNewClient: true,
+        message: 'Google account linked successfully',
+        clientId: uniqueClientId,
+        instruction: `Your Alpha X Gym Client ID is ${uniqueClientId}. Please keep this ID safe for future login.`,
+        token,
+        assessmentCompleted: false,
+        onboardingCompleted: false,
+        onboardingStep: 0,
+        user: {
+          id: newUser.id,
+          clientId: uniqueClientId,
+          name: newUser.name,
+          email: newUser.email,
+          phone: null,
+          role: newUser.role,
+          createdAt: newUser.createdAt.toISOString(),
+        },
+        profile: clientProfile,
+      },
+      HttpStatus.CREATED
+    );
+  } catch (err: any) {
+    console.error('[AUTH GOOGLE ERROR]', err);
+    sendError(res, 'INTERNAL_ERROR', 'Google authentication failed', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
  * POST /api/v1/auth/login
  * Client & Admin Login:
  * - Admin Login: Admin Email + Admin Password -> Admin Dashboard (unchanged).

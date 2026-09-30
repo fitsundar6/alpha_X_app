@@ -14,6 +14,7 @@ import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
 import 'package:alpha_x_gym/features/exercise/presentation/admin/admin_exercise_database_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_change_requests_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_performance_dashboard_screen.dart';
+import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -1498,67 +1499,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           title: const Text('Backend API Server Endpoint', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
           subtitle: Text(AppConstants.apiBaseUrl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
           trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
-          onTap: () => _showServerConfigDialog(context),
+          onTap: () async {
+            await ServerConfigDialog.show(context);
+            if (mounted) setState(() {});
+          },
         ),
       ],
-    );
-  }
-
-  void _showServerConfigDialog(BuildContext context) {
-    final ctrl = TextEditingController(text: AppConstants.apiBaseUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('CONFIGURE BACKEND SERVER URL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter your cloud server URL or LAN IP for physical Android phone testing.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'Server Base URL',
-                hintText: 'e.g. https://api.alphaxgym.com/api/v1',
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Leave empty or click Reset to restore the default platform URL.',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              await AuthService().updateServerUrl('');
-              if (mounted) setState(() {});
-              nav.pop();
-            },
-            child: const Text('RESET DEFAULT', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
-            onPressed: () async {
-              final nav = Navigator.of(ctx);
-              final inputUrl = ctrl.text.trim();
-              await AuthService().updateServerUrl(inputUrl);
-              if (mounted) setState(() {});
-              nav.pop();
-            },
-            child: const Text('SAVE & CONNECT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
     );
   }
 }

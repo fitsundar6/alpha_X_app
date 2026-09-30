@@ -180,6 +180,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
+                    textCapitalization: TextCapitalization.none,
                     style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
                     decoration: InputDecoration(
                       labelText: 'Admin Gmail',

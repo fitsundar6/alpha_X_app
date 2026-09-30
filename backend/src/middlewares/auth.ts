@@ -32,24 +32,27 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
 
 
 
-  if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
-    req.user = {
-      id: 'admin_alex_stone',
-      email: env.ADMIN_EMAIL.trim().toLowerCase(),
-      role: UserRole.ADMIN,
-    };
-    next();
-    return;
-  }
+  // Development / test mock tokens bypass (strictly disabled in production)
+  if (env.NODE_ENV !== 'production') {
+    if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
+      req.user = {
+        id: 'admin_alex_stone',
+        email: env.ADMIN_EMAIL.trim().toLowerCase(),
+        role: UserRole.ADMIN,
+      };
+      next();
+      return;
+    }
 
-  if (token === 'alpha_x_mock_token_for_client') {
-    req.user = {
-      id: 'client_marcus_vance',
-      email: 'marcus@client.alphax.gym',
-      role: UserRole.CLIENT,
-    };
-    next();
-    return;
+    if (token === 'alpha_x_mock_token_for_client') {
+      req.user = {
+        id: 'client_marcus_vance',
+        email: 'marcus@client.alphax.gym',
+        role: UserRole.CLIENT,
+      };
+      next();
+      return;
+    }
   }
 
   try {

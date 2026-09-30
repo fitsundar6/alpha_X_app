@@ -688,9 +688,41 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 letterSpacing: 1.1,
               ),
             ),
-            Text(
-              '${dailySummary.totalMealsLogged} / 4 meals logged',
-              style: const TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                AlphaXPressable(
+                  onTap: () => _openAddFood(MealType.snack),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.restaurant_menu, size: 13, color: AppColors.primaryRed),
+                        SizedBox(width: 4),
+                        Text(
+                          'FOOD LIBRARY',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${dailySummary.totalMealsLogged} / 4 logged',
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
           ],
         ),
