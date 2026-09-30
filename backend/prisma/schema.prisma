@@ -1,0 +1,464 @@
+// Prisma Schema for Alpha X Gym
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String?
+  name         String
+  role         UserRole      @default(CLIENT)
+  googleUid    String?       @unique
+  photoUrl     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  clientProfile   ClientProfile?
+  assignedClients ClientProfile[]     @relation("TrainerClients")
+  assignments     WorkoutAssignment[] @relation("ClientAssignments")
+  workoutRecords  WorkoutRecord[]     @relation("ClientWorkoutRecords")
+
+  @@map("users")
+}
+
+model ClientProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId            String?  @unique
+  googleUid           String?  @unique
+  photoUrl            String?
+  phone               String?
+  adminNotes          String?
+  trainerId           String?
+  trainer             User?    @relation("TrainerClients", fields: [trainerId], references: [id])
+  dailyStepGoal       Int      @default(6000)
+
+  // Onboarding & Fitness Assessment Fields
+  fitnessLevel        String?  // beginner, intermediate, advanced, returning
+  primaryGoal         String?  // Fat Loss, Muscle Gain, Build Strength, etc.
+  secondaryGoal       String?
+  weightKg            Float?
+  heightCm            Float?
+  age                 Int?
+  gender              String?
+  trainingExperience  String?  // New to training, Less than 3 months, etc.
+  trainingDaysPerWeek Int?     // 2 to 7
+  hasCurrentInjury    Boolean  @default(false)
+  injuryAreas         String[] @default([])
+  injuryDescription   String?
+  hasPreviousSurgery  Boolean  @default(false)
+  surgeryDetails      String?
+  activityLevel       String?  // LOW, LIGHT, MODERATE, HIGH
+  sleepHours          String?  // Less than 5 hours, 5–6 hours, etc.
+  dailySteps          Int?     @default(6000)
+  trainingTimePref    String?  // Morning, Afternoon, Evening, Night
+  preferredDays       String[] @default([])
+  trainingPreferences String[] @default([])
+  onboardingCompleted Boolean  @default(false)
+  onboardingStep      Int      @default(0)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  activityRecords   ActivityRecord[]
+  stepGoalHistories StepGoalHistory[]
+  dietPlans         DietPlan[]
+  macroPlans        MacroPlan[]
+  attendanceRecords ClientAttendance[]
+  progressRecords   ClientProgress[]
+
+  @@map("client_profiles")
+}
+
+model DietPlan {
+  id                String         @id @default(uuid())
+  clientProfileId   String
+  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?        // AXG-XXXX
+  planName          String
+  startDate         DateTime?
+  endDate           DateTime?
+  dailyCalories     Float          @default(2000)
+  protein           Float          @default(150)
+  carbohydrates     Float          @default(200)
+  fat               Float          @default(60)
+  fiber             Float          @default(30)
+  waterTargetLiters Float          @default(3.0)
+  isActive          Boolean        @default(true)
+  mealsJson         String?        // JSON-encoded meals and food items
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@map("diet_plans")
+}
+
+model MacroPlan {
+  id                String         @id @default(uuid())
+  clientProfileId   String
+  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?        // AXG-XXXX
+  calories          Float          @default(2000)
+  protein           Float          @default(150)
+  carbs             Float          @default(200)
+  fat               Float          @default(60)
+  fiber             Float          @default(30)
+  waterLiters       Float          @default(3.0)
+  isActive          Boolean        @default(true)
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@map("macro_plans")
+}
+
+model ClientAttendance {
+  id                String         @id @default(uuid())
+  clientProfileId   String
+  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?        // AXG-XXXX
+  date              DateTime       @db.Date
+  present           Boolean        @default(true)
+  method            String         @default("MANUAL") // QR_SCAN, MANUAL
+  checkInTime       DateTime       @default(now())
+  notes             String?
+  createdAt         DateTime       @default(now())
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([date])
+  @@map("client_attendances")
+}
+
+model ClientProgress {
+  id                String         @id @default(uuid())
+  clientProfileId   String
+  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?        // AXG-XXXX
+  date              DateTime       @default(now())
+  weightKg          Float
+  waistCm           Float?
+  notes             String?
+  createdAt         DateTime       @default(now())
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@map("client_progress")
+}
+
+model ActivityRecord {
+  id             String        @id @default(uuid())
+  clientId       String
+  client         ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  date           DateTime      @db.Date
+  steps          Int           @default(0)
+  stepGoal       Int           @default(6000)
+  cardioMinutes  Int           @default(0)
+  caloriesBurned Float         @default(0.0)
+  distanceMeters Float         @default(0.0)
+  isGoalAchieved Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([clientId, date], name: "client_date_unique")
+  @@index([clientId])
+  @@index([date])
+  @@map("activity_records")
+}
+
+model StepGoalHistory {
+  id            String        @id @default(uuid())
+  clientId      String
+  client        ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  stepGoal      Int
+  effectiveDate DateTime      @default(now())
+  setById       String
+  createdAt     DateTime      @default(now())
+
+  @@index([clientId])
+  @@map("step_goal_histories")
+}
+
+// ==========================================
+// WORKOUT SESSION MANAGEMENT SYSTEM ENTITIES
+// ==========================================
+
+model WorkoutSession {
+  id                       String   @id @default(uuid())
+  title                    String
+  workoutType              String   // Strength, Hypertrophy, Full Body, Conditioning, HIIT, Cardio, Mobility
+  targetMuscleGroup        String   // e.g. "Chest • Shoulders • Triceps"
+  difficulty               String   // Beginner, Intermediate, Advanced
+  estimatedDurationMinutes Int      @default(45)
+  description              String?
+  isActive                 Boolean  @default(true)
+  startDate                DateTime?
+  endDate                  DateTime?
+  recurringSchedule        String?  // Optional recurring schedule string
+  availabilityType         String   @default("ALL") // "ALL", "SELECTED", "INDIVIDUAL"
+  createdById              String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  exercises   WorkoutSessionExercise[]
+  assignments WorkoutAssignment[]
+  records     WorkoutRecord[]
+
+  @@map("workout_sessions")
+}
+
+model WorkoutSessionExercise {
+  id               String          @id @default(uuid())
+  sessionId        String
+  session          WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId       String
+  exerciseName     String
+  category         String          @default("General")
+  orderIndex       Int             @default(0)
+  supersetTag      String?         // e.g. "A1", "A2", "B1"
+  numberOfSets     Int             @default(3)
+  targetReps       String          @default("8-12")
+  targetWeight     Float?
+  restSeconds      Int             @default(90)
+  targetRir        Int?            @default(2)
+  targetRpe        Float?          @default(8.0)
+  tempo            String?         @default("3-1-1-0")
+  setType          String          @default("WORKING") // WARMUP, WORKING, FAILURE, DROP_SET, REST_PAUSE
+  exerciseNotes    String?
+  adminInstruction String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  setTemplates     WorkoutSetTemplate[]
+
+  @@index([sessionId])
+  @@map("workout_session_exercises")
+}
+
+model WorkoutSetTemplate {
+  id                String                 @id @default(uuid())
+  sessionExerciseId String
+  sessionExercise   WorkoutSessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  setType           String                 @default("WORKING")
+  targetWeight      Float?
+  targetRepsMin     Int                    @default(8)
+  targetRepsMax     Int                    @default(12)
+  targetRir         Int?                   @default(2)
+  targetRpe         Float?                 @default(8.0)
+  tempo             String?                @default("3-1-1-0")
+
+  @@index([sessionExerciseId])
+  @@map("workout_set_templates")
+}
+
+model WorkoutAssignment {
+  id            String         @id @default(uuid())
+  sessionId     String
+  session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clientId      String?        // null means assigned to ALL clients
+  client        User?          @relation("ClientAssignments", fields: [clientId], references: [id], onDelete: Cascade)
+  isRecommended Boolean        @default(false)
+  assignedById  String
+  assignedAt    DateTime       @default(now())
+  active        Boolean        @default(true)
+
+  @@unique([sessionId, clientId], name: "session_client_assignment_unique")
+  @@index([sessionId])
+  @@index([clientId])
+  @@map("workout_assignments")
+}
+
+model WorkoutRecord {
+  id                  String                  @id @default(uuid())
+  clientId            String
+  client              User                    @relation("ClientWorkoutRecords", fields: [clientId], references: [id], onDelete: Cascade)
+  sessionId           String?
+  session             WorkoutSession?         @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  sessionTitle        String
+  workoutType         String
+  startedAt           DateTime
+  completedAt         DateTime?
+  durationSeconds     Int                     @default(0)
+  totalVolume         Float                   @default(0.0)
+  completedSetsCount  Int                     @default(0)
+  skippedSetsCount    Int                     @default(0)
+  averageRpe          Float?
+  averageRir          Float?
+  isCompleted         Boolean                 @default(false)
+  personalRecordsJson String?                 // JSON serialized PR list
+  notes               String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  exerciseRecords     WorkoutExerciseRecord[]
+
+  @@index([clientId])
+  @@index([sessionId])
+  @@map("workout_records")
+}
+
+model WorkoutExerciseRecord {
+  id           String             @id @default(uuid())
+  recordId     String
+  record       WorkoutRecord      @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exerciseName String
+  orderIndex   Int                @default(0)
+  supersetTag  String?
+  isSkipped    Boolean            @default(false)
+  skipReason   String?
+  clientNote   String?
+  adminNote    String?
+
+  setRecords   WorkoutSetRecord[]
+
+  @@index([recordId])
+  @@map("workout_exercise_records")
+}
+
+model WorkoutSetRecord {
+  id               String                @id @default(uuid())
+  exerciseRecordId String
+  exerciseRecord   WorkoutExerciseRecord @relation(fields: [exerciseRecordId], references: [id], onDelete: Cascade)
+  setNumber        Int
+  setType          String                @default("WORKING")
+  targetReps       String?
+  targetWeight     Float?
+  actualWeight     Float?
+  actualReps       Int?
+  actualRir        Int?
+  actualRpe        Float?
+  tempo            String?
+  isCompleted      Boolean               @default(false)
+  completedAt      DateTime?
+  notes            String?
+
+  @@index([exerciseRecordId])
+  @@map("workout_set_records")
+}
+
+// ==========================================
+// EXERCISE DATABASE SYSTEM ENTITIES
+// ==========================================
+
+model Exercise {
+  id                   String   @id @default(uuid())
+  externalId           String?  @unique
+  name                 String
+  normalizedName       String
+  aliases              String[]
+  description          String   @default("")
+  instructions         String[]
+  coachingCues         String[]
+  commonMistakes       String[]
+  primaryMuscles       String[]
+  secondaryMuscles     String[]
+  bodyPart             String   @default("Full Body")
+  category             String   @default("Strength")
+  subcategory          String?
+  equipment            String   @default("Barbell")
+  movementPattern      String   @default("Compound")
+  exerciseType         String   @default("Strength")
+  difficulty           String   @default("Intermediate")
+  mechanics            String   @default("Compound")
+  forceType            String   @default("Push")
+  planeOfMotion        String   @default("Sagittal")
+  laterality           String   @default("Bilateral")
+  isCompound           Boolean  @default(true)
+  isIsolation          Boolean  @default(false)
+  isUnilateral         Boolean  @default(false)
+  imageUrl             String   @default("")
+  videoUrl             String   @default("")
+  thumbnailUrl         String   @default("")
+  variations           String[]
+  progressions         String[]
+  regressions          String[]
+  alternativeExercises String[]
+  source               String   @default("Alpha X Gym")
+  sourceUrl            String   @default("")
+  license              String   @default("Proprietary")
+  licenseAuthor        String   @default("Alpha X Gym")
+  isImported           Boolean  @default(false)
+  isCustom             Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([normalizedName])
+  @@index([category])
+  @@index([bodyPart])
+  @@index([equipment])
+  @@index([isActive])
+  @@map("exercises")
+}
+
+model ExerciseSyncLog {
+  id            String    @id @default(uuid())
+  source        String
+  totalFound    Int       @default(0)
+  importedCount Int       @default(0)
+  updatedCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  status        String    @default("SUCCESS")
+  errorMessage  String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@map("exercise_sync_logs")
+}
+
+// ==========================================
+// FOOD & NUTRITION DATABASE SYSTEM ENTITIES
+// ==========================================
+
+model Food {
+  id            String   @id @default(uuid())
+  name          String
+  normalizedName String
+  category      String   // Protein, Rice & Meals, South Indian, Dal & Legumes, Vegetables, Fruits, Nuts & Seeds, Snacks, Dairy, Custom
+  servingSize   Float    @default(100)
+  servingUnit   String   @default("g") // g, ml, piece, cup, tablespoon, scoop
+  calories      Float
+  protein       Float
+  carbohydrates Float
+  fat           Float
+  fiber         Float    @default(0.0)
+  sugar         Float?   @default(0.0)
+  sodium        Float?   @default(0.0)
+  source        String   @default("SYSTEM") // SYSTEM, USDA, USER
+  sourceId      String?
+  isCustom      Boolean  @default(false)
+  createdBy     String?  // Client ID (e.g. AXG-0001) or User ID
+  createdByName String?
+  isPublic      Boolean  @default(true)
+  isVerified    Boolean  @default(false)
+  status        String   @default("PUBLISHED") // PUBLISHED, PENDING, APPROVED, REJECTED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([normalizedName])
+  @@index([category])
+  @@index([source])
+  @@index([createdBy])
+  @@index([isPublic])
+  @@map("foods")
+}
+

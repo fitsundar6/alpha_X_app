@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing & Coverage
+coverage/
+*.lcov
+
+# Production build artifacts
+dist/
+build/
+.dart_tool/
+.packages
+*.apk
+*.aab
+*.ipa
+
+# Environment & Secrets (CRITICAL: Never commit .env or secret files)
+.env
+.env.*
+*.env
+backend/.env
+backend/.env.*
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+*.p12
+
+# Prisma
+/backend/prisma/*.db
+/backend/prisma/*.db-journal
+
+# Flutter / Dart
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+pubspec.lock
+
+# IDE & OS files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db

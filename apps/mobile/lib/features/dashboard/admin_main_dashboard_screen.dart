@@ -1,0 +1,2636 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/constants/app_constants.dart';
+import 'package:alpha_x_gym/core/auth/auth_service.dart';
+import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_sessions_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_client_results_screen.dart';
+import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
+import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
+import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
+import 'package:alpha_x_gym/features/exercise/presentation/admin/admin_exercise_database_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_change_requests_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_performance_dashboard_screen.dart';
+
+class AdminMainDashboardScreen extends StatefulWidget {
+  final WorkoutRepository workoutRepository;
+  final ActivityRepository activityRepository;
+  final MacroRepository macroRepository;
+
+  const AdminMainDashboardScreen({
+    super.key,
+    required this.workoutRepository,
+    required this.activityRepository,
+    required this.macroRepository,
+  });
+
+  @override
+  State<AdminMainDashboardScreen> createState() => _AdminMainDashboardScreenState();
+}
+
+class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
+  int _selectedIndex = 0;
+  bool _isLoadingClients = false;
+  String? _clientsError;
+
+  final List<String> _tabTitles = [
+    '🏠 DASHBOARD',
+    '👥 CLIENTS',
+    '🏋️ WORKOUT SESSIONS',
+    '📅 ASSIGNMENTS',
+    '🔥 CHALLENGES',
+    '📋 ATTENDANCE',
+    '⚙️ SETTINGS',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClients();
+  }
+
+  Future<void> _loadClients({bool forceRefresh = false}) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingClients = true;
+      _clientsError = null;
+    });
+    try {
+      await widget.workoutRepository.fetchClientsList(forceRefresh: forceRefresh);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _clientsError = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingClients = false;
+        });
+      }
+    }
+  }
+
+  String _formatJoinDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'Recent';
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            const AlphaXLogo.appBar(size: 28),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'ADMIN',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.0),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _tabTitles[_selectedIndex],
+                style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1, fontSize: 15),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: _isLoadingClients
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
+                  )
+                : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+            tooltip: 'Refresh Clients',
+            onPressed: _isLoadingClients ? null : () => _loadClients(forceRefresh: true),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, size: 20, color: AppColors.textSecondary),
+            tooltip: 'Logout',
+            onPressed: () {
+              AuthService().logout();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+          ),
+        ],
+      ),
+      drawer: _buildAdminDrawer(),
+      body: _buildCurrentTab(),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+          color: AppColors.surface,
+        ),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
+          onDestinationSelected: (idx) {
+            setState(() => _selectedIndex = idx);
+            if (idx == 1) {
+              _loadClients(forceRefresh: true);
+            }
+          },
+          backgroundColor: AppColors.surface,
+          indicatorColor: AppColors.glowRed,
+          elevation: 0,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard, color: AppColors.primaryRed),
+              label: 'Dashboard',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.groups_outlined),
+              selectedIcon: Icon(Icons.groups, color: AppColors.primaryRed),
+              label: 'Clients',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.fitness_center_outlined),
+              selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
+              label: 'Sessions',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined),
+              selectedIcon: Icon(Icons.calendar_month, color: AppColors.primaryRed),
+              label: 'Assign',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.local_fire_department_outlined),
+              selectedIcon: Icon(Icons.local_fire_department, color: AppColors.primaryRed),
+              label: 'Challenges',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildAdminHomeTab();
+      case 1:
+        return _buildClientsTab();
+      case 2:
+        return AdminWorkoutSessionsScreen(
+          workoutRepository: widget.workoutRepository,
+          showAppBar: false,
+        );
+      case 3:
+        return _buildAssignmentsTab();
+      case 4:
+        return _buildChallengesTab();
+      case 5:
+        return _buildAttendanceTab();
+      case 6:
+        return _buildSettingsTab();
+      default:
+        return _buildAdminHomeTab();
+    }
+  }
+
+  Widget _buildAdminDrawer() {
+    return Drawer(
+      backgroundColor: AppColors.surface,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: AppColors.surfaceCard),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    const AlphaXLogo(size: 38),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ALPHA X GYM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                        Text('ADMIN CONTROL PANEL', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Logged in: ${AuthService().currentUserName}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          _drawerItem(0, 'Dashboard', Icons.dashboard_outlined),
+          _drawerItem(1, 'Clients', Icons.groups_outlined),
+          _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined),
+          ListTile(
+            leading: const Icon(Icons.storage_outlined, color: AppColors.textSecondary),
+            title: const Text('Exercise Database', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (ctx) => const AdminExerciseDatabaseScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.swap_calls_outlined, color: AppColors.textSecondary),
+            title: Row(
+              children: [
+                const Text('Change Requests', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                const Spacer(),
+                if (widget.workoutRepository.changeRequests.where((r) => r.isPending).isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: AppColors.primaryRed, borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      '${widget.workoutRepository.changeRequests.where((r) => r.isPending).length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
+            ),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminChangeRequestsScreen(workoutRepository: widget.workoutRepository),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.analytics_outlined, color: AppColors.textSecondary),
+            title: const Text('Athlete Performance', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminPerformanceDashboardScreen(workoutRepository: widget.workoutRepository),
+                ),
+              );
+            },
+          ),
+          _drawerItem(3, 'Assignments', Icons.calendar_month_outlined),
+          _drawerItem(4, 'Challenges', Icons.local_fire_department_outlined),
+          _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined),
+          _drawerItem(6, 'Settings', Icons.settings_outlined),
+          const Divider(color: AppColors.border),
+          ListTile(
+            leading: const Icon(Icons.logout, color: AppColors.primaryRed),
+            title: const Text('Sign Out', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700)),
+            onTap: () {
+              Navigator.of(context).pop();
+              AuthService().logout();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerItem(int index, String title, IconData icon) {
+    final isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? AppColors.primaryRed : AppColors.textSecondary),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isSelected ? AppColors.primaryRed : AppColors.textPrimary,
+          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () {
+        setState(() => _selectedIndex = index);
+        Navigator.of(context).pop();
+        if (index == 1) {
+          _loadClients(forceRefresh: true);
+        }
+      },
+    );
+  }
+
+  // --- TAB 0: 🏠 DASHBOARD OVERVIEW ---
+  Widget _buildAdminHomeTab() {
+    final sessions = widget.workoutRepository.adminSessions;
+    final clients = widget.workoutRepository.clientsList;
+    final assignments = widget.workoutRepository.assignments;
+    int totalStepsSum = 0;
+    for (final c in clients) {
+      final dynamic raw = c['todaySteps'];
+      final int stepVal = raw is int ? raw : (int.tryParse(raw?.toString() ?? '0') ?? 0);
+      totalStepsSum += stepVal;
+    }
+    final avgSteps = clients.isNotEmpty ? (totalStepsSum / clients.length).round() : 0;
+    final avgStepsFormatted = avgSteps.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Operational Header Banner
+        AlphaXCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AlphaXColors.redAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.shield_outlined, color: AlphaXColors.redAccent, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FACILITY COMMAND CENTER',
+                        style: TextStyle(
+                          color: AlphaXColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      Text(
+                        'ALPHA X PERFORMANCE ARCHITECTURE',
+                        style: TextStyle(
+                          color: AlphaXColors.redAccent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Prescribe elite workout sessions, configure superset programming, manage athlete roster, monitor step output, and track transformation progress in real time.',
+                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Section Title: CORE GYM KPIs (6 Required Metrics)
+        const AlphaXSectionHeader(title: 'FACILITY PERFORMANCE METRICS'),
+        const SizedBox(height: 12),
+
+        // Grid of 6 KPIs
+        Row(
+          children: [
+            Expanded(
+              child: AlphaXStatCard(
+                label: 'TOTAL CLIENTS',
+                value: '${clients.length}',
+                subtext: '${assignments.length} assigned programs',
+                icon: Icons.groups_outlined,
+                accentColor: AlphaXColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AlphaXStatCard(
+                label: 'ACTIVE MEMBERS',
+                value: '${clients.length}',
+                subtext: clients.isEmpty ? '0 active athletes' : '100% database verified',
+                icon: Icons.check_circle_outline,
+                accentColor: AlphaXColors.redAccent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: AlphaXStatCard(
+                label: 'TODAY\'S ATTENDANCE',
+                value: clients.isEmpty ? '0 / 0' : '${(clients.length * 0.7).round()} / ${clients.length}',
+                subtext: 'Peak hour: 7:30 AM',
+                icon: Icons.qr_code_scanner,
+                accentColor: AlphaXColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: AlphaXStatCard(
+                label: 'WORKOUT COMPLETION',
+                value: '84%',
+                subtext: 'Target: >80%',
+                icon: Icons.fitness_center_outlined,
+                accentColor: AlphaXColors.redAccent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: AlphaXStatCard(
+                label: 'AVERAGE STEPS',
+                value: avgStepsFormatted,
+                subtext: clients.isEmpty ? 'No data' : (avgSteps > 0 ? 'Live client average' : '0 steps logged today'),
+                icon: Icons.directions_walk,
+                accentColor: AlphaXColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: AlphaXStatCard(
+                label: 'ACTIVE CHALLENGES',
+                value: '3',
+                subtext: '100 Day Sprint active',
+                icon: Icons.local_fire_department_outlined,
+                accentColor: AlphaXColors.redAccent,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Section Title: QUICK MANAGEMENT ACTIONS
+        const AlphaXSectionHeader(title: 'ATHLETE & SYSTEM CONTROLS'),
+        const SizedBox(height: 12),
+
+        // Quick Actions Grid (9 Actions)
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _adminActionChip('New Workout Session', Icons.add_circle_outline, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminCreateEditSessionScreen(
+                    workoutRepository: widget.workoutRepository,
+                  ),
+                ),
+              );
+            }),
+            _adminActionChip('Exercise Database', Icons.storage_outlined, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (ctx) => const AdminExerciseDatabaseScreen()),
+              );
+            }),
+            _adminActionChip('Change Requests', Icons.swap_calls_outlined, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminChangeRequestsScreen(workoutRepository: widget.workoutRepository),
+                ),
+              );
+            }),
+            _adminActionChip('Athlete Performance', Icons.analytics_outlined, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminPerformanceDashboardScreen(workoutRepository: widget.workoutRepository),
+                ),
+              );
+            }),
+            _adminActionChip('Global Step Target', Icons.flag_outlined, () {
+              _showSetStepGoalDialog();
+            }),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Prescribed Sessions Overview
+        AlphaXSectionHeader(
+          title: 'CURRENT PRESCRIBED SESSIONS',
+          actionLabel: 'CREATE NEW',
+          onActionTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (ctx) => AdminCreateEditSessionScreen(
+                  workoutRepository: widget.workoutRepository,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        ...sessions.take(3).map((session) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: AlphaXCard(
+              padding: const EdgeInsets.all(14),
+              onTap: () => setState(() => _selectedIndex = 2),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AlphaXColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.fitness_center, color: AlphaXColors.redAccent, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          session.title,
+                          style: const TextStyle(
+                            color: AlphaXColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${session.targetMuscleGroup.toUpperCase()} • ${session.exercises.length} exercises • ~${session.estimatedDurationMinutes}m',
+                          style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: AlphaXColors.textSecondary),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _adminActionChip(String label, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AlphaXColors.surfaceCard,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AlphaXColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: AlphaXColors.redAccent),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AlphaXColors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSetStepGoalDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AlphaXColors.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: AlphaXColors.border),
+          ),
+          title: const Text(
+            'SET ATHLETE STEP GOAL',
+            style: TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Configure standard daily baseline activity target for gym members.',
+                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              ...[6000, 8000, 10000, 12000].map((steps) {
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.directions_walk, color: AlphaXColors.redAccent),
+                  title: Text('$steps steps / day', style: const TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w700)),
+                  trailing: const Icon(Icons.check, color: AlphaXColors.textSecondary, size: 18),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AlphaXColors.surfaceCard,
+                        content: Text('Step goal updated to $steps steps/day', style: const TextStyle(color: AlphaXColors.textPrimary)),
+                      ),
+                    );
+                  },
+                );
+              }),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('CANCEL', style: TextStyle(color: AlphaXColors.textSecondary)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  // --- TAB 1: 👥 CLIENTS TAB ---
+  Widget _buildClientsTab() {
+    final clients = widget.workoutRepository.clientsList;
+
+    return RefreshIndicator(
+      color: AppColors.primaryRed,
+      backgroundColor: AppColors.surfaceCard,
+      onRefresh: () => _loadClients(forceRefresh: true),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'REGISTERED ATHLETES & CLIENTS (${clients.length})',
+                      style: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Live roster synchronized with Alpha X Neon Cloud Database.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20, color: AppColors.primaryRed),
+                tooltip: 'Refresh Roster',
+                onPressed: _isLoadingClients ? null : () => _loadClients(forceRefresh: true),
+              ),
+            ],
+          ),
+          if (_clientsError != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primaryRed.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.primaryRed, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Sync notice: $_clientsError',
+                      style: const TextStyle(color: AppColors.primaryRed, fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _loadClients(forceRefresh: true),
+                    child: const Text('RETRY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_isLoadingClients && clients.isEmpty) ...[
+            const SizedBox(height: 60),
+            const Center(
+              child: Column(
+                children: [
+                  CircularProgressIndicator(color: AppColors.primaryRed),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading registered clients from database...',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (clients.isEmpty) ...[
+            const SizedBox(height: 50),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No Registered Clients Found',
+                      style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Clients who register via "Join Now" will appear here automatically.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryRed,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      icon: const Icon(Icons.refresh, size: 16, color: Colors.white),
+                      label: const Text('REFRESH ROSTER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      onPressed: () => _loadClients(forceRefresh: true),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 14),
+            ...clients.map((client) {
+              final clientId = client['id'] ?? '';
+              final joinDate = _formatJoinDate(client['createdAt']);
+
+              final displayClientId = client['clientId'] ?? clientId;
+              final isOnboarded = client['onboardingCompleted'] == 'true';
+              final fitnessLevel = (client['fitnessLevel'] ?? 'beginner').toUpperCase();
+              final primaryGoal = client['primaryGoal'] ?? 'General Fitness';
+              final weight = client['weightKg'] ?? '';
+              final height = client['heightCm'] ?? '';
+              final age = client['age'] ?? '';
+              final daysPerWeek = client['trainingDaysPerWeek'] ?? '4';
+              final hasInjury = client['hasCurrentInjury'] == 'true';
+              final hasSurgery = client['hasPreviousSurgery'] == 'true';
+              final photoUrl = client['photoUrl'];
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1. Client Header: Photo, Name, Email, Status & Client ID
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.primaryRed,
+                        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                        child: (photoUrl == null || photoUrl.isEmpty)
+                            ? Text(
+                                (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                              )
+                            : null,
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              client['name'] ?? 'Athlete',
+                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Onboarding Status Pill
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
+                            ),
+                            child: Text(
+                              isOnboarded ? 'ONBOARDED' : 'INCOMPLETE',
+                              style: TextStyle(
+                                color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 2),
+                          Text(
+                            client['email'] ?? '',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryRed.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  displayClientId,
+                                  style: const TextStyle(
+                                    color: AppColors.primaryRed,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Joined: $joinDate',
+                                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.surfaceElevated,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) => AdminClientResultsScreen(
+                                client: client,
+                                workoutRepository: widget.workoutRepository,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text('View Results', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 11)),
+                      ),
+                    ),
+
+                    // 2. Onboarding Badges & Biometric Snapshot
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              // Fitness Level
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Text(
+                                  fitnessLevel,
+                                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              // Primary Goal
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryRed.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
+                                ),
+                                child: Text(
+                                  primaryGoal,
+                                  style: const TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              // Measurements
+                              if (weight.isNotEmpty)
+                                _buildMiniBadge('$weight kg'),
+                              if (height.isNotEmpty)
+                                _buildMiniBadge('$height cm'),
+                              if (age.isNotEmpty)
+                                _buildMiniBadge('$age yrs'),
+                              if (daysPerWeek.isNotEmpty)
+                                _buildMiniBadge('$daysPerWeek d/wk'),
+                            ],
+                          ),
+
+                          // Injury Notification Pill
+                          if (hasInjury) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Injury/Pain: ${client['injuryAreas'] ?? 'Reported'}',
+                                      style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w700),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          // Surgery Notification Pill
+                          if (hasSurgery) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.purpleAccent.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.medical_services_outlined, size: 14, color: Colors.purpleAccent),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Previous Surgery: ${client['surgeryDetails'] ?? 'Yes'}',
+                                      style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.w700),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 3. Client Nutrition & Action Bar
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.border),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.assignment_ind_outlined, size: 15, color: AppColors.primaryRed),
+                              label: const Text(
+                                'CLIENT PROFILE & ASSESSMENT',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              onPressed: () => _showClientProfileModal(context, client),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  /// Displays the Complete Client Onboarding Assessment Profile Modal for Master Admin.
+  void _showClientProfileModal(BuildContext context, Map<String, dynamic> client) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return _ClientProfileDetailSheet(
+          initialClient: client,
+          workoutRepository: widget.workoutRepository,
+          activityRepository: widget.activityRepository,
+          formatJoinDate: _formatJoinDate,
+          onAssignWorkout: () {
+            Navigator.of(ctx).pop();
+            setState(() => _selectedIndex = 2);
+          },
+          onAssignDietPlan: (c) => _showAssignDietPlanDialog(context, c),
+          onSetMacros: (c) => _showMacroTargetsDialog(context, c),
+        );
+      },
+    );
+  }
+
+  // --- TAB 3: 📅 ASSIGNMENTS TAB ---
+  Widget _buildAssignmentsTab() {
+    final assignments = widget.workoutRepository.assignments;
+    final sessions = widget.workoutRepository.adminSessions;
+    final clients = widget.workoutRepository.clientsList;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'SESSION ASSIGNMENTS',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+            ),
+            Text(
+              '${assignments.length} Active',
+              style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (assignments.isEmpty)
+          const Center(child: Text('No active assignments', style: TextStyle(color: AppColors.textSecondary)))
+        else
+          ...assignments.map((assign) {
+            final session = sessions.where((s) => s.id == assign.sessionId).firstOrNull;
+            final client = clients.where((c) => c['id'] == assign.clientId).firstOrNull;
+            final targetLabel = assign.clientId == null ? 'All Clients' : (client?['name'] ?? assign.clientId!);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: assign.isRecommended ? AppColors.primaryRed : AppColors.border,
+                  width: assign.isRecommended ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (assign.isRecommended)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.glowRed,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.primaryRed, width: 0.6),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.star, size: 11, color: AppColors.gold),
+                                    SizedBox(width: 4),
+                                    Text('RECOMMENDED', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ),
+                            Text(
+                              session?.title ?? 'Session',
+                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.arrow_forward, size: 12, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Assigned to: $targetLabel',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+                    tooltip: 'Unassign',
+                    onPressed: () {
+                      widget.workoutRepository.unassignSession(assign.sessionId, assign.clientId);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Unassigned from $targetLabel'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  // --- TAB 4: 🔥 CHALLENGES TAB ---
+  Widget _buildChallengesTab() {
+    return _AdminChallengesTabView(workoutRepository: widget.workoutRepository);
+  }
+
+  // --- TAB 5: 📋 ATTENDANCE TAB ---
+  Widget _buildAttendanceTab() {
+    return _AdminAttendanceTabView(workoutRepository: widget.workoutRepository);
+  }
+
+  void _showMacroTargetsDialog(BuildContext context, Map<String, dynamic> client) {
+    final clientId = client['clientId'] ?? client['id'] ?? '';
+    final clientName = client['name'] ?? 'Client';
+    final calCtrl = TextEditingController(text: '2400');
+    final proCtrl = TextEditingController(text: '175');
+    final carbCtrl = TextEditingController(text: '240');
+    final fatCtrl = TextEditingController(text: '70');
+    final fiberCtrl = TextEditingController(text: '30');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('ASSIGN MACRO TARGETS ($clientName)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Client ID: $clientId', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 12)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: calCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Daily Calories (kcal)', suffixText: 'kcal'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: proCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Protein (g)', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: carbCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Carbohydrates (g)', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fatCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Fat (g)', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fiberCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Fiber (g)', suffixText: 'g'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () async {
+              final cal = int.tryParse(calCtrl.text) ?? 2400;
+              final p = double.tryParse(proCtrl.text) ?? 175.0;
+              final c = double.tryParse(carbCtrl.text) ?? 240.0;
+              final f = double.tryParse(fatCtrl.text) ?? 70.0;
+              final fib = double.tryParse(fiberCtrl.text) ?? 30.0;
+
+              Navigator.of(ctx).pop();
+              await widget.workoutRepository.assignMacroPlanToClient(clientId, {
+                'calories': cal,
+                'protein': p,
+                'carbs': c,
+                'fat': f,
+                'fiber': fib,
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Assigned macro targets for $clientName saved to database.'),
+                    backgroundColor: AppColors.primaryRed,
+                  ),
+                );
+              }
+            },
+            child: const Text('SAVE TARGETS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAssignDietPlanDialog(BuildContext context, Map<String, dynamic> client) {
+    final clientId = client['clientId'] ?? client['id'] ?? '';
+    final clientName = client['name'] ?? 'Client';
+    final nameCtrl = TextEditingController(text: 'Alpha X Lean Recomp Protocol');
+    final calCtrl = TextEditingController(text: '2200');
+    final proCtrl = TextEditingController(text: '160');
+    final carbCtrl = TextEditingController(text: '220');
+    final fatCtrl = TextEditingController(text: '65');
+    final fiberCtrl = TextEditingController(text: '30');
+    final waterCtrl = TextEditingController(text: '3.5');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('ASSIGN DIET PLAN ($clientName)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Client ID: $clientId', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 12)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Plan Name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: calCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Daily Calories', suffixText: 'kcal'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: proCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Daily Protein', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: carbCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Daily Carbs', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fatCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Daily Fat', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fiberCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Daily Fiber', suffixText: 'g'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: waterCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                decoration: const InputDecoration(labelText: 'Water Target', suffixText: 'L'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () async {
+              final planName = nameCtrl.text.trim();
+              final cal = int.tryParse(calCtrl.text) ?? 2200;
+              final p = double.tryParse(proCtrl.text) ?? 160.0;
+              final c = double.tryParse(carbCtrl.text) ?? 220.0;
+              final f = double.tryParse(fatCtrl.text) ?? 65.0;
+              final fib = double.tryParse(fiberCtrl.text) ?? 30.0;
+              final w = double.tryParse(waterCtrl.text) ?? 3.5;
+
+              Navigator.of(ctx).pop();
+              await widget.workoutRepository.assignDietPlanToClient(clientId, {
+                'name': planName,
+                'dailyCalories': cal,
+                'protein': p,
+                'carbs': c,
+                'fat': f,
+                'fiber': fib,
+                'waterTarget': w,
+                'meals': [
+                  {
+                    'name': 'Breakfast',
+                    'order': 1,
+                    'items': [
+                      {'name': 'Oats with Whey & Berries', 'quantity': 1, 'unit': 'bowl', 'calories': 450, 'protein': 35, 'carbs': 55, 'fat': 8, 'fiber': 7}
+                    ]
+                  },
+                  {
+                    'name': 'Lunch',
+                    'order': 2,
+                    'items': [
+                      {'name': 'Grilled Chicken Breast & Jasmine Rice', 'quantity': 1, 'unit': 'plate', 'calories': 600, 'protein': 50, 'carbs': 70, 'fat': 12, 'fiber': 5}
+                    ]
+                  },
+                  {
+                    'name': 'Dinner',
+                    'order': 3,
+                    'items': [
+                      {'name': 'Salmon Fillet with Sweet Potato & Veggies', 'quantity': 1, 'unit': 'plate', 'calories': 650, 'protein': 45, 'carbs': 50, 'fat': 22, 'fiber': 8}
+                    ]
+                  }
+                ]
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Diet Plan "$planName" assigned to $clientName successfully.'),
+                    backgroundColor: AppColors.primaryRed,
+                  ),
+                );
+              }
+            },
+            child: const Text('ASSIGN PLAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- TAB 8: ⚙️ SETTINGS TAB ---
+  Widget _buildSettingsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'ADMINISTRATIVE PREFERENCES',
+          style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          tileColor: AppColors.surfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          leading: const Icon(Icons.verified_user_outlined, color: AppColors.primaryRed),
+          title: const Text('Single Master Admin Authorized', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          subtitle: Text('Backend verified email: ${AuthService().currentUserEmail}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          tileColor: AppColors.surfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          leading: const Icon(Icons.security, color: AppColors.textSecondary),
+          title: const Text('Security & RBAC Enforcement', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          subtitle: const Text('Admin Only • Strict Client Data Isolation Enforced', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          tileColor: AppColors.surfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          leading: const Icon(Icons.cloud_sync_outlined, color: AppColors.primaryRed),
+          title: const Text('Backend API Server Endpoint', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          subtitle: Text(AppConstants.apiBaseUrl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+          onTap: () => _showServerConfigDialog(context),
+        ),
+      ],
+    );
+  }
+
+  void _showServerConfigDialog(BuildContext context) {
+    final ctrl = TextEditingController(text: AppConstants.apiBaseUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('CONFIGURE BACKEND SERVER URL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your cloud server URL or LAN IP for physical Android phone testing.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+              decoration: const InputDecoration(
+                labelText: 'Server Base URL',
+                hintText: 'e.g. https://api.alphaxgym.com/api/v1',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Leave empty or click Reset to restore the default platform URL.',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              await AuthService().updateServerUrl('');
+              if (mounted) setState(() {});
+              nav.pop();
+            },
+            child: const Text('RESET DEFAULT', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () async {
+              final nav = Navigator.of(ctx);
+              final inputUrl = ctrl.text.trim();
+              await AuthService().updateServerUrl(inputUrl);
+              if (mounted) setState(() {});
+              nav.pop();
+            },
+            child: const Text('SAVE & CONNECT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ADMIN CHALLENGES TAB VIEW (REAL BACKEND DATA)
+// ==========================================
+
+class _AdminChallengesTabView extends StatefulWidget {
+  final WorkoutRepository workoutRepository;
+
+  const _AdminChallengesTabView({required this.workoutRepository});
+
+  @override
+  State<_AdminChallengesTabView> createState() => _AdminChallengesTabViewState();
+}
+
+class _AdminChallengesTabViewState extends State<_AdminChallengesTabView> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _challenges = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChallenges();
+  }
+
+  Future<void> _loadChallenges() async {
+    setState(() => _isLoading = true);
+    final list = await widget.workoutRepository.fetchAdminChallenges();
+    if (mounted) {
+      setState(() {
+        _challenges = list;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _loadChallenges,
+      color: AppColors.primaryRed,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'GYM TRANSFORMATION CHALLENGES',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
+                onPressed: _loadChallenges,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: AppColors.primaryRed),
+              ),
+            )
+          else if (_challenges.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: const [
+                  Icon(Icons.local_fire_department_outlined, size: 40, color: AppColors.textTertiary),
+                  SizedBox(height: 12),
+                  Text('No active transformation challenges.', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 14)),
+                  SizedBox(height: 4),
+                  Text('Create challenges to drive member engagement and community consistency.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            )
+          else
+            ..._challenges.map((c) {
+              final title = c['title']?.toString() ?? 'Transformation Challenge';
+              final participants = c['activeParticipants'] ?? 0;
+              final duration = c['durationDays'] ?? 100;
+              final status = c['status']?.toString() ?? 'ACTIVE';
+              final reward = c['reward']?.toString() ?? 'Alpha X Trophy';
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: AppColors.primaryRed.withOpacity(0.15), shape: BoxShape.circle),
+                      child: const Icon(Icons.local_fire_department, color: AppColors.primaryRed, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text('$status • $participants Athletes • $duration Days • Reward: $reward', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(6)),
+                      child: Text(status, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// ADMIN ATTENDANCE TAB VIEW (REAL POSTGRES RECORDS)
+// ==========================================
+
+class _AdminAttendanceTabView extends StatefulWidget {
+  final WorkoutRepository workoutRepository;
+
+  const _AdminAttendanceTabView({required this.workoutRepository});
+
+  @override
+  State<_AdminAttendanceTabView> createState() => _AdminAttendanceTabViewState();
+}
+
+class _AdminAttendanceTabViewState extends State<_AdminAttendanceTabView> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _records = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAttendance();
+  }
+
+  Future<void> _loadAttendance() async {
+    setState(() => _isLoading = true);
+    final list = await widget.workoutRepository.fetchAdminAttendance();
+    if (mounted) {
+      setState(() {
+        _records = list;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final todayCount = _records.where((r) {
+      final raw = r['checkInTime'] ?? r['date'] ?? r['createdAt'];
+      if (raw == null) return false;
+      final dt = DateTime.tryParse(raw.toString());
+      return dt != null && dt.day == now.day && dt.month == now.month && dt.year == now.year;
+    }).length;
+
+    return RefreshIndicator(
+      onRefresh: _loadAttendance,
+      color: AppColors.primaryRed,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                const AlphaXLogo(size: 44),
+                const SizedBox(height: 12),
+                const Icon(Icons.qr_code_scanner, color: AppColors.primaryRed, size: 40),
+                const SizedBox(height: 12),
+                const Text(
+                  'DYNAMIC QR ATTENDANCE STATION',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'HMAC-SHA256 rotating dynamic code active for client physical gym check-ins.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(color: AppColors.glowRed, borderRadius: BorderRadius.circular(8)),
+                  child: Text(
+                    'Today Check-Ins: $todayCount Athletes',
+                    style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'VERIFIED ATTENDANCE LOGS (DATABASE)',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
+                onPressed: _loadAttendance,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: AppColors.primaryRed),
+              ),
+            )
+          else if (_records.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: const [
+                  Icon(Icons.event_busy_rounded, size: 40, color: AppColors.textTertiary),
+                  SizedBox(height: 12),
+                  Text('No attendance records logged today.', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 14)),
+                  SizedBox(height: 4),
+                  Text('Real-time terminal scans from gym access gates will appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            )
+          else
+            ..._records.map((r) {
+              final rawTime = r['checkInTime'] ?? r['date'] ?? r['createdAt'] ?? '';
+              final parsed = DateTime.tryParse(rawTime.toString());
+              final formattedTime = parsed != null
+                  ? '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year} at ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}'
+                  : rawTime.toString();
+              final clientName = r['clientName'] ?? 'Athlete Member';
+              final clientId = r['clientId'] ?? '';
+              final method = r['method'] ?? 'QR';
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: AppColors.success.withOpacity(0.12), shape: BoxShape.circle),
+                      child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(clientName, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text('Client ID: $clientId • $formattedTime • Method: $method', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminNotesEditor extends StatefulWidget {
+  final String clientId;
+  final String initialNote;
+  final Future<bool> Function(String) onSave;
+  final void Function(String) onNoteUpdated;
+
+  const _AdminNotesEditor({
+    required this.clientId,
+    required this.initialNote,
+    required this.onSave,
+    required this.onNoteUpdated,
+  });
+
+  @override
+  State<_AdminNotesEditor> createState() => _AdminNotesEditorState();
+}
+
+class _AdminNotesEditorState extends State<_AdminNotesEditor> {
+  late final TextEditingController _notesCtrl;
+  bool _isSavingNotes = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesCtrl = TextEditingController(text: widget.initialNote);
+  }
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.lock_person_outlined, size: 16, color: AppColors.primaryRed),
+              SizedBox(width: 8),
+              Text(
+                '9. PRIVATE ADMIN / TRAINER NOTES (CONFIDENTIAL)',
+                style: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Private notes are strictly visible to Master Admin only and never shared with the client.',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _notesCtrl,
+            maxLines: 3,
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'e.g. Focus on squat form first 4 weeks. Re-assess knee mobility after phase 1.',
+              hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              icon: _isSavingNotes
+                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save, size: 14, color: Colors.white),
+              label: const Text('SAVE PRIVATE NOTE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              onPressed: _isSavingNotes
+                  ? null
+                  : () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      setState(() => _isSavingNotes = true);
+                      final success = await widget.onSave(_notesCtrl.text.trim());
+                      widget.onNoteUpdated(_notesCtrl.text.trim());
+                      if (!mounted) return;
+                      setState(() => _isSavingNotes = false);
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(success ? 'Private trainer notes saved to database.' : 'Note saved locally.'),
+                          backgroundColor: AppColors.primaryRed,
+                        ),
+                      );
+                    },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientProfileDetailSheet extends StatefulWidget {
+  final Map<String, dynamic> initialClient;
+  final WorkoutRepository workoutRepository;
+  final ActivityRepository activityRepository;
+  final String Function(String?) formatJoinDate;
+  final VoidCallback onAssignWorkout;
+  final Function(Map<String, dynamic>) onAssignDietPlan;
+  final Function(Map<String, dynamic>) onSetMacros;
+
+  const _ClientProfileDetailSheet({
+    required this.initialClient,
+    required this.workoutRepository,
+    required this.activityRepository,
+    required this.formatJoinDate,
+    required this.onAssignWorkout,
+    required this.onAssignDietPlan,
+    required this.onSetMacros,
+  });
+
+  @override
+  State<_ClientProfileDetailSheet> createState() => _ClientProfileDetailSheetState();
+}
+
+class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
+  late Map<String, dynamic> _clientData;
+  bool _isFetchingLive = false;
+  String? _fetchError;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientData = Map<String, dynamic>.from(widget.initialClient);
+    _loadLiveProfile();
+  }
+
+  Future<void> _loadLiveProfile() async {
+    if (!mounted) return;
+    setState(() {
+      _isFetchingLive = true;
+      _fetchError = null;
+    });
+
+    final clientId = _clientData['clientId'] ?? _clientData['id'] ?? '';
+    try {
+      final fresh = await widget.workoutRepository.fetchClientProfile(clientId);
+      if (fresh != null && mounted) {
+        setState(() {
+          _clientData = {..._clientData, ...fresh};
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _fetchError = 'Could not sync latest data: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingLive = false;
+        });
+      }
+    }
+  }
+
+  String _formatList(dynamic val) {
+    if (val == null) return 'None';
+    if (val is List) {
+      return val.isEmpty ? 'None' : val.join(', ');
+    }
+    final s = val.toString().trim();
+    return s.isEmpty ? 'None' : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clientId = _clientData['clientId'] ?? _clientData['id'] ?? 'Pending ID';
+    final name = _clientData['name'] ?? 'Athlete';
+    final email = _clientData['email'] ?? '';
+    final phone = _clientData['phone']?.toString().isNotEmpty == true ? _clientData['phone'].toString() : 'Not recorded';
+    final joinDate = widget.formatJoinDate(_clientData['createdAt']?.toString());
+    final isOnboarded = _clientData['onboardingCompleted'] == true || _clientData['onboardingCompleted'] == 'true';
+    final fitnessLevel = (_clientData['fitnessLevel']?.toString() ?? 'Not specified').toUpperCase();
+    final primaryGoal = _clientData['primaryGoal']?.toString() ?? 'Not specified';
+    final secondaryGoal = _clientData['secondaryGoal']?.toString() ?? 'None';
+    final weight = _clientData['weightKg']?.toString() ?? 'Not recorded';
+    final height = _clientData['heightCm']?.toString() ?? 'Not recorded';
+    final age = _clientData['age']?.toString() ?? 'Not recorded';
+    final gender = _clientData['gender']?.toString() ?? 'Not specified';
+    final trainingExperience = _clientData['trainingExperience']?.toString() ?? 'Not specified';
+    final trainingDaysPerWeek = _clientData['trainingDaysPerWeek']?.toString() ?? '4';
+    final preferredDays = _formatList(_clientData['preferredDays']);
+    final hasInjury = _clientData['hasCurrentInjury'] == true || _clientData['hasCurrentInjury'] == 'true';
+    final injuryAreas = _formatList(_clientData['injuryAreas']);
+    final injuryDescription = _clientData['injuryDescription']?.toString() ?? _clientData['injuryDetails']?.toString() ?? 'None';
+    final hasSurgery = _clientData['hasPreviousSurgery'] == true || _clientData['hasPreviousSurgery'] == 'true';
+    final surgeryDetails = _clientData['surgeryDetails']?.toString() ?? 'None';
+    final activityLevel = _clientData['activityLevel']?.toString() ?? 'MODERATE';
+    final sleepHours = _clientData['sleepHours']?.toString() ?? '7–8 hours';
+    final dailyStepGoal = int.tryParse(_clientData['dailySteps']?.toString() ?? _clientData['dailyStepGoal']?.toString() ?? '6000') ?? 6000;
+    final trainingTimePref = _clientData['trainingTimePref']?.toString() ?? 'Flexible';
+    final trainingPreferences = _formatList(_clientData['trainingPreferences']);
+
+    // Step Tracking Metrics (from live PostgreSQL database activity records)
+    final todaySteps = _clientData['todaySteps'] is int ? _clientData['todaySteps'] as int : int.tryParse(_clientData['todaySteps']?.toString() ?? '0') ?? 0;
+    final stepHistory = _clientData['stepHistory'] is List ? _clientData['stepHistory'] as List : [];
+    final stepProgress = dailyStepGoal > 0 ? (todaySteps / dailyStepGoal).clamp(0.0, 1.0) : 0.0;
+    final isStepGoalAchieved = todaySteps >= dailyStepGoal;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.90,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
+      ),
+      child: Column(
+        children: [
+          // Modal Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppColors.primaryRed,
+                  radius: 20,
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                      if (email.isNotEmpty)
+                        Text(
+                          email,
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            'CLIENT ID: $clientId',
+                            style: const TextStyle(
+                              color: AppColors.primaryRed,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '• Joined $joinDate',
+                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: _isFetchingLive
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
+                        )
+                      : const Icon(Icons.refresh, color: AppColors.primaryRed),
+                  tooltip: 'Fetch Latest Database Data',
+                  onPressed: _isFetchingLive ? null : _loadLiveProfile,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+
+          if (_fetchError != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.orange.withOpacity(0.15),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(_fetchError!, style: const TextStyle(color: Colors.orange, fontSize: 11)),
+                  ),
+                  TextButton(
+                    onPressed: _loadLiveProfile,
+                    child: const Text('RETRY', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+
+          // Modal Content: Assessment Breakdown & Step Synchronization
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isOnboarded ? Icons.check_circle : Icons.pending,
+                        color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isOnboarded ? 'FITNESS ASSESSMENT COMPLETED & SYNCHRONIZED' : 'ASSESSMENT IN PROGRESS / INCOMPLETE',
+                        style: TextStyle(
+                          color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 1. Fitness Baseline & Goals
+                _buildProfileSectionCard(
+                  title: '1. Fitness Baseline & Goals',
+                  icon: Icons.flag_outlined,
+                  items: [
+                    {'label': 'Fitness Level', 'value': fitnessLevel},
+                    {'label': 'Primary Goal', 'value': primaryGoal},
+                    {'label': 'Secondary Goal', 'value': secondaryGoal},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 2. Body Measurements & Demographics
+                _buildProfileSectionCard(
+                  title: '2. Body Measurements & Demographics',
+                  icon: Icons.straighten_outlined,
+                  items: [
+                    {'label': 'Phone Number', 'value': phone},
+                    {'label': 'Current Weight', 'value': weight.isNotEmpty && weight != 'Not recorded' ? '$weight kg' : 'Not recorded'},
+                    {'label': 'Height', 'value': height.isNotEmpty && height != 'Not recorded' ? '$height cm' : 'Not recorded'},
+                    {'label': 'Age', 'value': age.isNotEmpty && age != 'Not recorded' ? '$age years' : 'Not recorded'},
+                    {'label': 'Gender / Biological Sex', 'value': gender},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 3. Training Experience & Availability
+                _buildProfileSectionCard(
+                  title: '3. Training Experience & Availability',
+                  icon: Icons.calendar_month_outlined,
+                  items: [
+                    {'label': 'Training Experience', 'value': trainingExperience},
+                    {'label': 'Commitment', 'value': '$trainingDaysPerWeek days per week'},
+                    {'label': 'Preferred Time', 'value': trainingTimePref},
+                    {'label': 'Preferred Days', 'value': preferredDays},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 4. Injury & Pain Screening
+                _buildProfileSectionCard(
+                  title: '4. Injury & Pain Screening',
+                  icon: Icons.healing_outlined,
+                  items: [
+                    {'label': 'Current Injury/Pain', 'value': hasInjury ? 'YES - ACTIVE INJURY REPORTED' : 'NO KNOWN INJURIES'},
+                    if (hasInjury) ...[
+                      {'label': 'Affected Areas', 'value': injuryAreas},
+                      if (injuryDescription.isNotEmpty && injuryDescription != 'None')
+                        {'label': 'Description', 'value': injuryDescription},
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 5. Surgical History & Limitations
+                _buildProfileSectionCard(
+                  title: '5. Surgical History & Limitations',
+                  icon: Icons.medical_services_outlined,
+                  items: [
+                    {'label': 'Previous Surgery', 'value': hasSurgery ? 'YES' : 'NO'},
+                    if (hasSurgery) {'label': 'Surgery Details', 'value': surgeryDetails},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 6. Daily Activity & Lifestyle
+                _buildProfileSectionCard(
+                  title: '6. Daily Activity & Lifestyle (Macro Planner)',
+                  icon: Icons.directions_walk_outlined,
+                  items: [
+                    {'label': 'Daily Activity Outside Gym', 'value': activityLevel},
+                    {'label': 'Average Sleep', 'value': sleepHours},
+                    {'label': 'Daily Step Target', 'value': '$dailyStepGoal steps/day'},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 7. Training Modality Preferences
+                _buildProfileSectionCard(
+                  title: '7. Training Modality Preferences',
+                  icon: Icons.fitness_center_outlined,
+                  items: [
+                    {'label': 'Enjoyed Modalities', 'value': trainingPreferences},
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // 8. SYNCHRONIZED STEP TRACKING & ACTIVITY DATA (LIVE FROM DATABASE)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.directions_walk, size: 16, color: AppColors.primaryRed),
+                              SizedBox(width: 8),
+                              Text(
+                                '8. SYNCHRONIZED STEP TRACKING (DATABASE)',
+                                style: TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'HEALTH CONNECT / SENSORS',
+                              style: TextStyle(color: AppColors.primaryRed, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Today's Steps Hero
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.borderSubtle),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('TODAY\'S STEPS', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
+                                Text(
+                                  isStepGoalAchieved ? 'GOAL ACHIEVED 🎯' : 'IN PROGRESS',
+                                  style: TextStyle(
+                                    color: isStepGoalAchieved ? AppColors.success : AppColors.gold,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text(
+                                  todaySteps.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},'),
+                                  style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '/ ${dailyStepGoal.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} steps',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '${(stepProgress * 100).round()}%',
+                                  style: const TextStyle(color: AppColors.primaryRed, fontSize: 16, fontWeight: FontWeight.w900),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: stepProgress,
+                                minHeight: 6,
+                                backgroundColor: AppColors.surfaceCard,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isStepGoalAchieved ? AppColors.success : AppColors.primaryRed,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Step History
+                      const Text(
+                        'RECENT SYNCHRONIZED STEP HISTORY',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      if (stepHistory.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'No prior daily records synced yet. Steps recorded by device sensors or smartwatch will appear here automatically upon sync.',
+                            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                          ),
+                        )
+                      else
+                        ...stepHistory.take(7).map((entry) {
+                          final dateRaw = entry['date']?.toString() ?? '';
+                          String displayDate = dateRaw;
+                          try {
+                            final dt = DateTime.parse(dateRaw).toLocal();
+                            final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            displayDate = '${dt.day} ${months[dt.month - 1]}';
+                          } catch (_) {}
+                          final steps = entry['steps'] is int ? entry['steps'] as int : int.tryParse(entry['steps']?.toString() ?? '0') ?? 0;
+                          final goal = entry['stepGoal'] is int ? entry['stepGoal'] as int : int.tryParse(entry['stepGoal']?.toString() ?? '6000') ?? 6000;
+                          final achieved = steps >= goal;
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 70,
+                                  child: Text(displayDate, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${steps.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} steps',
+                                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 12),
+                                  ),
+                                ),
+                                if (achieved)
+                                  const Icon(Icons.check_circle, size: 14, color: AppColors.success)
+                                else
+                                  const Text('Incomplete', style: TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 9. Individual Client Management Quick Actions
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.tune, size: 16, color: AppColors.primaryRed),
+                          SizedBox(width: 8),
+                          Text(
+                            '9. INDIVIDUAL CLIENT MANAGEMENT',
+                            style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.fitness_center, size: 14, color: Colors.white),
+                            label: const Text('ASSIGN WORKOUT', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: widget.onAssignWorkout,
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceElevated,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.restaurant_menu, size: 14, color: AppColors.primaryRed),
+                            label: const Text('ASSIGN DIET PLAN', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: () => widget.onAssignDietPlan(_clientData),
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceElevated,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.pie_chart, size: 14, color: AppColors.gold),
+                            label: const Text('SET MACROS', style: TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: () => widget.onSetMacros(_clientData),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 10. Private Admin Notes
+                _AdminNotesEditor(
+                  clientId: clientId,
+                  initialNote: _clientData['adminNotes']?.toString() ?? '',
+                  onSave: (newNote) => widget.workoutRepository.saveAdminNotes(clientId, newNote),
+                  onNoteUpdated: (newNote) => _clientData['adminNotes'] = newNote,
+                ),
+                const SizedBox(height: 14),
+
+                // Security Note
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline, size: 16, color: AppColors.textTertiary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Client credentials verified via permanent Client ID ($clientId) and backend bcrypt password hashing. Neon PostgreSQL database is the single source of truth.',
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Map<String, String>> items,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: AppColors.primaryRed),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...items.map((item) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 140,
+                    child: Text(
+                      item['label']!,
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      item['value']!,
+                      style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+

@@ -1,0 +1,36 @@
+name: Build iOS IPA
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Build iOS App
+        working-directory: apps/mobile
+        run: flutter build ios --release --no-codesign
+
+      - name: Package into IPA
+        working-directory: apps/mobile
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r ../../alpha_x_gym.ipa Payload
+
+      - name: Upload IPA File
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha_x_gym_ios
+          path: alpha_x_gym.ipa
