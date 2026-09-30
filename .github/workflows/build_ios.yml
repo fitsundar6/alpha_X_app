@@ -9,11 +9,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.0'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -26,6 +21,22 @@ jobs:
       - name: Install Dependencies
         working-directory: apps/mobile
         run: flutter pub get
+
+      - name: Fix device_info_plus visionOS compatibility
+        run: |
+          python3 -c "
+          import glob, os
+          pattern = os.path.expanduser('~/.pub-cache/**/FPPDeviceInfoPlusPlugin.m')
+          files = glob.glob(pattern, recursive=True)
+          for f in files:
+              with open(f, 'r') as fp:
+                  content = fp.read()
+              if 'isiOSAppOnVision' in content:
+                  content = content.replace('isiOSAppOnVision', 'isMacCatalystApp')
+                  with open(f, 'w') as fp:
+                      fp.write(content)
+                  print(f'Successfully patched {f}')
+          "
 
       - name: Build iOS App
         working-directory: apps/mobile
