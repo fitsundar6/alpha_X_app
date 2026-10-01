@@ -380,6 +380,374 @@ export class FoodPhotoController {
   }
 
   /**
+   * POST /api/v1/food-photos/live
+   * Dedicated Live Camera Food Photo capture endpoint.
+   * STRICT: No AI nutrition guessing, purely visual evidence for trainer review.
+   * Does NOT modify or create ClientFoodLog entries.
+   */
+  public async recordLiveFoodPhoto(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser) {
+        sendError(res, 'UNAUTHORIZED', 'Authentication required to record live food photo', HttpStatus.UNAUTHORIZED);
+        return;
+      }
+
+      const clientProfile = await this.getClientProfile(authUser.id);
+      if (!clientProfile) {
+        sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+        return;
+      }
+
+      const {
+        image,
+        imageBase64,
+        mealType = 'Lunch',
+        capturedAt,
+        timezone = 'UTC',
+        clientNote,
+      } = req.body;
+
+      const rawBase64 = image || imageBase64;
+      if (!rawBase64 || typeof rawBase64 !== 'string' || !rawBase64.trim()) {
+        sendError(res, 'VALIDATION_ERROR', 'Live camera photo data (Base64) is required', HttpStatus.BAD_REQUEST);
+        return;
+      }
+
+      // Clean Base64
+      let cleanBase64 = rawBase64.trim();
+      if (cleanBase64.includes('base64,')) {
+        cleanBase64 = cleanBase64.split('base64,')[1];
+      }
+      cleanBase64 = cleanBase64.replace(/[\r\n\s]+/g, '');
+      const imageBuffer = Buffer.from(cleanBase64, 'base64');
+
+      if (imageBuffer.length === 0) {
+        sendError(res, 'VALIDATION_ERROR', 'Invalid image data received', HttpStatus.BAD_REQUEST);
+        return;
+      }
+
+      // 10MB limit check
+      if (imageBuffer.length > 10 * 1024 * 1024) {
+        sendError(res, 'FILE_TOO_LARGE', 'Photo exceeds 10MB limit', HttpStatus.BAD_REQUEST);
+        return;
+      }
+
+      // Save securely into private storage
+      const storageResult = await mealPhotoStorageService.saveMealPhoto(
+        clientProfile.id,
+        imageBuffer,
+        'image/jpeg'
+      );
+
+      // Derive reliable timestamp
+      let captureDate = new Date();
+      if (capturedAt) {
+        const parsed = new Date(capturedAt);
+        if (!isNaN(parsed.getTime())) {
+          captureDate = parsed;
+        }
+      }
+
+      const dateString = captureDate.toISOString().split('T')[0];
+      const validMealType = ['Breakfast', 'Lunch', 'Snack', 'Dinner', 'Other'].includes(mealType)
+        ? mealType
+        : 'Lunch';
+
+      const mealPhoto = await prisma.mealPhoto.create({
+        data: {
+          clientProfileId: clientProfile.id,
+          clientId: clientProfile.clientId || clientProfile.id,
+          mealId: `live_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          dateString,
+          mealType: validMealType,
+          storagePath: storageResult.storagePath,
+          storageProvider: 'LOCAL_SECURE',
+          mimeType: 'image/jpeg',
+          fileSizeBytes: storageResult.fileSizeBytes,
+          capturedAt: captureDate,
+          confirmedAt: new Date(),
+          status: 'PENDING',
+          clientNote: clientNote && typeof clientNote === 'string' ? clientNote.trim().slice(0, 500) : null,
+          timezone: typeof timezone === 'string' ? timezone.trim() : 'UTC',
+        },
+      });
+
+      sendSuccess(
+        res,
+        {
+          foodPhoto: {
+            id: mealPhoto.id,
+            clientId: mealPhoto.clientId,
+            clientName: clientProfile.user?.name || 'Athlete Member',
+            dateString: mealPhoto.dateString,
+            mealType: mealPhoto.mealType,
+            capturedAt: mealPhoto.capturedAt.toISOString(),
+            status: mealPhoto.status,
+            clientNote: mealPhoto.clientNote,
+            adminNote: mealPhoto.adminNote,
+            photoUrl: `/api/v1/food-photos/${mealPhoto.id}/image`,
+            timezone: mealPhoto.timezone,
+          },
+        },
+        HttpStatus.CREATED
+      );
+    } catch (err: any) {
+      console.error('[LIVE FOOD PHOTO ERROR]', err);
+      sendError(res, 'PHOTO_RECORD_ERROR', err.message || 'Failed to record live food photo', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * GET /api/v1/food-photos/my-photos
+   * Retrieves food photo history for the authenticated client.
+   */
+  public async getClientFoodPhotos(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser) {
+        sendError(res, 'UNAUTHORIZED', 'Authentication required', HttpStatus.UNAUTHORIZED);
+        return;
+      }
+
+      const clientProfile = await this.getClientProfile(authUser.id);
+      if (!clientProfile) {
+        sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+        return;
+      }
+
+      const { dateString, mealType } = req.query;
+
+      const whereClause: any = {
+        clientProfileId: clientProfile.id,
+        isDeleted: false,
+      };
+
+      if (dateString && typeof dateString === 'string') {
+        whereClause.dateString = dateString.trim();
+      }
+
+      if (mealType && typeof mealType === 'string') {
+        whereClause.mealType = mealType.trim();
+      }
+
+      const photos = await prisma.mealPhoto.findMany({
+        where: whereClause,
+        orderBy: { capturedAt: 'desc' },
+        take: 100,
+      });
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayPhotos = photos.filter((p) => p.dateString === todayStr);
+
+      const formatted = photos.map((p) => ({
+        id: p.id,
+        clientId: p.clientId,
+        dateString: p.dateString,
+        mealType: p.mealType,
+        capturedAt: p.capturedAt.toISOString(),
+        status: p.status, // PENDING, VERIFIED, NEEDS_ATTENTION
+        clientNote: p.clientNote,
+        adminNote: p.adminNote,
+        verifiedAt: p.verifiedAt ? p.verifiedAt.toISOString() : null,
+        photoUrl: `/api/v1/food-photos/${p.id}/image`,
+        timezone: p.timezone,
+      }));
+
+      const summary = {
+        totalToday: todayPhotos.length,
+        verifiedCount: todayPhotos.filter((p) => p.status === 'VERIFIED').length,
+        pendingCount: todayPhotos.filter((p) => p.status === 'PENDING').length,
+        needsAttentionCount: todayPhotos.filter((p) => p.status === 'NEEDS_ATTENTION').length,
+        breakfastRecorded: todayPhotos.some((p) => p.mealType.toLowerCase() === 'breakfast'),
+        lunchRecorded: todayPhotos.some((p) => p.mealType.toLowerCase() === 'lunch'),
+        snackRecorded: todayPhotos.some((p) => p.mealType.toLowerCase() === 'snack' || p.mealType.toLowerCase() === 'snacks'),
+        dinnerRecorded: todayPhotos.some((p) => p.mealType.toLowerCase() === 'dinner'),
+      };
+
+      sendSuccess(res, {
+        photos: formatted,
+        summary,
+      });
+    } catch (err: any) {
+      sendError(res, 'FETCH_ERROR', err.message || 'Failed to fetch food photos', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * GET /api/v1/food-photos/admin/monitoring
+   * Retrieves food photos for Admin verification and daily monitoring across athletes.
+   */
+  public async getAdminFoodPhotosMonitoring(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser || authUser.role !== UserRole.ADMIN) {
+        sendError(res, 'FORBIDDEN', 'Administrator access required', HttpStatus.FORBIDDEN);
+        return;
+      }
+
+      const { clientId, dateString, mealType, status, search } = req.query;
+
+      const whereClause: any = {
+        isDeleted: false,
+      };
+
+      if (clientId && typeof clientId === 'string' && clientId.trim()) {
+        whereClause.clientId = clientId.trim();
+      }
+
+      if (dateString && typeof dateString === 'string' && dateString.trim()) {
+        whereClause.dateString = dateString.trim();
+      }
+
+      if (mealType && typeof mealType === 'string' && mealType.trim()) {
+        whereClause.mealType = mealType.trim();
+      }
+
+      if (status && typeof status === 'string' && status.trim()) {
+        whereClause.status = status.trim().toUpperCase();
+      }
+
+      if (search && typeof search === 'string' && search.trim()) {
+        const query = search.trim();
+        whereClause.clientProfile = {
+          OR: [
+            { clientId: { contains: query, mode: 'insensitive' } },
+            { user: { name: { contains: query, mode: 'insensitive' } } },
+            { user: { email: { contains: query, mode: 'insensitive' } } },
+          ],
+        };
+      }
+
+      const photos = await prisma.mealPhoto.findMany({
+        where: whereClause,
+        include: {
+          clientProfile: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+        },
+        orderBy: { capturedAt: 'desc' },
+        take: 200,
+      });
+
+      const todayStr = (typeof dateString === 'string' && dateString.trim()) || new Date().toISOString().split('T')[0];
+
+      const formatted = photos.map((p) => ({
+        id: p.id,
+        clientId: p.clientId || p.clientProfile?.clientId,
+        clientName: p.clientProfile?.user?.name || 'Athlete Member',
+        clientEmail: p.clientProfile?.user?.email || '',
+        dateString: p.dateString,
+        mealType: p.mealType,
+        capturedAt: p.capturedAt.toISOString(),
+        status: p.status, // PENDING, VERIFIED, NEEDS_ATTENTION
+        clientNote: p.clientNote,
+        adminNote: p.adminNote,
+        verifiedAt: p.verifiedAt ? p.verifiedAt.toISOString() : null,
+        photoUrl: `/api/v1/food-photos/${p.id}/image`,
+        timezone: p.timezone,
+      }));
+
+      const summary = {
+        total: formatted.length,
+        verifiedCount: formatted.filter((p) => p.status === 'VERIFIED').length,
+        pendingCount: formatted.filter((p) => p.status === 'PENDING').length,
+        needsAttentionCount: formatted.filter((p) => p.status === 'NEEDS_ATTENTION').length,
+        uniqueClientsCount: new Set(formatted.map((p) => p.clientId)).size,
+      };
+
+      sendSuccess(res, {
+        photos: formatted,
+        summary,
+        filterDate: todayStr,
+      });
+    } catch (err: any) {
+      sendError(res, 'ADMIN_FETCH_ERROR', err.message || 'Failed to retrieve food photos for monitoring', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/food-photos/:id/verify
+   * Admin verifies or requests attention on a food photo.
+   */
+  public async adminVerifyFoodPhoto(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser || authUser.role !== UserRole.ADMIN) {
+        sendError(res, 'FORBIDDEN', 'Administrator access required to verify food photos', HttpStatus.FORBIDDEN);
+        return;
+      }
+
+      const photoId = String(req.params.id || '');
+      const { status, adminNote } = req.body;
+
+      if (!status || !['VERIFIED', 'NEEDS_ATTENTION', 'PENDING'].includes(status.toUpperCase())) {
+        sendError(res, 'VALIDATION_ERROR', 'Valid status (VERIFIED or NEEDS_ATTENTION) is required', HttpStatus.BAD_REQUEST);
+        return;
+      }
+
+      const normalizedStatus = status.toUpperCase();
+
+      const existing = await prisma.mealPhoto.findUnique({
+        where: { id: photoId },
+        include: { clientProfile: true },
+      });
+
+      if (!existing || existing.isDeleted) {
+        sendError(res, 'NOT_FOUND', 'Food photo not found', HttpStatus.NOT_FOUND);
+        return;
+      }
+
+      const updated = await prisma.mealPhoto.update({
+        where: { id: photoId },
+        data: {
+          status: normalizedStatus,
+          adminNote: adminNote !== undefined ? (adminNote ? String(adminNote).trim() : null) : existing.adminNote,
+          verifiedByAdminId: authUser.id,
+          verifiedAt: new Date(),
+        },
+      });
+
+      // Send in-app notification if marked as NEEDS_ATTENTION
+      if (normalizedStatus === 'NEEDS_ATTENTION' && existing.clientProfileId) {
+        try {
+          await prisma.notification.create({
+            data: {
+              clientProfileId: existing.clientProfileId,
+              clientId: existing.clientId,
+              title: 'Food Photo Review: Needs Attention',
+              message: adminNote?.trim() || `Your trainer reviewed your ${existing.mealType} photo and added diet guidance.`,
+              type: 'NUTRITION',
+              category: 'FOOD_PHOTO_REVIEW',
+              priority: 'NORMAL',
+              source: 'ADMIN',
+            },
+          });
+        } catch (_) {}
+      }
+
+      sendSuccess(res, {
+        foodPhoto: {
+          id: updated.id,
+          clientId: updated.clientId,
+          mealType: updated.mealType,
+          status: updated.status,
+          adminNote: updated.adminNote,
+          verifiedAt: updated.verifiedAt?.toISOString(),
+          photoUrl: `/api/v1/food-photos/${updated.id}/image`,
+        },
+        message: normalizedStatus === 'VERIFIED' ? 'Food photo marked as Verified.' : 'Food photo marked as Needs Attention.',
+      });
+    } catch (err: any) {
+      sendError(res, 'VERIFY_ERROR', err.message || 'Failed to update food photo status', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
    * DELETE /api/v1/admin/meal-photos/:id (Admin single photo deletion)
    */
   public async deleteMealPhoto(req: Request, res: Response): Promise<void> {

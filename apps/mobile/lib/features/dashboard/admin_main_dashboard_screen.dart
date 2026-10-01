@@ -18,8 +18,9 @@ import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_client_nutrition_screen.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/admin_weekly_progress_screen.dart';
-import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
+import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/admin_food_photos_monitoring_screen.dart';
+import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -224,6 +225,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         return AdminWeeklyProgressScreen(repository: _weeklyProgressRepo);
       case 8:
         return const AdminAttentionCenterView();
+      case 9:
+        return const AdminFoodPhotosMonitoringScreen();
       default:
         return _buildAdminHomeTab();
     }
@@ -319,6 +322,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           _drawerItem(6, 'Settings', Icons.settings_outlined),
           _drawerItem(7, 'Weekly Progress', Icons.insights_rounded),
           _drawerItem(8, 'Client Attention', Icons.warning_amber_rounded),
+          _drawerItem(9, 'Client Food Photos', Icons.camera_alt_outlined),
           const Divider(color: AppColors.border),
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.primaryRed),
@@ -555,6 +559,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   builder: (ctx) => AdminPerformanceDashboardScreen(workoutRepository: widget.workoutRepository),
                 ),
               );
+            }),
+            _adminActionChip('Client Food Photos', Icons.camera_alt_outlined, () {
+              setState(() => _selectedIndex = 9);
             }),
             _adminActionChip('Global Step Target', Icons.flag_outlined, () {
               _showSetStepGoalDialog();

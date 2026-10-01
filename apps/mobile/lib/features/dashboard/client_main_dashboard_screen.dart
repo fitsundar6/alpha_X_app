@@ -21,8 +21,9 @@ import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_progress_screen.dart';
 import 'package:alpha_x_gym/features/notifications/data/repositories/notification_repository.dart';
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_sheet.dart';
-import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
+import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
+import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -278,6 +279,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               repository: widget.macroRepository,
               mealType: MealType.snack,
               dateString: widget.macroRepository.getTodayDateString(),
+            );
+          }),
+          _drawerSubPageItem('My Food Photos', Icons.camera_alt_outlined, () {
+            Navigator.of(context).pop();
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
             );
           }),
           _drawerSubPageItem('Attendance Pass', Icons.qr_code_scanner_outlined, () {
@@ -634,6 +641,11 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => setState(() => _currentTabIndex = 1)),
                   _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => setState(() => _currentTabIndex = 2)),
                   _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => setState(() => _currentTabIndex = 3)),
+                  _clientSectionChip('FOOD PHOTOS', Icons.camera_alt, () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
+                    );
+                  }),
                   _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => setState(() => _currentTabIndex = 4)),
                   _clientSectionChip('MY ATTENDANCE', Icons.qr_code_scanner, () => _openAttendanceSubPage(context)),
                   _clientSectionChip('MY CHALLENGE', Icons.local_fire_department, () => _openChallengeSubPage(context)),

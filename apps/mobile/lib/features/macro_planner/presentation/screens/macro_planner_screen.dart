@@ -14,6 +14,8 @@ import '../widgets/edit_food_quantity_dialog.dart';
 import 'macro_input_screen.dart';
 import 'macro_history_screen.dart';
 import 'ai_food_camera_scanner_screen.dart';
+import '../../../food_photo_tracking/presentation/screens/live_food_camera_screen.dart';
+import '../../../food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import '../../domain/models/assigned_diet_plan.dart';
 
 /// Main client hub for Alpha X Macro Planner & Daily Food Tracking
@@ -140,11 +142,17 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
   void _openCameraScanner([MealType mealType = MealType.lunch]) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (ctx) => AiFoodCameraScannerScreen(
-          repository: widget.repository,
-          initialMealType: mealType,
-          dateString: _selectedDateString,
+        builder: (ctx) => LiveFoodCameraScreen(
+          initialMealType: mealType.displayName,
         ),
+      ),
+    );
+  }
+
+  void _openMyFoodPhotos() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => const MyFoodPhotosScreen(),
       ),
     );
   }
@@ -792,7 +800,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
         ),
         const SizedBox(height: 14),
 
-        // AI FOOD CAMERA SCANNER BANNER
+        // LIVE FOOD PHOTO TRACKING & TRAINER VERIFICATION BANNER
         Container(
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(14),
@@ -824,9 +832,9 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'AI FOOD CAMERA SCANNER',
+                  children: [
+                    const Text(
+                      'LIVE FOOD PHOTO TRACKING',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -834,10 +842,28 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                         letterSpacing: 0.8,
                       ),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Point camera at food to scan meal and estimate macros.',
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Take a live camera photo of your meal for your trainer to review.',
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    ),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: _openMyFoodPhotos,
+                      child: Row(
+                        children: const [
+                          Icon(Icons.history, size: 12, color: AppColors.primaryRed),
+                          SizedBox(width: 4),
+                          Text(
+                            'View My Food Photos History →',
+                            style: TextStyle(
+                              color: AppColors.primaryRed,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -846,7 +872,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               ElevatedButton.icon(
                 onPressed: () => _openCameraScanner(MealType.lunch),
                 icon: const Icon(Icons.photo_camera, size: 14),
-                label: const Text('SCAN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                label: const Text('PHOTO', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
                   foregroundColor: Colors.white,

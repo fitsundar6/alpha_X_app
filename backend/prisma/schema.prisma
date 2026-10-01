@@ -643,6 +643,12 @@ model MealPhoto {
   totalCarbs      Float          @default(0.0)
   totalFat        Float          @default(0.0)
   totalFiber      Float          @default(0.0)
+  status          String         @default("PENDING") // PENDING, VERIFIED, NEEDS_ATTENTION
+  clientNote      String?
+  adminNote       String?
+  verifiedByAdminId String?
+  verifiedAt      DateTime?
+  timezone        String?        @default("UTC")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -652,6 +658,7 @@ model MealPhoto {
   @@index([clientId])
   @@index([dateString])
   @@index([mealId])
+  @@index([status])
   @@map("meal_photos")
 }
 

@@ -1111,6 +1111,19 @@ router.delete('/meal-photos/:id', (req: Request, res: Response) => {
 });
 
 // ==========================================
+// ADMIN FOOD PHOTO MONITORING & VERIFICATION
+// ==========================================
+router.get('/food-photos', (req: Request, res: Response) => {
+  foodPhotoController.getAdminFoodPhotosMonitoring(req, res);
+});
+router.patch('/food-photos/:id/verify', (req: Request, res: Response) => {
+  foodPhotoController.adminVerifyFoodPhoto(req, res);
+});
+router.post('/food-photos/:id/verify', (req: Request, res: Response) => {
+  foodPhotoController.adminVerifyFoodPhoto(req, res);
+});
+
+// ==========================================
 // ADMIN ATTENTION CENTER & AUTOMATION
 // ==========================================
 
