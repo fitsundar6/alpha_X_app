@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'client_workout_execution_screen.dart';
@@ -21,7 +22,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
     // Starts a new workout execution record
     workoutRepository.startSession(session);
 
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => ClientWorkoutExecutionScreen(
           workoutRepository: workoutRepository,
@@ -32,6 +33,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     final totalSets = session.exercises.fold(0, (acc, ex) => acc + ex.sets.length);
 
     // Group exercises by superset tag if applicable
@@ -52,7 +54,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
+                    color: colors.primaryRed,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -66,9 +68,9 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   '• Perform back-to-back, rest after superset',
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontStyle: FontStyle.italic),
+                  style: TextStyle(color: colors.textTertiary, fontSize: 11, fontStyle: FontStyle.italic),
                 ),
               ],
             ),
@@ -81,17 +83,20 @@ class ClientSessionOverviewScreen extends StatelessWidget {
       exerciseWidgets.add(
         AlphaXSubtleEntrance(
           delay: Duration(milliseconds: 30 * i),
-          child: _buildExerciseCard(context, ex, i),
+          child: _buildExerciseCard(context, ex, i, colors),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text(
+        backgroundColor: colors.surface,
+        iconTheme: IconThemeData(color: colors.textPrimary),
+        title: Text(
           'SESSION OVERVIEW',
           style: TextStyle(
+            color: colors.textPrimary,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.1,
             fontSize: 16,
@@ -119,9 +124,9 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
+              color: colors.surfaceCard,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: colors.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,24 +136,24 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceElevated,
+                        color: colors.surfaceElevated,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         session.difficulty.toUpperCase(),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: colors.textSecondary,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     const Spacer(),
-                    const Icon(Icons.timer_outlined, size: 14, color: AppColors.textTertiary),
+                    Icon(Icons.timer_outlined, size: 14, color: colors.textTertiary),
                     const SizedBox(width: 4),
                     Text(
                       '~${session.estimatedDurationMinutes} min',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -156,22 +161,22 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     session.description!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textTertiary,
+                      color: colors.textTertiary,
                       height: 1.4,
                     ),
                   ),
                 ],
                 const SizedBox(height: 16),
-                const Divider(color: AppColors.border),
+                Divider(color: colors.border),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _metricItem('Exercises', '${session.exercises.length}'),
-                    _metricItem('Total Sets', '$totalSets'),
-                    _metricItem('Est. Duration', '${session.estimatedDurationMinutes}m'),
+                    _metricItem('Exercises', '${session.exercises.length}', colors),
+                    _metricItem('Total Sets', '$totalSets', colors),
+                    _metricItem('Est. Duration', '${session.estimatedDurationMinutes}m', colors),
                   ],
                 ),
               ],
@@ -179,19 +184,19 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           ),
 
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'PRESCRIBED EXERCISE ROUTINE',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.1,
-              color: AppColors.textSecondary,
+              color: colors.textSecondary,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Structure is prescribed by gym administration. Enter actual sets during execution.',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            style: TextStyle(color: colors.textTertiary, fontSize: 12),
           ),
           const SizedBox(height: 12),
 
@@ -231,23 +236,23 @@ class ClientSessionOverviewScreen extends StatelessWidget {
     );
   }
 
-  Widget _metricItem(String label, String value) {
+  Widget _metricItem(String label, String value, ClientThemeColors colors) {
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 18),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+          style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
-  Widget _buildExerciseCard(BuildContext context, WorkoutExercise ex, int index) {
+  Widget _buildExerciseCard(BuildContext context, WorkoutExercise ex, int index, ClientThemeColors colors) {
     final firstSet = ex.sets.firstOrNull;
     return AlphaXPressable(
       onTap: () {
@@ -265,10 +270,10 @@ class ClientSessionOverviewScreen extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: colors.surfaceCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: ex.isSuperset ? AppColors.accentRed.withOpacity(0.4) : AppColors.border,
+          color: ex.isSuperset ? colors.accentRed.withOpacity(0.4) : colors.border,
           width: ex.isSuperset ? 1.4 : 1.0,
         ),
       ),
@@ -282,7 +287,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
+                    color: colors.primaryRed,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -295,13 +300,13 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceElevated,
+                    color: colors.surfaceElevated,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Center(
                     child: Text(
                       '${index + 1}',
-                      style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w800, fontSize: 12),
+                      style: TextStyle(color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 12),
                     ),
                   ),
                 ),
@@ -310,8 +315,8 @@ class ClientSessionOverviewScreen extends StatelessWidget {
               Expanded(
                 child: Text(
                   ex.exerciseName,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: colors.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
@@ -320,13 +325,13 @@ class ClientSessionOverviewScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: colors.surfaceElevated,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   '${ex.sets.length} × ${firstSet?.targetRepsDisplay ?? "8-12"}',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: colors.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
@@ -338,25 +343,25 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           Row(
             children: [
               if (firstSet?.targetWeight != null && firstSet!.targetWeight > 0) ...[
-                const Icon(Icons.fitness_center, size: 12, color: AppColors.textSecondary),
+                Icon(Icons.fitness_center, size: 12, color: colors.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   'Target: ${firstSet.targetWeight} kg',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
                 ),
-                const Text(' • ', style: TextStyle(color: AppColors.textTertiary)),
+                Text(' • ', style: TextStyle(color: colors.textTertiary)),
               ],
-              const Icon(Icons.timer_outlined, size: 12, color: AppColors.textSecondary),
+              Icon(Icons.timer_outlined, size: 12, color: colors.textSecondary),
               const SizedBox(width: 4),
               Text(
                 'Rest: ${ex.restSeconds}s',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
               if (firstSet?.targetRir != null) ...[
-                const Text(' • ', style: TextStyle(color: AppColors.textTertiary)),
+                Text(' • ', style: TextStyle(color: colors.textTertiary)),
                 Text(
                   'RIR: ${firstSet!.targetRir}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
                 ),
               ],
             ],
@@ -366,18 +371,18 @@ class ClientSessionOverviewScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
+                color: colors.surfaceElevated,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, size: 14, color: AppColors.primaryRed),
+                  Icon(Icons.info_outline, size: 14, color: colors.primaryRed),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Admin Instruction: ${ex.trainerNote}',
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontStyle: FontStyle.italic),
+                      style: TextStyle(color: colors.textTertiary, fontSize: 11, fontStyle: FontStyle.italic),
                     ),
                   ),
                 ],

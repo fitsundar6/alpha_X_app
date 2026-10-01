@@ -301,14 +301,17 @@ class MacroProgressCard extends StatelessWidget {
               ),
               const Spacer(),
               // Status Pill: "X g remaining" or "X g over target" (Section 10: Never negative)
-              Text(
-                isOver
-                    ? '${FoodLogEntry.formatMacro(over)} $unit over target'
-                    : '${FoodLogEntry.formatMacro(remaining)} $unit remaining',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: isOver ? AppColors.primaryRed : AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  isOver
+                      ? '${FoodLogEntry.formatMacro(over)} $unit over target'
+                      : '${FoodLogEntry.formatMacro(remaining)} $unit remaining',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: isOver ? AppColors.primaryRed : AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

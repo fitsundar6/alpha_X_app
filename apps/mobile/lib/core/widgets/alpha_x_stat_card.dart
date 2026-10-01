@@ -22,6 +22,13 @@ class AlphaXStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveColor = accentColor ?? AlphaXColors.redAccent;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceColor = theme.cardTheme.color ?? AlphaXColors.surfaceCard;
+    final borderColor = theme.dividerTheme.color ?? AlphaXColors.border;
+    final primaryTextColor = isDark ? AlphaXColors.textPrimary : const Color(0xFF111827);
+    final secondaryTextColor = isDark ? AlphaXColors.textSecondary : const Color(0xFF4B5563);
+    final tertiaryTextColor = isDark ? AlphaXColors.textTertiary : const Color(0xFF9CA3AF);
 
     return Material(
       color: Colors.transparent,
@@ -31,9 +38,18 @@ class AlphaXStatCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(AlphaXSpacing.md),
           decoration: BoxDecoration(
-            color: AlphaXColors.surfaceCard,
+            color: surfaceColor,
             borderRadius: AlphaXRadius.roundedMd,
-            border: Border.all(color: AlphaXColors.border, width: 1.0),
+            border: Border.all(color: borderColor, width: 1.0),
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,8 +60,8 @@ class AlphaXStatCard extends StatelessWidget {
                 children: [
                   Text(
                     label.toUpperCase(),
-                    style: const TextStyle(
-                      color: AlphaXColors.textSecondary,
+                    style: TextStyle(
+                      color: secondaryTextColor,
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.8,
@@ -61,8 +77,8 @@ class AlphaXStatCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 value,
-                style: const TextStyle(
-                  color: AlphaXColors.textPrimary,
+                style: TextStyle(
+                  color: primaryTextColor,
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.3,
@@ -75,7 +91,7 @@ class AlphaXStatCard extends StatelessWidget {
                 Text(
                   subtext!,
                   style: TextStyle(
-                    color: AlphaXColors.textTertiary,
+                    color: tertiaryTextColor,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),

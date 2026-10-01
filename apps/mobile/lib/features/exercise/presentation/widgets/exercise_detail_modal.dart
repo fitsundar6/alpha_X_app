@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/features/exercise/domain/models/exercise_model.dart';
 import 'package:alpha_x_gym/features/exercise/data/repositories/exercise_repository.dart';
 
@@ -24,10 +25,11 @@ class ExerciseDetailModal extends StatelessWidget {
     VoidCallback? onDuplicate,
     VoidCallback? onToggleArchive,
   }) {
+    final colors = ClientThemeColors.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -48,27 +50,40 @@ class ExerciseDetailModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     final alternatives = ExerciseRepository().getAlternatives(exercise.id);
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+    double? dragStartX;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (details) {
+        dragStartX = details.globalPosition.dx;
+      },
+      onHorizontalDragEnd: (details) {
+        if (dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150) {
+          Navigator.of(context).pop();
+        }
+        dragStartX = null;
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
 
           // Header
           Padding(
@@ -504,8 +519,9 @@ class ExerciseDetailModal extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _specRow(String label, String value, IconData icon) {
     return Row(

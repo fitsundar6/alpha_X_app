@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/exercise/domain/models/exercise_model.dart';
 import 'package:alpha_x_gym/features/exercise/data/repositories/exercise_repository.dart';
@@ -47,11 +47,12 @@ class ClientExerciseDetailSheet extends StatelessWidget {
     // If catalogExercise is not passed, resolve from ExerciseRepository
     final resolvedCatalog = catalogExercise ??
         ExerciseRepository().getExerciseById(workoutExercise.exerciseId);
+    final colors = ClientThemeColors.of(context);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -74,6 +75,7 @@ class ClientExerciseDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     final effectiveClientId = clientId ?? AuthService().currentUserId;
 
     // Retrieve previous performance history using Client ID + Exercise ID
@@ -105,107 +107,121 @@ class ClientExerciseDetailSheet extends StatelessWidget {
     // Target Reps Display
     final targetReps = workoutExercise.sets.firstOrNull?.targetRepsDisplay ?? '';
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+    double? dragStartX;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (details) {
+        dragStartX = details.globalPosition.dx;
+      },
+      onHorizontalDragEnd: (details) {
+        if (dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150) {
+          Navigator.of(context).pop();
+        }
+        dragStartX = null;
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
 
-          // Scrollable Content Area
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              children: [
-                // 1. EXERCISE NAME (Clean, strong heading)
-                ExerciseHeader(
-                  exerciseName: workoutExercise.exerciseName,
-                  category: workoutExercise.category,
-                  equipment: equipment,
-                  supersetTag: workoutExercise.supersetTag,
-                  onClose: () => Navigator.of(context).pop(),
-                ),
-                const SizedBox(height: 16),
-
-                // 2. [ ANIMATED GIF ] (Continuous exercise demonstration)
-                ExerciseMedia(
-                  exerciseId: workoutExercise.exerciseId,
-                  gifUrl: resolvedCatalog?.gifDemonstrationUrl ?? '',
-                  videoUrl: videoUrl,
-                  thumbnailUrl: thumbnailUrl,
-                  imageUrl: imageUrl,
-                  animationUrl: animationUrl,
-                  exerciseName: workoutExercise.exerciseName,
-                  category: workoutExercise.category,
-                  movementPattern: movementPattern,
-                ),
-                const SizedBox(height: 16),
-
-                // 3. EXERCISE INFORMATION (Target Muscle, Sets, Target Reps, Rest)
-                ExerciseStats(
-                  targetMuscle: workoutExercise.primaryMusclesDisplay.isNotEmpty
-                      ? workoutExercise.primaryMusclesDisplay
-                      : catalogExercise?.primaryMusclesDisplay,
-                  setsCount: workoutExercise.sets.length,
-                  targetReps: targetReps,
-                  restSeconds: workoutExercise.restSeconds > 0
-                      ? workoutExercise.restSeconds
-                      : null,
-                ),
-                const SizedBox(height: 16),
-
-                // 4. PREVIOUS PERFORMANCE (Last workout & View History)
-                PreviousPerformanceCard(
-                  exerciseName: workoutExercise.exerciseName,
-                  history: history,
-                ),
-                const SizedBox(height: 16),
-
-                // 5. TRAINER NOTE (Noticeable, non-distracting; hidden if empty)
-                if (effectiveTrainerNote.isNotEmpty) ...[
-                  TrainerNoteCard(note: effectiveTrainerNote),
-                  const SizedBox(height: 16),
-                ],
-
-                // 6. INSTRUCTIONS (Setup, execution steps, coaching cues)
-                if (setupSteps.isNotEmpty || executionSteps.isNotEmpty) ...[
-                  ExerciseInstructions(
-                    setupInstructions: setupSteps,
-                    executionSteps: executionSteps,
-                    coachingCues: cues,
-                    initialExpanded: true,
+            // Scrollable Content Area
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                children: [
+                  // 1. EXERCISE NAME (Clean, strong heading)
+                  ExerciseHeader(
+                    exerciseName: workoutExercise.exerciseName,
+                    category: workoutExercise.category,
+                    equipment: equipment,
+                    supersetTag: workoutExercise.supersetTag,
+                    onClose: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(height: 16),
-                ],
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
 
-          // 9. STICKY BOTTOM ACTION AREA (START SET / START WORKOUT)
-          ExerciseBottomAction(
-            label: actionButtonLabel,
-            onPressed: () {
-              Navigator.of(context).pop();
-              if (onPrimaryAction != null) {
-                onPrimaryAction!();
-              }
-            },
-          ),
-        ],
+                  // 2. [ ANIMATED GIF ] (Continuous exercise demonstration)
+                  ExerciseMedia(
+                    exerciseId: workoutExercise.exerciseId,
+                    gifUrl: resolvedCatalog?.gifDemonstrationUrl ?? '',
+                    videoUrl: videoUrl,
+                    thumbnailUrl: thumbnailUrl,
+                    imageUrl: imageUrl,
+                    animationUrl: animationUrl,
+                    exerciseName: workoutExercise.exerciseName,
+                    category: workoutExercise.category,
+                    movementPattern: movementPattern,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 3. EXERCISE INFORMATION (Target Muscle, Sets, Target Reps, Rest)
+                  ExerciseStats(
+                    targetMuscle: workoutExercise.primaryMusclesDisplay.isNotEmpty
+                        ? workoutExercise.primaryMusclesDisplay
+                        : catalogExercise?.primaryMusclesDisplay,
+                    setsCount: workoutExercise.sets.length,
+                    targetReps: targetReps,
+                    restSeconds: workoutExercise.restSeconds > 0
+                        ? workoutExercise.restSeconds
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 4. PREVIOUS PERFORMANCE (Last workout & View History)
+                  PreviousPerformanceCard(
+                    exerciseName: workoutExercise.exerciseName,
+                    history: history,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 5. TRAINER NOTE (Noticeable, non-distracting; hidden if empty)
+                  if (effectiveTrainerNote.isNotEmpty) ...[
+                    TrainerNoteCard(note: effectiveTrainerNote),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 6. INSTRUCTIONS (Setup, execution steps, coaching cues)
+                  if (setupSteps.isNotEmpty || executionSteps.isNotEmpty) ...[
+                    ExerciseInstructions(
+                      setupInstructions: setupSteps,
+                      executionSteps: executionSteps,
+                      coachingCues: cues,
+                      initialExpanded: true,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+
+            // 9. STICKY BOTTOM ACTION AREA (START SET / START WORKOUT)
+            ExerciseBottomAction(
+              label: actionButtonLabel,
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (onPrimaryAction != null) {
+                  onPrimaryAction!();
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

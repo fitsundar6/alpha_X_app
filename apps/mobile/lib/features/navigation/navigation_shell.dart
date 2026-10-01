@@ -59,9 +59,12 @@ class _NavigationShellState extends State<NavigationShell> {
           child: Container(
             width: 540,
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: Theme.of(context).scaffoldBackgroundColor,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.border, width: 1.5),
+              border: Border.all(
+                color: Theme.of(context).dividerTheme.color ?? AppColors.border,
+                width: 1.5,
+              ),
               boxShadow: const [
                 BoxShadow(
                   color: Colors.black54,

@@ -27,6 +27,8 @@ class AlphaXCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final effectiveBorderRadius = borderRadius ?? AlphaXRadius.roundedMd;
 
     final cardContent = Container(
@@ -35,19 +37,27 @@ class AlphaXCard extends StatelessWidget {
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AlphaXColors.surfaceCard,
+        color: backgroundColor ?? theme.cardTheme.color ?? AlphaXColors.surfaceCard,
         borderRadius: effectiveBorderRadius,
         border: Border.all(
-          color: borderColor ?? AlphaXColors.border,
+          color: borderColor ?? theme.dividerTheme.color ?? AlphaXColors.border,
           width: 1.0,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black45,
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark
+            ? const [
+                BoxShadow(
+                  color: Colors.black45,
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: child,
     );

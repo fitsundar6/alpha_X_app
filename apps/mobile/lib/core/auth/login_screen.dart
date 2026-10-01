@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen>
 
       final role = result['role']?.toString();
       if (role == 'ADMIN') {
-        Navigator.of(context).pushReplacementNamed('/admin');
+        Navigator.of(context).pushNamedAndRemoveUntil('/admin', (route) => false);
         return;
       }
 
@@ -108,10 +108,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!isAssessmentComplete) {
         // Open / resume Fitness Assessment
-        Navigator.of(context).pushReplacementNamed('/onboarding');
+        Navigator.of(context).pushNamedAndRemoveUntil('/onboarding', (route) => false);
       } else {
         // Assessment completed -> Open Client Dashboard
-        Navigator.of(context).pushReplacementNamed('/dashboard');
+        Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (route) => false);
       }
     } catch (e) {
       if (mounted) {
@@ -469,7 +469,7 @@ class _LoginScreenState extends State<LoginScreen>
                   runSpacing: 4,
                   children: [
                     TextButton(
-                      onPressed: () => Navigator.of(context).pushReplacementNamed('/dashboard'),
+                      onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (route) => false),
                       child: const Text(
                         'Continue as Guest',
                         style: TextStyle(

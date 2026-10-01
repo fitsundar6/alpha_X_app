@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/client_theme_service.dart';
 import 'core/theme/app_typography.dart';
 import 'core/auth/auth_service.dart';
 import 'core/widgets/alpha_x_logo.dart';
@@ -30,6 +31,7 @@ import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService().initialize();
+  await ClientThemeService().initialize();
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
   debugPrint('====================================================');
@@ -54,10 +56,13 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
   late final MacroRepository _macroRepository;
   late final WeeklyProgressRepository _weeklyProgressRepository;
   final AuthService _authService = AuthService();
+  final ClientThemeService _clientThemeService = ClientThemeService();
 
   @override
   void initState() {
     super.initState();
+    _authService.addListener(_onStateChange);
+    _clientThemeService.addListener(_onStateChange);
     _workoutRepository = WorkoutRepository();
     _activityRepository = ActivityRepository();
     _macroRepository = MacroRepository();
@@ -76,6 +81,17 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
     };
   }
 
+  @override
+  void dispose() {
+    _authService.removeListener(_onStateChange);
+    _clientThemeService.removeListener(_onStateChange);
+    super.dispose();
+  }
+
+  void _onStateChange() {
+    if (mounted) setState(() {});
+  }
+
   Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
     return buildAppRoute(
       settings,
@@ -89,24 +105,35 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: widget.home ?? const FoundationSplashScreen(),
-      onGenerateRoute: _onGenerateRoute,
-      routes: {
-        '/dashboard': (context) => NavigationShell(
-          workoutRepository: _workoutRepository,
-          activityRepository: _activityRepository,
-          macroRepository: _macroRepository,
-          weeklyProgressRepository: _weeklyProgressRepository,
-        ),
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const CreateAccountScreen(),
-        '/admin/login': (context) => const AdminLoginScreen(),
-        '/onboarding': (context) => const ClientOnboardingScreen(),
-      },
+    // Admin application must strictly remain unchanged and dark:
+    final bool isAdmin = _authService.isAuthenticated && _authService.isAdmin;
+    final ThemeData effectiveTheme = isAdmin
+        ? AppTheme.darkTheme
+        : _clientThemeService.resolveTheme(context);
+
+    return AnimatedTheme(
+      data: effectiveTheme,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      child: MaterialApp(
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
+        theme: effectiveTheme,
+        home: widget.home ?? const FoundationSplashScreen(),
+        onGenerateRoute: _onGenerateRoute,
+        routes: {
+          '/dashboard': (context) => NavigationShell(
+            workoutRepository: _workoutRepository,
+            activityRepository: _activityRepository,
+            macroRepository: _macroRepository,
+            weeklyProgressRepository: _weeklyProgressRepository,
+          ),
+          '/login': (context) => const LoginScreen(),
+          '/register': (context) => const CreateAccountScreen(),
+          '/admin/login': (context) => const AdminLoginScreen(),
+          '/onboarding': (context) => const ClientOnboardingScreen(),
+        },
+      ),
     );
   }
 }
@@ -296,7 +323,7 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
               TextButton.icon(
                 onPressed: () {
                   _autoTransitionTimer?.cancel();
-                  Navigator.of(context).pushNamed('/login');
+                  Navigator.of(context).pushReplacementNamed('/login');
                 },
                 icon: const Icon(Icons.login, size: 16, color: AppColors.textSecondary),
                 label: const Text(
@@ -435,30 +462,42 @@ Route<dynamic>? buildAppRoute(
       case '/admin/clients':
       case '/admin/assignments':
         return MaterialPageRoute(
-          builder: (_) => AdminMainDashboardScreen(
-            workoutRepository: workoutRepo,
-            activityRepository: activityRepo,
-            macroRepository: macroRepo,
-            weeklyProgressRepository: weeklyProgressRepo,
+          builder: (_) => Theme(
+            data: AppTheme.darkTheme,
+            child: AdminMainDashboardScreen(
+              workoutRepository: workoutRepo,
+              activityRepository: activityRepo,
+              macroRepository: macroRepo,
+              weeklyProgressRepository: weeklyProgressRepo,
+            ),
           ),
         );
       case '/admin/weekly-progress':
         return MaterialPageRoute(
-          builder: (_) => AdminWeeklyProgressScreen(
-            repository: weeklyProgressRepo,
+          builder: (_) => Theme(
+            data: AppTheme.darkTheme,
+            child: AdminWeeklyProgressScreen(
+              repository: weeklyProgressRepo,
+            ),
           ),
         );
       case '/admin/workout-sessions':
         return MaterialPageRoute(
-          builder: (_) => AdminWorkoutSessionsScreen(
-            workoutRepository: workoutRepo,
+          builder: (_) => Theme(
+            data: AppTheme.darkTheme,
+            child: AdminWorkoutSessionsScreen(
+              workoutRepository: workoutRepo,
+            ),
           ),
         );
       case '/admin/workout-sessions/create':
       case '/admin/workout-sessions/edit':
         return MaterialPageRoute(
-          builder: (_) => AdminCreateEditSessionScreen(
-            workoutRepository: workoutRepo,
+          builder: (_) => Theme(
+            data: AppTheme.darkTheme,
+            child: AdminCreateEditSessionScreen(
+              workoutRepository: workoutRepo,
+            ),
           ),
         );
     }

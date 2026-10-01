@@ -27,16 +27,27 @@ class AlphaXHero extends StatelessWidget {
       width: double.infinity,
       height: height,
       decoration: BoxDecoration(
-        color: AlphaXColors.surfaceCard,
+        color: Theme.of(context).cardTheme.color ?? AlphaXColors.surfaceCard,
         borderRadius: AlphaXRadius.roundedXl,
-        border: Border.all(color: AlphaXColors.border, width: 1.0),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black87,
-            blurRadius: 24,
-            offset: Offset(0, 8),
-          ),
-        ],
+        border: Border.all(
+          color: Theme.of(context).dividerTheme.color ?? AlphaXColors.border,
+          width: 1.0,
+        ),
+        boxShadow: Theme.of(context).brightness == Brightness.dark
+            ? const [
+                BoxShadow(
+                  color: Colors.black87,
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(

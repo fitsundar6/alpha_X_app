@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in.dart';
 import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in_status.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
@@ -71,14 +72,15 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     return Scaffold(
-      backgroundColor: AlphaXColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: AlphaXColors.surface,
-        title: const Text(
+        backgroundColor: colors.surface,
+        title: Text(
           'WEEKLY PROGRESS & CHECK-IN',
           style: TextStyle(
-            color: AlphaXColors.textPrimary,
+            color: colors.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.8,
@@ -86,10 +88,10 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
         ),
         centerTitle: true,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AlphaXColors.textPrimary),
+        iconTheme: IconThemeData(color: colors.textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AlphaXColors.textSecondary),
+            icon: Icon(Icons.refresh_rounded, color: colors.textSecondary),
             onPressed: _loadData,
           ),
         ],

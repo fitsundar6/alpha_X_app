@@ -356,7 +356,15 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _currentStep == 1,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentStep > 1 && !_isSaving) {
+          _handleBack();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -542,8 +550,9 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStepContent() {
     switch (_currentStep) {

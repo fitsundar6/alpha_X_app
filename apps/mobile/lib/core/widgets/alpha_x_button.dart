@@ -71,10 +71,14 @@ class AlphaXButton extends StatelessWidget {
     Widget buttonWidget;
 
     if (variant == AlphaXButtonVariant.secondary) {
+      final theme = Theme.of(context);
       buttonWidget = OutlinedButton(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AlphaXColors.textPrimary,
-          side: const BorderSide(color: AlphaXColors.border, width: 1.2),
+          foregroundColor: theme.colorScheme.onSurface,
+          side: BorderSide(
+            color: theme.dividerTheme.color ?? AlphaXColors.border,
+            width: 1.2,
+          ),
           shape: RoundedRectangleBorder(borderRadius: AlphaXRadius.roundedMd),
           padding: const EdgeInsets.symmetric(horizontal: 20),
         ),

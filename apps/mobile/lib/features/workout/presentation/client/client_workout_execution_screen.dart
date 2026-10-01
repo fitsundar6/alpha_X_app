@@ -631,7 +631,41 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       }
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldLeave = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surfaceElevated,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            title: const Text('Exit Workout Session?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+            content: const Text(
+              'Your completed sets are saved in your session. Do you want to return to the session overview?',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Stay & Train', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Exit to Overview', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        );
+        if (shouldLeave == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
@@ -958,8 +992,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // --- SECTION 21: WORKOUT PROGRESS HEADER ---
   Widget _buildProgressHeader({

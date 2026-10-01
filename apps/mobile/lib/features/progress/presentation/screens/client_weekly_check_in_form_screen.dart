@@ -156,7 +156,43 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final hasData = _weightCtrl.text.isNotEmpty || _waistCtrl.text.isNotEmpty;
+
+    return PopScope(
+      canPop: !hasData,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldDiscard = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AlphaXColors.surfaceElevated,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AlphaXColors.border),
+            ),
+            title: const Text('Discard Check-In?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+            content: const Text(
+              'Your entered weekly measurements have not been submitted. Do you want to discard them?',
+              style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Keep Editing', style: TextStyle(color: AlphaXColors.textSecondary, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AlphaXColors.redAccent),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Discard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        );
+        if (shouldDiscard == true && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AlphaXColors.background,
       appBar: AppBar(
         backgroundColor: AlphaXColors.surface,
@@ -585,8 +621,9 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeaderBanner() {
     return Container(

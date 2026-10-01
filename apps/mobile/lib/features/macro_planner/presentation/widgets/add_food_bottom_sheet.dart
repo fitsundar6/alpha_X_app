@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/client_theme_service.dart';
 import '../../../../core/widgets/alpha_x_widgets.dart';
 import '../../domain/models/food_item.dart';
 import '../../domain/models/meal_type.dart';
@@ -151,32 +152,58 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     final foods = widget.repository.searchFoods(
       _searchController.text,
       category: _selectedCategory,
     );
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.90,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
-      ),
-      child: Column(
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+    double? dragStartX;
+
+    return PopScope(
+      canPop: _selectedFood == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_selectedFood != null) {
+          setState(() => _selectedFood = null);
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (details) {
+          dragStartX = details.globalPosition.dx;
+        },
+        onHorizontalDragEnd: (details) {
+          if (dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150) {
+            if (_selectedFood != null) {
+              setState(() => _selectedFood = null);
+            } else {
+              Navigator.of(context).pop();
+            }
+          }
+          dragStartX = null;
+        },
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.90,
+          decoration: BoxDecoration(
+            color: colors.surfaceCard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(top: BorderSide(color: colors.border, width: 1.5)),
           ),
+          child: Column(
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
 
           // Header: Food Library                         [+ Custom]  (X)
           Padding(
@@ -458,7 +485,9 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
           if (_selectedFood != null) _buildSelectedFoodPanel(),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   /// Section 5: Food Entry Screen details panel

@@ -25,8 +25,10 @@ class AlphaXSectionHeader extends StatelessWidget {
         children: [
           Text(
             title.toUpperCase(),
-            style: const TextStyle(
-              color: AlphaXColors.textSecondary,
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AlphaXColors.textSecondary
+                  : const Color(0xFF6B7280),
               fontSize: 12,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,

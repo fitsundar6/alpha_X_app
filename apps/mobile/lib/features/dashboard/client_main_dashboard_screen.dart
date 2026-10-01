@@ -24,6 +24,7 @@ import 'package:alpha_x_gym/features/notifications/presentation/widgets/notifica
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -45,8 +46,13 @@ class ClientMainDashboardScreen extends StatefulWidget {
 
 class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   int _currentTabIndex = 0;
+  final List<int> _tabHistory = [0];
+  DateTime? _lastBackPressTime;
+  double? _dragStartX;
   late final WeeklyProgressRepository _weeklyProgressRepository;
   final NotificationRepository _notificationRepository = NotificationRepository();
+  final ClientThemeService _themeService = ClientThemeService();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -57,6 +63,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     widget.macroRepository.addListener(_onRepoChange);
     _weeklyProgressRepository.addListener(_onRepoChange);
     _notificationRepository.addListener(_onRepoChange);
+    _themeService.addListener(_onRepoChange);
     _weeklyProgressRepository.fetchCheckInStatus();
     _notificationRepository.sendActivityPing();
     _notificationRepository.fetchNotifications();
@@ -69,6 +76,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     widget.macroRepository.removeListener(_onRepoChange);
     _weeklyProgressRepository.removeListener(_onRepoChange);
     _notificationRepository.removeListener(_onRepoChange);
+    _themeService.removeListener(_onRepoChange);
     _notificationRepository.dispose();
     super.dispose();
   }
@@ -77,139 +85,243 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     if (mounted) setState(() {});
   }
 
+  void _selectTab(int idx) {
+    if (_currentTabIndex != idx) {
+      setState(() {
+        _currentTabIndex = idx;
+        if (_tabHistory.isEmpty || _tabHistory.last != idx) {
+          _tabHistory.add(idx);
+        }
+      });
+    }
+  }
+
+  bool _navigateBack() {
+    // 1. If Drawer is open, close it
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+      return true;
+    }
+
+    // 2. If tab history has previous tabs, step back in history (e.g. Exercise -> Workout -> Home)
+    if (_tabHistory.length > 1) {
+      setState(() {
+        _tabHistory.removeLast();
+        _currentTabIndex = _tabHistory.last;
+      });
+      return true;
+    }
+
+    // 3. If currently on a non-zero tab, return to Home (Tab 0)
+    if (_currentTabIndex != 0) {
+      setState(() {
+        _currentTabIndex = 0;
+        _tabHistory.clear();
+        _tabHistory.add(0);
+      });
+      return true;
+    }
+
+    // At root Home screen:
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            const AlphaXLogo.appBar(size: 28),
-            const SizedBox(width: 10),
-            const Text(
-              'ALPHA X GYM',
-              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 16),
-            ),
-          ],
-        ),
-        actions: [
-          // In-App Notification Bell with Unread Count Badge
-          AnimatedBuilder(
-            animation: _notificationRepository,
-            builder: (context, _) {
-              final unread = _notificationRepository.unreadCount;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary, size: 22),
-                    tooltip: 'Notifications',
-                    onPressed: () => NotificationSheet.show(context, _notificationRepository),
-                  ),
-                  if (unread > 0)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: AppColors.primaryRed,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.history, color: AppColors.textSecondary, size: 22),
-            tooltip: 'Workout History',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (ctx) => ClientWorkoutHistoryScreen(workoutRepository: widget.workoutRepository),
+    final clientTheme = _themeService.resolveTheme(context);
+    final colors = ClientThemeColors(context);
+
+    return AnimatedTheme(
+      data: clientTheme,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+
+          if (_navigateBack()) {
+            return;
+          }
+
+          // 4. Root Home Screen Protection against accidental exit:
+          final now = DateTime.now();
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2, milliseconds: 500)) {
+            _lastBackPressTime = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Press back again to exit Alpha X Gym',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
-              );
-            },
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: colors.surfaceElevated,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: colors.border),
+                ),
+              ),
+            );
+            return;
+          }
+
+          // Confirmed double-back at root: allow system exit
+          SystemNavigator.pop();
+        },
+        child: GestureDetector(
+          onHorizontalDragStart: (details) {
+            _dragStartX = details.globalPosition.dx;
+          },
+          onHorizontalDragEnd: (details) {
+            if (_dragStartX != null && _dragStartX! <= 50.0 && (details.primaryVelocity ?? 0) > 150) {
+              _navigateBack();
+            }
+            _dragStartX = null;
+          },
+          child: Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: clientTheme.scaffoldBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: clientTheme.appBarTheme.backgroundColor,
+            titleSpacing: 16,
+            iconTheme: IconThemeData(color: colors.textPrimary),
+            title: Row(
+              children: [
+                const AlphaXLogo.appBar(size: 28),
+                const SizedBox(width: 10),
+                Text(
+                  'ALPHA X GYM',
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              // In-App Notification Bell with Unread Count Badge
+              AnimatedBuilder(
+                animation: _notificationRepository,
+                builder: (context, _) {
+                  final unread = _notificationRepository.unreadCount;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.notifications_outlined, color: colors.textSecondary, size: 22),
+                        tooltip: 'Notifications',
+                        onPressed: () => NotificationSheet.show(context, _notificationRepository),
+                      ),
+                      if (unread > 0)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.primaryRed,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              IconButton(
+                icon: Icon(Icons.history, color: colors.textSecondary, size: 22),
+                tooltip: 'Workout History',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => ClientWorkoutHistoryScreen(workoutRepository: widget.workoutRepository),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
-      drawer: _buildClientDrawer(),
-      body: IndexedStack(
-        index: _currentTabIndex,
-        children: [
-          _buildClientHomeScreen(),
-          ClientWorkoutScreen(
-            workoutRepository: widget.workoutRepository,
-            showAppBar: false,
+          drawer: _buildClientDrawer(),
+          body: IndexedStack(
+            index: _currentTabIndex,
+            children: [
+              _buildClientHomeScreen(),
+              ClientWorkoutScreen(
+                workoutRepository: widget.workoutRepository,
+                showAppBar: false,
+              ),
+              const ClientExerciseLibraryTab(),
+              MacroPlannerScreen(
+                repository: widget.macroRepository,
+                showAppBar: false,
+              ),
+              ActivityDashboardScreen(
+                activityRepository: widget.activityRepository,
+                showAppBar: false,
+              ),
+            ],
           ),
-          const ClientExerciseLibraryTab(),
-          MacroPlannerScreen(
-            repository: widget.macroRepository,
-            showAppBar: false,
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: colors.border, width: 1)),
+              color: colors.surface,
+            ),
+            child: NavigationBar(
+              selectedIndex: _currentTabIndex.clamp(0, 4),
+              onDestinationSelected: _selectTab,
+              backgroundColor: colors.surface,
+              indicatorColor: colors.glowRed,
+              elevation: 0,
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home, color: AppColors.primaryRed),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.fitness_center_outlined),
+                  selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
+                  label: 'Workout',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.format_list_bulleted_rounded),
+                  selectedIcon: Icon(Icons.format_list_bulleted, color: AppColors.primaryRed),
+                  label: 'Exercises',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.pie_chart_outline_rounded),
+                  selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryRed),
+                  label: 'Nutrition',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.directions_walk_outlined),
+                  selectedIcon: Icon(Icons.directions_walk, color: AppColors.primaryRed),
+                  label: 'Steps',
+                ),
+              ],
+            ),
           ),
-          ActivityDashboardScreen(
-            activityRepository: widget.activityRepository,
-            showAppBar: false,
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-          color: AppColors.surface,
         ),
-        child: NavigationBar(
-          selectedIndex: _currentTabIndex.clamp(0, 4),
-          onDestinationSelected: (idx) => setState(() => _currentTabIndex = idx),
-          backgroundColor: AppColors.surface,
-          indicatorColor: AppColors.glowRed,
-          elevation: 0,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home, color: AppColors.primaryRed),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.fitness_center_outlined),
-              selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
-              label: 'Workout',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.format_list_bulleted_rounded),
-              selectedIcon: Icon(Icons.format_list_bulleted, color: AppColors.primaryRed),
-              label: 'Exercises',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.pie_chart_outline_rounded),
-              selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryRed),
-              label: 'Nutrition',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.directions_walk_outlined),
-              selectedIcon: Icon(Icons.directions_walk, color: AppColors.primaryRed),
-              label: 'Steps',
-            ),
-          ],
         ),
       ),
     );
   }
 
   Widget _buildClientDrawer() {
+    final colors = ClientThemeColors(context);
     return Drawer(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceCard,
-              border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+            decoration: BoxDecoration(
+              color: colors.surfaceCard,
+              border: Border(bottom: BorderSide(color: colors.border, width: 1)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,7 +332,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: AppColors.primaryRed,
+                      backgroundColor: colors.primaryRed,
                       child: Text(
                         AuthService().currentUserName.isNotEmpty ? AuthService().currentUserName.substring(0, 1) : 'A',
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
@@ -235,20 +347,20 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     Expanded(
                       child: Text(
                         AuthService().currentUserName,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                        style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.glowRed,
+                        color: colors.glowRed,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
+                      child: Text(
                         'ELITE',
                         style: TextStyle(
-                          color: AppColors.primaryRed,
+                          color: colors.primaryRed,
                           fontSize: 9,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.8,
@@ -260,7 +372,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                 const SizedBox(height: 2),
                 Text(
                   AuthService().currentUserEmail,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -271,7 +383,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           _drawerItem(2, 'Exercise Library', Icons.format_list_bulleted_rounded),
           _drawerItem(3, 'Nutrition & Macros', Icons.pie_chart_outline),
           _drawerItem(4, 'Steps & Activity', Icons.directions_walk_outlined),
-          const Divider(color: AppColors.border),
+          Divider(color: colors.border),
           _drawerSubPageItem('Food Library', Icons.restaurant_menu_outlined, () {
             Navigator.of(context).pop();
             AddFoodBottomSheet.show(
@@ -309,14 +421,18 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             Navigator.of(context).pop();
             _openProfileSubPage(context);
           }),
+          _drawerSubPageItem('Appearance', Icons.palette_outlined, () {
+            Navigator.of(context).pop();
+            _openAppearanceDialog(context);
+          }),
           _drawerSubPageItem('Notification Settings', Icons.tune_outlined, () {
             Navigator.of(context).pop();
             NotificationPreferencesDialog.show(context, _notificationRepository);
           }),
-          const Divider(color: AppColors.border),
+          Divider(color: ClientThemeColors(context).border),
           ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.textSecondary),
-            title: const Text('Sign Out', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            leading: Icon(Icons.logout, color: ClientThemeColors(context).textSecondary),
+            title: Text('Sign Out', style: TextStyle(color: ClientThemeColors(context).textSecondary, fontWeight: FontWeight.w600)),
             onTap: () {
               Navigator.of(context).pop();
               AuthService().logout();
@@ -329,17 +445,18 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   }
 
   Widget _drawerItem(int index, String title, IconData icon) {
+    final colors = ClientThemeColors(context);
     final isSelected = _currentTabIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        tileColor: isSelected ? AppColors.primaryRed.withOpacity(0.12) : Colors.transparent,
-        leading: Icon(icon, color: isSelected ? AppColors.primaryRed : AppColors.textSecondary, size: 22),
+        tileColor: isSelected ? colors.primaryRed.withOpacity(0.12) : Colors.transparent,
+        leading: Icon(icon, color: isSelected ? colors.primaryRed : colors.textSecondary, size: 22),
         title: Text(
           title,
           style: TextStyle(
-            color: isSelected ? AppColors.primaryRed : AppColors.textPrimary,
+            color: isSelected ? colors.primaryRed : colors.textPrimary,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             fontSize: 14,
           ),
@@ -347,7 +464,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         selected: isSelected,
         onTap: () {
           HapticFeedback.lightImpact();
-          setState(() => _currentTabIndex = index);
+          _selectTab(index);
           Navigator.of(context).pop();
         },
       ),
@@ -355,24 +472,143 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   }
 
   Widget _drawerSubPageItem(String title, IconData icon, VoidCallback onTap) {
+    final colors = ClientThemeColors(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        leading: Icon(icon, color: AppColors.textSecondary, size: 22),
+        leading: Icon(icon, color: colors.textSecondary, size: 22),
         title: Text(
           title,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: colors.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textTertiary),
+        trailing: Icon(Icons.arrow_forward_ios, size: 12, color: colors.textTertiary),
         onTap: () {
           HapticFeedback.lightImpact();
           onTap();
         },
+      ),
+    );
+  }
+
+  void _openAppearanceDialog(BuildContext context) {
+    final colors = ClientThemeColors(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final mode = _themeService.themeMode;
+          return AlertDialog(
+            backgroundColor: colors.surfaceCard,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: colors.border),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.palette_outlined, color: colors.primaryRed, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  'Appearance',
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildThemeRadioOption(
+                  mode: ClientThemeMode.light,
+                  icon: Icons.wb_sunny_outlined,
+                  title: 'Light Mode',
+                  selected: mode == ClientThemeMode.light,
+                  onSelect: () {
+                    _themeService.setThemeMode(ClientThemeMode.light);
+                    setDialogState(() {});
+                  },
+                  colors: colors,
+                ),
+                Divider(color: colors.border, height: 16),
+                _buildThemeRadioOption(
+                  mode: ClientThemeMode.dark,
+                  icon: Icons.nightlight_round_outlined,
+                  title: 'Dark Mode',
+                  selected: mode == ClientThemeMode.dark,
+                  onSelect: () {
+                    _themeService.setThemeMode(ClientThemeMode.dark);
+                    setDialogState(() {});
+                  },
+                  colors: colors,
+                ),
+                Divider(color: colors.border, height: 16),
+                _buildThemeRadioOption(
+                  mode: ClientThemeMode.system,
+                  icon: Icons.settings_brightness_outlined,
+                  title: 'System Default',
+                  selected: mode == ClientThemeMode.system,
+                  onSelect: () {
+                    _themeService.setThemeMode(ClientThemeMode.system);
+                    setDialogState(() {});
+                  },
+                  colors: colors,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('Done', style: TextStyle(color: colors.primaryRed, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildThemeRadioOption({
+    required ClientThemeMode mode,
+    required IconData icon,
+    required String title,
+    required bool selected,
+    required VoidCallback onSelect,
+    required ClientThemeColors colors,
+  }) {
+    return InkWell(
+      onTap: onSelect,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        child: Row(
+          children: [
+            Icon(icon, color: selected ? colors.primaryRed : colors.textSecondary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: selected ? colors.primaryRed : colors.textPrimary,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? colors.primaryRed : colors.textTertiary,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -638,15 +874,15 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => setState(() => _currentTabIndex = 1)),
-                  _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => setState(() => _currentTabIndex = 2)),
-                  _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => setState(() => _currentTabIndex = 3)),
+                  _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => _selectTab(1)),
+                  _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => _selectTab(2)),
+                  _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => _selectTab(3)),
                   _clientSectionChip('FOOD PHOTOS', Icons.camera_alt, () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
                     );
                   }),
-                  _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => setState(() => _currentTabIndex = 4)),
+                  _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => _selectTab(4)),
                   _clientSectionChip('MY ATTENDANCE', Icons.qr_code_scanner, () => _openAttendanceSubPage(context)),
                   _clientSectionChip('MY CHALLENGE', Icons.local_fire_department, () => _openChallengeSubPage(context)),
                   _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
@@ -682,7 +918,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   ),
                 );
               } else {
-                setState(() => _currentTabIndex = 1);
+                _selectTab(1);
               }
             },
           ),
@@ -705,7 +941,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               value: widget.activityRepository.todayRecord.formattedSteps,
               subtext: '/ ${widget.activityRepository.todayRecord.formattedGoal} goal',
               accentColor: AlphaXColors.redAccent,
-              onTap: () => setState(() => _currentTabIndex = 4),
+              onTap: () => _selectTab(4),
             ),
             AlphaXStatCard(
               icon: Icons.fitness_center_rounded,
@@ -713,7 +949,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               value: history.isNotEmpty ? 'Logged' : 'Ready',
               subtext: recommended != null ? recommended.title : (history.isNotEmpty ? '${history.length} completed' : 'Tap to start'),
               accentColor: history.isNotEmpty ? AlphaXColors.success : AlphaXColors.redAccent,
-              onTap: () => setState(() => _currentTabIndex = 1),
+              onTap: () => _selectTab(1),
             ),
             AlphaXStatCard(
               icon: Icons.local_fire_department_rounded,
@@ -727,7 +963,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                 (Match m) => '${m[1]},',
               )} kcal',
               accentColor: AlphaXColors.redAccent,
-              onTap: () => setState(() => _currentTabIndex = 3),
+              onTap: () => _selectTab(3),
             ),
             AlphaXStatCard(
               icon: Icons.bolt_rounded,
@@ -735,7 +971,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               value: '${FoodLogEntry.formatMacro(dailySummary.consumedProtein)} g',
               subtext: '/ ${dailySummary.targetProtein.round()} g target',
               accentColor: AlphaXColors.redAccent,
-              onTap: () => setState(() => _currentTabIndex = 3),
+              onTap: () => _selectTab(3),
             ),
           ],
         ),
@@ -796,7 +1032,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         AlphaXSectionHeader(
           title: 'RECENT SESSIONS',
           actionLabel: 'View All',
-          onActionTap: () => setState(() => _currentTabIndex = 1),
+          onActionTap: () => _selectTab(1),
         ),
         if (history.isEmpty)
           const Padding(
@@ -917,7 +1153,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     return AlphaXCard(
       padding: const EdgeInsets.all(16),
       child: InkWell(
-        onTap: () => setState(() => _currentTabIndex = 3),
+        onTap: () => _selectTab(3),
         borderRadius: BorderRadius.circular(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1137,7 +1373,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       MaterialPageRoute(
         builder: (_) => _ClientChallengeSubScreen(
           workoutRepository: widget.workoutRepository,
-          onNavigateToWorkout: () => setState(() => _currentTabIndex = 1),
+          onNavigateToWorkout: () => _selectTab(1),
         ),
       ),
     );
@@ -1257,7 +1493,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   void _openProfileSubPage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _ClientProfileSubScreen(workoutRepository: widget.workoutRepository),
+        builder: (_) => ClientProfileSubScreen(workoutRepository: widget.workoutRepository),
       ),
     );
   }
@@ -2151,190 +2387,316 @@ class _ClientProgressSubScreenState extends State<_ClientProgressSubScreen> {
 // 4. ATHLETE PROFILE SUB-SCREEN (REAL DATA)
 // ==========================================
 
-class _ClientProfileSubScreen extends StatelessWidget {
+class ClientProfileSubScreen extends StatelessWidget {
   final WorkoutRepository workoutRepository;
 
-  const _ClientProfileSubScreen({required this.workoutRepository});
+  const ClientProfileSubScreen({super.key, required this.workoutRepository});
 
   @override
   Widget build(BuildContext context) {
+    final themeService = ClientThemeService();
+    final colors = ClientThemeColors.of(context);
     final userName = AuthService().currentUserName;
     final userEmail = AuthService().currentUserEmail;
     final userId = AuthService().currentUserId;
     final clientProfile = AuthService().clientProfile;
     final completedWorkoutsCount = workoutRepository.clientHistory.length;
 
-    return Scaffold(
-      backgroundColor: AlphaXColors.background,
-      appBar: AppBar(
-        backgroundColor: AlphaXColors.background,
-        elevation: 0,
-        title: const Text(
-          'ATHLETE PROFILE',
-          style: TextStyle(
-            color: AlphaXColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-            letterSpacing: 1.1,
-          ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (context, _) {
+        final currentMode = themeService.themeMode;
+        return Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.background,
+            elevation: 0,
+            iconTheme: IconThemeData(color: colors.textPrimary),
+            title: Text(
+              'ATHLETE PROFILE',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                letterSpacing: 1.1,
+              ),
             ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: colors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Column(
                   children: [
-                    const AlphaXLogo(size: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const AlphaXLogo(size: 32),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: colors.primaryRed.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: colors.primaryRed.withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            'ATHLETE MEMBER',
+                            style: TextStyle(
+                              color: colors.primaryRed,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 10,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    CircleAvatar(
+                      radius: 36,
+                      backgroundColor: colors.primaryRed,
+                      child: Text(
+                        userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      userName.isNotEmpty ? userName : 'Alpha X Athlete',
+                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 20),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      userEmail,
+                      style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.15),
+                        color: colors.surfaceElevated,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
                       ),
-                      child: const Text(
-                        'ATHLETE MEMBER',
-                        style: TextStyle(
-                          color: AppColors.primaryRed,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10,
-                          letterSpacing: 0.8,
+                      child: Text(
+                        'Client ID: $userId',
+                        style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Divider(color: colors.border, height: 1),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _profileMetric('COMPLETED WORKOUTS', '$completedWorkoutsCount', Icons.fitness_center, colors),
+                        Container(height: 32, width: 1, color: colors.border),
+                        _profileMetric(
+                          'START WEIGHT',
+                          clientProfile['weightKg'] != null ? '${clientProfile['weightKg']} KG' : 'N/A',
+                          Icons.monitor_weight_outlined,
+                          colors,
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: AppColors.primaryRed,
-                  child: Text(
-                    userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  userName.isNotEmpty ? userName : 'Alpha X Athlete',
-                  style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 20),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  userEmail,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AlphaXColors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Client ID: $userId',
-                    style: const TextStyle(color: AlphaXColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Divider(color: AppColors.border, height: 1),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _profileMetric('COMPLETED WORKOUTS', '$completedWorkoutsCount', Icons.fitness_center),
-                    Container(height: 32, width: 1, color: AppColors.border),
-                    _profileMetric(
-                      'START WEIGHT',
-                      clientProfile['weightKg'] != null ? '${clientProfile['weightKg']} KG' : 'N/A',
-                      Icons.monitor_weight_outlined,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Fitness Assessment Details if available
-          if (clientProfile.isNotEmpty) ...[
-            const AlphaXSectionHeader(title: 'FITNESS PROFILE'),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
               ),
+              const SizedBox(height: 24),
+
+              // Section: Appearance Settings
+              const AlphaXSectionHeader(title: 'APPEARANCE'),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.palette_outlined, size: 20, color: colors.primaryRed),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Theme Mode',
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _buildThemeRadioRow(
+                      title: 'Light Mode',
+                      subtitle: 'Clean, bright interface with crisp contrast',
+                      icon: Icons.wb_sunny_rounded,
+                      selected: currentMode == ClientThemeMode.light,
+                      onTap: () => themeService.setThemeMode(ClientThemeMode.light),
+                      colors: colors,
+                    ),
+                    Divider(color: colors.border, height: 16),
+                    _buildThemeRadioRow(
+                      title: 'Dark Mode',
+                      subtitle: 'Classic Alpha X sleek dark appearance',
+                      icon: Icons.nightlight_round,
+                      selected: currentMode == ClientThemeMode.dark,
+                      onTap: () => themeService.setThemeMode(ClientThemeMode.dark),
+                      colors: colors,
+                    ),
+                    Divider(color: colors.border, height: 16),
+                    _buildThemeRadioRow(
+                      title: 'System Default',
+                      subtitle: 'Automatically follow device appearance setting',
+                      icon: Icons.settings_brightness_rounded,
+                      selected: currentMode == ClientThemeMode.system,
+                      onTap: () => themeService.setThemeMode(ClientThemeMode.system),
+                      colors: colors,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Fitness Assessment Details if available
+              if (clientProfile.isNotEmpty) ...[
+                const AlphaXSectionHeader(title: 'FITNESS PROFILE'),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      _infoRow('Primary Goal', clientProfile['fitnessGoal'] ?? clientProfile['goal'] ?? 'Not set', colors),
+                      Divider(color: colors.border, height: 16),
+                      _infoRow('Experience Level', clientProfile['experienceLevel'] ?? clientProfile['level'] ?? 'Not set', colors),
+                      Divider(color: colors.border, height: 16),
+                      _infoRow('Activity Level', clientProfile['activityLevel'] ?? 'Moderate', colors),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // Sign Out Action
+              ListTile(
+                tileColor: colors.surfaceCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: colors.border),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.logout, color: colors.primaryRed, size: 20),
+                ),
+                title: Text(
+                  'Sign Out',
+                  style: TextStyle(color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'Log out of your Alpha X Gym athlete account',
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                ),
+                trailing: Icon(Icons.arrow_forward_ios, size: 14, color: colors.textTertiary),
+                onTap: () {
+                  AuthService().logout();
+                  Navigator.of(context).pushReplacementNamed('/login');
+                },
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static Widget _buildThemeRadioRow({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    required ClientThemeColors colors,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected ? colors.primaryRed.withOpacity(0.12) : colors.surfaceElevated,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: selected ? colors.primaryRed : colors.textSecondary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _infoRow('Primary Goal', clientProfile['fitnessGoal'] ?? clientProfile['goal'] ?? 'Not set'),
-                  const Divider(color: AppColors.border, height: 16),
-                  _infoRow('Experience Level', clientProfile['experienceLevel'] ?? clientProfile['level'] ?? 'Not set'),
-                  const Divider(color: AppColors.border, height: 16),
-                  _infoRow('Activity Level', clientProfile['activityLevel'] ?? 'Moderate'),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: selected ? colors.primaryRed : colors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: colors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? colors.primaryRed : colors.textTertiary,
+              size: 20,
+            ),
           ],
-
-          // Sign Out Action
-          ListTile(
-            tileColor: AppColors.surfaceCard,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.border),
-            ),
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.logout, color: AppColors.primaryRed, size: 20),
-            ),
-            title: const Text(
-              'Sign Out',
-              style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w800, fontSize: 14),
-            ),
-            subtitle: const Text(
-              'Log out of your Alpha X Gym athlete account',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textTertiary),
-            onTap: () {
-              AuthService().logout();
-              Navigator.of(context).pushReplacementNamed('/login');
-            },
-          ),
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _profileMetric(String label, String value, IconData icon) {
+  Widget _profileMetric(String label, String value, IconData icon, ClientThemeColors colors) {
     return Column(
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 12, color: AppColors.primaryRed),
+            Icon(icon, size: 12, color: colors.primaryRed),
             const SizedBox(width: 4),
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textTertiary,
+              style: TextStyle(
+                color: colors.textTertiary,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
@@ -2345,8 +2707,8 @@ class _ClientProfileSubScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: colors.textPrimary,
             fontWeight: FontWeight.w900,
             fontSize: 16,
           ),
@@ -2355,14 +2717,14 @@ class _ClientProfileSubScreen extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(String label, dynamic value) {
+  Widget _infoRow(String label, dynamic value, ClientThemeColors colors) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
         Text(
           value.toString(),
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w800),
+          style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w800),
         ),
       ],
     );

@@ -301,49 +301,85 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          _capturedImagePath != null ? 'FOOD PHOTO PREVIEW' : 'LIVE FOOD PHOTO',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.0,
+    double? dragStartX;
+
+    return PopScope(
+      canPop: _capturedImagePath == null && !_isUploading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_isUploading) return;
+        if (_capturedImagePath != null) {
+          _retakePhoto();
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (details) {
+          dragStartX = details.globalPosition.dx;
+        },
+        onHorizontalDragEnd: (details) {
+          if (dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150) {
+            if (_isUploading) return;
+            if (_capturedImagePath != null) {
+              _retakePhoto();
+            } else {
+              Navigator.of(context).pop();
+            }
+          }
+          dragStartX = null;
+        },
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+              onPressed: () {
+                if (_isUploading) return;
+                if (_capturedImagePath != null) {
+                  _retakePhoto();
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+            title: Text(
+              _capturedImagePath != null ? 'FOOD PHOTO PREVIEW' : 'LIVE FOOD PHOTO',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+              ),
+            ),
+            actions: [
+              if (_capturedImagePath == null && _isCameraInitialized) ...[
+                IconButton(
+                  icon: Icon(
+                    _flashMode == FlashMode.off
+                        ? Icons.flash_off
+                        : _flashMode == FlashMode.torch
+                            ? Icons.highlight
+                            : Icons.flash_auto,
+                    color: _flashMode != FlashMode.off ? AppColors.primaryRed : Colors.white70,
+                  ),
+                  onPressed: _toggleFlash,
+                ),
+                if (_availableCameras.length > 1)
+                  IconButton(
+                    icon: const Icon(Icons.flip_camera_ios, color: Colors.white70),
+                    onPressed: _switchCamera,
+                  ),
+              ],
+            ],
+          ),
+          body: SafeArea(
+            child: _capturedImagePath != null || _capturedImageBytes != null
+                ? _buildPhotoConfirmationView()
+                : _buildLiveCameraView(),
           ),
         ),
-        actions: [
-          if (_capturedImagePath == null && _isCameraInitialized) ...[
-            IconButton(
-              icon: Icon(
-                _flashMode == FlashMode.off
-                    ? Icons.flash_off
-                    : _flashMode == FlashMode.torch
-                        ? Icons.highlight
-                        : Icons.flash_auto,
-                color: _flashMode != FlashMode.off ? AppColors.primaryRed : Colors.white70,
-              ),
-              onPressed: _toggleFlash,
-            ),
-            if (_availableCameras.length > 1)
-              IconButton(
-                icon: const Icon(Icons.flip_camera_ios, color: Colors.white70),
-                onPressed: _switchCamera,
-              ),
-          ],
-        ],
-      ),
-      body: SafeArea(
-        child: _capturedImagePath != null || _capturedImageBytes != null
-            ? _buildPhotoConfirmationView()
-            : _buildLiveCameraView(),
       ),
     );
   }
