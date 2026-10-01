@@ -7,6 +7,7 @@ import 'package:alpha_x_gym/features/progress/presentation/widgets/motivational_
 import 'package:alpha_x_gym/features/progress/presentation/widgets/weekly_progress_charts.dart';
 import 'package:alpha_x_gym/features/progress/presentation/widgets/coach_review_card.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_check_in_form_screen.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
 
 class ClientWeeklyProgressScreen extends StatefulWidget {
   final WeeklyProgressRepository repository;
@@ -110,7 +111,9 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                       const SizedBox(height: 16),
 
                       // Weekly Availability & Locking Card
-                      _buildWeeklyStatusCard(),
+                      AlphaXSubtleEntrance(
+                        child: _buildWeeklyStatusCard(),
+                      ),
                       const SizedBox(height: 16),
 
                       if (_history.isNotEmpty) ...[

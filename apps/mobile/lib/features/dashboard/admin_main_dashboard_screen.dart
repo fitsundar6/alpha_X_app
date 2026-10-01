@@ -377,135 +377,145 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         // Operational Header Banner
-        AlphaXCard(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: AlphaXColors.redAccent.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.shield_outlined, color: AlphaXColors.redAccent, size: 18),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'FACILITY COMMAND CENTER',
-                        style: TextStyle(
-                          color: AlphaXColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.1,
-                        ),
+        AlphaXSubtleEntrance(
+          child: AlphaXCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AlphaXColors.redAccent.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      Text(
-                        'ALPHA X PERFORMANCE ARCHITECTURE',
-                        style: TextStyle(
-                          color: AlphaXColors.redAccent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                        ),
+                      child: const Center(
+                        child: Icon(Icons.shield_outlined, color: AlphaXColors.redAccent, size: 18),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Prescribe elite workout sessions, configure superset programming, manage athlete roster, monitor step output, and track transformation progress in real time.',
-                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.4),
-              ),
-            ],
+                    ),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'FACILITY COMMAND CENTER',
+                          style: TextStyle(
+                            color: AlphaXColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        Text(
+                          'ALPHA X PERFORMANCE ARCHITECTURE',
+                          style: TextStyle(
+                            color: AlphaXColors.redAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Prescribe elite workout sessions, configure superset programming, manage athlete roster, monitor step output, and track transformation progress in real time.',
+                  style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.4),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 20),
 
         // Section Title: CORE GYM KPIs (6 Required Metrics)
-        const AlphaXSectionHeader(title: 'FACILITY PERFORMANCE METRICS'),
-        const SizedBox(height: 12),
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 70),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AlphaXSectionHeader(title: 'FACILITY PERFORMANCE METRICS'),
+              const SizedBox(height: 12),
 
-        // Grid of 6 KPIs
-        Row(
-          children: [
-            Expanded(
-              child: AlphaXStatCard(
-                label: 'TOTAL CLIENTS',
-                value: '${clients.length}',
-                subtext: '${assignments.length} assigned programs',
-                icon: Icons.groups_outlined,
-                accentColor: AlphaXColors.textPrimary,
+              // Grid of 6 KPIs
+              Row(
+                children: [
+                  Expanded(
+                    child: AlphaXStatCard(
+                      label: 'TOTAL CLIENTS',
+                      value: '${clients.length}',
+                      subtext: '${assignments.length} assigned programs',
+                      icon: Icons.groups_outlined,
+                      accentColor: AlphaXColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AlphaXStatCard(
+                      label: 'ACTIVE MEMBERS',
+                      value: '${clients.length}',
+                      subtext: clients.isEmpty ? '0 active athletes' : '100% database verified',
+                      icon: Icons.check_circle_outline,
+                      accentColor: AlphaXColors.redAccent,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: AlphaXStatCard(
-                label: 'ACTIVE MEMBERS',
-                value: '${clients.length}',
-                subtext: clients.isEmpty ? '0 active athletes' : '100% database verified',
-                icon: Icons.check_circle_outline,
-                accentColor: AlphaXColors.redAccent,
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: AlphaXStatCard(
+                      label: 'TODAY\'S ATTENDANCE',
+                      value: clients.isEmpty ? '0 / 0' : '${(clients.length * 0.7).round()} / ${clients.length}',
+                      subtext: 'Peak hour: 7:30 AM',
+                      icon: Icons.qr_code_scanner,
+                      accentColor: AlphaXColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: AlphaXStatCard(
+                      label: 'WORKOUT COMPLETION',
+                      value: '84%',
+                      subtext: 'Target: >80%',
+                      icon: Icons.fitness_center_outlined,
+                      accentColor: AlphaXColors.redAccent,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: AlphaXStatCard(
-                label: 'TODAY\'S ATTENDANCE',
-                value: clients.isEmpty ? '0 / 0' : '${(clients.length * 0.7).round()} / ${clients.length}',
-                subtext: 'Peak hour: 7:30 AM',
-                icon: Icons.qr_code_scanner,
-                accentColor: AlphaXColors.textPrimary,
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: AlphaXStatCard(
+                      label: 'AVERAGE STEPS',
+                      value: avgStepsFormatted,
+                      subtext: clients.isEmpty ? 'No data' : (avgSteps > 0 ? 'Live client average' : '0 steps logged today'),
+                      icon: Icons.directions_walk,
+                      accentColor: AlphaXColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: AlphaXStatCard(
+                      label: 'ACTIVE CHALLENGES',
+                      value: '3',
+                      subtext: '100 Day Sprint active',
+                      icon: Icons.local_fire_department_outlined,
+                      accentColor: AlphaXColors.redAccent,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: AlphaXStatCard(
-                label: 'WORKOUT COMPLETION',
-                value: '84%',
-                subtext: 'Target: >80%',
-                icon: Icons.fitness_center_outlined,
-                accentColor: AlphaXColors.redAccent,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: AlphaXStatCard(
-                label: 'AVERAGE STEPS',
-                value: avgStepsFormatted,
-                subtext: clients.isEmpty ? 'No data' : (avgSteps > 0 ? 'Live client average' : '0 steps logged today'),
-                icon: Icons.directions_walk,
-                accentColor: AlphaXColors.textPrimary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: AlphaXStatCard(
-                label: 'ACTIVE CHALLENGES',
-                value: '3',
-                subtext: '100 Day Sprint active',
-                icon: Icons.local_fire_department_outlined,
-                accentColor: AlphaXColors.redAccent,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 24),
 

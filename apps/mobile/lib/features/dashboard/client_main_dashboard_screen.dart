@@ -392,70 +392,102 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
         // 1. User Header & Profile Avatar
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AlphaXColors.redAccent, width: 1.5),
-                        ),
-                        child: CircleAvatar(
-                          radius: 20,
-                          backgroundColor: AlphaXColors.surfaceElevated,
-                          child: Text(
-                            firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
-                            style: const TextStyle(
-                              color: AlphaXColors.textPrimary,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
+        AlphaXSubtleEntrance(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Stack(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AlphaXColors.redAccent, width: 1.5),
+                          ),
+                          child: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: AlphaXColors.surfaceElevated,
+                            child: Text(
+                              firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
+                              style: const TextStyle(
+                                color: AlphaXColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        right: 1,
-                        bottom: 1,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: AlphaXColors.success,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AlphaXColors.background, width: 1.5),
+                        Positioned(
+                          right: 1,
+                          bottom: 1,
+                          child: Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: AlphaXColors.success,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AlphaXColors.background, width: 1.5),
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$greetingText, $firstName',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AlphaXColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const Text(
+                            "Train Strong • Move Better",
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AlphaXColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                children: [
+                  const AlphaXLogo.badge(size: 20),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AlphaXColors.surfaceCard,
+                      borderRadius: AlphaXRadius.roundedXs,
+                      border: Border.all(color: AlphaXColors.border),
+                    ),
+                    child: const Row(
                       children: [
+                        Icon(Icons.local_fire_department_rounded, size: 14, color: AlphaXColors.redAccent),
+                        SizedBox(width: 4),
                         Text(
-                          '$greetingText, $firstName',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AlphaXColors.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const Text(
-                          "Train Strong • Move Better",
-                          overflow: TextOverflow.ellipsis,
+                          '12 DAYS',
                           style: TextStyle(
-                            color: AlphaXColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                            color: AlphaXColors.textPrimary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
@@ -463,170 +495,154 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Row(
-              children: [
-                const AlphaXLogo.badge(size: 20),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AlphaXColors.surfaceCard,
-                    borderRadius: AlphaXRadius.roundedXs,
-                    border: Border.all(color: AlphaXColors.border),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.local_fire_department_rounded, size: 14, color: AlphaXColors.redAccent),
-                      SizedBox(width: 4),
-                      Text(
-                        '12 DAYS',
-                        style: TextStyle(
-                          color: AlphaXColors.textPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 14),
 
         // Prominent Client Profile Card (Prompt Requirement 21)
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AlphaXColors.surfaceCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AlphaXColors.redAccent.withOpacity(0.35)),
-            boxShadow: [
-              BoxShadow(
-                color: AlphaXColors.redAccent.withOpacity(0.08),
-                blurRadius: 16,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Welcome, ${AuthService().currentUserName}',
-                          style: const TextStyle(
-                            color: AlphaXColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            letterSpacing: 0.5,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Text(
-                              'Client ID: ',
-                              style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 50),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AlphaXColors.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AlphaXColors.redAccent.withOpacity(0.35)),
+              boxShadow: [
+                BoxShadow(
+                  color: AlphaXColors.redAccent.withOpacity(0.08),
+                  blurRadius: 16,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome, ${AuthService().currentUserName}',
+                            style: const TextStyle(
+                              color: AlphaXColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AlphaXColors.redAccent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: AlphaXColors.redAccent, width: 0.8),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Text(
+                                'Client ID: ',
+                                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
                               ),
-                              child: Text(
-                                AuthService().currentClientId,
-                                style: const TextStyle(
-                                  color: AlphaXColors.redAccent,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                  letterSpacing: 1.0,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AlphaXColors.redAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AlphaXColors.redAccent, width: 0.8),
+                                ),
+                                child: Text(
+                                  AuthService().currentClientId,
+                                  style: const TextStyle(
+                                    color: AlphaXColors.redAccent,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    fontFamily: 'monospace',
+                                    letterSpacing: 1.0,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Divider(color: AlphaXColors.border, height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('GOAL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                        const SizedBox(height: 2),
-                        Text(
-                          (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString(),
-                          style: const TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(color: AlphaXColors.border, height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('GOAL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          const SizedBox(height: 2),
+                          Text(
+                            (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString(),
+                            style: const TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(width: 1, height: 26, color: AlphaXColors.border),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('FITNESS LEVEL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                        const SizedBox(height: 2),
-                        Text(
-                          (AuthService().clientProfile['fitnessLevel'] ?? 'Intermediate').toString().toUpperCase(),
-                          style: const TextStyle(color: AlphaXColors.redAccent, fontWeight: FontWeight.w800, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    Container(width: 1, height: 26, color: AlphaXColors.border),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('FITNESS LEVEL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          const SizedBox(height: 2),
+                          Text(
+                            (AuthService().clientProfile['fitnessLevel'] ?? 'Intermediate').toString().toUpperCase(),
+                            style: const TextStyle(color: AlphaXColors.redAccent, fontWeight: FontWeight.w800, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 16),
 
         // Section: WEEKLY PROGRESS & CHECK-IN
-        _buildWeeklyCheckInHomeCard(),
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 90),
+          child: _buildWeeklyCheckInHomeCard(),
+        ),
         const SizedBox(height: 16),
 
         // Quick Navigation to Core Sections
-        const AlphaXSectionHeader(title: 'MY ATHLETE PORTAL'),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => setState(() => _currentTabIndex = 1)),
-            _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => setState(() => _currentTabIndex = 2)),
-            _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => setState(() => _currentTabIndex = 3)),
-            _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => setState(() => _currentTabIndex = 4)),
-            _clientSectionChip('MY ATTENDANCE', Icons.qr_code_scanner, () => _openAttendanceSubPage(context)),
-            _clientSectionChip('MY CHALLENGE', Icons.local_fire_department, () => _openChallengeSubPage(context)),
-            _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
-            _clientSectionChip('MY PROFILE', Icons.person, () => _openProfileSubPage(context)),
-          ],
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 130),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AlphaXSectionHeader(title: 'MY ATHLETE PORTAL'),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => setState(() => _currentTabIndex = 1)),
+                  _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => setState(() => _currentTabIndex = 2)),
+                  _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => setState(() => _currentTabIndex = 3)),
+                  _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => setState(() => _currentTabIndex = 4)),
+                  _clientSectionChip('MY ATTENDANCE', Icons.qr_code_scanner, () => _openAttendanceSubPage(context)),
+                  _clientSectionChip('MY CHALLENGE', Icons.local_fire_department, () => _openChallengeSubPage(context)),
+                  _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
+                  _clientSectionChip('MY PROFILE', Icons.person, () => _openProfileSubPage(context)),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 20),
 

@@ -8,3 +8,4 @@ export 'alpha_x_bottom_sheet.dart';
 export 'alpha_x_logo.dart';
 export 'alpha_x_pressable.dart';
 export 'alpha_x_feedback_states.dart';
+export 'alpha_x_subtle_entrance.dart';

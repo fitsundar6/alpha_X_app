@@ -119,7 +119,10 @@ class FoundationSplashScreen extends StatefulWidget {
 }
 
 class _FoundationSplashScreenState extends State<FoundationSplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  late AnimationController _entranceController;
+  late Animation<double> _entranceFade;
+  late Animation<double> _entranceScale;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   Timer? _autoTransitionTimer;
@@ -127,12 +130,30 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
   @override
   void initState() {
     super.initState();
+    // 1. Smooth Logo Entrance: Fade + slight scale
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _entranceFade = CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOut,
+    );
+    _entranceScale = Tween<double>(begin: 0.90, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+    _entranceController.forward();
+
+    // 2. Subtle Brand Pulse
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1600),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
@@ -164,6 +185,7 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
 
   @override
   void dispose() {
+    _entranceController.dispose();
     _pulseController.dispose();
     _autoTransitionTimer?.cancel();
     super.dispose();
@@ -181,12 +203,18 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
             children: [
               const Spacer(),
 
-              // Official Alpha X Gym Brand Logo with smooth pulse animation
-              ScaleTransition(
-                scale: _pulseAnimation,
-                child: const AlphaXLogo.splash(
-                  size: 130,
-                  withGlow: true,
+              // Official Alpha X Gym Brand Logo with smooth entrance and subtle pulse animation
+              FadeTransition(
+                opacity: _entranceFade,
+                child: ScaleTransition(
+                  scale: _entranceScale,
+                  child: ScaleTransition(
+                    scale: _pulseAnimation,
+                    child: const AlphaXLogo.splash(
+                      size: 130,
+                      withGlow: true,
+                    ),
+                  ),
                 ),
               ),
 

@@ -78,7 +78,12 @@ class ClientSessionOverviewScreen extends StatelessWidget {
         currentSupersetGroup = null;
       }
 
-      exerciseWidgets.add(_buildExerciseCard(context, ex, i));
+      exerciseWidgets.add(
+        AlphaXSubtleEntrance(
+          delay: Duration(milliseconds: 30 * i),
+          child: _buildExerciseCard(context, ex, i),
+        ),
+      );
     }
 
     return Scaffold(

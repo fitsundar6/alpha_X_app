@@ -94,6 +94,7 @@ class AlphaXLogo extends StatelessWidget {
       fit: fit,
       color: color,
       filterQuality: FilterQuality.high,
+      isAntiAlias: true,
       semanticLabel: AppConstants.appName,
       errorBuilder: (context, error, stackTrace) {
         // Fallback gracefully if asset is loading or missing
@@ -110,19 +111,37 @@ class AlphaXLogo extends StatelessWidget {
       },
     );
 
-    if (withGlow) {
-      imageWidget = Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: glowColor,
-              blurRadius: glowRadius,
-              spreadRadius: 2.0,
-            ),
-          ],
-        ),
+    // Optical centering compensation: The raw 1024x1024 artwork is slightly displaced
+    // downward by 25.5px (~2.5%). Applying a subtle vertical adjustment ensures the logo
+    // is optically centered inside circles, avatars, and app bars without cropping.
+    if (effectiveHeight != null && effectiveHeight > 0) {
+      imageWidget = Transform.translate(
+        offset: Offset(0, -effectiveHeight * 0.025),
         child: imageWidget,
+      );
+    }
+
+    if (withGlow && effectiveWidth != null && effectiveHeight != null) {
+      imageWidget = Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: effectiveWidth * 1.25,
+            height: effectiveHeight * 1.25,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  glowColor.withOpacity(0.36),
+                  glowColor.withOpacity(0.12),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.55, 1.0],
+              ),
+            ),
+          ),
+          imageWidget,
+        ],
       );
     }
 
