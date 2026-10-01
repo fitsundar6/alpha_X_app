@@ -5,7 +5,6 @@ import 'package:alpha_x_gym/features/macro_planner/domain/models/confirmed_meal_
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_log_entry.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/scanned_food_detection.dart';
-import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_meal_photo_viewer_dialog.dart';
 
 void main() {

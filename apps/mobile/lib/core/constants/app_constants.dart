@@ -27,6 +27,7 @@ class AppConstants {
 
   /// Authoritative API base URL
   static String get apiBaseUrl => ApiConfig.baseUrl;
+  static String get currentBaseUrl => apiBaseUrl;
 
   // Storage Keys
   static const String serverUrlKey = 'alpha_x_custom_server_url';

@@ -19,6 +19,10 @@ import 'package:alpha_x_gym/features/macro_planner/presentation/widgets/add_food
 import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_progress_screen.dart';
+import 'package:alpha_x_gym/features/notifications/data/repositories/notification_repository.dart';
+import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_sheet.dart';
+import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
+import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -41,6 +45,7 @@ class ClientMainDashboardScreen extends StatefulWidget {
 class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   int _currentTabIndex = 0;
   late final WeeklyProgressRepository _weeklyProgressRepository;
+  final NotificationRepository _notificationRepository = NotificationRepository();
 
   @override
   void initState() {
@@ -50,7 +55,10 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     widget.activityRepository.addListener(_onRepoChange);
     widget.macroRepository.addListener(_onRepoChange);
     _weeklyProgressRepository.addListener(_onRepoChange);
+    _notificationRepository.addListener(_onRepoChange);
     _weeklyProgressRepository.fetchCheckInStatus();
+    _notificationRepository.sendActivityPing();
+    _notificationRepository.fetchNotifications();
   }
 
   @override
@@ -59,6 +67,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     widget.activityRepository.removeListener(_onRepoChange);
     widget.macroRepository.removeListener(_onRepoChange);
     _weeklyProgressRepository.removeListener(_onRepoChange);
+    _notificationRepository.removeListener(_onRepoChange);
+    _notificationRepository.dispose();
     super.dispose();
   }
 
@@ -83,6 +93,36 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           ],
         ),
         actions: [
+          // In-App Notification Bell with Unread Count Badge
+          AnimatedBuilder(
+            animation: _notificationRepository,
+            builder: (context, _) {
+              final unread = _notificationRepository.unreadCount;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary, size: 22),
+                    tooltip: 'Notifications',
+                    onPressed: () => NotificationSheet.show(context, _notificationRepository),
+                  ),
+                  if (unread > 0)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryRed,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.history, color: AppColors.textSecondary, size: 22),
             tooltip: 'Workout History',
@@ -252,9 +292,19 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             Navigator.of(context).pop();
             _openProgressSubPage(context);
           }),
+          _drawerSubPageItem('Transformation Timeline', Icons.timeline_outlined, () {
+            Navigator.of(context).pop();
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ClientTransformationTimelineScreen()),
+            );
+          }),
           _drawerSubPageItem('Athlete Profile', Icons.person_outline, () {
             Navigator.of(context).pop();
             _openProfileSubPage(context);
+          }),
+          _drawerSubPageItem('Notification Settings', Icons.tune_outlined, () {
+            Navigator.of(context).pop();
+            NotificationPreferencesDialog.show(context, _notificationRepository);
           }),
           const Divider(color: AppColors.border),
           ListTile(

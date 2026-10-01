@@ -18,6 +18,8 @@ import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_client_nutrition_screen.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/admin_weekly_progress_screen.dart';
+import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
+import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -52,6 +54,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     '📋 ATTENDANCE',
     '⚙️ SETTINGS',
     '📈 WEEKLY PROGRESS',
+    '⚠️ CLIENT ATTENTION',
   ];
 
   @override
@@ -219,6 +222,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         return _buildSettingsTab();
       case 7:
         return AdminWeeklyProgressScreen(repository: _weeklyProgressRepo);
+      case 8:
+        return const AdminAttentionCenterView();
       default:
         return _buildAdminHomeTab();
     }
@@ -313,6 +318,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined),
           _drawerItem(6, 'Settings', Icons.settings_outlined),
           _drawerItem(7, 'Weekly Progress', Icons.insights_rounded),
+          _drawerItem(8, 'Client Attention', Icons.warning_amber_rounded),
           const Divider(color: AppColors.border),
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.primaryRed),
@@ -1053,82 +1059,113 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     // 3. Client Nutrition & Action Bar
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
+                      child: Column(
                         children: [
-                          Expanded(
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: AppColors.border),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: const Icon(Icons.assignment_ind_outlined, size: 14, color: AppColors.textSecondary),
+                                  label: const Text(
+                                    'PROFILE',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  onPressed: () => _showClientProfileModal(context, client),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primaryRed,
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: const Icon(Icons.restaurant_menu_rounded, size: 14, color: Colors.white),
+                                  label: const Text(
+                                    '🥗 NUTRITION',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AdminClientNutritionScreen(
+                                          client: client,
+                                          macroRepository: widget.macroRepository,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AlphaXColors.surfaceElevated,
+                                    side: const BorderSide(color: AlphaXColors.gold, width: 0.8),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: const Icon(Icons.insights_rounded, size: 14, color: AlphaXColors.gold),
+                                  label: const Text(
+                                    '📈 PROGRESS',
+                                    style: TextStyle(
+                                      color: AlphaXColors.gold,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AdminWeeklyProgressScreen(
+                                          repository: _weeklyProgressRepo,
+                                          initialClientId: clientId,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: AppColors.border),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              icon: const Icon(Icons.assignment_ind_outlined, size: 14, color: AppColors.textSecondary),
+                              icon: const Icon(Icons.timeline_rounded, size: 14, color: Colors.lightBlueAccent),
                               label: const Text(
-                                'PROFILE',
-                                style: TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              onPressed: () => _showClientProfileModal(context, client),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryRed,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.restaurant_menu_rounded, size: 14, color: Colors.white),
-                              label: const Text(
-                                '🥗 NUTRITION',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                                'TRANSFORMATION TIMELINE (WEEKS 1-12)',
+                                style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                               onPressed: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => AdminClientNutritionScreen(
-                                      client: client,
-                                      macroRepository: widget.macroRepository,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AlphaXColors.surfaceElevated,
-                                side: const BorderSide(color: AlphaXColors.gold, width: 0.8),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.insights_rounded, size: 14, color: AlphaXColors.gold),
-                              label: const Text(
-                                '📈 PROGRESS',
-                                style: TextStyle(
-                                  color: AlphaXColors.gold,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AdminWeeklyProgressScreen(
-                                      repository: _weeklyProgressRepo,
-                                      initialClientId: clientId,
+                                    builder: (_) => ClientTransformationTimelineScreen(
+                                      adminTargetClientId: clientId,
+                                      athleteName: client['name']?.toString() ?? 'Athlete',
                                     ),
                                   ),
                                 );
