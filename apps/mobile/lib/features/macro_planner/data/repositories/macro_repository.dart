@@ -14,6 +14,7 @@ import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart'
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_item.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_log_entry.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/daily_macro_summary.dart';
+import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/food_database.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/services/macro_calculator.dart';
 
@@ -55,6 +56,7 @@ class MacroRepository extends ChangeNotifier {
   final List<FoodItem> _customFoods = [];
   final List<FoodItem> _serverFoods = [];
   final List<FoodLogEntry> _foodLogs = [];
+  AssignedDietPlan? _assignedDietPlan;
 
   // Daily target overrides (allowing coaches/clients to set benchmark targets)
   double? _customTargetCalories;
@@ -74,6 +76,8 @@ class MacroRepository extends ChangeNotifier {
   MacroInput? get currentInput => _currentInput;
   MacroResult? get currentResult => _currentResult;
   MacroResult? get activeResult => _currentResult;
+  AssignedDietPlan? get assignedDietPlan => _assignedDietPlan;
+  bool get hasAssignedDietPlan => _assignedDietPlan != null;
   List<MacroHistoryEntry> get history => List.unmodifiable(_history);
   List<MacroProgressReview> get reviews => List.unmodifiable(_reviews);
 
@@ -501,11 +505,11 @@ class MacroRepository extends ChangeNotifier {
     final cId = resolveClientId(clientId);
     final dayEntries = getFoodEntriesForDate(dateString, clientId: cId);
 
-    final targetCal = _customTargetCalories ?? _currentResult?.targetCalories.toDouble() ?? 2200.0;
-    final targetProt = _customTargetProtein ?? _currentResult?.proteinGrams.toDouble() ?? 160.0;
-    final targetCrbs = _customTargetCarbs ?? _currentResult?.carbGrams.toDouble() ?? 250.0;
-    final targetFt = _customTargetFat ?? _currentResult?.fatGrams.toDouble() ?? 70.0;
-    final targetFbr = _customTargetFiber ?? _currentResult?.fiberGrams.toDouble() ?? 30.0;
+    final targetCal = _assignedDietPlan?.dailyCalories.toDouble() ?? _customTargetCalories ?? _currentResult?.targetCalories.toDouble() ?? 2200.0;
+    final targetProt = _assignedDietPlan?.protein ?? _customTargetProtein ?? _currentResult?.proteinGrams.toDouble() ?? 160.0;
+    final targetCrbs = _assignedDietPlan?.carbs ?? _customTargetCarbs ?? _currentResult?.carbGrams.toDouble() ?? 250.0;
+    final targetFt = _assignedDietPlan?.fat ?? _customTargetFat ?? _currentResult?.fatGrams.toDouble() ?? 70.0;
+    final targetFbr = _assignedDietPlan?.fiber ?? _customTargetFiber ?? _currentResult?.fiberGrams.toDouble() ?? 30.0;
 
     double consumedCal = 0.0;
     double consumedProt = 0.0;
@@ -543,6 +547,84 @@ class MacroRepository extends ChangeNotifier {
     );
   }
 
+  /// Explicitly set or update active assigned diet plan
+  void setAssignedDietPlan(AssignedDietPlan? plan) {
+    _assignedDietPlan = plan;
+    if (plan != null) {
+      setCustomDailyTargets(
+        calories: plan.dailyCalories,
+        protein: plan.protein,
+        carbs: plan.carbohydrates,
+        fat: plan.fat,
+        fiber: plan.fiber,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Fetch currently assigned diet plan from Coach/Trainer
+  Future<void> fetchAssignedDietPlan() async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/diet-plan');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded['data'] ?? decoded;
+        if (data != null && data is Map<String, dynamic> && data['planName'] != null) {
+          final plan = AssignedDietPlan.fromJson(data);
+          _assignedDietPlan = plan;
+          // Apply assigned targets
+          setCustomDailyTargets(
+            calories: plan.dailyCalories,
+            protein: plan.protein,
+            carbs: plan.carbohydrates,
+            fat: plan.fat,
+            fiber: plan.fiber,
+          );
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+      // Offline fallback: retains active targets or defaults
+    }
+  }
+
+  /// Pull actual food logs from backend for a specific date
+  Future<void> fetchFoodLogsFromBackend(String dateString) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/food-logs?date=$dateString');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded['data'] ?? decoded;
+        if (data is List) {
+          final serverEntries = data.map((item) => FoodLogEntry.fromJson(item as Map<String, dynamic>)).toList();
+          // Remove existing entries for date and replace with server verified records
+          _foodLogs.removeWhere((e) => e.dateString == dateString);
+          _foodLogs.addAll(serverEntries);
+          _saveFoodLogsToPrefs();
+          notifyListeners();
+        }
+      }
+    } catch (_) {}
+  }
+
   /// Log a new food item into a meal
   void logFoodEntry(FoodLogEntry entry) {
     final validClientId = (entry.clientId.isNotEmpty && entry.clientId != entry.dateString)
@@ -552,6 +634,46 @@ class MacroRepository extends ChangeNotifier {
     _foodLogs.add(normalized);
     _saveFoodLogsToPrefs();
     notifyListeners();
+
+    // Asynchronously dispatch confirmed food log to backend PostgreSQL database
+    _dispatchFoodLogToBackend(normalized);
+  }
+
+  Future<void> _dispatchFoodLogToBackend(FoodLogEntry entry) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/food-logs');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'x-client-id': entry.clientId,
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final body = jsonEncode({
+        'dateString': entry.dateString,
+        'mealType': entry.mealType.displayName,
+        'foodId': entry.foodId,
+        'foodName': entry.foodName,
+        'category': entry.category,
+        'servingSize': entry.servingSize,
+        'servingUnit': entry.servingUnit,
+        'quantity': entry.quantity,
+        'calories': entry.baseCalories * entry.quantity,
+        'protein': entry.baseProtein * entry.quantity,
+        'carbohydrates': entry.baseCarbs * entry.quantity,
+        'fat': entry.baseFat * entry.quantity,
+        'fiber': entry.baseFiber * entry.quantity,
+        'source': entry.source,
+        'isAiConfirmed': entry.isAiConfirmed,
+        'loggedAt': (entry.loggedAt ?? entry.createdAt).toIso8601String(),
+      });
+
+      await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Offline fallback: persists in local preferences
+    }
   }
 
   /// Update quantity for an existing food entry
@@ -559,12 +681,12 @@ class MacroRepository extends ChangeNotifier {
     final index = _foodLogs.indexWhere((e) => e.id == entryId);
     if (index != -1) {
       if (newQuantity <= 0) {
-        _foodLogs.removeAt(index);
+        deleteFoodEntry(entryId);
       } else {
         _foodLogs[index] = _foodLogs[index].copyWith(quantity: newQuantity);
+        _saveFoodLogsToPrefs();
+        notifyListeners();
       }
-      _saveFoodLogsToPrefs();
-      notifyListeners();
     }
   }
 
@@ -573,6 +695,24 @@ class MacroRepository extends ChangeNotifier {
     _foodLogs.removeWhere((e) => e.id == entryId);
     _saveFoodLogsToPrefs();
     notifyListeners();
+
+    // Sync deletion to backend
+    _dispatchDeleteFoodLogToBackend(entryId);
+  }
+
+  Future<void> _dispatchDeleteFoodLogToBackend(String entryId) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/food-logs/$entryId');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      await http.delete(url, headers: headers).timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 
   /// Clear all food entries for a specific date (useful for resets and tests)
@@ -580,6 +720,100 @@ class MacroRepository extends ChangeNotifier {
     _foodLogs.removeWhere((e) => e.dateString == dateString);
     _saveFoodLogsToPrefs();
     notifyListeners();
+  }
+
+  // ==========================================
+  // ADMIN NUTRITION SYSTEM API HELPERS
+  // ==========================================
+
+  /// Admin: Fetch target vs actual nutrition summary for any client
+  Future<Map<String, dynamic>?> fetchAdminNutritionSummary(String clientId, String dateString) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/nutrition-summary?date=$dateString');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded['data'] ?? decoded;
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Admin: Assign structured diet plan with versioning
+  Future<bool> assignAdminDietPlan({
+    required String clientId,
+    required String planName,
+    required double dailyCalories,
+    required double protein,
+    required double carbs,
+    required double fat,
+    required double fiber,
+    required double waterTargetLiters,
+    String? notes,
+    required List<PrescribedMeal> meals,
+  }) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/diet-plans');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final body = jsonEncode({
+        'planName': planName,
+        'dailyCalories': dailyCalories,
+        'protein': protein,
+        'carbohydrates': carbs,
+        'fat': fat,
+        'fiber': fiber,
+        'waterTargetLiters': waterTargetLiters,
+        'notes': notes,
+        'meals': meals.map((m) => m.toJson()).toList(),
+      });
+
+      final response = await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8));
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Admin: Fetch version history of diet plans
+  Future<List<Map<String, dynamic>>> fetchAdminDietHistory(String clientId) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/diet-plans/history');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      final token = AuthService().token;
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded['data'] ?? decoded;
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+      }
+    } catch (_) {}
+    return [];
   }
 
   /// Seed realistic food tracking data for today and yesterday

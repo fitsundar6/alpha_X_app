@@ -17,6 +17,10 @@ class FoodLogEntry {
   final double baseCarbs;
   final double baseFat;
   final double baseFiber;
+  final String source; // 'AI_CAMERA', 'FOOD_LIBRARY', 'CUSTOM_FOOD'
+  final bool isAiConfirmed;
+  final String category;
+  final DateTime? loggedAt;
   final DateTime createdAt;
 
   const FoodLogEntry({
@@ -34,6 +38,10 @@ class FoodLogEntry {
     required this.baseCarbs,
     required this.baseFat,
     this.baseFiber = 0.0,
+    this.source = 'FOOD_LIBRARY',
+    this.isAiConfirmed = true,
+    this.category = 'General',
+    this.loggedAt,
     required this.createdAt,
   });
 
@@ -44,9 +52,11 @@ class FoodLogEntry {
     required MealType mealType,
     required FoodItem food,
     required double quantity,
+    String? source,
   }) {
+    final now = DateTime.now();
     return FoodLogEntry(
-      id: 'flog_${DateTime.now().millisecondsSinceEpoch}_${food.id}',
+      id: 'flog_${now.millisecondsSinceEpoch}_${food.id}',
       clientId: clientId,
       dateString: dateString,
       mealType: mealType,
@@ -60,7 +70,11 @@ class FoodLogEntry {
       baseCarbs: food.carbs,
       baseFat: food.fat,
       baseFiber: food.fiber,
-      createdAt: DateTime.now(),
+      source: source ?? (food.isCustom ? 'CUSTOM_FOOD' : 'FOOD_LIBRARY'),
+      isAiConfirmed: true,
+      category: food.category,
+      loggedAt: now,
+      createdAt: now,
     );
   }
 
@@ -147,6 +161,10 @@ class FoodLogEntry {
     'baseCarbs': baseCarbs,
     'baseFat': baseFat,
     'baseFiber': baseFiber,
+    'source': source,
+    'isAiConfirmed': isAiConfirmed,
+    'category': category,
+    'loggedAt': (loggedAt ?? createdAt).toIso8601String(),
     'createdAt': createdAt.toIso8601String(),
   };
 
@@ -155,7 +173,7 @@ class FoodLogEntry {
     clientId: json['clientId'] as String,
     dateString: json['dateString'] as String,
     mealType: MealType.fromString(json['mealType'] as String),
-    foodId: json['foodId'] as String,
+    foodId: json['foodId'] as String? ?? '',
     foodName: json['foodName'] as String,
     quantity: (json['quantity'] as num).toDouble(),
     servingUnit: json['servingUnit'] as String,
@@ -165,6 +183,10 @@ class FoodLogEntry {
     baseCarbs: (json['baseCarbs'] as num).toDouble(),
     baseFat: (json['baseFat'] as num).toDouble(),
     baseFiber: (json['baseFiber'] as num?)?.toDouble() ?? 0.0,
+    source: json['source'] as String? ?? 'FOOD_LIBRARY',
+    isAiConfirmed: json['isAiConfirmed'] as bool? ?? true,
+    category: json['category'] as String? ?? 'General',
+    loggedAt: DateTime.tryParse(json['loggedAt'] as String? ?? ''),
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
   );
 
@@ -183,6 +205,10 @@ class FoodLogEntry {
     double? baseCarbs,
     double? baseFat,
     double? baseFiber,
+    String? source,
+    bool? isAiConfirmed,
+    String? category,
+    DateTime? loggedAt,
     DateTime? createdAt,
   }) {
     return FoodLogEntry(
@@ -200,6 +226,10 @@ class FoodLogEntry {
       baseCarbs: baseCarbs ?? this.baseCarbs,
       baseFat: baseFat ?? this.baseFat,
       baseFiber: baseFiber ?? this.baseFiber,
+      source: source ?? this.source,
+      isAiConfirmed: isAiConfirmed ?? this.isAiConfirmed,
+      category: category ?? this.category,
+      loggedAt: loggedAt ?? this.loggedAt,
       createdAt: createdAt ?? this.createdAt,
     );
   }

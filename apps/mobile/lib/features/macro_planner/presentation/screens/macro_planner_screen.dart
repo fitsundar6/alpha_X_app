@@ -13,6 +13,8 @@ import '../widgets/add_food_bottom_sheet.dart';
 import '../widgets/edit_food_quantity_dialog.dart';
 import 'macro_input_screen.dart';
 import 'macro_history_screen.dart';
+import 'ai_food_camera_scanner_screen.dart';
+import '../../domain/models/assigned_diet_plan.dart';
 
 /// Main client hub for Alpha X Macro Planner & Daily Food Tracking
 class MacroPlannerScreen extends StatefulWidget {
@@ -47,6 +49,17 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
     final currentWeight = widget.repository.currentInput?.weightKg ?? 81.0;
     _reviewWeightController.text = currentWeight.toStringAsFixed(1);
     _reviewWaistController.text = '83.5';
+    _fetchInitialData();
+  }
+
+  Future<void> _fetchInitialData() async {
+    try {
+      await widget.repository.fetchAssignedDietPlan();
+      await widget.repository.fetchFoodLogsFromBackend(_selectedDateString);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('[MacroPlannerScreen] Sync error: $e');
+    }
   }
 
   @override
@@ -66,6 +79,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
     setState(() {
       _selectedDate = _selectedDate.subtract(const Duration(days: 1));
     });
+    widget.repository.fetchFoodLogsFromBackend(_selectedDateString);
   }
 
   void _nextDay() {
@@ -73,6 +87,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
     setState(() {
       _selectedDate = _selectedDate.add(const Duration(days: 1));
     });
+    widget.repository.fetchFoodLogsFromBackend(_selectedDateString);
   }
 
   void _jumpToToday() {
@@ -80,6 +95,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
     setState(() {
       _selectedDate = DateTime.now();
     });
+    widget.repository.fetchFoodLogsFromBackend(_selectedDateString);
   }
 
   Future<void> _pickDate() async {
@@ -108,6 +124,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
       setState(() {
         _selectedDate = picked;
       });
+      widget.repository.fetchFoodLogsFromBackend(_selectedDateString);
     }
   }
 
@@ -117,6 +134,18 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
       repository: widget.repository,
       mealType: mealType,
       dateString: _selectedDateString,
+    );
+  }
+
+  void _openCameraScanner([MealType mealType = MealType.lunch]) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => AiFoodCameraScannerScreen(
+          repository: widget.repository,
+          initialMealType: mealType,
+          dateString: _selectedDateString,
+        ),
+      ),
     );
   }
 
@@ -217,8 +246,10 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
 
           const SizedBox(height: 16),
 
-          // --- SECTION 1: DAILY CALCULATED TARGET CARD ---
-          if (currentResult != null && currentInput != null) ...[
+          // --- SECTION 1: TRAINER ASSIGNED DIET PLAN (OR CALCULATED TARGET) ---
+          if (widget.repository.hasAssignedDietPlan) ...[
+            _buildAssignedDietCard(widget.repository.assignedDietPlan!),
+          ] else if (currentResult != null && currentInput != null) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -691,6 +722,34 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
             Row(
               children: [
                 AlphaXPressable(
+                  onTap: () => _openCameraScanner(MealType.lunch),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.primaryRed),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.camera_alt, size: 13, color: AppColors.primaryRed),
+                        SizedBox(width: 4),
+                        Text(
+                          '📷 SCAN FOOD',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                AlphaXPressable(
                   onTap: () => _openAddFood(MealType.snack),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -732,6 +791,73 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 14),
+
+        // AI FOOD CAMERA SCANNER BANNER
+        Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.surfaceCard,
+                AppColors.primaryRed.withOpacity(0.12),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primaryRed),
+                ),
+                child: const Icon(Icons.camera_alt, color: AppColors.primaryRed, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'AI FOOD CAMERA SCANNER',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Point camera at food to scan meal and estimate macros.',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _openCameraScanner(MealType.lunch),
+                icon: const Icon(Icons.photo_camera, size: 14),
+                label: const Text('SCAN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+        ),
 
         // 4 Meal Sections (Breakfast, Lunch, Snack, Dinner)
         ...MealType.values.map((meal) {
@@ -889,9 +1015,12 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                entry.foodName,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                              Flexible(
+                                child: Text(
+                                  entry.foodName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               const SizedBox(width: 6),
                               Container(
@@ -905,6 +1034,8 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                   style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w800),
                                 ),
                               ),
+                              const SizedBox(width: 6),
+                              _buildSourceBadge(entry.source),
                             ],
                           ),
                           const SizedBox(height: 3),
@@ -975,38 +1106,456 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
             ),
           ],
 
-          // Add Food Button
-          AlphaXPressable(
-            onTap: () => _openAddFood(meal),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+          // Action Buttons: Add Food & Scan Food with Live Camera
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: AlphaXPressable(
+                  onTap: () => _openAddFood(meal),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.add, size: 16, color: AppColors.primaryRed),
+                        SizedBox(width: 4),
+                        Text(
+                          'ADD FOOD',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: AlphaXPressable(
+                  onTap: () => _openCameraScanner(meal),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.6)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.camera_alt, size: 15, color: AppColors.primaryRed),
+                        SizedBox(width: 4),
+                        Text(
+                          '📷 SCAN FOOD',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignedDietCard(AssignedDietPlan plan) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryRed.withOpacity(0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryRed.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primaryRed),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified, size: 12, color: AppColors.primaryRed),
+                    const SizedBox(width: 4),
+                    Text(
+                      'PRESCRIBED BY COACH (v${plan.version})',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                        color: AppColors.primaryRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (plan.assignedByName != null)
+                Text(
+                  'Coach: ${plan.assignedByName}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            plan.planName,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Daily Targets
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${plan.dailyCalories}',
+                style: AppTypography.displayLarge.copyWith(fontSize: 32),
+              ),
+              const SizedBox(width: 6),
+              const Text('kcal / day target', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(color: AppColors.borderSubtle, height: 1),
+          const SizedBox(height: 10),
+
+          // Macros Grid
+          Row(
+            children: [
+              Expanded(
+                child: _MacroCompactItem(
+                  label: 'Protein',
+                  value: '${plan.protein.round()}g',
+                  range: 'Target',
+                  color: AppColors.accentRed,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MacroCompactItem(
+                  label: 'Carbs',
+                  value: '${plan.carbs.round()}g',
+                  range: 'Target',
+                  color: AppColors.info,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MacroCompactItem(
+                  label: 'Fat',
+                  value: '${plan.fat.round()}g',
+                  range: 'Target',
+                  color: AppColors.gold,
+                ),
+              ),
+              if (plan.fiber > 0) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _MacroCompactItem(
+                    label: 'Fiber',
+                    value: '${plan.fiber.round()}g',
+                    range: 'Target',
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          if (plan.notes != null && plan.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.borderSubtle),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.add, size: 16, color: AppColors.primaryRed),
+                  const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppColors.gold),
                   const SizedBox(width: 6),
-                  Text(
-                    'ADD FOOD TO ${meal.displayName.toUpperCase()}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
+                  Expanded(
+                    child: Text(
+                      plan.notes!,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
                     ),
                   ),
                 ],
               ),
             ),
+          ],
+
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primaryRed),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.restaurant_menu, size: 14, color: AppColors.primaryRed),
+              label: Text(
+                'VIEW PRESCRIBED MEALS & TIMINGS (${plan.meals.length})',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              onPressed: () => _showPrescribedMealsSheet(context, plan),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  void _showPrescribedMealsSheet(BuildContext context, AssignedDietPlan plan) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppColors.primaryRed, width: 2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        plan.planName.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Assigned by ${plan.assignedByName ?? "Coach"} • Version ${plan.version}',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(color: AppColors.borderSubtle, height: 1),
+            const SizedBox(height: 12),
+            Expanded(
+              child: plan.meals.isEmpty
+                  ? const Center(
+                      child: Text('No structured meals prescribed yet.', style: TextStyle(color: AppColors.textSecondary)),
+                    )
+                  : ListView.builder(
+                      itemCount: plan.meals.length,
+                      itemBuilder: (context, index) {
+                        final meal = plan.meals[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.borderSubtle),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    meal.name.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                  if (meal.timing.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryRed.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: AppColors.primaryRed.withOpacity(0.5)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.access_time, size: 11, color: AppColors.primaryRed),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            meal.timing,
+                                            style: const TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.w800),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              if (meal.items.isEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Text('No specific foods listed.', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                              ] else ...[
+                                const SizedBox(height: 10),
+                                ...meal.items.map((item) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceCard,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                item.name,
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '${item.quantityDisplay} ${item.unit} • ${item.calories.round()} kcal | P: ${item.protein.round()}g C: ${item.carbs.round()}g F: ${item.fat.round()}g',
+                                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceBadge(String source) {
+    if (source == 'AI_CAMERA') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: Colors.tealAccent.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.tealAccent.withOpacity(0.6), width: 0.8),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.camera_alt, size: 9, color: Colors.tealAccent),
+            SizedBox(width: 3),
+            Text(
+              'AI CAMERA',
+              style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+      );
+    } else if (source == 'CUSTOM_FOOD') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: Colors.amber.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.amber.withOpacity(0.6), width: 0.8),
+        ),
+        child: const Text(
+          'CUSTOM',
+          style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.w800),
+        ),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: Colors.blueAccent.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.blueAccent.withOpacity(0.4), width: 0.8),
+        ),
+        child: const Text(
+          'LIBRARY',
+          style: TextStyle(color: Colors.lightBlueAccent, fontSize: 9, fontWeight: FontWeight.w800),
+        ),
+      );
+    }
   }
 }
 

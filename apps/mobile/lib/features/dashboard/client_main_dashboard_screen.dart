@@ -17,17 +17,21 @@ import 'package:alpha_x_gym/features/macro_planner/domain/models/daily_macro_sum
 import 'package:alpha_x_gym/features/exercise/presentation/client/client_exercise_library_tab.dart';
 import 'package:alpha_x_gym/features/macro_planner/presentation/widgets/add_food_bottom_sheet.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart';
+import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
+import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_progress_screen.dart';
 
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final ActivityRepository activityRepository;
   final MacroRepository macroRepository;
+  final WeeklyProgressRepository? weeklyProgressRepository;
 
   const ClientMainDashboardScreen({
     super.key,
     required this.workoutRepository,
     required this.activityRepository,
     required this.macroRepository,
+    this.weeklyProgressRepository,
   });
 
   @override
@@ -36,13 +40,17 @@ class ClientMainDashboardScreen extends StatefulWidget {
 
 class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   int _currentTabIndex = 0;
+  late final WeeklyProgressRepository _weeklyProgressRepository;
 
   @override
   void initState() {
     super.initState();
+    _weeklyProgressRepository = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
     widget.workoutRepository.addListener(_onRepoChange);
     widget.activityRepository.addListener(_onRepoChange);
     widget.macroRepository.addListener(_onRepoChange);
+    _weeklyProgressRepository.addListener(_onRepoChange);
+    _weeklyProgressRepository.fetchCheckInStatus();
   }
 
   @override
@@ -50,6 +58,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     widget.workoutRepository.removeListener(_onRepoChange);
     widget.activityRepository.removeListener(_onRepoChange);
     widget.macroRepository.removeListener(_onRepoChange);
+    _weeklyProgressRepository.removeListener(_onRepoChange);
     super.dispose();
   }
 
@@ -239,7 +248,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             Navigator.of(context).pop();
             _openChallengeSubPage(context);
           }),
-          _drawerSubPageItem('Body Progress & Weight', Icons.auto_graph_outlined, () {
+          _drawerSubPageItem('Weekly Progress & Check-In', Icons.event_available_outlined, () {
             Navigator.of(context).pop();
             _openProgressSubPage(context);
           }),
@@ -546,6 +555,10 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+
+        // Section: WEEKLY PROGRESS & CHECK-IN
+        _buildWeeklyCheckInHomeCard(),
         const SizedBox(height: 16),
 
         // Quick Navigation to Core Sections
@@ -1055,10 +1068,113 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   void _openProgressSubPage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _ClientProgressSubScreen(workoutRepository: widget.workoutRepository),
+        builder: (_) => ClientWeeklyProgressScreen(repository: _weeklyProgressRepository),
       ),
     );
   }
+
+  Widget _buildWeeklyCheckInHomeCard() {
+    final status = _weeklyProgressRepository.currentStatus;
+    final isAvailable = status?.isAvailable ?? true;
+    final weekNum = status?.currentWeekNumber ?? 1;
+    final nextDate = status?.nextCheckInDate;
+    final nextDateStr = nextDate != null ? nextDate.toIso8601String().substring(0, 10) : 'Next Week';
+    final daysLeft = status?.daysUntilNext ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AlphaXColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isAvailable
+              ? AlphaXColors.success.withValues(alpha: 0.45)
+              : AlphaXColors.redAccent.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isAvailable ? Icons.check_circle_outline_rounded : Icons.lock_clock_rounded,
+                    color: isAvailable ? AlphaXColors.success : AlphaXColors.redAccent,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isAvailable ? 'WEEK $weekNum CHECK-IN READY' : 'WEEKLY CHECK-IN COMPLETED ✓',
+                    style: TextStyle(
+                      color: isAvailable ? AlphaXColors.success : AlphaXColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isAvailable
+                      ? AlphaXColors.success.withValues(alpha: 0.15)
+                      : AlphaXColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  isAvailable ? 'OPEN NOW' : 'LOCKED',
+                  style: TextStyle(
+                    color: isAvailable ? AlphaXColors.success : AlphaXColors.textTertiary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isAvailable
+                ? 'Your Week $weekNum progress review is available. Submit your weight, nutrition, workout & recovery metrics.'
+                : 'Next Check-In: $nextDateStr (in $daysLeft ${daysLeft == 1 ? "day" : "days"}). Automatically unlocks when week starts.',
+            style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12, height: 1.3),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isAvailable ? AlphaXColors.redAccent : AlphaXColors.surfaceElevated,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              icon: Icon(
+                isAvailable ? Icons.play_arrow_rounded : Icons.insights_rounded,
+                size: 16,
+                color: isAvailable ? Colors.white : AlphaXColors.redAccent,
+              ),
+              label: Text(
+                isAvailable ? 'START WEEK $weekNum CHECK-IN' : 'VIEW WEEKLY PROGRESS SUMMARY',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: isAvailable ? Colors.white : AlphaXColors.textPrimary,
+                ),
+              ),
+              onPressed: () => _openProgressSubPage(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   void _openProfileSubPage(BuildContext context) {
     Navigator.of(context).push(

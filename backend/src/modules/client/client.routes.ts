@@ -294,6 +294,110 @@ router.get('/me/macros', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/v1/client/me/food-logs: Client fetches their actual logged meals for a specific date
+router.get('/me/food-logs', async (req: Request, res: Response) => {
+  const dateQuery = String(req.query.date || '');
+  const targetDate = dateQuery.trim() || new Date().toISOString().split('T')[0];
+
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const logs = await prisma.clientFoodLog.findMany({
+      where: {
+        clientProfileId: profile.id,
+        dateString: targetDate,
+      },
+      orderBy: { loggedAt: 'asc' },
+    });
+
+    sendSuccess(res, logs);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch actual food logs', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// POST /api/v1/client/me/food-logs: Client logs confirmed actual food (Food Library, Snacks, Custom Food, or AI Camera)
+router.post('/me/food-logs', async (req: Request, res: Response) => {
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const body = req.body;
+    const entries = Array.isArray(body) ? body : (body.entries || [body]);
+
+    const createdList = [];
+    for (const item of entries) {
+      if (!item.foodName || typeof item.foodName !== 'string') continue;
+
+      const dateStr = item.dateString || new Date().toISOString().split('T')[0];
+      const dateObj = new Date(dateStr);
+
+      const created = await prisma.clientFoodLog.create({
+        data: {
+          clientProfileId: profile.id,
+          clientId: profile.clientId || profile.id,
+          date: dateObj,
+          dateString: dateStr,
+          mealType: item.mealType || 'Lunch',
+          foodId: item.foodId || null,
+          foodName: item.foodName.trim(),
+          category: item.category || 'General',
+          servingSize: Number(item.servingSize) || 100,
+          servingUnit: item.servingUnit || 'g',
+          quantity: Number(item.quantity) || 1.0,
+          calories: Number(item.calories) || 0,
+          protein: Number(item.protein) || 0,
+          carbohydrates: Number(item.carbohydrates ?? item.carbs) || 0,
+          fat: Number(item.fat) || 0,
+          fiber: Number(item.fiber) || 0,
+          source: item.source || 'FOOD_LIBRARY',
+          isAiConfirmed: item.isAiConfirmed !== undefined ? Boolean(item.isAiConfirmed) : true,
+          loggedAt: item.loggedAt ? new Date(item.loggedAt) : new Date(),
+        },
+      });
+      createdList.push(created);
+    }
+
+    sendSuccess(res, createdList, HttpStatus.CREATED);
+  } catch (err: any) {
+    console.error('[CLIENT LOG FOOD ERROR]', err);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to log food entry', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// DELETE /api/v1/client/me/food-logs/:id: Remove a single logged item (strictly authorized)
+router.delete('/me/food-logs/:id', async (req: Request, res: Response) => {
+  const id = String(req.params.id || '');
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const entry = await prisma.clientFoodLog.findFirst({
+      where: { id, clientProfileId: profile.id },
+    });
+
+    if (!entry) {
+      sendError(res, 'NOT_FOUND', 'Food log entry not found or unauthorized', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    await prisma.clientFoodLog.delete({ where: { id } });
+    sendSuccess(res, { deleted: true, id });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to delete food log entry', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 // GET /api/v1/client/me/attendance: Attendance history
 router.get('/me/attendance', async (req: Request, res: Response) => {
   try {
@@ -413,5 +517,252 @@ router.get('/me/challenge', async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// WEEKLY CHECK-IN SYSTEM (CLIENT ENDPOINTS)
+// ==========================================
+
+// GET /api/v1/client/me/weekly-check-ins/status
+// Determines if client can check in (only once per week)
+router.get('/me/weekly-check-ins/status', async (req: Request, res: Response) => {
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const latestCheckIn = await prisma.weeklyCheckIn.findFirst({
+      where: { clientProfileId: profile.id },
+      orderBy: { checkInDate: 'desc' },
+    });
+
+    const now = new Date();
+
+    if (!latestCheckIn) {
+      // First check-in is immediately available
+      sendSuccess(res, {
+        isAvailable: true,
+        currentWeekNumber: 1,
+        lastCheckIn: null,
+        nextCheckInDate: null,
+        daysUntilNext: 0,
+        statusText: 'Week 1 Check-In Available',
+      });
+      return;
+    }
+
+    const isAvailable = now >= latestCheckIn.nextCheckInDate;
+    const diffMs = latestCheckIn.nextCheckInDate.getTime() - now.getTime();
+    const daysUntilNext = isAvailable ? 0 : Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const nextWeekNumber = latestCheckIn.weekNumber + 1;
+
+    sendSuccess(res, {
+      isAvailable,
+      currentWeekNumber: isAvailable ? nextWeekNumber : latestCheckIn.weekNumber,
+      lastCheckIn: latestCheckIn,
+      nextCheckInDate: latestCheckIn.nextCheckInDate.toISOString(),
+      daysUntilNext,
+      statusText: isAvailable
+        ? `Week ${nextWeekNumber} Check-In Available`
+        : `Weekly Check-In Completed ✓ (Next: ${latestCheckIn.nextCheckInDate.toISOString().split('T')[0]})`,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in status', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// GET /api/v1/client/me/weekly-check-ins: Full history of weekly check-ins for authenticated client
+router.get('/me/weekly-check-ins', async (req: Request, res: Response) => {
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const checkIns = await prisma.weeklyCheckIn.findMany({
+      where: { clientProfileId: profile.id },
+      orderBy: { weekNumber: 'desc' },
+    });
+
+    sendSuccess(res, checkIns);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in history', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// GET /api/v1/client/me/weekly-check-ins/:id: Specific check-in detail
+router.get('/me/weekly-check-ins/:id', async (req: Request, res: Response) => {
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const checkInId = String(req.params.id);
+    const checkIn = await prisma.weeklyCheckIn.findFirst({
+      where: { id: checkInId, clientProfileId: profile.id },
+    });
+
+    if (!checkIn) {
+      sendError(res, 'NOT_FOUND', 'Weekly check-in not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    sendSuccess(res, checkIn);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch check-in details', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// POST /api/v1/client/me/weekly-check-ins: Submit a weekly check-in
+// Strictly enforces 1 check-in per week rule on the backend
+router.post('/me/weekly-check-ins', async (req: Request, res: Response) => {
+  const {
+    weightKg,
+    waistCm,
+    chestCm,
+    armsCm,
+    hipsCm,
+    thighsCm,
+    nutritionCalories,
+    nutritionProtein,
+    nutritionWater,
+    dietAdherence,
+    sleepQuality,
+    sleepHours,
+    recoveryQuality,
+    workoutCompletion,
+    workoutFeeling,
+    energyLevel,
+    hasPain,
+    painLocation,
+    painExercise,
+    painLevel,
+    painDescription,
+    weeklyProblems,
+    clientNotes,
+  } = req.body;
+
+  if (weightKg === undefined || weightKg === null || isNaN(Number(weightKg)) || Number(weightKg) < 25 || Number(weightKg) > 350) {
+    sendError(res, 'VALIDATION_ERROR', 'Valid body weight in kg (25-350 kg) is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    // 1. Check existing check-ins to enforce weekly restriction
+    const latestCheckIn = await prisma.weeklyCheckIn.findFirst({
+      where: { clientProfileId: profile.id },
+      orderBy: { checkInDate: 'desc' },
+    });
+
+    const now = new Date();
+
+    if (latestCheckIn && now < latestCheckIn.nextCheckInDate) {
+      const nextDateStr = latestCheckIn.nextCheckInDate.toISOString().split('T')[0];
+      sendError(
+        res,
+        'WEEKLY_LOCKED',
+        `Weekly check-in already submitted for this week. Next check-in unlocks on ${nextDateStr}.`,
+        HttpStatus.CONFLICT
+      );
+      return;
+    }
+
+    const weekNumber = latestCheckIn ? latestCheckIn.weekNumber + 1 : 1;
+    const year = now.getFullYear();
+    // Next check-in is exactly 7 days later
+    const nextCheckInDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Calculate changes vs previous week if available
+    const weightVal = Number(Number(weightKg).toFixed(1));
+    const waistVal = waistCm && !isNaN(Number(waistCm)) ? Number(Number(waistCm).toFixed(1)) : null;
+
+    let weightChange: number | null = null;
+    let waistChange: number | null = null;
+
+    if (latestCheckIn) {
+      weightChange = Number((weightVal - latestCheckIn.weightKg).toFixed(1));
+      if (waistVal !== null && latestCheckIn.waistCm !== null) {
+        waistChange = Number((waistVal - latestCheckIn.waistCm).toFixed(1));
+      }
+    }
+
+    // Create record in database
+    const checkIn = await prisma.weeklyCheckIn.create({
+      data: {
+        clientProfileId: profile.id,
+        clientId: profile.clientId,
+        weekNumber,
+        year,
+        checkInDate: now,
+        nextCheckInDate,
+        weightKg: weightVal,
+        waistCm: waistVal,
+        chestCm: chestCm && !isNaN(Number(chestCm)) ? Number(chestCm) : null,
+        armsCm: armsCm && !isNaN(Number(armsCm)) ? Number(armsCm) : null,
+        hipsCm: hipsCm && !isNaN(Number(hipsCm)) ? Number(hipsCm) : null,
+        thighsCm: thighsCm && !isNaN(Number(thighsCm)) ? Number(thighsCm) : null,
+        weightChange,
+        waistChange,
+        nutritionCalories: String(nutritionCalories || 'Good'),
+        nutritionProtein: String(nutritionProtein || 'Good'),
+        nutritionWater: String(nutritionWater || 'Good'),
+        dietAdherence: String(dietAdherence || 'Good'),
+        sleepQuality: String(sleepQuality || 'Good'),
+        sleepHours: Number(sleepHours) || 7.0,
+        recoveryQuality: String(recoveryQuality || 'Good'),
+        workoutCompletion: String(workoutCompletion || 'All'),
+        workoutFeeling: String(workoutFeeling || 'Good'),
+        energyLevel: String(energyLevel || 'Good'),
+        hasPain: Boolean(hasPain),
+        painLocation: hasPain ? String(painLocation || '') : null,
+        painExercise: hasPain ? String(painExercise || '') : null,
+        painLevel: hasPain && painLevel ? Number(painLevel) : null,
+        painDescription: hasPain ? String(painDescription || '') : null,
+        weeklyProblems: Array.isArray(weeklyProblems) ? weeklyProblems.map(String) : [],
+        clientNotes: clientNotes ? String(clientNotes).trim() : null,
+      },
+    });
+
+    // Also update client profile weightKg to keep profile current
+    await prisma.clientProfile.update({
+      where: { id: profile.id },
+      data: { weightKg: weightVal },
+    });
+
+    sendSuccess(
+      res,
+      {
+        checkIn,
+        summary: {
+          weekNumber,
+          weightKg: weightVal,
+          weightChange,
+          waistCm: waistVal,
+          waistChange,
+          nextCheckInDate: nextCheckInDate.toISOString(),
+          statusText: 'Weekly Check-In Completed ✓',
+        },
+      },
+      HttpStatus.CREATED
+    );
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      sendError(res, 'DUPLICATE_CHECK_IN', 'A check-in for this week already exists.', HttpStatus.CONFLICT);
+      return;
+    }
+    sendError(res, 'INTERNAL_ERROR', 'Failed to submit weekly check-in', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 export const clientRoutes = router;
+
 

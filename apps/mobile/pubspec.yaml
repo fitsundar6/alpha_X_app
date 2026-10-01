@@ -43,6 +43,7 @@ dependencies:
   http: ^1.6.0
   flutter_secure_storage: ^11.2.0
   crypto: ^3.0.7
+  camera: ^0.12.1
 
 dev_dependencies:
   flutter_test:

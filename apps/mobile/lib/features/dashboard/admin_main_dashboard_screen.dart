@@ -15,17 +15,22 @@ import 'package:alpha_x_gym/features/exercise/presentation/admin/admin_exercise_
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_change_requests_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_performance_dashboard_screen.dart';
 import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
+import 'package:alpha_x_gym/features/dashboard/admin_client_nutrition_screen.dart';
+import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
+import 'package:alpha_x_gym/features/progress/presentation/screens/admin_weekly_progress_screen.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final ActivityRepository activityRepository;
   final MacroRepository macroRepository;
+  final WeeklyProgressRepository? weeklyProgressRepository;
 
   const AdminMainDashboardScreen({
     super.key,
     required this.workoutRepository,
     required this.activityRepository,
     required this.macroRepository,
+    this.weeklyProgressRepository,
   });
 
   @override
@@ -36,6 +41,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   int _selectedIndex = 0;
   bool _isLoadingClients = false;
   String? _clientsError;
+  late final WeeklyProgressRepository _weeklyProgressRepo;
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -45,11 +51,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     '🔥 CHALLENGES',
     '📋 ATTENDANCE',
     '⚙️ SETTINGS',
+    '📈 WEEKLY PROGRESS',
   ];
 
   @override
   void initState() {
     super.initState();
+    _weeklyProgressRepo = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
     _loadClients();
   }
 
@@ -209,6 +217,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         return _buildAttendanceTab();
       case 6:
         return _buildSettingsTab();
+      case 7:
+        return AdminWeeklyProgressScreen(repository: _weeklyProgressRepo);
       default:
         return _buildAdminHomeTab();
     }
@@ -302,6 +312,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           _drawerItem(4, 'Challenges', Icons.local_fire_department_outlined),
           _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined),
           _drawerItem(6, 'Settings', Icons.settings_outlined),
+          _drawerItem(7, 'Weekly Progress', Icons.insights_rounded),
           const Divider(color: AppColors.border),
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.primaryRed),
@@ -1051,9 +1062,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              icon: const Icon(Icons.assignment_ind_outlined, size: 15, color: AppColors.primaryRed),
+                              icon: const Icon(Icons.assignment_ind_outlined, size: 14, color: AppColors.textSecondary),
                               label: const Text(
-                                'CLIENT PROFILE & ASSESSMENT',
+                                'PROFILE',
                                 style: TextStyle(
                                   color: AppColors.textPrimary,
                                   fontSize: 11,
@@ -1061,6 +1072,67 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                                 ),
                               ),
                               onPressed: () => _showClientProfileModal(context, client),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryRed,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.restaurant_menu_rounded, size: 14, color: Colors.white),
+                              label: const Text(
+                                '🥗 NUTRITION',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AdminClientNutritionScreen(
+                                      client: client,
+                                      macroRepository: widget.macroRepository,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AlphaXColors.surfaceElevated,
+                                side: const BorderSide(color: AlphaXColors.gold, width: 0.8),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.insights_rounded, size: 14, color: AlphaXColors.gold),
+                              label: const Text(
+                                '📈 PROGRESS',
+                                style: TextStyle(
+                                  color: AlphaXColors.gold,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AdminWeeklyProgressScreen(
+                                      repository: _weeklyProgressRepo,
+                                      initialClientId: clientId,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -1107,7 +1179,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             Navigator.of(ctx).pop();
             setState(() => _selectedIndex = 2);
           },
-          onAssignDietPlan: (c) => _showAssignDietPlanDialog(context, c),
+          onAssignDietPlan: (c) {
+            Navigator.of(ctx).pop();
+            _showAssignDietPlanDialog(context, c);
+          },
           onSetMacros: (c) => _showMacroTargetsDialog(context, c),
         );
       },
@@ -1330,138 +1405,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   }
 
   void _showAssignDietPlanDialog(BuildContext context, Map<String, dynamic> client) {
-    final clientId = client['clientId'] ?? client['id'] ?? '';
-    final clientName = client['name'] ?? 'Client';
-    final nameCtrl = TextEditingController(text: 'Alpha X Lean Recomp Protocol');
-    final calCtrl = TextEditingController(text: '2200');
-    final proCtrl = TextEditingController(text: '160');
-    final carbCtrl = TextEditingController(text: '220');
-    final fatCtrl = TextEditingController(text: '65');
-    final fiberCtrl = TextEditingController(text: '30');
-    final waterCtrl = TextEditingController(text: '3.5');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('ASSIGN DIET PLAN ($clientName)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Client ID: $clientId', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 12)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Plan Name'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: calCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'Daily Calories', suffixText: 'kcal'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: proCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Daily Protein', suffixText: 'g'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: carbCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Daily Carbs', suffixText: 'g'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: fatCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Daily Fat', suffixText: 'g'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: fiberCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Daily Fiber', suffixText: 'g'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: waterCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Water Target', suffixText: 'L'),
-              ),
-            ],
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminClientNutritionScreen(
+          client: client,
+          macroRepository: widget.macroRepository,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
-            onPressed: () async {
-              final planName = nameCtrl.text.trim();
-              final cal = int.tryParse(calCtrl.text) ?? 2200;
-              final p = double.tryParse(proCtrl.text) ?? 160.0;
-              final c = double.tryParse(carbCtrl.text) ?? 220.0;
-              final f = double.tryParse(fatCtrl.text) ?? 65.0;
-              final fib = double.tryParse(fiberCtrl.text) ?? 30.0;
-              final w = double.tryParse(waterCtrl.text) ?? 3.5;
-
-              Navigator.of(ctx).pop();
-              await widget.workoutRepository.assignDietPlanToClient(clientId, {
-                'name': planName,
-                'dailyCalories': cal,
-                'protein': p,
-                'carbs': c,
-                'fat': f,
-                'fiber': fib,
-                'waterTarget': w,
-                'meals': [
-                  {
-                    'name': 'Breakfast',
-                    'order': 1,
-                    'items': [
-                      {'name': 'Oats with Whey & Berries', 'quantity': 1, 'unit': 'bowl', 'calories': 450, 'protein': 35, 'carbs': 55, 'fat': 8, 'fiber': 7}
-                    ]
-                  },
-                  {
-                    'name': 'Lunch',
-                    'order': 2,
-                    'items': [
-                      {'name': 'Grilled Chicken Breast & Jasmine Rice', 'quantity': 1, 'unit': 'plate', 'calories': 600, 'protein': 50, 'carbs': 70, 'fat': 12, 'fiber': 5}
-                    ]
-                  },
-                  {
-                    'name': 'Dinner',
-                    'order': 3,
-                    'items': [
-                      {'name': 'Salmon Fillet with Sweet Potato & Veggies', 'quantity': 1, 'unit': 'plate', 'calories': 650, 'protein': 45, 'carbs': 50, 'fat': 22, 'fiber': 8}
-                    ]
-                  }
-                ]
-              });
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Diet Plan "$planName" assigned to $clientName successfully.'),
-                    backgroundColor: AppColors.primaryRed,
-                  ),
-                );
-              }
-            },
-            child: const Text('ASSIGN PLAN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }

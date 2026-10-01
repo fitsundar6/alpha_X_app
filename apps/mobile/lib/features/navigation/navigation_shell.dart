@@ -3,18 +3,21 @@ import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
+import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'role_router.dart';
 
 class NavigationShell extends StatefulWidget {
   final WorkoutRepository? workoutRepository;
   final ActivityRepository? activityRepository;
   final MacroRepository? macroRepository;
+  final WeeklyProgressRepository? weeklyProgressRepository;
 
   const NavigationShell({
     super.key,
     this.workoutRepository,
     this.activityRepository,
     this.macroRepository,
+    this.weeklyProgressRepository,
   });
 
   @override
@@ -25,6 +28,7 @@ class _NavigationShellState extends State<NavigationShell> {
   late final WorkoutRepository _workoutRepository;
   late final ActivityRepository _activityRepository;
   late final MacroRepository _macroRepository;
+  late final WeeklyProgressRepository _weeklyProgressRepository;
   final bool _isExpandedView = false;
 
   @override
@@ -33,6 +37,7 @@ class _NavigationShellState extends State<NavigationShell> {
     _workoutRepository = widget.workoutRepository ?? WorkoutRepository();
     _activityRepository = widget.activityRepository ?? ActivityRepository();
     _macroRepository = widget.macroRepository ?? MacroRepository();
+    _weeklyProgressRepository = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
   }
 
   @override
@@ -43,6 +48,7 @@ class _NavigationShellState extends State<NavigationShell> {
       workoutRepository: _workoutRepository,
       activityRepository: _activityRepository,
       macroRepository: _macroRepository,
+      weeklyProgressRepository: _weeklyProgressRepository,
     );
 
     // Responsive desktop container wrapper:

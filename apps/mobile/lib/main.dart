@@ -22,10 +22,20 @@ import 'features/workout/presentation/client/client_workout_screen.dart';
 import 'features/workout/presentation/client/client_session_overview_screen.dart';
 import 'features/workout/presentation/client/client_workout_history_screen.dart';
 import 'features/onboarding/client_onboarding_screen.dart';
+import 'features/progress/data/repositories/weekly_progress_repository.dart';
+import 'features/progress/presentation/screens/client_weekly_progress_screen.dart';
+import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService().initialize();
+
+  // Runtime API Configuration Logging (Zero secrets or credentials logged)
+  debugPrint('====================================================');
+  debugPrint('ALPHA X GYM APP STARTUP');
+  debugPrint('API BASE URL = ${ApiConfig.baseUrl}');
+  debugPrint('====================================================');
+
   runApp(const AlphaXGymApp());
 }
 
@@ -41,6 +51,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
   late final WorkoutRepository _workoutRepository;
   late final ActivityRepository _activityRepository;
   late final MacroRepository _macroRepository;
+  late final WeeklyProgressRepository _weeklyProgressRepository;
   final AuthService _authService = AuthService();
 
   @override
@@ -49,6 +60,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
     _workoutRepository = WorkoutRepository();
     _activityRepository = ActivityRepository();
     _macroRepository = MacroRepository();
+    _weeklyProgressRepository = WeeklyProgressRepository();
 
     // Automatically update daily activity tracking & sync with backend when workout is completed
     _workoutRepository.onWorkoutCompleted = (record) {
@@ -70,6 +82,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
       workoutRepository: _workoutRepository,
       activityRepository: _activityRepository,
       macroRepository: _macroRepository,
+      weeklyProgressRepository: _weeklyProgressRepository,
     );
   }
 
@@ -86,6 +99,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
           workoutRepository: _workoutRepository,
           activityRepository: _activityRepository,
           macroRepository: _macroRepository,
+          weeklyProgressRepository: _weeklyProgressRepository,
         ),
         '/login': (context) => const LoginScreen(),
         '/admin/login': (context) => const AdminLoginScreen(),
@@ -307,11 +321,13 @@ Route<dynamic>? buildAppRoute(
   WorkoutRepository? workoutRepository,
   ActivityRepository? activityRepository,
   MacroRepository? macroRepository,
+  WeeklyProgressRepository? weeklyProgressRepository,
 }) {
   final auth = authService ?? AuthService();
   final workoutRepo = workoutRepository ?? WorkoutRepository();
   final activityRepo = activityRepository ?? ActivityRepository();
   final macroRepo = macroRepository ?? MacroRepository();
+  final weeklyProgressRepo = weeklyProgressRepository ?? WeeklyProgressRepository();
   final uri = Uri.parse(settings.name ?? '/');
   final path = uri.path;
 
@@ -391,6 +407,13 @@ Route<dynamic>? buildAppRoute(
             workoutRepository: workoutRepo,
             activityRepository: activityRepo,
             macroRepository: macroRepo,
+            weeklyProgressRepository: weeklyProgressRepo,
+          ),
+        );
+      case '/admin/weekly-progress':
+        return MaterialPageRoute(
+          builder: (_) => AdminWeeklyProgressScreen(
+            repository: weeklyProgressRepo,
           ),
         );
       case '/admin/workout-sessions':
@@ -418,6 +441,13 @@ Route<dynamic>? buildAppRoute(
             workoutRepository: workoutRepo,
             activityRepository: activityRepo,
             macroRepository: macroRepo,
+            weeklyProgressRepository: weeklyProgressRepo,
+          ),
+        );
+      case '/client/weekly-check-in':
+        return MaterialPageRoute(
+          builder: (_) => ClientWeeklyProgressScreen(
+            repository: weeklyProgressRepo,
           ),
         );
       case '/client/workout':
@@ -462,6 +492,7 @@ Route<dynamic>? buildAppRoute(
         workoutRepository: workoutRepo,
         activityRepository: activityRepo,
         macroRepository: macroRepo,
+        weeklyProgressRepository: weeklyProgressRepo,
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
+import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_main_dashboard_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/client_main_dashboard_screen.dart';
 
@@ -14,12 +15,14 @@ class RoleRouter extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final ActivityRepository activityRepository;
   final MacroRepository macroRepository;
+  final WeeklyProgressRepository? weeklyProgressRepository;
 
   const RoleRouter({
     super.key,
     required this.workoutRepository,
     required this.activityRepository,
     required this.macroRepository,
+    this.weeklyProgressRepository,
   });
 
   @override
@@ -28,10 +31,12 @@ class RoleRouter extends StatefulWidget {
 
 class _RoleRouterState extends State<RoleRouter> {
   final _auth = AuthService();
+  late final WeeklyProgressRepository _weeklyProgressRepository;
 
   @override
   void initState() {
     super.initState();
+    _weeklyProgressRepository = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
     _auth.addListener(_onAuthChange);
     if (!_auth.isInitialized) {
       _auth.initialize();
@@ -70,12 +75,14 @@ class _RoleRouterState extends State<RoleRouter> {
         workoutRepository: widget.workoutRepository,
         activityRepository: widget.activityRepository,
         macroRepository: widget.macroRepository,
+        weeklyProgressRepository: _weeklyProgressRepository,
       );
     } else {
       return ClientMainDashboardScreen(
         workoutRepository: widget.workoutRepository,
         activityRepository: widget.activityRepository,
         macroRepository: widget.macroRepository,
+        weeklyProgressRepository: _weeklyProgressRepository,
       );
     }
   }

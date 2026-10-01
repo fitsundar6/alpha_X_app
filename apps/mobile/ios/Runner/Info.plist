@@ -32,6 +32,8 @@
 	<string>Alpha X Gym requires health write access to synchronize workout and activity sessions with Apple Health.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Alpha X Gym uses motion sensor data to assist in tracking daily step metrics.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Alpha X Gym requires live camera access to scan your meal and analyze nutritional macros in real-time.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

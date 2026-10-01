@@ -346,6 +346,18 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
 
     const cp = user.clientProfile;
 
+    // Find latest existing plan to increment version
+    const previousPlan = await prisma.dietPlan.findFirst({
+      where: { clientProfileId: cp.id, isActive: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const nextVersion = previousPlan ? previousPlan.version + 1 : 1;
+
+    // Admin attribution
+    const adminUser = (req as any).user || {};
+    const adminId = adminUser.id || 'admin_alex_stone';
+    const adminName = adminUser.name || 'Alex Stone';
+
     // Deactivate previous active diet plans for this client (Preserve history)
     await prisma.dietPlan.updateMany({
       where: {
@@ -355,12 +367,15 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
       data: { isActive: false },
     });
 
-    // Create the new active diet plan
+    // Create the new active diet plan with versioning
     const newDietPlan = await prisma.dietPlan.create({
       data: {
         clientProfileId: cp.id,
         clientId: cp.clientId,
         planName: planName.trim(),
+        version: nextVersion,
+        assignedById: adminId,
+        assignedByName: adminName,
         startDate: startDate ? new Date(startDate) : new Date(),
         endDate: endDate ? new Date(endDate) : null,
         dailyCalories: Number(dailyCalories) || 2000,
@@ -375,10 +390,159 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
       },
     });
 
+    // Create historical version entry
+    await prisma.dietPlanHistory.create({
+      data: {
+        dietPlanId: newDietPlan.id,
+        clientProfileId: cp.id,
+        clientId: cp.clientId,
+        adminId,
+        adminName,
+        version: nextVersion,
+        planName: newDietPlan.planName,
+        dailyCalories: newDietPlan.dailyCalories,
+        protein: newDietPlan.protein,
+        carbohydrates: newDietPlan.carbohydrates,
+        fat: newDietPlan.fat,
+        fiber: newDietPlan.fiber,
+        waterTargetLiters: newDietPlan.waterTargetLiters,
+        mealsJson: newDietPlan.mealsJson,
+        notes: newDietPlan.notes,
+        changeSummary: previousPlan
+          ? `Updated from v${previousPlan.version} (${previousPlan.planName}) to v${nextVersion} (${newDietPlan.planName})`
+          : `Initial Diet Plan v1 assigned`,
+      },
+    });
+
     sendSuccess(res, newDietPlan, HttpStatus.CREATED);
   } catch (err: any) {
     console.error('[ADMIN CREATE DIET PLAN ERROR]', err);
     sendError(res, 'INTERNAL_ERROR', 'Failed to create diet plan', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// GET /clients/:id/diet-plans/history: Version history of client's diet plans
+router.get('/clients/:id/diet-plans/history', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const history = await prisma.dietPlanHistory.findMany({
+      where: { clientProfileId: user.clientProfile.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    sendSuccess(res, history);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch diet history', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// GET /clients/:id/nutrition-summary: Target vs Actual daily nutrition comparison
+router.get('/clients/:id/nutrition-summary', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  const dateQuery = String(req.query.date || '');
+  const targetDate = dateQuery.trim() || new Date().toISOString().split('T')[0];
+
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const cp = user.clientProfile;
+
+    // 1. Fetch currently active assigned diet plan
+    const activeDietPlan = await prisma.dietPlan.findFirst({
+      where: { clientProfileId: cp.id, isActive: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 2. Fetch actual food logs recorded by client on this date
+    const foodLogs = await prisma.clientFoodLog.findMany({
+      where: {
+        clientProfileId: cp.id,
+        dateString: targetDate,
+      },
+      orderBy: { loggedAt: 'asc' },
+    });
+
+    // 3. Compute actual totals
+    const consumedCalories = foodLogs.reduce((acc, log) => acc + log.calories * log.quantity, 0);
+    const consumedProtein = foodLogs.reduce((acc, log) => acc + log.protein * log.quantity, 0);
+    const consumedCarbs = foodLogs.reduce((acc, log) => acc + log.carbohydrates * log.quantity, 0);
+    const consumedFat = foodLogs.reduce((acc, log) => acc + log.fat * log.quantity, 0);
+    const consumedFiber = foodLogs.reduce((acc, log) => acc + log.fiber * log.quantity, 0);
+
+    const assignedCalories = activeDietPlan?.dailyCalories ?? 2000;
+    const assignedProtein = activeDietPlan?.protein ?? 150;
+    const assignedCarbs = activeDietPlan?.carbohydrates ?? 200;
+    const assignedFat = activeDietPlan?.fat ?? 60;
+    const assignedFiber = activeDietPlan?.fiber ?? 30;
+
+    // Group actual meals
+    const mealGroups: Record<string, any[]> = {
+      Breakfast: [],
+      Lunch: [],
+      Snacks: [],
+      Dinner: [],
+    };
+
+    for (const log of foodLogs) {
+      const mType = log.mealType.charAt(0).toUpperCase() + log.mealType.slice(1).toLowerCase();
+      const key = mType.startsWith('Snack') ? 'Snacks' : mType;
+      if (!mealGroups[key]) mealGroups[key] = [];
+      mealGroups[key].push(log);
+    }
+
+    const loggedMealTypes = Object.keys(mealGroups).filter(k => mealGroups[k].length > 0);
+    const lastMealTime = foodLogs.length > 0 ? foodLogs[foodLogs.length - 1].loggedAt : null;
+
+    sendSuccess(res, {
+      clientId: cp.clientId || user.id,
+      clientName: user.name,
+      date: targetDate,
+      assignedDiet: activeDietPlan,
+      actualFoodLogs: foodLogs,
+      meals: mealGroups,
+      totalMealsLogged: loggedMealTypes.length,
+      lastMealTime,
+      comparison: {
+        calories: {
+          assigned: assignedCalories,
+          actual: Math.round(consumedCalories),
+          diff: Math.round(consumedCalories - assignedCalories),
+        },
+        protein: {
+          assigned: assignedProtein,
+          actual: Math.round(consumedProtein * 10) / 10,
+          diff: Math.round((consumedProtein - assignedProtein) * 10) / 10,
+        },
+        carbohydrates: {
+          assigned: assignedCarbs,
+          actual: Math.round(consumedCarbs * 10) / 10,
+          diff: Math.round((consumedCarbs - assignedCarbs) * 10) / 10,
+        },
+        fat: {
+          assigned: assignedFat,
+          actual: Math.round(consumedFat * 10) / 10,
+          diff: Math.round((consumedFat - assignedFat) * 10) / 10,
+        },
+        fiber: {
+          assigned: assignedFiber,
+          actual: Math.round(consumedFiber * 10) / 10,
+          diff: Math.round((consumedFiber - assignedFiber) * 10) / 10,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[ADMIN NUTRITION SUMMARY ERROR]', err);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to generate nutrition summary', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -630,4 +794,247 @@ router.put('/challenges/:id', (req: Request, res: Response) => {
   sendSuccess(res, { id: req.params.id, updated: true, data: req.body, updatedAt: new Date().toISOString() });
 });
 
+// ==========================================
+// WEEKLY PROGRESS & CHECK-IN (ADMIN ENDPOINTS)
+// ==========================================
+
+// GET /api/v1/admin/clients/:id/weekly-check-ins
+// Returns client's weekly check-in history, charts data, and habit consistency
+router.get('/clients/:id/weekly-check-ins', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const cp = user.clientProfile;
+
+    const checkIns = await prisma.weeklyCheckIn.findMany({
+      where: { clientProfileId: cp.id },
+      orderBy: { weekNumber: 'asc' },
+    });
+
+    const totalWeeks = checkIns.length;
+    const latestCheckIn = totalWeeks > 0 ? checkIns[totalWeeks - 1] : null;
+    const startWeight = totalWeeks > 0 ? checkIns[0].weightKg : (cp.weightKg || null);
+    const latestWeight = latestCheckIn ? latestCheckIn.weightKg : (cp.weightKg || null);
+    const totalWeightChange = (startWeight && latestWeight && totalWeeks > 1)
+      ? Number((latestWeight - startWeight).toFixed(1))
+      : 0.0;
+
+    // Weight and waist trajectory for charts
+    const weightHistory = checkIns.map((c) => ({
+      week: c.weekNumber,
+      weightKg: c.weightKg,
+      change: c.weightChange,
+      date: c.checkInDate.toISOString().split('T')[0],
+    }));
+
+    const waistHistory = checkIns
+      .filter((c) => c.waistCm !== null)
+      .map((c) => ({
+        week: c.weekNumber,
+        waistCm: c.waistCm,
+        change: c.waistChange,
+        date: c.checkInDate.toISOString().split('T')[0],
+      }));
+
+    // Consistency & habit calculations
+    let avgSleep = 0.0;
+    let goodNutritionCount = 0;
+    let workoutsAllOrMostCount = 0;
+    let highEnergyCount = 0;
+
+    if (totalWeeks > 0) {
+      const totalSleep = checkIns.reduce((acc, c) => acc + c.sleepHours, 0);
+      avgSleep = Number((totalSleep / totalWeeks).toFixed(1));
+
+      goodNutritionCount = checkIns.filter(
+        (c) => (c.nutritionProtein === 'Good' || c.nutritionProtein === 'Mostly') &&
+               (c.dietAdherence === 'Good' || c.dietAdherence === 'Mostly')
+      ).length;
+
+      workoutsAllOrMostCount = checkIns.filter(
+        (c) => c.workoutCompletion === 'All' || c.workoutCompletion === 'Most'
+      ).length;
+
+      highEnergyCount = checkIns.filter(
+        (c) => c.energyLevel === 'High' || c.energyLevel === 'Good'
+      ).length;
+    }
+
+    sendSuccess(res, {
+      client: {
+        id: user.id,
+        clientId: cp.clientId,
+        name: user.name,
+        email: user.email,
+        phone: cp.phone,
+        currentWeightKg: cp.weightKg,
+        primaryGoal: cp.primaryGoal,
+      },
+      totalWeeks,
+      latestCheckIn,
+      weightHistory,
+      waistHistory,
+      metrics: {
+        startWeight,
+        latestWeight,
+        totalWeightChange,
+        avgSleep,
+        nutritionAdherenceRate: totalWeeks > 0 ? Number(((goodNutritionCount / totalWeeks) * 100).toFixed(0)) : 0,
+        workoutConsistencyRate: totalWeeks > 0 ? Number(((workoutsAllOrMostCount / totalWeeks) * 100).toFixed(0)) : 0,
+        energyConsistencyRate: totalWeeks > 0 ? Number(((highEnergyCount / totalWeeks) * 100).toFixed(0)) : 0,
+        recentPainReported: latestCheckIn ? latestCheckIn.hasPain : false,
+      },
+      allCheckIns: [...checkIns].reverse(), // Newest first for list view
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in progress', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// GET /api/v1/admin/clients/:id/weekly-check-ins/compare
+// Side-by-side comparison between any two weeks
+router.get('/clients/:id/weekly-check-ins-compare', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  const weekANum = Number(req.query.weekA || 1);
+  const weekBNum = Number(req.query.weekB || 2);
+
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const cp = user.clientProfile;
+
+    const [checkInA, checkInB] = await Promise.all([
+      prisma.weeklyCheckIn.findFirst({
+        where: { clientProfileId: cp.id, weekNumber: weekANum },
+      }),
+      prisma.weeklyCheckIn.findFirst({
+        where: { clientProfileId: cp.id, weekNumber: weekBNum },
+      }),
+    ]);
+
+    if (!checkInA || !checkInB) {
+      sendError(res, 'NOT_FOUND', 'One or both requested weeks not found for comparison', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const weightDelta = Number((checkInB.weightKg - checkInA.weightKg).toFixed(1));
+    const waistDelta = (checkInA.waistCm && checkInB.waistCm)
+      ? Number((checkInB.waistCm - checkInA.waistCm).toFixed(1))
+      : null;
+
+    sendSuccess(res, {
+      weekA: checkInA,
+      weekB: checkInB,
+      comparison: {
+        weight: {
+          previous: checkInA.weightKg,
+          current: checkInB.weightKg,
+          change: weightDelta,
+        },
+        waist: {
+          previous: checkInA.waistCm,
+          current: checkInB.waistCm,
+          change: waistDelta,
+        },
+        workout: {
+          previous: checkInA.workoutCompletion,
+          current: checkInB.workoutCompletion,
+        },
+        protein: {
+          previous: checkInA.nutritionProtein,
+          current: checkInB.nutritionProtein,
+        },
+        water: {
+          previous: checkInA.nutritionWater,
+          current: checkInB.nutritionWater,
+        },
+        sleep: {
+          previous: `${checkInA.sleepHours}h (${checkInA.sleepQuality})`,
+          current: `${checkInB.sleepHours}h (${checkInB.sleepQuality})`,
+        },
+        recovery: {
+          previous: checkInA.recoveryQuality,
+          current: checkInB.recoveryQuality,
+        },
+        problems: {
+          previous: checkInA.weeklyProblems,
+          current: checkInB.weeklyProblems,
+        },
+      },
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to compare weekly check-ins', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// POST /api/v1/admin/clients/:id/weekly-check-ins/:checkInId/coach-review
+// Submits a coach review for a specific check-in
+router.post('/clients/:id/weekly-check-ins/:checkInId/coach-review', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  const checkInId = String(req.params.checkInId || '');
+  const {
+    whatWentWell,
+    needsImprovement,
+    nextWeekFocus,
+    workoutNotes,
+    nutritionNotes,
+    recoveryNotes,
+    followUpRequired,
+  } = req.body;
+
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const checkIn = await prisma.weeklyCheckIn.findFirst({
+      where: { id: checkInId, clientProfileId: user.clientProfile.id },
+    });
+
+    if (!checkIn) {
+      sendError(res, 'NOT_FOUND', 'Weekly check-in not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const reviewer = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { name: true },
+    });
+    const reviewerName = reviewer?.name || 'Head Coach';
+
+    const updated = await prisma.weeklyCheckIn.update({
+      where: { id: checkIn.id },
+      data: {
+        hasCoachReview: true,
+        reviewedById: req.user!.id,
+        reviewedByName: reviewerName,
+        reviewedAt: new Date(),
+        whatWentWell: whatWentWell ? String(whatWentWell).trim() : null,
+        needsImprovement: needsImprovement ? String(needsImprovement).trim() : null,
+        nextWeekFocus: nextWeekFocus ? String(nextWeekFocus).trim() : null,
+        workoutNotes: workoutNotes ? String(workoutNotes).trim() : null,
+        nutritionNotes: nutritionNotes ? String(nutritionNotes).trim() : null,
+        recoveryNotes: recoveryNotes ? String(recoveryNotes).trim() : null,
+        followUpRequired: Boolean(followUpRequired),
+      },
+    });
+
+    sendSuccess(res, updated);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save coach review', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 export const adminRoutes = router;
+

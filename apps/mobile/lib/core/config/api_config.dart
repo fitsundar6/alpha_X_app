@@ -57,7 +57,19 @@ class ApiConfig {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(storageKey);
       if (saved != null && saved.trim().isNotEmpty) {
-        customServerUrl = normalizeUrl(saved.trim());
+        final normalized = normalizeUrl(saved.trim());
+        // Prune stale local development IPs (10.0.2.2, 192.168., localhost) in release mode
+        final isLocalAddress = normalized.contains('10.0.2.2') ||
+            normalized.contains('127.0.0.1') ||
+            normalized.contains('localhost') ||
+            normalized.contains('192.168.');
+        if (kReleaseMode && isLocalAddress) {
+          debugPrint('[API CONFIG] Pruning stale local server URL in release mode: $normalized');
+          customServerUrl = null;
+          await prefs.remove(storageKey);
+        } else {
+          customServerUrl = normalized;
+        }
       }
     } catch (_) {}
   }
@@ -76,13 +88,14 @@ class ApiConfig {
   }
 
   /// Cleans and standardizes any raw user input or environment variable:
+  /// - Defaults to productionUrl if input is empty
   /// - Fixes typos like `/api?v1` -> `/api/v1`
   /// - Prepends `http://` if no protocol is given
   /// - Strips trailing slashes
   /// - Guarantees `/api/v1` path is appended if omitted
   static String normalizeUrl(String input) {
     var url = input.trim();
-    if (url.isEmpty) return physicalLanUrl;
+    if (url.isEmpty) return productionUrl;
 
     // Fix query-string typo (/api?v1 -> /api/v1)
     url = url.replaceAll('/api?v1', '/api/v1');
@@ -115,7 +128,7 @@ class ApiConfig {
   }
 
   /// Compile-time environment variable overrides:
-  /// e.g. flutter run --dart-define=API_BASE_URL=http://192.168.1.100:5000/api/v1
+  /// e.g. flutter run --dart-define=API_BASE_URL=https://alpha-x-app.vercel.app/api/v1
   static const String _envApiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
   static const String _envServerIp = String.fromEnvironment('SERVER_IP', defaultValue: '');
   static const String _envLanIp = String.fromEnvironment('LAN_IP', defaultValue: '');
@@ -129,8 +142,8 @@ class ApiConfig {
   /// 3. Compile-time `--dart-define=SERVER_IP=...` or `--dart-define=LAN_IP=...`
   /// 4. Compile-time `--dart-define=ENV=production` -> [productionUrl]
   /// 5. Compile-time `--dart-define=ENV=emulator` -> [emulatorUrl]
-  /// 6. Desktop (Windows, macOS, Linux) or Web -> [localhostUrl]
-  /// 7. Physical Mobile Devices (iPhone & Android) -> [physicalLanUrl] (192.168.1.5:5000/api/v1)
+  /// 6. Desktop (Windows, macOS, Linux) or Web -> [localhostUrl] (or [productionUrl] in release mode)
+  /// 7. Mobile platforms (iOS and Android) -> [productionUrl] (HTTPS production cloud backend)
   static String get baseUrl {
     // 1. Runtime override
     if (customServerUrl != null && customServerUrl!.trim().isNotEmpty) {
@@ -175,8 +188,7 @@ class ApiConfig {
       }
 
       // 7. Mobile platforms (iOS and Android)
-      // Defaults to the deployed cloud production API (https://alpha-x-app.vercel.app/api/v1)
-      // so testing on real devices works immediately without local server requirements.
+      // Both platforms MUST use the identical production HTTPS Alpha X API
       if (Platform.isIOS || Platform.isAndroid) {
         return productionUrl;
       }

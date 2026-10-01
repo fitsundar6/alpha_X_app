@@ -14,7 +14,7 @@ class AppConstants {
   static const String appIconPath = 'assets/images/alpha_x_app_icon.png';
 
   // API Config (Unified via ApiConfig)
-  static String get defaultBaseUrl => ApiConfig.emulatorUrl;
+  static String get defaultBaseUrl => ApiConfig.productionUrl;
   static String get defaultLocalhostUrl => ApiConfig.localhostUrl;
   static String get defaultLanUrl => ApiConfig.physicalLanUrl;
   static String get defaultProductionUrl => ApiConfig.productionUrl;

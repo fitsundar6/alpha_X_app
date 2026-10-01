@@ -77,36 +77,103 @@ model ClientProfile {
   activityRecords   ActivityRecord[]
   stepGoalHistories StepGoalHistory[]
   dietPlans         DietPlan[]
+  dietPlanHistories DietPlanHistory[]
+  foodLogs          ClientFoodLog[]
   macroPlans        MacroPlan[]
   attendanceRecords ClientAttendance[]
   progressRecords   ClientProgress[]
+  weeklyCheckIns    WeeklyCheckIn[]
 
   @@map("client_profiles")
 }
 
 model DietPlan {
-  id                String         @id @default(uuid())
+  id                String            @id @default(uuid())
   clientProfileId   String
-  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId          String?        // AXG-XXXX
+  clientProfile     ClientProfile     @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?           // AXG-XXXX
   planName          String
+  version           Int               @default(1)
+  assignedById      String?
+  assignedByName    String?
   startDate         DateTime?
   endDate           DateTime?
-  dailyCalories     Float          @default(2000)
-  protein           Float          @default(150)
-  carbohydrates     Float          @default(200)
-  fat               Float          @default(60)
-  fiber             Float          @default(30)
-  waterTargetLiters Float          @default(3.0)
-  isActive          Boolean        @default(true)
-  mealsJson         String?        // JSON-encoded meals and food items
+  dailyCalories     Float             @default(2000)
+  protein           Float             @default(150)
+  carbohydrates     Float             @default(200)
+  fat               Float             @default(60)
+  fiber             Float             @default(30)
+  waterTargetLiters Float             @default(3.0)
+  isActive          Boolean           @default(true)
+  mealsJson         String?           // JSON-encoded structured meals and food items
   notes             String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  histories         DietPlanHistory[]
 
   @@index([clientProfileId])
   @@index([clientId])
   @@map("diet_plans")
+}
+
+model DietPlanHistory {
+  id                String         @id @default(uuid())
+  dietPlanId        String?
+  dietPlan          DietPlan?      @relation(fields: [dietPlanId], references: [id], onDelete: SetNull)
+  clientProfileId   String
+  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String?
+  adminId           String?
+  adminName         String?
+  version           Int            @default(1)
+  planName          String
+  dailyCalories     Float
+  protein           Float
+  carbohydrates     Float
+  fat               Float
+  fiber             Float
+  waterTargetLiters Float          @default(3.0)
+  mealsJson         String?
+  notes             String?
+  changeSummary     String?
+  createdAt         DateTime       @default(now())
+
+  @@index([dietPlanId])
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@map("diet_plan_histories")
+}
+
+model ClientFoodLog {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String?       // AXG-XXXX
+  date            DateTime      @db.Date
+  dateString      String        // 'yyyy-MM-dd'
+  mealType        String        // Breakfast, Lunch, Snacks, Dinner
+  foodId          String?
+  foodName        String
+  category        String        @default("General")
+  servingSize     Float         @default(100)
+  servingUnit     String        @default("g")
+  quantity        Float         @default(1.0)
+  calories        Float
+  protein         Float
+  carbohydrates   Float
+  fat             Float
+  fiber           Float         @default(0.0)
+  source          String        @default("FOOD_LIBRARY") // AI_CAMERA, FOOD_LIBRARY, CUSTOM_FOOD
+  isAiConfirmed   Boolean       @default(true)
+  loggedAt        DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([dateString])
+  @@map("client_food_logs")
 }
 
 model MacroPlan {
@@ -461,5 +528,75 @@ model Food {
   @@index([createdBy])
   @@index([isPublic])
   @@map("foods")
+}
+
+model WeeklyCheckIn {
+  id                 String        @id @default(uuid())
+  clientProfileId    String
+  clientProfile      ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId           String?       // AXG-XXXX
+  weekNumber         Int           // 1, 2, 3...
+  year               Int           // e.g. 2026
+  checkInDate        DateTime      @default(now())
+  nextCheckInDate    DateTime
+
+  // Body Progress
+  weightKg           Float
+  waistCm            Float?
+  chestCm            Float?
+  armsCm             Float?
+  hipsCm             Float?
+  thighsCm           Float?
+  weightChange       Float?        // Calculated vs previous week
+  waistChange        Float?        // Calculated vs previous week
+
+  // Nutrition Adherence (Previous 7 days)
+  nutritionCalories  String        // Good, Mostly, Poor
+  nutritionProtein   String        // Good, Mostly, Poor
+  nutritionWater     String        // Good, Average, Poor
+  dietAdherence      String        // Good, Mostly, Poor
+
+  // Sleep & Recovery
+  sleepQuality       String        // Good, Average, Poor
+  sleepHours         Float
+  recoveryQuality    String        // Good, Average, Poor
+
+  // Workout
+  workoutCompletion  String        // All, Most, Some, None
+  workoutFeeling     String        // Very Good, Good, Average, Difficult
+  energyLevel        String        // High, Good, Low
+
+  // Pain / Discomfort
+  hasPain            Boolean       @default(false)
+  painLocation       String?
+  painExercise       String?
+  painLevel          Int?          // 1 - 10
+  painDescription    String?
+
+  // Weekly Problems & Client Notes
+  weeklyProblems     String[]      @default([])
+  clientNotes        String?
+
+  // Coach Review
+  hasCoachReview     Boolean       @default(false)
+  reviewedById       String?
+  reviewedByName     String?
+  reviewedAt         DateTime?
+  whatWentWell       String?
+  needsImprovement   String?
+  nextWeekFocus      String?
+  workoutNotes       String?
+  nutritionNotes     String?
+  recoveryNotes      String?
+  followUpRequired   Boolean       @default(false)
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([clientProfileId, year, weekNumber], name: "client_year_week_unique")
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([checkInDate])
+  @@map("weekly_check_ins")
 }
 

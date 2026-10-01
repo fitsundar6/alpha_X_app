@@ -186,7 +186,7 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               controller: _urlController,
               style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontFamily: 'monospace'),
               decoration: InputDecoration(
-                hintText: ApiConfig.physicalLanUrl,
+                hintText: ApiConfig.productionUrl,
                 hintStyle: TextStyle(color: AppColors.textTertiary.withOpacity(0.6)),
                 filled: true,
                 fillColor: AppColors.background,
@@ -213,10 +213,10 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                _presetChip('Physical Phone (LAN)', ApiConfig.physicalLanUrl),
+                _presetChip('Production Cloud (Recommended)', ApiConfig.productionUrl),
+                _presetChip('Local Windows (LAN)', ApiConfig.physicalLanUrl),
                 _presetChip('Android Emulator', ApiConfig.emulatorUrl),
                 _presetChip('Localhost', ApiConfig.localhostUrl),
-                _presetChip('Production Cloud', ApiConfig.productionUrl),
               ],
             ),
             const SizedBox(height: 14),

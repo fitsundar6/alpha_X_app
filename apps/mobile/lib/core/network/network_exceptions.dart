@@ -33,14 +33,19 @@ class NetworkExceptions {
   /// Interprets any caught network or HTTP exception into a [NetworkErrorDetails].
   static NetworkErrorDetails handle(dynamic error, {String? requestUrl}) {
     final url = requestUrl ?? ApiConfig.baseUrl;
+    final isLocal = url.contains('10.0.2.2') || url.contains('localhost') || url.contains('127.0.0.1') || url.contains('192.168.');
+
+    debugPrint('[NETWORK ERROR] Request: $url | Error: $error');
 
     // 1. Timeout Exceptions
     if (error is TimeoutException) {
+      final hint = isLocal
+          ? 'Ensure the backend is running on your Windows PC and TCP port 5000 is open in firewall.'
+          : 'Check your internet connection or try again shortly.';
       return NetworkErrorDetails(
-        userMessage: 'Connection timed out connecting to the Alpha X server.\n'
-            'The server took too long to respond.',
-        technicalDetails: 'TimeoutException: Request to $url timed out after ${error.duration?.inSeconds ?? 12}s. '
-            'Ensure the backend is running on your Windows PC and not blocked by firewall.',
+        userMessage: 'Connection timed out connecting to Alpha X server.\n'
+            'The request took too long to respond.',
+        technicalDetails: 'TimeoutException: Request to $url timed out after ${error.duration?.inSeconds ?? 12}s. $hint',
         isConnectionError: true,
       );
     }
@@ -51,13 +56,13 @@ class NetworkExceptions {
       final errorMsg = error.message.toLowerCase();
 
       if (osMsg.contains('refused') || errorMsg.contains('refused')) {
+        final hint = isLocal
+            ? '1) Verify backend is started (`npm run dev`). 2) Verify server listens on 0.0.0.0:5000. 3) Check Windows Firewall.'
+            : 'The production server rejected connection. Verify backend status.';
         return NetworkErrorDetails(
           userMessage: 'Connection refused by Alpha X server.\n'
               'The server is not responding at $url.',
-          technicalDetails: 'SocketException: Connection refused ($url). '
-              '1) Verify backend is started (`npm run dev`). '
-              '2) Verify server is listening on 0.0.0.0:5000 (not just localhost). '
-              '3) Check Windows Firewall allows inbound TCP port 5000.',
+          technicalDetails: 'SocketException: Connection refused ($url). $hint',
           isConnectionError: true,
         );
       }
@@ -65,13 +70,15 @@ class NetworkExceptions {
       if (osMsg.contains('unreachable') ||
           osMsg.contains('no route') ||
           errorMsg.contains('unreachable') ||
-          errorMsg.contains('failed host lookup')) {
+          errorMsg.contains('failed host lookup') ||
+          errorMsg.contains('nodename nor servname provided')) {
+        final hint = isLocal
+            ? 'Verify phone and Windows PC are on the same Wi-Fi and the LAN IP has not changed.'
+            : 'DNS resolution or internet route to $url failed. Verify active Wi-Fi or cellular internet.';
         return NetworkErrorDetails(
-          userMessage: 'Unable to reach Alpha X server on Wi-Fi network.\n'
-              'Please check your connection or server settings.',
-          technicalDetails: 'SocketException: Network unreachable or host lookup failed for $url. '
-              'Verify that your mobile device and Windows PC are connected to the SAME Wi-Fi network '
-              'and that your Windows LAN IP has not changed.',
+          userMessage: 'Unable to reach Alpha X server.\n'
+              'Please check your internet or network connection.',
+          technicalDetails: 'SocketException: Network unreachable or DNS host lookup failed for $url. $hint',
           isConnectionError: true,
         );
       }
@@ -86,10 +93,13 @@ class NetworkExceptions {
 
     // 3. Handshake / SSL / TLS Exceptions
     if (error is HandshakeException || error.toString().contains('HandshakeException')) {
+      final hint = isLocal
+          ? 'If using local testing, ensure HTTP (not HTTPS) is used with your local IP.'
+          : 'Verify SSL/TLS certificate and device date/time settings for $url.';
       return NetworkErrorDetails(
         userMessage: 'SSL/TLS security negotiation failed.\n'
-            'If using local testing, ensure HTTP (not HTTPS) is used with your local IP.',
-        technicalDetails: 'HandshakeException: $error while connecting to $url',
+            'Could not establish secure HTTPS connection.',
+        technicalDetails: 'HandshakeException: $error while connecting to $url. $hint',
         isConnectionError: true,
       );
     }
@@ -110,7 +120,7 @@ class NetworkExceptions {
     if (stringVal.contains('401') || stringVal.toLowerCase().contains('unauthorized')) {
       return NetworkErrorDetails(
         userMessage: 'Authentication failed. Please verify your credentials.',
-        technicalDetails: stringVal,
+        technicalDetails: 'HTTP 401 on $url: $stringVal',
         isAuthError: true,
         statusCode: 401,
       );
@@ -119,7 +129,7 @@ class NetworkExceptions {
     if (stringVal.contains('403') || stringVal.toLowerCase().contains('forbidden')) {
       return NetworkErrorDetails(
         userMessage: 'Access denied. You do not have permission for this resource.',
-        technicalDetails: stringVal,
+        technicalDetails: 'HTTP 403 on $url: $stringVal',
         isAuthError: true,
         statusCode: 403,
       );
@@ -129,7 +139,7 @@ class NetworkExceptions {
       return NetworkErrorDetails(
         userMessage: 'Server endpoint was not found ($url).\n'
             'Please verify the server route configuration.',
-        technicalDetails: 'HTTP 404: $stringVal',
+        technicalDetails: 'HTTP 404: $stringVal on $url',
         isConnectionError: true,
         statusCode: 404,
       );

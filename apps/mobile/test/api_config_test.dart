@@ -58,6 +58,11 @@ void main() {
         equals('https://api.alphaxgym.com/api/v1'),
       );
     });
+
+    test('Defaults to productionUrl on empty or whitespace input', () {
+      expect(ApiConfig.normalizeUrl(''), equals(ApiConfig.productionUrl));
+      expect(ApiConfig.normalizeUrl('   '), equals(ApiConfig.productionUrl));
+    });
   });
 
   group('ApiConfig Runtime Override & Resolution Tests', () {

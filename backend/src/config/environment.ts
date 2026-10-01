@@ -17,6 +17,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   WGER_API_URL: z.string().default('https://wger.de/api/v2'),
   EXERCISE_DB_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
   // Master Administrator Email & Password Credentials
   // Exactly ONE authorized master admin account
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),

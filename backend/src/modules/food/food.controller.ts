@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { foodService } from './food.service';
+import { foodAiService } from './food.ai.service';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
 
@@ -134,6 +135,46 @@ export class FoodController {
       sendSuccess(res, { deleted: true, id });
     } catch (err: any) {
       sendError(res, 'DELETE_FOOD_ERROR', err.message || 'Failed to delete food', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  /**
+   * Analyze food photo from live camera using AI vision
+   */
+  public async analyzeFoodImage(req: Request, res: Response): Promise<void> {
+    try {
+      const { image, imageBase64, mimeType } = req.body;
+      const rawImage = imageBase64 || image;
+
+      if (!rawImage || typeof rawImage !== 'string' || !rawImage.trim()) {
+        sendError(
+          res,
+          'VALIDATION_ERROR',
+          'Live camera image payload (Base64) is required for AI food scanning',
+          HttpStatus.BAD_REQUEST
+        );
+        return;
+      }
+
+      const user = (req as any).user || {};
+      const userId = user.clientId || user.id || (req.headers['x-client-id'] as string) || req.ip || 'client_athlete';
+
+      const scanResult = await foodAiService.analyzeFoodImage(
+        rawImage,
+        mimeType || 'image/jpeg',
+        userId
+      );
+
+      sendSuccess(res, scanResult);
+    } catch (err: any) {
+      const message = err.message || 'Food analysis is temporarily unavailable. Please check your internet connection and try again.';
+      const isRateLimit = message.includes('limit') || message.includes('Too many camera scans');
+      sendError(
+        res,
+        isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'AI_SCAN_ERROR',
+        message,
+        isRateLimit ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 

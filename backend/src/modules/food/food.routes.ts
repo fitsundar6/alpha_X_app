@@ -58,6 +58,9 @@ router.post('/seed', (req, res) => foodController.seedDatabase(req, res));
 router.get('/', (req, res) => foodController.searchFoods(req, res));
 router.get('/:id', (req, res) => foodController.getFoodById(req, res));
 
+// AI Food Camera Scanner endpoint (analyzes live camera photo)
+router.post('/ai-scan', (req, res) => foodController.analyzeFoodImage(req, res));
+
 // Create custom food (saves to global shared database)
 router.post('/', (req, res) => foodController.createCustomFood(req, res));
 
