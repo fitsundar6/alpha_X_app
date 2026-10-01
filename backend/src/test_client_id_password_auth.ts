@@ -64,7 +64,7 @@ async function runTests() {
     const timestamp = Date.now();
     const testEmail = `athlete_${timestamp}@alphaxgym.com`;
     const testPassword = 'Password123!';
-    const testPhone = '+1 (555) 987-6543';
+    const testPhone = `+1555${timestamp.toString().slice(-7)}`;
     const testName = 'Alex Mercer';
 
     // -------------------------------------------------------------

@@ -279,11 +279,11 @@ class AuthService extends ChangeNotifier {
     final cleanEmail = email.trim().toLowerCase();
     final cleanPhone = phone.trim();
 
-    if (cleanName.isEmpty) throw Exception('Full name is required.');
-    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) throw Exception('Valid email address is required.');
-    if (cleanPhone.isEmpty) throw Exception('Phone number is required.');
-    if (password.length < 6) throw Exception('Password must be at least 6 characters.');
-    if (password != confirmPassword) throw Exception('Password and Confirm Password do not match.');
+    if (cleanName.isEmpty) throw Exception('Please enter your name');
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) throw Exception('Please enter a valid email');
+    if (cleanPhone.isEmpty) throw Exception('Please enter your phone number');
+    if (password.length < 6) throw Exception('Password must meet the required security rules');
+    if (password != confirmPassword) throw Exception('Passwords do not match.');
 
     if (cleanEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
       throw Exception('This email is reserved for administration. Please sign in via Admin Portal.');
@@ -372,7 +372,16 @@ class AuthService extends ChangeNotifier {
       if (_isTestEnvironment) {
         final clients = await _loadClientAccounts();
         if (clients.any((c) => (c['email'] as String? ?? '').trim().toLowerCase() == cleanEmail)) {
-          throw Exception('An account with this email already exists.');
+          throw Exception('This email is already registered. Please login.');
+        }
+        final digits = cleanPhone.replaceAll(RegExp(r'\D'), '');
+        if (clients.any((c) {
+          final p = (c['phone'] as String? ?? '').trim();
+          if (p.isNotEmpty && p == cleanPhone) return true;
+          final pDigits = p.replaceAll(RegExp(r'\D'), '');
+          return digits.length >= 7 && pDigits.length >= 7 && (pDigits == digits || pDigits.endsWith(digits) || digits.endsWith(pDigits));
+        })) {
+          throw Exception('This phone number is already registered.');
         }
         final nextNum = clients.length + 1;
         final generatedClientId = 'AXG-${nextNum.toString().padLeft(4, '0')}';
@@ -415,12 +424,12 @@ class AuthService extends ChangeNotifier {
       }
       final errorDetails = NetworkExceptions.handle(e, requestUrl: '${AppConstants.apiBaseUrl}/auth/register');
       if (errorDetails.isConnectionError) {
-        throw Exception(errorDetails.toString());
+        throw Exception('Unable to reach Alpha X server. Please try again.');
       }
       if (e is Exception && !e.toString().contains('Unable to reach')) {
         rethrow;
       }
-      throw Exception(errorDetails.toString());
+      throw Exception('Unable to reach Alpha X server. Please try again.');
     }
   }
 

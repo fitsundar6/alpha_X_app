@@ -127,7 +127,17 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      sendError(res, 'USER_EXISTS', 'An account with this email already exists', HttpStatus.CONFLICT);
+      sendError(res, 'USER_EXISTS', 'This email is already registered. Please login.', HttpStatus.CONFLICT);
+      return;
+    }
+
+    // 2b. Check if phone number already exists
+    const existingPhone = await prisma.clientProfile.findFirst({
+      where: { phone: cleanPhone },
+    });
+
+    if (existingPhone) {
+      sendError(res, 'PHONE_EXISTS', 'This phone number is already registered.', HttpStatus.CONFLICT);
       return;
     }
 

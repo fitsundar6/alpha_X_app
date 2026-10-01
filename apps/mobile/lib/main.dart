@@ -9,6 +9,7 @@ import 'core/theme/app_typography.dart';
 import 'core/auth/auth_service.dart';
 import 'core/widgets/alpha_x_logo.dart';
 import 'core/auth/login_screen.dart';
+import 'core/auth/create_account_screen.dart';
 import 'core/auth/admin_login_screen.dart';
 import 'features/navigation/navigation_shell.dart';
 import 'features/workout/data/repositories/workout_repository.dart';
@@ -102,6 +103,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
           weeklyProgressRepository: _weeklyProgressRepository,
         ),
         '/login': (context) => const LoginScreen(),
+        '/register': (context) => const CreateAccountScreen(),
         '/admin/login': (context) => const AdminLoginScreen(),
         '/onboarding': (context) => const ClientOnboardingScreen(),
       },
@@ -475,6 +477,13 @@ Route<dynamic>? buildAppRoute(
   if (path == '/login') {
     return MaterialPageRoute(
       builder: (_) => const LoginScreen(),
+    );
+  }
+
+  // Client Create Account / Registration route
+  if (path == '/register') {
+    return MaterialPageRoute(
+      builder: (_) => const CreateAccountScreen(),
     );
   }
 

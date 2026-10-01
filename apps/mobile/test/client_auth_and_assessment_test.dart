@@ -156,7 +156,7 @@ void main() {
       expect(auth.clientProfile['weightKg'], 68.0);
     });
 
-    testWidgets('6. LoginScreen renders Client Login & Create Account tabs with AXG branding', (tester) async {
+    testWidgets('6. LoginScreen renders Login and Create New Account buttons with AXG branding', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: LoginScreen(),
@@ -165,8 +165,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ALPHA X GYM'), findsOneWidget);
-      expect(find.text('CLIENT LOGIN'), findsOneWidget);
-      expect(find.text('CREATE ACCOUNT'), findsOneWidget);
+      expect(find.text('LOG IN TO YOUR ACCOUNT'), findsOneWidget);
+      expect(find.text('LOGIN'), findsOneWidget);
+      expect(find.text('CREATE NEW ACCOUNT'), findsOneWidget);
       expect(find.text('ADMIN LOGIN'), findsOneWidget);
       expect(find.text('Continue as Guest'), findsOneWidget);
     });
