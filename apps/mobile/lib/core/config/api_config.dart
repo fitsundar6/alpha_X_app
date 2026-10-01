@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -58,13 +57,13 @@ class ApiConfig {
       final saved = prefs.getString(storageKey);
       if (saved != null && saved.trim().isNotEmpty) {
         final normalized = normalizeUrl(saved.trim());
-        // Prune stale local development IPs (10.0.2.2, 192.168., localhost) in release mode
+        // Prune stale local development IPs (10.0.2.2, 192.168., localhost)
         final isLocalAddress = normalized.contains('10.0.2.2') ||
             normalized.contains('127.0.0.1') ||
             normalized.contains('localhost') ||
             normalized.contains('192.168.');
-        if (kReleaseMode && isLocalAddress) {
-          debugPrint('[API CONFIG] Pruning stale local server URL in release mode: $normalized');
+        if (isLocalAddress) {
+          debugPrint('[API CONFIG] Pruning stale local server URL: $normalized -> using production $productionUrl');
           customServerUrl = null;
           await prefs.remove(storageKey);
         } else {
@@ -169,31 +168,13 @@ class ApiConfig {
     if (env == 'emulator') {
       return emulatorUrl;
     }
-
-    // 5. Flutter Web
-    if (kIsWeb) {
-      if (kReleaseMode) {
-        return productionUrl;
-      }
+    if (env == 'local' || env == 'localhost' || env == 'dev') {
       return localhostUrl;
     }
 
-    // 6. Desktop platforms
-    try {
-      if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-        if (kReleaseMode) {
-          return productionUrl;
-        }
-        return localhostUrl;
-      }
-
-      // 7. Mobile platforms (iOS and Android)
-      // Both platforms MUST use the identical production HTTPS Alpha X API
-      if (Platform.isIOS || Platform.isAndroid) {
-        return productionUrl;
-      }
-    } catch (_) {}
-
+    // 5. Unified Production Target for all platforms (Mobile, Desktop, Web)
+    // Ensures that the Admin app (desktop/web/mobile) and Client app (mobile)
+    // always synchronize against the same live production cloud backend (PostgreSQL).
     return productionUrl;
   }
 }

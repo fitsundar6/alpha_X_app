@@ -71,17 +71,44 @@ class WorkoutRepository extends ChangeNotifier {
   /// Fetches real registered clients exclusively from the shared backend database (PostgreSQL).
   /// NEVER falls back to demo/sample/example data.
   Future<List<Map<String, String>>> fetchClientsList({bool forceRefresh = false}) async {
-    final token = AuthService().currentToken;
+    var token = AuthService().currentToken;
+
+    // In production or when token is a local placeholder, acquire live JWT token
+    if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+        !_isTestEnvironment &&
+        AuthService().isAdmin) {
+      final freshToken = await AuthService().refreshAdminToken();
+      if (freshToken != null && freshToken.isNotEmpty) {
+        token = freshToken;
+      }
+    }
+
     final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients');
 
     try {
-      final response = await _httpClient.get(
+      var response = await _httpClient.get(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 12));
+
+      // Automatic 401 recovery: token expired or invalid in production
+      if (response.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
+        debugPrint('[WorkoutRepository] Admin session token returned 401. Re-authenticating...');
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          response = await _httpClient.get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          ).timeout(const Duration(seconds: 12));
+        }
+      }
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);

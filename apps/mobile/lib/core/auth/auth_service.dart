@@ -123,6 +123,7 @@ class AuthService extends ChangeNotifier {
             _photoUrl = null;
             _isAuthenticated = true;
             _token = session['token'] ?? 'local_admin_session_token';
+            unawaited(refreshAdminToken());
           } else {
             await logout();
           }
@@ -836,6 +837,43 @@ class AuthService extends ChangeNotifier {
 
     await _saveActiveSession();
     notifyListeners();
+  }
+
+  /// Authenticates with the backend as Master Administrator to obtain a fresh signed JWT token.
+  /// Ensures valid authorization for all /admin/* endpoints in production.
+  Future<String?> refreshAdminToken() async {
+    try {
+      final email = AdminConfig.adminEmail.trim().toLowerCase();
+      final password = AdminConfig.adminPassword;
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        final token = decoded['data']?['token']?.toString();
+        if (token != null && token.isNotEmpty) {
+          _token = token;
+          if (_role == UserRole.admin) {
+            await _saveActiveSession();
+          }
+          debugPrint('[AuthService] Successfully acquired fresh Admin JWT token');
+          return token;
+        }
+      } else {
+        debugPrint('[AuthService] Admin token refresh failed with status: ${res.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Admin token refresh error: $e');
+    }
+    return null;
   }
 
   /// Convenience login method for backwards compatibility with tests and callers.

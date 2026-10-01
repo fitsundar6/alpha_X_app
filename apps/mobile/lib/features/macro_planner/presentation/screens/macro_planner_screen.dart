@@ -13,7 +13,6 @@ import '../widgets/add_food_bottom_sheet.dart';
 import '../widgets/edit_food_quantity_dialog.dart';
 import 'macro_input_screen.dart';
 import 'macro_history_screen.dart';
-import 'ai_food_camera_scanner_screen.dart';
 import '../../../food_photo_tracking/presentation/screens/live_food_camera_screen.dart';
 import '../../../food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import '../../domain/models/assigned_diet_plan.dart';
