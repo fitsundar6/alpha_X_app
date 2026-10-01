@@ -3,6 +3,8 @@ import { requireAuth } from '../../middlewares/auth';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
 import { prisma } from '../../config/prisma';
+import { foodPhotoController } from '../food/food.photo.controller';
+import { automationController } from '../automation/automation.controller';
 
 const router = Router();
 
@@ -369,6 +371,67 @@ router.post('/me/food-logs', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[CLIENT LOG FOOD ERROR]', err);
     sendError(res, 'INTERNAL_ERROR', 'Failed to log food entry', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// POST /api/v1/client/me/food-photos/confirm: Securely upload and confirm meal photo with food items
+router.post('/me/food-photos/confirm', (req: Request, res: Response) => {
+  foodPhotoController.confirmAndUploadMealPhoto(req, res);
+});
+
+// GET /api/v1/client/me/food-photos: Retrieve list of client's own confirmed meal photos
+router.get('/me/food-photos', async (req: Request, res: Response) => {
+  try {
+    const profile = await getAuthenticatedClientProfile(req.user!.id);
+    if (!profile) {
+      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const dateQuery = String(req.query.date || '').trim();
+    const whereClause: any = {
+      clientProfileId: profile.id,
+      isDeleted: false,
+    };
+    if (dateQuery) {
+      whereClause.dateString = dateQuery;
+    }
+
+    const photos = await prisma.mealPhoto.findMany({
+      where: whereClause,
+      orderBy: { confirmedAt: 'desc' },
+    });
+
+    const mapped = photos.map((p) => {
+      let items = [];
+      if (p.itemsJson) {
+        try {
+          items = JSON.parse(p.itemsJson);
+        } catch (_) {}
+      }
+      return {
+        id: p.id,
+        mealId: p.mealId,
+        clientId: p.clientId,
+        dateString: p.dateString,
+        mealType: p.mealType,
+        confirmedAt: p.confirmedAt,
+        capturedAt: p.capturedAt,
+        weightSource: p.weightSource,
+        totalCalories: p.totalCalories,
+        totalProtein: p.totalProtein,
+        totalCarbs: p.totalCarbs,
+        totalFat: p.totalFat,
+        totalFiber: p.totalFiber,
+        photoUrl: `/api/v1/food-photos/${p.id}/image`,
+        photoAvailable: true,
+        items,
+      };
+    });
+
+    sendSuccess(res, mapped);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch meal photos', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -763,6 +826,49 @@ router.post('/me/weekly-check-ins', async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// AUTOMATION & ENGAGEMENT CLIENT ENDPOINTS
+// ==========================================
+
+// Activity heartbeat ping: records app open timestamp for inactivity tracking
+router.post('/me/activity-ping', (req: Request, res: Response) =>
+  automationController.pingActivity(req, res)
+);
+
+// Notifications list for client
+router.get('/me/notifications', (req: Request, res: Response) =>
+  automationController.getClientNotifications(req, res)
+);
+
+// Mark single notification read
+router.put('/me/notifications/:id/read', (req: Request, res: Response) =>
+  automationController.markNotificationRead(req, res)
+);
+
+// Mark all notifications read
+router.put('/me/notifications/read-all', (req: Request, res: Response) =>
+  automationController.markAllNotificationsRead(req, res)
+);
+
+// Notification preferences
+router.get('/me/notification-preferences', (req: Request, res: Response) =>
+  automationController.getNotificationPreferences(req, res)
+);
+
+router.put('/me/notification-preferences', (req: Request, res: Response) =>
+  automationController.updateNotificationPreferences(req, res)
+);
+
+// Transformation timeline milestones (Week 1, 4, 8, 12 photos + stats)
+router.get('/me/transformation-timeline', (req: Request, res: Response) =>
+  automationController.getTransformationTimeline(req, res)
+);
+
+router.post('/me/transformation-timeline', (req: Request, res: Response) =>
+  automationController.saveTransformationMilestone(req, res)
+);
+
 export const clientRoutes = router;
+
 
 

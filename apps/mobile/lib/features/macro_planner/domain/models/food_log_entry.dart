@@ -22,6 +22,10 @@ class FoodLogEntry {
   final String category;
   final DateTime? loggedAt;
   final DateTime createdAt;
+  final bool photoAvailable;
+  final String? mealPhotoId;
+  final String weightSource; // 'AI_ESTIMATE', 'SMART_SCALE_BLE', 'CLIENT_ENTERED'
+  final String? mealId;
 
   const FoodLogEntry({
     required this.id,
@@ -43,6 +47,10 @@ class FoodLogEntry {
     this.category = 'General',
     this.loggedAt,
     required this.createdAt,
+    this.photoAvailable = false,
+    this.mealPhotoId,
+    this.weightSource = 'CLIENT_ENTERED',
+    this.mealId,
   });
 
   /// Factory to create an entry from a FoodItem and desired quantity
@@ -53,6 +61,10 @@ class FoodLogEntry {
     required FoodItem food,
     required double quantity,
     String? source,
+    String? weightSource,
+    bool photoAvailable = false,
+    String? mealPhotoId,
+    String? mealId,
   }) {
     final now = DateTime.now();
     return FoodLogEntry(
@@ -75,6 +87,10 @@ class FoodLogEntry {
       category: food.category,
       loggedAt: now,
       createdAt: now,
+      photoAvailable: photoAvailable,
+      mealPhotoId: mealPhotoId,
+      weightSource: weightSource ?? 'CLIENT_ENTERED',
+      mealId: mealId,
     );
   }
 
@@ -164,6 +180,10 @@ class FoodLogEntry {
     'source': source,
     'isAiConfirmed': isAiConfirmed,
     'category': category,
+    'photoAvailable': photoAvailable,
+    'mealPhotoId': mealPhotoId,
+    'weightSource': weightSource,
+    'mealId': mealId,
     'loggedAt': (loggedAt ?? createdAt).toIso8601String(),
     'createdAt': createdAt.toIso8601String(),
   };
@@ -186,6 +206,10 @@ class FoodLogEntry {
     source: json['source'] as String? ?? 'FOOD_LIBRARY',
     isAiConfirmed: json['isAiConfirmed'] as bool? ?? true,
     category: json['category'] as String? ?? 'General',
+    photoAvailable: json['photoAvailable'] as bool? ?? false,
+    mealPhotoId: json['mealPhotoId'] as String?,
+    weightSource: json['weightSource'] as String? ?? 'CLIENT_ENTERED',
+    mealId: json['mealId'] as String?,
     loggedAt: DateTime.tryParse(json['loggedAt'] as String? ?? ''),
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
   );
@@ -210,6 +234,10 @@ class FoodLogEntry {
     String? category,
     DateTime? loggedAt,
     DateTime? createdAt,
+    bool? photoAvailable,
+    String? mealPhotoId,
+    String? weightSource,
+    String? mealId,
   }) {
     return FoodLogEntry(
       id: id ?? this.id,
@@ -231,6 +259,10 @@ class FoodLogEntry {
       category: category ?? this.category,
       loggedAt: loggedAt ?? this.loggedAt,
       createdAt: createdAt ?? this.createdAt,
+      photoAvailable: photoAvailable ?? this.photoAvailable,
+      mealPhotoId: mealPhotoId ?? this.mealPhotoId,
+      weightSource: weightSource ?? this.weightSource,
+      mealId: mealId ?? this.mealId,
     );
   }
 }

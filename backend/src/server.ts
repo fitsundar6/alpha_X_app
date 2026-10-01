@@ -14,6 +14,8 @@ import { foodRoutes } from './modules/food/food.routes';
 import { foodService } from './modules/food/food.service';
 import { adminRoutes } from './modules/admin/admin.routes';
 import { clientRoutes } from './modules/client/client.routes';
+import { foodPhotoRoutes } from './modules/food/food.photo.routes';
+import { automationRoutes } from './modules/automation/automation.routes';
 
 const app = express();
 
@@ -178,9 +180,17 @@ app.use('/api/exercises', exerciseRoutes);
 app.use('/api/v1/foods', foodRoutes);
 app.use('/api/foods', foodRoutes);
 
+// Confirmed Meal Photos & Secure Streaming Routes
+app.use('/api/v1/food-photos', foodPhotoRoutes);
+app.use('/api/food-photos', foodPhotoRoutes);
+
 // Master Administrator Operations & Authentication (requireAdmin)
 app.use('/api/admin', adminRoutes);
 app.use('/api/v1/admin', adminRoutes);
+
+// Automation & Engagement Engine Routes
+app.use('/api/v1/automation', automationRoutes);
+app.use('/api/automation', automationRoutes);
 
 // Centralized error handler
 app.use(errorHandler);

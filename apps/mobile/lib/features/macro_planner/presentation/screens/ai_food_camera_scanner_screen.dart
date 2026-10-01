@@ -198,15 +198,20 @@ class _AiFoodCameraScannerScreenState extends State<AiFoodCameraScannerScreen>
           ? await scannerService.analyzeLivePhoto(capturedPath)
           : await scannerService.analyzeImageBytes(Uint8List(0));
 
-      // Cleanup local temp file to follow privacy requirement
+      Uint8List? imageBytes;
       if (capturedPath != null) {
         try {
           final tempFile = File(capturedPath);
           if (await tempFile.exists()) {
-            await tempFile.delete();
+            imageBytes = await tempFile.readAsBytes();
           }
         } catch (_) {}
       }
+
+      final scanWithPhoto = result.copyWith(
+        capturedPhotoPath: capturedPath,
+        capturedPhotoBytes: imageBytes,
+      );
 
       if (!mounted) return;
 
@@ -214,7 +219,7 @@ class _AiFoodCameraScannerScreenState extends State<AiFoodCameraScannerScreen>
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (ctx) => AiFoodAnalysisResultScreen(
-            scanResult: result,
+            scanResult: scanWithPhoto,
             repository: widget.repository,
             initialMealType: widget.initialMealType,
             dateString: widget.dateString,

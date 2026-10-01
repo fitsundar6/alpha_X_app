@@ -15,6 +15,9 @@ import 'package:alpha_x_gym/features/macro_planner/domain/models/food_item.dart'
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_log_entry.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/daily_macro_summary.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
+import 'dart:io';
+import 'package:alpha_x_gym/features/macro_planner/domain/models/confirmed_meal_photo.dart';
+import 'package:alpha_x_gym/features/macro_planner/domain/models/scanned_food_detection.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/food_database.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/services/macro_calculator.dart';
 
@@ -720,6 +723,112 @@ class MacroRepository extends ChangeNotifier {
     _foodLogs.removeWhere((e) => e.dateString == dateString);
     _saveFoodLogsToPrefs();
     notifyListeners();
+  }
+
+  /// Securely upload and confirm live camera meal photo, link to Client ID, Meal ID,
+  /// create food logs, and make visible to Admin
+  Future<ConfirmedMealPhoto?> confirmAndUploadMealPhoto({
+    String? capturedPhotoPath,
+    Uint8List? capturedPhotoBytes,
+    required String dateString,
+    required MealType mealType,
+    required String weightSource,
+    required List<ScannedFoodItem> foods,
+    String? mealId,
+  }) async {
+    final cId = resolveClientId(null);
+    final finalMealId = mealId ?? 'meal_${DateTime.now().millisecondsSinceEpoch}_${foods.length}';
+
+    // 1. Prepare Base64 payload
+    String? base64Image;
+    if (capturedPhotoBytes != null && capturedPhotoBytes.isNotEmpty) {
+      base64Image = base64Encode(capturedPhotoBytes);
+    } else if (capturedPhotoPath != null && capturedPhotoPath.isNotEmpty) {
+      try {
+        final file = File(capturedPhotoPath);
+        if (await file.exists()) {
+          final bytes = await file.readAsBytes();
+          base64Image = base64Encode(bytes);
+        }
+      } catch (e) {
+        debugPrint('[CONFIRM MEAL PHOTO] Error reading local image: $e');
+      }
+    }
+
+    ConfirmedMealPhoto? confirmedPhoto;
+
+    // 2. Dispatch to backend if image is available
+    if (base64Image != null && base64Image.isNotEmpty) {
+      try {
+        final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/food-photos/confirm');
+        final headers = <String, String>{
+          'Content-Type': 'application/json',
+          'x-client-id': cId,
+        };
+        final token = AuthService().token;
+        if (token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+
+        final itemsPayload = foods.map((f) => {
+          'foodName': f.name,
+          'foodId': f.matchedFoodId,
+          'servingSize': f.estimatedGrams,
+          'servingUnit': 'g',
+          'quantity': 1.0,
+          'calories': f.calories,
+          'protein': f.protein,
+          'carbohydrates': f.carbs,
+          'fat': f.fat,
+          'fiber': f.fiber,
+          'category': f.category,
+          'source': f.source == 'ALPHA_X_LIBRARY' ? 'FOOD_LIBRARY' : 'AI_CAMERA',
+          'weightSource': f.weightSource,
+        }).toList();
+
+        final body = jsonEncode({
+          'imageBase64': base64Image,
+          'mimeType': 'image/jpeg',
+          'mealId': finalMealId,
+          'dateString': dateString,
+          'mealType': mealType.displayName,
+          'weightSource': weightSource,
+          'items': itemsPayload,
+        });
+
+        final response = await http
+            .post(url, headers: headers, body: body)
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final decoded = jsonDecode(response.body);
+          final data = decoded['data'] ?? decoded;
+          if (data['mealPhoto'] != null) {
+            confirmedPhoto = ConfirmedMealPhoto.fromJson(data['mealPhoto'] as Map<String, dynamic>);
+          }
+        }
+      } catch (e) {
+        debugPrint('[CONFIRM MEAL PHOTO] Network / backend notice: $e');
+      }
+    }
+
+    // 3. Create and store confirmed local FoodLogEntry records
+    for (final food in foods) {
+      final entry = food.toFoodLogEntry(
+        clientId: cId,
+        dateString: dateString,
+        mealType: mealType,
+        mealId: finalMealId,
+        mealPhotoId: confirmedPhoto?.id,
+        photoAvailable: confirmedPhoto != null,
+      );
+      _foodLogs.add(entry);
+    }
+
+    _saveFoodLogsToPrefs();
+    notifyListeners();
+
+    return confirmedPhoto;
   }
 
   // ==========================================

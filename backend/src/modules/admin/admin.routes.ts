@@ -6,6 +6,8 @@ import { exerciseController } from '../exercise/exercise.controller';
 import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { prisma } from '../../config/prisma';
+import { foodPhotoController } from '../food/food.photo.controller';
+import { automationController } from '../automation/automation.controller';
 
 const router = Router();
 
@@ -469,7 +471,20 @@ router.get('/clients/:id/nutrition-summary', async (req: Request, res: Response)
         clientProfileId: cp.id,
         dateString: targetDate,
       },
+      include: {
+        mealPhoto: true,
+      },
       orderBy: { loggedAt: 'asc' },
+    });
+
+    // 2b. Fetch confirmed meal photos recorded by client on this date
+    const mealPhotos = await prisma.mealPhoto.findMany({
+      where: {
+        clientProfileId: cp.id,
+        dateString: targetDate,
+        isDeleted: false,
+      },
+      orderBy: { confirmedAt: 'asc' },
     });
 
     // 3. Compute actual totals
@@ -500,6 +515,43 @@ router.get('/clients/:id/nutrition-summary', async (req: Request, res: Response)
       mealGroups[key].push(log);
     }
 
+    const mealPhotosByType: Record<string, any[]> = {
+      Breakfast: [],
+      Lunch: [],
+      Snacks: [],
+      Dinner: [],
+    };
+
+    for (const p of mealPhotos) {
+      const mType = p.mealType.charAt(0).toUpperCase() + p.mealType.slice(1).toLowerCase();
+      const key = mType.startsWith('Snack') ? 'Snacks' : mType;
+      if (!mealPhotosByType[key]) mealPhotosByType[key] = [];
+      let parsedItems = [];
+      if (p.itemsJson) {
+        try {
+          parsedItems = JSON.parse(p.itemsJson);
+        } catch (_) {}
+      }
+      mealPhotosByType[key].push({
+        id: p.id,
+        mealId: p.mealId,
+        clientId: p.clientId,
+        dateString: p.dateString,
+        mealType: p.mealType,
+        confirmedAt: p.confirmedAt,
+        capturedAt: p.capturedAt,
+        weightSource: p.weightSource,
+        totalCalories: p.totalCalories,
+        totalProtein: p.totalProtein,
+        totalCarbs: p.totalCarbs,
+        totalFat: p.totalFat,
+        totalFiber: p.totalFiber,
+        photoUrl: `/api/v1/food-photos/${p.id}/image`,
+        photoAvailable: true,
+        items: parsedItems,
+      });
+    }
+
     const loggedMealTypes = Object.keys(mealGroups).filter(k => mealGroups[k].length > 0);
     const lastMealTime = foodLogs.length > 0 ? foodLogs[foodLogs.length - 1].loggedAt : null;
 
@@ -510,6 +562,23 @@ router.get('/clients/:id/nutrition-summary', async (req: Request, res: Response)
       assignedDiet: activeDietPlan,
       actualFoodLogs: foodLogs,
       meals: mealGroups,
+      mealPhotos: mealPhotos.map((p) => ({
+        id: p.id,
+        mealId: p.mealId,
+        dateString: p.dateString,
+        mealType: p.mealType,
+        confirmedAt: p.confirmedAt,
+        capturedAt: p.capturedAt,
+        weightSource: p.weightSource,
+        totalCalories: p.totalCalories,
+        totalProtein: p.totalProtein,
+        totalCarbs: p.totalCarbs,
+        totalFat: p.totalFat,
+        totalFiber: p.totalFiber,
+        photoUrl: `/api/v1/food-photos/${p.id}/image`,
+        photoAvailable: true,
+      })),
+      mealPhotosByType,
       totalMealsLogged: loggedMealTypes.length,
       lastMealTime,
       comparison: {
@@ -1036,5 +1105,39 @@ router.post('/clients/:id/weekly-check-ins/:checkInId/coach-review', async (req:
   }
 });
 
+// DELETE /meal-photos/:id: Master Admin deletes a meal photo
+router.delete('/meal-photos/:id', (req: Request, res: Response) => {
+  foodPhotoController.deleteMealPhoto(req, res);
+});
+
+// ==========================================
+// ADMIN ATTENTION CENTER & AUTOMATION
+// ==========================================
+
+// GET /api/v1/admin/attention-center
+// Returns flagged attention items (inactive, missed workouts, missing check-in, pain reported, etc.)
+router.get('/attention-center', (req: Request, res: Response) => {
+  automationController.getAdminAttentionCenter(req, res);
+});
+
+// POST /api/v1/admin/attention-items/:id/review
+// Marks an attention item as reviewed + saves coach notes
+router.post('/attention-items/:id/review', (req: Request, res: Response) => {
+  automationController.reviewAttentionItem(req, res);
+});
+
+// GET /api/v1/admin/clients/:id/weekly-report
+// Automated factual weekly report for the selected client
+router.get('/clients/:id/weekly-report', (req: Request, res: Response) => {
+  automationController.getWeeklyReport(req, res);
+});
+
+// GET /api/v1/admin/clients/:id/transformation-timeline
+// Retrieves transformation milestones (Weeks 1, 4, 8, 12 photos + stats)
+router.get('/clients/:id/transformation-timeline', (req: Request, res: Response) => {
+  automationController.getTransformationTimeline(req, res);
+});
+
 export const adminRoutes = router;
+
 

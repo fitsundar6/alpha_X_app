@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../macro_planner/data/repositories/macro_repository.dart';
 import '../macro_planner/domain/models/assigned_diet_plan.dart';
 import 'admin_create_edit_diet_plan_screen.dart';
+import 'widgets/admin_meal_photo_viewer_dialog.dart';
 
 /// Screen for Master Admin / Trainer to monitor client nutrition:
 /// - Assigned Diet vs Actual Food Log (Factual Comparison)
@@ -30,6 +31,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
   bool _isLoading = false;
   Map<String, dynamic>? _nutritionSummary;
   List<Map<String, dynamic>> _dietHistory = [];
+  String _selectedMealFilter = 'ALL';
 
   String get _selectedDateString => DateFormat('yyyy-MM-dd').format(_selectedDate);
 
@@ -79,6 +81,25 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
     if (updated == true) {
       _loadData();
     }
+  }
+
+  void _openPhotoViewer(Map<String, dynamic> photo) {
+    final clientName = widget.client['name'] ?? 'Athlete';
+    final clientId = widget.client['clientId'] ?? widget.client['id'] ?? '';
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => AdminMealPhotoViewerDialog(
+          mealPhoto: photo,
+          clientName: clientName,
+          clientId: clientId,
+          onPhotoDeleted: () {
+            _loadData();
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -258,105 +279,368 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
         ),
         const SizedBox(height: 18),
 
-        // Actual Meals Logged with Source Badges
-        const Text('ACTUAL FOOD CONSUMED', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+        // CLIENT FOOD LOG (WITH LIVE CAMERA MEAL PHOTO SUPPORT)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'CLIENT FOOD LOG',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+            Text(
+              '${comp?['calories']?['actual'] ?? 0} kcal consumed',
+              style: const TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
 
-        ...['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map((mealCategory) {
-          final entries = (meals[mealCategory] as List<dynamic>? ?? []);
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(mealCategory.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
-                    Text('${entries.length} items logged', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                  ],
+        // Meal Category Filter Bar (ALL, BREAKFAST, LUNCH, SNACKS, DINNER)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: ['ALL', 'BREAKFAST', 'LUNCH', 'SNACKS', 'DINNER'].map((filter) {
+              final isSelected = _selectedMealFilter == filter;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    filter == 'ALL' ? 'ALL MEALS' : filter,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppColors.primaryRed,
+                  backgroundColor: AppColors.surfaceCard,
+                  side: BorderSide(
+                    color: isSelected ? AppColors.primaryRed : AppColors.borderSubtle,
+                  ),
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() => _selectedMealFilter = filter);
+                    }
+                  },
                 ),
-                if (entries.isEmpty) ...[
-                  const SizedBox(height: 6),
-                  const Text('No actual foods logged for this meal.', style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontStyle: FontStyle.italic)),
-                ] else ...[
-                  const Divider(color: AppColors.borderSubtle, height: 14),
-                  ...entries.map((item) {
-                    final source = item['source'] ?? 'FOOD_LIBRARY';
-                    final isAiCamera = source == 'AI_CAMERA';
-                    final isCustom = source == 'CUSTOM_FOOD';
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        item['foodName'] ?? 'Food',
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Source Tag
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: isAiCamera
-                                            ? AppColors.primaryRed.withOpacity(0.15)
-                                            : (isCustom ? Colors.purpleAccent.withOpacity(0.15) : AppColors.surfaceElevated),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: isAiCamera
-                                              ? AppColors.primaryRed
-                                              : (isCustom ? Colors.purpleAccent : AppColors.borderSubtle),
-                                          width: 0.8,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        isAiCamera ? '📷 AI CAMERA' : (isCustom ? 'CUSTOM' : 'LIBRARY'),
-                                        style: TextStyle(
-                                          color: isAiCamera
-                                              ? AppColors.primaryRed
-                                              : (isCustom ? Colors.purpleAccent : AppColors.textSecondary),
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${item['quantity']}x • ${item['servingSize']} ${item['servingUnit']} • ${item['calories']?.round()} kcal (P:${item['protein']?.round()}g C:${item['carbohydrates']?.round()}g F:${item['fat']?.round()}g)',
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ],
-            ),
-          );
-        }),
+        // Build filtered meal cards
+        ..._buildClientMealLogCards(meals),
       ],
     );
+  }
+
+  List<Widget> _buildClientMealLogCards(Map<String, dynamic> meals) {
+    final photosByType = _nutritionSummary?['mealPhotosByType'] as Map<String, dynamic>? ?? {};
+    final allCategories = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
+
+    final filteredCategories = _selectedMealFilter == 'ALL'
+        ? allCategories
+        : allCategories.where((c) => c.toUpperCase() == _selectedMealFilter).toList();
+
+    return filteredCategories.map((mealCategory) {
+      final entries = (meals[mealCategory] as List<dynamic>? ?? []);
+      final photos = (photosByType[mealCategory] as List<dynamic>? ?? []);
+      final bool hasPhotos = photos.isNotEmpty || entries.any((e) => e['photoAvailable'] == true);
+      final photoData = photos.isNotEmpty ? (photos[0] as Map<String, dynamic>) : null;
+
+      // Calculate meal totals
+      double mealCal = 0;
+      double mealProt = 0;
+      double mealCrbs = 0;
+      double mealFt = 0;
+      double mealFbr = 0;
+
+      for (final item in entries) {
+        final q = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+        mealCal += ((item['calories'] as num?)?.toDouble() ?? 0) * q;
+        mealProt += ((item['protein'] as num?)?.toDouble() ?? 0) * q;
+        mealCrbs += ((item['carbohydrates'] ?? item['carbs'] as num?)?.toDouble() ?? 0) * q;
+        mealFt += ((item['fat'] as num?)?.toDouble() ?? 0) * q;
+        mealFbr += ((item['fiber'] as num?)?.toDouble() ?? 0) * q;
+      }
+
+      if (entries.isEmpty && photoData != null) {
+        mealCal = (photoData['totalCalories'] as num?)?.toDouble() ?? 0;
+        mealProt = (photoData['totalProtein'] as num?)?.toDouble() ?? 0;
+        mealCrbs = (photoData['totalCarbs'] as num?)?.toDouble() ?? 0;
+        mealFt = (photoData['totalFat'] as num?)?.toDouble() ?? 0;
+        mealFbr = (photoData['totalFiber'] as num?)?.toDouble() ?? 0;
+      }
+
+      final itemsSummary = entries.isNotEmpty
+          ? entries.map((e) => e['foodName'] ?? 'Food').take(3).join(' • ')
+          : (photoData != null && photoData['items'] is List
+              ? (photoData['items'] as List).map((i) => i['foodName'] ?? 'Food').take(3).join(' • ')
+              : 'No foods logged for $mealCategory');
+
+      String timeDisplay = _selectedDateString;
+      if (photoData != null && photoData['confirmedAt'] != null) {
+        final dt = DateTime.tryParse(photoData['confirmedAt'].toString());
+        if (dt != null) {
+          timeDisplay = DateFormat('dd MMM yyyy • h:mm a').format(dt.toLocal());
+        }
+      } else if (entries.isNotEmpty && entries[0]['loggedAt'] != null) {
+        final dt = DateTime.tryParse(entries[0]['loggedAt'].toString());
+        if (dt != null) {
+          timeDisplay = DateFormat('dd MMM yyyy • h:mm a').format(dt.toLocal());
+        }
+      }
+
+      final weightSource = photoData?['weightSource'] ??
+          (entries.any((e) => e['weightSource'] == 'SMART_SCALE_BLE')
+              ? 'SMART_SCALE_BLE'
+              : (entries.any((e) => e['weightSource'] == 'AI_ESTIMATE') ? 'AI_ESTIMATE' : 'CLIENT_ENTERED'));
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: hasPhotos ? AppColors.primaryRed.withOpacity(0.5) : AppColors.border,
+            width: hasPhotos ? 1.5 : 1.0,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Header: Meal Type + Photo Available / No Photo Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: AppColors.surfaceElevated,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        mealCategory.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '• $timeDisplay',
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasPhotos ? AppColors.success.withOpacity(0.15) : Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: hasPhotos ? AppColors.success.withOpacity(0.5) : AppColors.borderSubtle,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hasPhotos ? Icons.camera_alt : Icons.no_photography_outlined,
+                          size: 12,
+                          color: hasPhotos ? AppColors.success : AppColors.textTertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          hasPhotos ? '📷 Photo Available' : 'No Photo',
+                          style: TextStyle(
+                            color: hasPhotos ? AppColors.success : AppColors.textTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Card Body: Items Summary, Macros & Action Button
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    itemsSummary,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Nutrition Metrics Row
+                  Row(
+                    children: [
+                      Text(
+                        '${mealCal.round()} kcal',
+                        style: const TextStyle(
+                          color: AppColors.primaryRed,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        '${mealProt.round()}g Protein',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${mealCrbs.round()}g Carbs',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${mealFt.round()}g Fat',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${mealFbr.round()}g Fiber',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Weight source indicator badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: weightSource == 'SMART_SCALE_BLE'
+                          ? AppColors.success.withOpacity(0.12)
+                          : (weightSource == 'AI_ESTIMATE'
+                              ? AppColors.gold.withOpacity(0.12)
+                              : Colors.lightBlueAccent.withOpacity(0.12)),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: weightSource == 'SMART_SCALE_BLE'
+                            ? AppColors.success.withOpacity(0.4)
+                            : (weightSource == 'AI_ESTIMATE'
+                                ? AppColors.gold.withOpacity(0.4)
+                                : Colors.lightBlueAccent.withOpacity(0.4)),
+                      ),
+                    ),
+                    child: Text(
+                      weightSource == 'SMART_SCALE_BLE'
+                          ? 'WEIGHT: SMART SCALE MEASURED'
+                          : (weightSource == 'AI_ESTIMATE'
+                              ? 'WEIGHT: AI ESTIMATED PORTION'
+                              : 'WEIGHT: CLIENT ENTERED'),
+                      style: TextStyle(
+                        color: weightSource == 'SMART_SCALE_BLE'
+                            ? AppColors.success
+                            : (weightSource == 'AI_ESTIMATE' ? AppColors.gold : Colors.lightBlueAccent),
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+
+                  // Prominent Action Button: [ VIEW PHOTO ]
+                  if (hasPhotos && photoData != null) ...[
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.fullscreen, size: 18),
+                        label: const Text(
+                          'VIEW PHOTO',
+                          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => _openPhotoViewer(photoData),
+                      ),
+                    ),
+                  ],
+
+                  // Individual food items expandable
+                  if (entries.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(color: AppColors.borderSubtle, height: 1),
+                    const SizedBox(height: 10),
+                    ...entries.map((item) {
+                      final src = item['weightSource'] ?? (item['source'] == 'AI_CAMERA' ? 'AI_ESTIMATE' : 'CLIENT_ENTERED');
+                      final isScale = src == 'SMART_SCALE_BLE';
+                      final isAi = src == 'AI_ESTIMATE';
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${item['quantity']}× ${item['foodName']} (${item['servingSize']} ${item['servingUnit']})',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isScale
+                                    ? AppColors.success.withOpacity(0.12)
+                                    : (isAi ? AppColors.gold.withOpacity(0.12) : Colors.lightBlueAccent.withOpacity(0.12)),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isScale ? 'Scale' : (isAi ? 'AI Est.' : 'Client'),
+                                style: TextStyle(
+                                  color: isScale
+                                      ? AppColors.success
+                                      : (isAi ? AppColors.gold : Colors.lightBlueAccent),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${(item['calories'] as num?)?.round()} kcal',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildComparisonRow(String label, Map<String, dynamic>? data, String unit, Color color) {

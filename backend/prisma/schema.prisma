@@ -71,6 +71,13 @@ model ClientProfile {
   onboardingCompleted Boolean  @default(false)
   onboardingStep      Int      @default(0)
 
+  // Activity, Engagement & Membership Tracking
+  lastAppOpenAt       DateTime?
+  membershipPlan      String?  @default("ELITE")
+  membershipStatus    String   @default("ACTIVE") // ACTIVE, EXPIRING_SOON, EXPIRED
+  membershipExpiresAt DateTime?
+  aiEngagementEnabled Boolean  @default(true)
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -83,6 +90,11 @@ model ClientProfile {
   attendanceRecords ClientAttendance[]
   progressRecords   ClientProgress[]
   weeklyCheckIns    WeeklyCheckIn[]
+  mealPhotos        MealPhoto[]
+  notifications     Notification[]
+  notificationPref  NotificationPreference?
+  transformationMilestones TransformationMilestone[]
+  attentionItems    AdminAttentionItem[]
 
   @@map("client_profiles")
 }
@@ -165,7 +177,12 @@ model ClientFoodLog {
   fat             Float
   fiber           Float         @default(0.0)
   source          String        @default("FOOD_LIBRARY") // AI_CAMERA, FOOD_LIBRARY, CUSTOM_FOOD
+  weightSource    String        @default("CLIENT_ENTERED") // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
   isAiConfirmed   Boolean       @default(true)
+  mealId          String?       // Grouping identifier for meal
+  photoAvailable  Boolean       @default(false)
+  mealPhotoId     String?
+  mealPhoto       MealPhoto?    @relation(fields: [mealPhotoId], references: [id], onDelete: SetNull)
   loggedAt        DateTime      @default(now())
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -173,6 +190,8 @@ model ClientFoodLog {
   @@index([clientProfileId])
   @@index([clientId])
   @@index([dateString])
+  @@index([mealId])
+  @@index([mealPhotoId])
   @@map("client_food_logs")
 }
 
@@ -599,4 +618,135 @@ model WeeklyCheckIn {
   @@index([checkInDate])
   @@map("weekly_check_ins")
 }
+
+model MealPhoto {
+  id              String         @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String?        // AXG-XXXX
+  mealId          String         // Grouping identifier for confirmed meal
+  dateString      String         // 'yyyy-MM-dd'
+  mealType        String         // Breakfast, Lunch, Snacks, Dinner
+  storagePath     String         // Relative path in secure storage
+  storageProvider String         @default("LOCAL_SECURE") // LOCAL_SECURE, S3, R2
+  mimeType        String         @default("image/jpeg")
+  fileSizeBytes   Int            @default(0)
+  capturedAt      DateTime       @default(now())
+  confirmedAt     DateTime       @default(now())
+  retentionUntil  DateTime?      // Configurable retention expiration date (null = keep indefinitely)
+  isDeleted       Boolean        @default(false)
+  deletedAt       DateTime?
+  itemsJson       String?        // JSON-encoded list of confirmed food items
+  weightSource    String         @default("AI_ESTIMATE") // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
+  totalCalories   Float          @default(0.0)
+  totalProtein    Float          @default(0.0)
+  totalCarbs      Float          @default(0.0)
+  totalFat        Float          @default(0.0)
+  totalFiber      Float          @default(0.0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  foodLogs        ClientFoodLog[]
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([dateString])
+  @@index([mealId])
+  @@map("meal_photos")
+}
+
+// ==========================================
+// AUTOMATION, NOTIFICATION & ATTENTION ENTITIES
+// ==========================================
+
+model Notification {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String?       // AXG-XXXX
+  title           String
+  message         String
+  type            String        // WORKOUT, NUTRITION, CHECK_IN, ACTIVITY, MEMBERSHIP, SYSTEM
+  category        String        @default("GENERAL")
+  priority        String        @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  source          String        @default("AUTOMATION_RULE") // AUTOMATION_RULE, AI_COACH, ADMIN, SYSTEM
+  triggerRule     String?
+  isRead          Boolean       @default(false)
+  readAt          DateTime?
+  sentStatus      String        @default("SENT") // PENDING, SENT, FAILED
+  metadataJson    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                     String        @id @default(uuid())
+  clientProfileId        String        @unique
+  clientProfile          ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  workoutReminders       Boolean       @default(true)
+  nutritionReminders     Boolean       @default(true)
+  weeklyCheckInReminders Boolean       @default(true)
+  activityReminders      Boolean       @default(true)
+  membershipAlerts       Boolean       @default(true)
+  aiEngagementEnabled    Boolean       @default(true)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model TransformationMilestone {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String?       // AXG-XXXX
+  weekNumber      Int           // 1, 4, 8, 12...
+  date            DateTime      @default(now())
+  frontPhotoUrl   String?
+  sidePhotoUrl    String?
+  backPhotoUrl    String?
+  weightKg        Float?
+  waistCm         Float?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([clientProfileId, weekNumber], name: "client_milestone_week_unique")
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@map("transformation_milestones")
+}
+
+model AdminAttentionItem {
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String?       // AXG-XXXX
+  clientName      String
+  attentionType   String        // INACTIVE, MISSED_WORKOUT, MISSING_CHECKIN, MISSING_FOOD, LOW_PROTEIN, LOW_WATER, LOW_STEPS, PAIN_REPORTED, POOR_SLEEP, MEMBERSHIP_EXPIRING
+  severity        String        @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  title           String
+  details         String
+  dataJson        String?
+  isReviewed      Boolean       @default(false)
+  reviewedById    String?
+  reviewedAt      DateTime?
+  coachNotes      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([attentionType])
+  @@index([isReviewed])
+  @@index([createdAt])
+  @@map("admin_attention_items")
+}
+
 

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -32,6 +33,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
   late MealType _selectedMealType;
   late TextEditingController _mealNameController;
   bool _isSaving = false;
+  bool _isConfirmedAndSaved = false;
 
   @override
   void initState() {
@@ -41,9 +43,24 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
     _mealNameController = TextEditingController(text: widget.scanResult.mealName);
   }
 
+  void _cleanupTempPhoto() {
+    final path = widget.scanResult.capturedPhotoPath;
+    if (path != null && path.isNotEmpty) {
+      try {
+        final f = File(path);
+        if (f.existsSync()) {
+          f.deleteSync();
+        }
+      } catch (_) {}
+    }
+  }
+
   @override
   void dispose() {
     _mealNameController.dispose();
+    if (!_isConfirmedAndSaved) {
+      _cleanupTempPhoto();
+    }
     super.dispose();
   }
 
@@ -113,7 +130,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
               final newGrams = double.tryParse(controller.text.trim());
               if (newGrams != null && newGrams > 0) {
                 setState(() {
-                  _foods[index] = food.updatePortionGrams(newGrams);
+                  _foods[index] = food.updatePortionGrams(newGrams, newWeightSource: 'CLIENT_ENTERED');
                 });
                 Navigator.of(ctx).pop();
               }
@@ -228,17 +245,20 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
     HapticFeedback.heavyImpact();
 
     try {
-      final clientId = widget.repository.resolveClientId();
-      final dateString = widget.dateString;
+      final hasCustomEdits = _foods.any((f) => f.weightSource == 'CLIENT_ENTERED');
+      final mealWeightSource = hasCustomEdits ? 'CLIENT_ENTERED' : 'AI_ESTIMATE';
 
-      for (final food in _foods) {
-        final entry = food.toFoodLogEntry(
-          clientId: clientId,
-          dateString: dateString,
-          mealType: _selectedMealType,
-        );
-        widget.repository.logFoodEntry(entry);
-      }
+      await widget.repository.confirmAndUploadMealPhoto(
+        capturedPhotoPath: widget.scanResult.capturedPhotoPath,
+        capturedPhotoBytes: widget.scanResult.capturedPhotoBytes,
+        dateString: widget.dateString,
+        mealType: _selectedMealType,
+        weightSource: mealWeightSource,
+        foods: _foods,
+      );
+
+      _isConfirmedAndSaved = true;
+      _cleanupTempPhoto();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -250,7 +270,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Added ${_foods.length} items to ${_selectedMealType.displayName}!',
+                    'Added ${_foods.length} items to ${_selectedMealType.displayName} • Photo Saved!',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -280,6 +300,12 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         children: [
+          // Captured meal photo preview (Only saved if client confirms)
+          if (widget.scanResult.hasCapturedPhoto) ...[
+            _buildCapturedPhotoPreview(),
+            const SizedBox(height: 14),
+          ],
+
           // Banner for low-confidence or estimate notification
           if (widget.scanResult.isLowConfidence) ...[
             Container(
@@ -507,7 +533,10 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                               ),
                             ),
                             const SizedBox(height: 3),
-                            Row(
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -518,7 +547,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    food.isFromFoodLibrary ? 'Alpha X Verified' : 'AI Estimate',
+                                    food.isFromFoodLibrary ? 'Alpha X Library' : 'Plate Item',
                                     style: TextStyle(
                                       color: food.isFromFoodLibrary ? AppColors.success : AppColors.textTertiary,
                                       fontSize: 10,
@@ -526,7 +555,36 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: food.isAiEstimated
+                                        ? AppColors.gold.withOpacity(0.15)
+                                        : (food.isSmartScale
+                                            ? AppColors.success.withOpacity(0.15)
+                                            : Colors.lightBlueAccent.withOpacity(0.15)),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: food.isAiEstimated
+                                          ? AppColors.gold.withOpacity(0.4)
+                                          : (food.isSmartScale
+                                              ? AppColors.success.withOpacity(0.4)
+                                              : Colors.lightBlueAccent.withOpacity(0.4)),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    food.isSmartScale
+                                        ? '⚖️ SMART SCALE'
+                                        : (food.isAiEstimated ? 'AI ESTIMATED' : 'CLIENT ENTERED'),
+                                    style: TextStyle(
+                                      color: food.isAiEstimated
+                                          ? AppColors.gold
+                                          : (food.isSmartScale ? AppColors.success : Colors.lightBlueAccent),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
                                 Text(
                                   food.servingDisplay,
                                   style: const TextStyle(
@@ -634,6 +692,104 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
           ),
 
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCapturedPhotoPreview() {
+    final photoBytes = widget.scanResult.capturedPhotoBytes;
+    final photoPath = widget.scanResult.capturedPhotoPath;
+
+    Widget imageWidget;
+    if (photoBytes != null && photoBytes.isNotEmpty) {
+      imageWidget = Image.memory(
+        photoBytes,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 200,
+      );
+    } else if (photoPath != null && photoPath.isNotEmpty && File(photoPath).existsSync()) {
+      imageWidget = Image.file(
+        File(photoPath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 200,
+      );
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          imageWidget,
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withOpacity(0.6), Colors.transparent, Colors.black.withOpacity(0.7)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.75),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.primaryRed.withOpacity(0.6)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.camera_alt, color: AppColors.primaryRed, size: 13),
+                  SizedBox(width: 6),
+                  Text(
+                    'LIVE CAMERA SCAN',
+                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 12,
+            left: 12,
+            right: 12,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                  ),
+                  child: const Text(
+                    'AI ESTIMATED PORTION',
+                    style: TextStyle(color: AppColors.gold, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Text(
+                  'Saved to Food Log upon Confirm',
+                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

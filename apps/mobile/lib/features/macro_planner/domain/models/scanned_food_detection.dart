@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'food_item.dart';
 import 'food_log_entry.dart';
 import 'meal_type.dart';
@@ -17,6 +18,7 @@ class ScannedFoodItem {
   final double fiber;
   final bool isEstimate;
   final String source; // 'ALPHA_X_LIBRARY' or 'AI_ESTIMATE'
+  final String weightSource; // 'AI_ESTIMATE', 'SMART_SCALE_BLE', 'CLIENT_ENTERED'
 
   const ScannedFoodItem({
     required this.name,
@@ -32,9 +34,13 @@ class ScannedFoodItem {
     this.fiber = 0.0,
     this.isEstimate = true,
     this.source = 'AI_ESTIMATE',
+    this.weightSource = 'AI_ESTIMATE',
   });
 
   bool get isFromFoodLibrary => source == 'ALPHA_X_LIBRARY';
+  bool get isAiEstimated => weightSource == 'AI_ESTIMATE';
+  bool get isSmartScale => weightSource == 'SMART_SCALE_BLE';
+  bool get isClientEntered => weightSource == 'CLIENT_ENTERED';
 
   ScannedFoodItem copyWith({
     String? name,
@@ -50,6 +56,7 @@ class ScannedFoodItem {
     double? fiber,
     bool? isEstimate,
     String? source,
+    String? weightSource,
   }) {
     return ScannedFoodItem(
       name: name ?? this.name,
@@ -65,11 +72,12 @@ class ScannedFoodItem {
       fiber: fiber ?? this.fiber,
       isEstimate: isEstimate ?? this.isEstimate,
       source: source ?? this.source,
+      weightSource: weightSource ?? this.weightSource,
     );
   }
 
   /// Recalculate nutrition proportionally when user edits portion size in grams
-  ScannedFoodItem updatePortionGrams(double newGrams) {
+  ScannedFoodItem updatePortionGrams(double newGrams, {String? newWeightSource}) {
     if (estimatedGrams <= 0 || newGrams <= 0) return this;
     final ratio = newGrams / estimatedGrams;
     final newDisplay = newGrams % 1 == 0
@@ -84,6 +92,8 @@ class ScannedFoodItem {
       carbs: double.parse((carbs * ratio).toStringAsFixed(1)),
       fat: double.parse((fat * ratio).toStringAsFixed(1)),
       fiber: double.parse((fiber * ratio).toStringAsFixed(1)),
+      isEstimate: false,
+      weightSource: newWeightSource ?? 'CLIENT_ENTERED',
     );
   }
 
@@ -92,6 +102,9 @@ class ScannedFoodItem {
     required String clientId,
     required String dateString,
     required MealType mealType,
+    String? mealId,
+    String? mealPhotoId,
+    bool photoAvailable = false,
   }) {
     final entryId = 'fscan_${DateTime.now().millisecondsSinceEpoch}_${name.replaceAll(RegExp(r'\s+'), '_').toLowerCase()}';
     return FoodLogEntry(
@@ -112,6 +125,10 @@ class ScannedFoodItem {
       source: 'AI_CAMERA',
       isAiConfirmed: true,
       category: category,
+      photoAvailable: photoAvailable,
+      mealPhotoId: mealPhotoId,
+      weightSource: weightSource,
+      mealId: mealId,
       loggedAt: DateTime.now(),
       createdAt: DateTime.now(),
     );
@@ -184,6 +201,10 @@ class AiMealScanResult {
   final double totalFiber;
   final bool isLowConfidence;
   final String disclaimer;
+  final String? capturedPhotoPath;
+  final Uint8List? capturedPhotoBytes;
+  final String weightSource;
+  final String? mealPhotoId;
 
   const AiMealScanResult({
     required this.scanId,
@@ -197,7 +218,15 @@ class AiMealScanResult {
     required this.totalFiber,
     this.isLowConfidence = false,
     this.disclaimer = 'Nutritional values are AI visual estimates based on visible portion sizes. Confirm or edit before logging.',
+    this.capturedPhotoPath,
+    this.capturedPhotoBytes,
+    this.weightSource = 'AI_ESTIMATE',
+    this.mealPhotoId,
   });
+
+  bool get hasCapturedPhoto =>
+      (capturedPhotoPath != null && capturedPhotoPath!.isNotEmpty) ||
+      (capturedPhotoBytes != null && capturedPhotoBytes!.isNotEmpty);
 
   // Dynamic totals that recalculate automatically if foods are edited or removed
   double get liveCalories => foods.fold(0.0, (acc, f) => acc + f.calories);
@@ -218,6 +247,10 @@ class AiMealScanResult {
     double? totalFiber,
     bool? isLowConfidence,
     String? disclaimer,
+    String? capturedPhotoPath,
+    Uint8List? capturedPhotoBytes,
+    String? weightSource,
+    String? mealPhotoId,
   }) {
     final updatedFoods = foods ?? this.foods;
     return AiMealScanResult(
@@ -232,6 +265,10 @@ class AiMealScanResult {
       totalFiber: totalFiber ?? updatedFoods.fold(0.0, (acc, f) => acc + f.fiber),
       isLowConfidence: isLowConfidence ?? this.isLowConfidence,
       disclaimer: disclaimer ?? this.disclaimer,
+      capturedPhotoPath: capturedPhotoPath ?? this.capturedPhotoPath,
+      capturedPhotoBytes: capturedPhotoBytes ?? this.capturedPhotoBytes,
+      weightSource: weightSource ?? this.weightSource,
+      mealPhotoId: mealPhotoId ?? this.mealPhotoId,
     );
   }
 
@@ -255,6 +292,9 @@ class AiMealScanResult {
       isLowConfidence: json['isLowConfidence'] as bool? ?? false,
       disclaimer: json['disclaimer'] as String? ??
           'Nutritional values are AI visual estimates based on visible portion sizes. Confirm or edit before logging.',
+      capturedPhotoPath: json['capturedPhotoPath'] as String?,
+      weightSource: json['weightSource'] as String? ?? 'AI_ESTIMATE',
+      mealPhotoId: json['mealPhotoId'] as String?,
     );
   }
 
@@ -270,5 +310,7 @@ class AiMealScanResult {
     'totalFiber': liveFiber,
     'isLowConfidence': isLowConfidence,
     'disclaimer': disclaimer,
+    'weightSource': weightSource,
+    'mealPhotoId': mealPhotoId,
   };
 }
