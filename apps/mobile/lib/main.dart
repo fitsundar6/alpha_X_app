@@ -211,20 +211,22 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
                   child: ScaleTransition(
                     scale: _pulseAnimation,
                     child: const AlphaXLogo.splash(
-                      size: 130,
-                      withGlow: true,
+                      size: 140,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 16),
 
-              // Brand Title
-              const Text(
-                'ALPHA X GYM',
-                style: AppTypography.displayMedium,
-                textAlign: TextAlign.center,
+              // Accessible semantic branding title (0-height to avoid duplicate visual text)
+              const SizedBox(
+                height: 0,
+                width: 0,
+                child: Text(
+                  'ALPHA X GYM',
+                  style: TextStyle(fontSize: 0, color: Colors.transparent),
+                ),
               ),
 
               const SizedBox(height: 8),

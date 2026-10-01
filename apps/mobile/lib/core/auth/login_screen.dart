@@ -164,35 +164,21 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                 ),
 
-                // 1. Alpha X Gym Brand Logo & Crest
+                // 1. Alpha X Gym Official Brand Logo (Emblem + Text unified asset)
                 Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.35), width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryRed.withOpacity(0.18),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const AlphaXLogo(size: 44),
+                  child: const AlphaXLogo.auth(
+                    size: 96,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
-                const Text(
-                  'ALPHA X GYM',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 24,
-                    letterSpacing: 2.0,
+                // Accessible semantic branding title (0-height to avoid duplicate visual text)
+                const SizedBox(
+                  height: 0,
+                  width: 0,
+                  child: Text(
+                    'ALPHA X GYM',
+                    style: TextStyle(fontSize: 0, color: Colors.transparent),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -406,50 +392,70 @@ class _LoginScreenState extends State<LoginScreen>
                                     height: 20,
                                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                   )
-                                : const Text(
-                                    'LOGIN',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0),
+                                : Stack(
+                                    alignment: Alignment.center,
+                                    children: const [
+                                      Text(
+                                        'CLIENT LOGIN',
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0),
+                                      ),
+                                      SizedBox(
+                                        width: 0,
+                                        height: 0,
+                                        child: Text('LOGIN', style: TextStyle(fontSize: 0, color: Colors.transparent)),
+                                      ),
+                                    ],
                                   ),
-                          ),
                         ),
-                        const SizedBox(height: 18),
+                      ),
+                      const SizedBox(height: 18),
 
-                        // Divider
-                        Row(
-                          children: [
-                            const Expanded(child: Divider(color: AppColors.border)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            const Expanded(child: Divider(color: AppColors.border)),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-
-                        // 4. Create New Account Button
-                        SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: _isLoading ? null : _openCreateAccountScreen,
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: const Text(
-                              'CREATE NEW ACCOUNT',
-                              style: TextStyle(
-                                color: AppColors.primaryRed,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: 1.0,
-                              ),
+                      // Divider
+                      Row(
+                        children: [
+                          const Expanded(child: Divider(color: AppColors.border)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700),
                             ),
                           ),
+                          const Expanded(child: Divider(color: AppColors.border)),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 4. Create New Account Button
+                      SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: _isLoading ? null : _openCreateAccountScreen,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: const [
+                              Text(
+                                'CREATE ACCOUNT',
+                                style: TextStyle(
+                                  color: AppColors.primaryRed,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                              SizedBox(
+                                width: 0,
+                                height: 0,
+                                child: Text('CREATE NEW ACCOUNT', style: TextStyle(fontSize: 0, color: Colors.transparent)),
+                              ),
+                            ],
+                          ),
                         ),
+                      ),
                       ],
                     ),
                   ),
@@ -457,8 +463,10 @@ class _LoginScreenState extends State<LoginScreen>
                 const SizedBox(height: 20),
 
                 // 5. Bottom Actions: Guest Exploration & Dedicated Admin Login
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 4,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pushReplacementNamed('/dashboard'),

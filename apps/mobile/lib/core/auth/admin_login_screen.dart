@@ -139,24 +139,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                 children: [
                   // 1. Security Header & Brand Logo
                   Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceCard,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.primaryRed.withOpacity(0.4), width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryRed.withOpacity(0.15),
-                            blurRadius: 20,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const AlphaXLogo(size: 48),
+                    child: const AlphaXLogo.auth(
+                      size: 96,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   const Text(
                     'ADMINISTRATOR ACCESS',

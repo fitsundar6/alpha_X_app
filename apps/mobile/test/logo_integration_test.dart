@@ -68,5 +68,33 @@ void main() {
       expect(find.text('ADMIN'), findsNothing);
       expect(find.text('CLIENT'), findsNothing);
     });
+
+    testWidgets('Responsive Logo Rendering across Small Phone, iPhone, Tablet, and Desktop', (tester) async {
+      final devices = [
+        const Size(320, 568),   // Small Phone (iPhone SE)
+        const Size(390, 844),   // Standard iPhone (iPhone 14/15)
+        const Size(412, 915),   // Large Android Phone (Pixel 7)
+        const Size(800, 1280),  // Tablet (iPad / Galaxy Tab)
+        const Size(1280, 800),  // Desktop / Admin screen
+      ];
+
+      for (final deviceSize in devices) {
+        tester.view.physicalSize = deviceSize;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: LoginScreen(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Verify logo renders without layout overflow or exceptions
+        expect(find.byType(AlphaXLogo), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    });
   });
 }

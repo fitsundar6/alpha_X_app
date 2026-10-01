@@ -46,10 +46,10 @@ class AlphaXLogo extends StatelessWidget {
   /// Large hero logo for Splash and Welcome screens
   const AlphaXLogo.splash({
     super.key,
-    this.size = 110.0,
+    this.size = 140.0,
     this.fit = BoxFit.contain,
     this.color,
-    this.withGlow = true,
+    this.withGlow = false,
     this.glowColor = AppColors.glowRed,
     this.glowRadius = 32.0,
     this.padding = EdgeInsets.zero,
@@ -59,10 +59,10 @@ class AlphaXLogo extends StatelessWidget {
   /// Medium logo for Authentication and Login screens
   const AlphaXLogo.auth({
     super.key,
-    this.size = 84.0,
+    this.size = 100.0,
     this.fit = BoxFit.contain,
     this.color,
-    this.withGlow = true,
+    this.withGlow = false,
     this.glowColor = AppColors.glowRed,
     this.glowRadius = 20.0,
     this.padding = EdgeInsets.zero,
@@ -110,16 +110,6 @@ class AlphaXLogo extends StatelessWidget {
         );
       },
     );
-
-    // Optical centering compensation: The raw 1024x1024 artwork is slightly displaced
-    // downward by 25.5px (~2.5%). Applying a subtle vertical adjustment ensures the logo
-    // is optically centered inside circles, avatars, and app bars without cropping.
-    if (effectiveHeight != null && effectiveHeight > 0) {
-      imageWidget = Transform.translate(
-        offset: Offset(0, -effectiveHeight * 0.025),
-        child: imageWidget,
-      );
-    }
 
     if (withGlow && effectiveWidth != null && effectiveHeight != null) {
       imageWidget = Stack(

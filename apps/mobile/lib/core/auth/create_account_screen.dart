@@ -357,34 +357,21 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Top: Alpha X Gym Logo & Brand Heading
+                // Official Alpha X Gym Brand Logo (Emblem + Text unified asset)
                 Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.35), width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryRed.withOpacity(0.18),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const AlphaXLogo(size: 40),
+                  child: const AlphaXLogo.auth(
+                    size: 96,
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                const Text(
-                  'ALPHA X',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 22,
-                    letterSpacing: 3.0,
+                // Accessible semantic branding title (0-height to avoid duplicate visual text)
+                const SizedBox(
+                  height: 0,
+                  width: 0,
+                  child: Text(
+                    'ALPHA X',
+                    style: TextStyle(fontSize: 0, color: Colors.transparent),
                   ),
                 ),
                 const SizedBox(height: 6),
