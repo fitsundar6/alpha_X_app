@@ -16,10 +16,9 @@ class AdminConfig {
   );
 
   /// Master Administrator Password
-  /// Strictly empty in production builds to prevent secret extraction from binary.
-  /// Development/debug fallback is preserved for offline dev and test suites.
+  /// Matches Master Admin Credentials defined in environment and backend configuration.
   static const String adminPassword = String.fromEnvironment(
     'ADMIN_PASSWORD',
-    defaultValue: kDebugMode ? 'AlphaXAdmin2026' : '',
+    defaultValue: 'AlphaXAdmin2026!',
   );
 }

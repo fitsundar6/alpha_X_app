@@ -212,12 +212,32 @@ void main() {
     test('TEST 10: Local Admin login verifies against AdminConfig and rejects wrong credentials', () async {
       await auth.initialize();
 
-      // Successful Admin Login
+      // Successful Admin Login with configured credentials
       final role = await auth.login(
         email: AdminConfig.adminEmail,
         password: AdminConfig.adminPassword,
       );
       expect(role, UserRole.admin);
+      expect(auth.isAdmin, isTrue);
+
+      await auth.logout();
+
+      // Successful Admin Login with fitsundar6@gmail.com and AlphaXAdmin2026!
+      final role1 = await auth.login(
+        email: 'fitsundar6@gmail.com',
+        password: 'AlphaXAdmin2026!',
+      );
+      expect(role1, UserRole.admin);
+      expect(auth.isAdmin, isTrue);
+
+      await auth.logout();
+
+      // Successful Admin Login without exclamation mark
+      final role2 = await auth.login(
+        email: 'fitsundar6@gmail.com',
+        password: 'AlphaXAdmin2026',
+      );
+      expect(role2, UserRole.admin);
       expect(auth.isAdmin, isTrue);
 
       await auth.logout();
