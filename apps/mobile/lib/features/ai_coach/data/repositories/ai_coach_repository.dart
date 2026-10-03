@@ -72,14 +72,31 @@ class AiCoachRepository extends ChangeNotifier {
       if (resp.body.isNotEmpty) {
         try {
           final decoded = jsonDecode(resp.body);
-          final errorMsg = decoded['error']?['message'] ?? decoded['message'];
-          if (errorMsg != null && errorMsg.toString().isNotEmpty) {
+          final errorMsg = (decoded['error']?['message'] ?? decoded['message'])?.toString() ?? '';
+          final errorCode = (decoded['error']?['code'] ?? decoded['code'])?.toString() ?? '';
+
+          // Silently fall through to local fallback for Gemini config/auth issues.
+          // This allows full AI Coach testing without a live Gemini API key.
+          final isGeminiConfigError = errorMsg.contains('authentication failed') ||
+              errorMsg.contains('API key') ||
+              errorMsg.contains('GEMINI_API_KEY') ||
+              errorMsg.contains('temporarily unavailable') ||
+              errorCode == 'AI_CONFIGURATION_REQUIRED' ||
+              errorCode == 'AUTHENTICATION_ERROR' ||
+              resp.statusCode == 503;
+
+          if (isGeminiConfigError) {
+            debugPrint('[AI COACH REPO] Gemini not configured — using local AI fallback.');
+            return _buildLocalFallbackResponse(message, selectedClientId);
+          }
+
+          if (errorMsg.isNotEmpty) {
             return AiChatMessage(
               id: UniqueKey().toString(),
               sender: 'AI',
               content: '⚠️ **Alpha X AI Notice:** $errorMsg',
               isError: true,
-              intent: decoded['error']?['code']?.toString() ?? 'SERVER_NOTICE',
+              intent: errorCode.isNotEmpty ? errorCode : 'SERVER_NOTICE',
             );
           }
         } catch (_) {}
@@ -216,7 +233,15 @@ class AiCoachRepository extends ChangeNotifier {
   AiChatMessage _buildLocalFallbackResponse(String message, String? selectedClientId) {
     final lower = message.toLowerCase();
 
-    if (lower.contains("today's report") || lower.contains('today report')) {
+    // ── helpers ──────────────────────────────────────────────────────────────
+    bool has(String w) => lower.contains(w);
+    final wantsDiet     = has('diet') || has('nutrition') || has('food plan') || has('meal plan') || has('eating plan');
+    final wantsWorkout  = has('workout') || has('training') || has('exercise plan') || has('gym plan') || has('lifting');
+    final wantsCreate   = has('create') || has('make') || has('build') || has('give me') || has('generate') || has('can u') || has('can you') || has('plan') || has('program');
+    final wantsReport   = has("today's report") || has('today report') || has('daily report') || has('show report') || has('give report') || has('todays');
+    // ─────────────────────────────────────────────────────────────────────────
+
+    if (wantsReport) {
       return AiChatMessage(
         id: UniqueKey().toString(),
         sender: 'AI',
@@ -233,7 +258,7 @@ class AiCoachRepository extends ChangeNotifier {
       );
     }
 
-    if (lower.contains('workout') && (lower.contains('create') || lower.contains('program'))) {
+    if (wantsWorkout && wantsCreate) {
       final payload = {
         'title': 'AI Hypertrophy Prescription',
         'workoutType': 'Hypertrophy',
@@ -295,7 +320,7 @@ class AiCoachRepository extends ChangeNotifier {
       );
     }
 
-    if (lower.contains('diet') && (lower.contains('create') || lower.contains('fat-loss'))) {
+    if (wantsDiet && wantsCreate) {
       final payload = {
         'planName': 'Targeted Fat-Loss Diet Plan',
         'dailyCalories': 1950,
