@@ -51,8 +51,8 @@ export class GeminiService {
   public get promptVersion(): string {
     return GeminiService.PROMPT_VERSION;
   }
-  private static readonly DEFAULT_MODEL = 'gemini-3-flash-preview';
-  private static readonly FALLBACK_MODEL = 'gemini-3-flash-preview';
+  private static readonly DEFAULT_MODEL = 'gemini-2.0-flash';
+  private static readonly FALLBACK_MODEL = 'gemini-1.5-flash';
   private static readonly DEFAULT_TIMEOUT_MS = 30000;
 
   /**
