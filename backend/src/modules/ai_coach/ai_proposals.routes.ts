@@ -53,7 +53,7 @@ router.get('/', requireAuth, requireAdmin, async (req: Request, res: Response) =
 // Returns full proposal including the proposed plan JSON
 router.get('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const proposal = await prisma.aIProposal.findUnique({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
   });
 
   if (!proposal) {
@@ -75,8 +75,7 @@ router.post('/:id/approve', requireAuth, requireAdmin, async (req: Request, res:
   const adminName = (req as any).user?.name || 'Admin';
 
   const proposal = await prisma.aIProposal.findUnique({
-    where: { id: req.params.id },
-    include: { clientProfile: { select: { id: true, clientId: true, userId: true } } },
+    where: { id: req.params.id as string },
   });
 
   if (!proposal) {
@@ -135,10 +134,16 @@ router.post('/:id/approve', requireAuth, requireAdmin, async (req: Request, res:
       sessionIds.push(session.id);
 
       // Assign session to this specific client
+      // Look up userId from clientProfileId
+      const clientProfile = await prisma.clientProfile.findUnique({
+        where: { id: proposal.clientProfileId },
+        select: { userId: true },
+      });
       await prisma.workoutAssignment.create({
         data: {
           sessionId: session.id,
-          clientId: proposal.clientProfile?.userId || '',
+          clientId: clientProfile?.userId || null,
+          assignedById: adminId,
         },
       });
     }
@@ -220,7 +225,7 @@ router.post('/:id/reject', requireAuth, requireAdmin, async (req: Request, res: 
   const adminId = (req as any).user?.id || 'admin';
   const { reason } = req.body;
 
-  const proposal = await prisma.aIProposal.findUnique({ where: { id: req.params.id } });
+  const proposal = await prisma.aIProposal.findUnique({ where: { id: req.params.id as string } });
   if (!proposal) {
     sendError(res, 'NOT_FOUND', 'Proposal not found', HttpStatus.NOT_FOUND);
     return;

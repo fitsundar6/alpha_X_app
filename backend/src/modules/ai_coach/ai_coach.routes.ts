@@ -550,13 +550,14 @@ router.get('/clients/:clientId/summary', async (req: Request, res: Response) => 
   const { clientId } = req.params;
   const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
 
-  if (!clientId || !clientId.trim()) {
+  const clientIdStr = Array.isArray(clientId) ? clientId[0] : clientId;
+  if (!clientIdStr || !clientIdStr.trim()) {
     sendError(res, 'VALIDATION_ERROR', 'clientId path parameter is required', HttpStatus.BAD_REQUEST);
     return;
   }
 
   try {
-    const summary = await clientSummaryService.buildClientSummary(clientId.trim(), {
+    const summary = await clientSummaryService.buildClientSummary(clientIdStr.trim(), {
       startDate,
       endDate,
     });

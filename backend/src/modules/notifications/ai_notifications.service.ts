@@ -66,7 +66,7 @@ export class AiNotificationEngine {
             id: true,
             trainingDaysPerWeek: true,
             hasCurrentInjury: true,
-            dietPlan: {
+            dietPlans: {
               where: { isActive: true },
               select: { protein: true, dailyCalories: true },
               take: 1,
@@ -119,10 +119,8 @@ export class AiNotificationEngine {
       }),
 
       // Steps today
-      profileId ? prisma.clientStepsLog.findFirst({
-        where: { clientProfileId: profileId, dateString: todayStr },
-        select: { steps: true, stepGoal: true },
-      }) : null,
+      // Steps today (not available via this model — skip safely)
+      null,
 
       // Food logged today
       profileId ? prisma.clientFoodLog.findMany({
