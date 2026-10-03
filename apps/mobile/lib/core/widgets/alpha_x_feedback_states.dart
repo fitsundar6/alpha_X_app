@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../theme/alpha_x_design_system.dart';
 import '../theme/app_colors.dart';
@@ -214,7 +216,13 @@ class _AlphaXSkeletonState extends State<AlphaXSkeleton>
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
+    final isTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    if (!isTest) {
+      _shimmerController.repeat(reverse: true);
+    } else {
+      _shimmerController.value = 0.5;
+    }
   }
 
   @override

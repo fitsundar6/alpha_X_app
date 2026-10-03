@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/alpha_x_design_system.dart';
+import '../theme/app_colors.dart';
 
+/// Athletic Premium Card Component
+/// Surface background, radius 24, soft depth (colored subtle glow on dark, soft shadow on light).
 class AlphaXCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -11,11 +14,12 @@ class AlphaXCard extends StatelessWidget {
   final double? height;
   final VoidCallback? onTap;
   final BorderRadius? borderRadius;
+  final bool hasGlow;
 
   const AlphaXCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(AlphaXSpacing.md),
+    this.padding = const EdgeInsets.all(AlphaXSpacing.lg),
     this.margin,
     this.backgroundColor,
     this.borderColor,
@@ -23,13 +27,14 @@ class AlphaXCard extends StatelessWidget {
     this.height,
     this.onTap,
     this.borderRadius,
+    this.hasGlow = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final effectiveBorderRadius = borderRadius ?? AlphaXRadius.roundedMd;
+    final effectiveBorderRadius = borderRadius ?? AlphaXRadius.roundedXl; // Radius 24
 
     final cardContent = Container(
       width: width,
@@ -37,25 +42,25 @@ class AlphaXCard extends StatelessWidget {
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? theme.cardTheme.color ?? AlphaXColors.surfaceCard,
+        color: backgroundColor ?? (isDark ? AppColors.surfaceCard : AppColors.lightSurface),
         borderRadius: effectiveBorderRadius,
         border: Border.all(
-          color: borderColor ?? theme.dividerTheme.color ?? AlphaXColors.border,
+          color: borderColor ?? (isDark ? AppColors.border : AppColors.lightBorder),
           width: 1.0,
         ),
         boxShadow: isDark
-            ? const [
+            ? [
                 BoxShadow(
-                  color: Colors.black45,
-                  blurRadius: 16,
-                  offset: Offset(0, 4),
+                  color: hasGlow ? AppColors.glow.withOpacity(0.2) : Colors.black.withOpacity(0.4),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
               ]
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.06), // soft gray shadow y8 blur24 ~10%
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
               ],
       ),

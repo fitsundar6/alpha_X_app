@@ -169,7 +169,7 @@ void main() {
       expect(find.text('LOGIN'), findsOneWidget);
       expect(find.text('CREATE NEW ACCOUNT'), findsOneWidget);
       expect(find.text('ADMIN LOGIN'), findsOneWidget);
-      expect(find.text('Continue as Guest'), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsNothing);
     });
 
     testWidgets('7. ClientOnboardingScreen shows 10-step progress and review', (tester) async {

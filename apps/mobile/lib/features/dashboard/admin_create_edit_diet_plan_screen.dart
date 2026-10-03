@@ -80,6 +80,21 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
     super.dispose();
   }
 
+  static const List<String> _supportedUnits = [
+    'g',
+    'kg',
+    'ml',
+    'L',
+    'serving',
+    'piece',
+    'egg',
+    'cup',
+    'tbsp',
+    'tsp',
+    'slice',
+    'bowl',
+  ];
+
   void _addFoodToMeal(int mealIndex) async {
     final allFoods = FoodDatabase.defaultFoods;
     FoodItem? selectedFood;
@@ -106,7 +121,7 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
                     onChanged: (val) => setModalState(() => query = val),
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: 'Search foods (dosa, chicken, rice, eggs)...',
+                      hintText: 'Search foods (chicken, rice, oats, egg)...',
                       hintStyle: const TextStyle(color: AppColors.textTertiary),
                       prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
                       filled: true,
@@ -143,29 +158,438 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
       },
     );
 
-    if (selectedFood != null) {
-      setState(() {
-        final currentMeal = _meals[mealIndex];
-        final updatedFoods = List<PrescribedFoodItem>.from(currentMeal.foods)..add(
-          PrescribedFoodItem(
-            name: selectedFood!.name,
-            servingDisplay: selectedFood!.servingDisplay,
-            quantity: 1.0,
-            calories: selectedFood!.calories,
-            protein: selectedFood!.protein,
-            carbs: selectedFood!.carbs,
-            fat: selectedFood!.fat,
-            fiber: selectedFood!.fiber,
-          ),
-        );
-        _meals[mealIndex] = PrescribedMeal(
-          mealType: currentMeal.mealType,
-          timing: currentMeal.timing,
-          notes: currentMeal.notes,
-          foods: updatedFoods,
-        );
-      });
+    if (selectedFood != null && mounted) {
+      await _showFoodServingDialog(
+        mealIndex: mealIndex,
+        foodLibraryItem: selectedFood,
+      );
     }
+  }
+
+  Future<void> _showFoodServingDialog({
+    required int mealIndex,
+    FoodItem? foodLibraryItem,
+    PrescribedFoodItem? existingFoodItem,
+    int? foodIndex,
+  }) async {
+    final isEditing = existingFoodItem != null && foodIndex != null;
+    final foodName = foodLibraryItem?.name ?? existingFoodItem?.name ?? 'Food Item';
+    final foodId = foodLibraryItem?.id ?? existingFoodItem?.foodId;
+
+    // Base nutritional facts from food library or preserved base facts
+    final baseCalories = foodLibraryItem?.calories ?? existingFoodItem?.baseCalories ?? existingFoodItem?.calories ?? 0.0;
+    final baseProtein = foodLibraryItem?.protein ?? existingFoodItem?.baseProtein ?? existingFoodItem?.protein ?? 0.0;
+    final baseCarbs = foodLibraryItem?.carbs ?? existingFoodItem?.baseCarbs ?? existingFoodItem?.carbs ?? 0.0;
+    final baseFat = foodLibraryItem?.fat ?? existingFoodItem?.baseFat ?? existingFoodItem?.fat ?? 0.0;
+    final baseFiber = foodLibraryItem?.fiber ?? existingFoodItem?.baseFiber ?? existingFoodItem?.fiber ?? 0.0;
+    final baseServingSize = foodLibraryItem != null
+        ? (foodLibraryItem.servingSize > 0 ? foodLibraryItem.servingSize : 100.0)
+        : (existingFoodItem?.servingSize ?? 100.0);
+    final baseServingUnit = foodLibraryItem?.servingUnit.trim().isNotEmpty == true
+        ? foodLibraryItem!.servingUnit.trim()
+        : (existingFoodItem?.baseUnit ?? 'g');
+
+    // Initial unit
+    String selectedUnit = existingFoodItem?.unit ??
+        (foodLibraryItem?.servingUnit.trim().isNotEmpty == true ? foodLibraryItem!.servingUnit.trim() : 'g');
+
+    // Normalize unit if needed
+    final cleanLower = selectedUnit.toLowerCase();
+    if (cleanLower == 'grams' || cleanLower == 'gram') {
+      selectedUnit = 'g';
+    } else if (cleanLower == 'pieces') {
+      selectedUnit = 'piece';
+    } else if (cleanLower == 'servings') {
+      selectedUnit = 'serving';
+    } else if (cleanLower == 'eggs') {
+      selectedUnit = 'egg';
+    } else if (cleanLower == 'slices') {
+      selectedUnit = 'slice';
+    } else if (cleanLower == 'cups') {
+      selectedUnit = 'cup';
+    } else if (cleanLower == 'bowls') {
+      selectedUnit = 'bowl';
+    }
+
+    // Ensure unit is present in dropdown
+    final List<String> unitsList = List.from(_supportedUnits);
+    if (!unitsList.contains(selectedUnit)) {
+      unitsList.insert(0, selectedUnit);
+    }
+
+    // Initial quantity
+    String initialQty = '100';
+    if (existingFoodItem != null) {
+      initialQty = existingFoodItem.quantityDisplay;
+    } else if (foodLibraryItem != null) {
+      if (foodLibraryItem.servingSize > 0) {
+        initialQty = foodLibraryItem.servingSize % 1 == 0
+            ? foodLibraryItem.servingSize.toInt().toString()
+            : foodLibraryItem.servingSize.toString();
+      } else {
+        initialQty = selectedUnit == 'piece' || selectedUnit == 'serving' ? '1' : '100';
+      }
+    }
+
+    // Initial servings
+    final String initialServings = existingFoodItem != null ? existingFoodItem.servingsDisplay : '1';
+
+    final qtyController = TextEditingController(text: initialQty);
+    final servingsController = TextEditingController(text: initialServings);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        String? errorMessage;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final rawQty = double.tryParse(qtyController.text.trim()) ?? 0.0;
+            final rawServings = double.tryParse(servingsController.text.trim()) ?? 1.0;
+
+            final calculated = PrescribedFoodItem.calculateNutritionFromBase(
+              baseCalories: baseCalories,
+              baseProtein: baseProtein,
+              baseCarbs: baseCarbs,
+              baseFat: baseFat,
+              baseFiber: baseFiber,
+              baseServingSize: baseServingSize,
+              baseServingUnit: baseServingUnit,
+              quantity: rawQty,
+              unit: selectedUnit,
+              servings: rawServings,
+            );
+
+            final displayServing = PrescribedFoodItem.formatServingDisplay(
+              quantity: rawQty,
+              unit: selectedUnit,
+              servings: rawServings,
+            );
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Header
+                    Row(
+                      children: [
+                        Text(PrescribedFoodItem.getFoodEmoji(foodName), style: const TextStyle(fontSize: 26)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                foodName,
+                                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Base: ${baseServingSize % 1 == 0 ? baseServingSize.toInt() : baseServingSize} $baseServingUnit • ${baseCalories.round()} kcal • P:${baseProtein.toStringAsFixed(1)}g C:${baseCarbs.toStringAsFixed(1)}g F:${baseFat.toStringAsFixed(1)}g',
+                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(color: AppColors.borderSubtle, height: 1),
+                    const SizedBox(height: 16),
+
+                    // Quantity and Unit Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Quantity input
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('QUANTITY', style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: qtyController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                onChanged: (val) {
+                                  setSheetState(() {
+                                    final d = double.tryParse(val.trim());
+                                    if (d == null || d <= 0) {
+                                      errorMessage = 'Quantity must be greater than 0';
+                                    } else {
+                                      errorMessage = null;
+                                    }
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: AppColors.surfaceElevated,
+                                  hintText: '150',
+                                  hintStyle: const TextStyle(color: AppColors.textTertiary),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+
+                        // Unit dropdown
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('UNIT', style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                value: selectedUnit,
+                                dropdownColor: AppColors.surfaceCard,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: AppColors.surfaceElevated,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                ),
+                                items: unitsList.map((u) {
+                                  return DropdownMenuItem<String>(
+                                    value: u,
+                                    child: Text(u, style: const TextStyle(color: Colors.white)),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setSheetState(() => selectedUnit = val);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Number of Servings Row
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('NUMBER OF SERVINGS', style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: servingsController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          onChanged: (val) {
+                            setSheetState(() {
+                              final d = double.tryParse(val.trim());
+                              if (d == null || d <= 0) {
+                                errorMessage = 'Servings must be greater than 0';
+                              } else {
+                                errorMessage = null;
+                              }
+                            });
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: AppColors.surfaceElevated,
+                            hintText: '1',
+                            hintStyle: const TextStyle(color: AppColors.textTertiary),
+                            suffixText: 'servings',
+                            suffixStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Live Calculated Nutrition Preview Card
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'ASSIGNED NUTRITION',
+                                style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                              ),
+                              Text(
+                                displayServing,
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(child: _buildNutritionPill('Calories', '${calculated['calories']!.round()}', 'kcal', AppColors.primaryRed)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _buildNutritionPill('Protein', calculated['protein']!.toStringAsFixed(1), 'g', AppColors.accentRed)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _buildNutritionPill('Carbs', calculated['carbs']!.toStringAsFixed(1), 'g', AppColors.info)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _buildNutritionPill('Fat', calculated['fat']!.toStringAsFixed(1), 'g', AppColors.gold)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        errorMessage!,
+                        style: const TextStyle(color: AppColors.primaryRed, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+
+                    const SizedBox(height: 20),
+
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppColors.border),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              final finalQty = double.tryParse(qtyController.text.trim());
+                              final finalServings = double.tryParse(servingsController.text.trim());
+
+                              if (finalQty == null || finalQty <= 0) {
+                                setSheetState(() => errorMessage = 'Please enter a quantity greater than 0');
+                                return;
+                              }
+                              if (finalServings == null || finalServings <= 0) {
+                                setSheetState(() => errorMessage = 'Please enter servings greater than 0');
+                                return;
+                              }
+
+                              final calculatedNutrition = PrescribedFoodItem.calculateNutritionFromBase(
+                                baseCalories: baseCalories,
+                                baseProtein: baseProtein,
+                                baseCarbs: baseCarbs,
+                                baseFat: baseFat,
+                                baseFiber: baseFiber,
+                                baseServingSize: baseServingSize,
+                                baseServingUnit: baseServingUnit,
+                                quantity: finalQty,
+                                unit: selectedUnit,
+                                servings: finalServings,
+                              );
+
+                              final updatedItem = PrescribedFoodItem(
+                                foodId: foodId,
+                                name: foodName,
+                                quantity: finalQty,
+                                unit: selectedUnit,
+                                servings: finalServings,
+                                servingSize: baseServingSize,
+                                baseUnit: baseServingUnit,
+                                calories: calculatedNutrition['calories']!,
+                                protein: calculatedNutrition['protein']!,
+                                carbs: calculatedNutrition['carbs']!,
+                                fat: calculatedNutrition['fat']!,
+                                fiber: calculatedNutrition['fiber']!,
+                                baseCalories: baseCalories,
+                                baseProtein: baseProtein,
+                                baseCarbs: baseCarbs,
+                                baseFat: baseFat,
+                                baseFiber: baseFiber,
+                                servingDisplay: PrescribedFoodItem.formatServingDisplay(
+                                  quantity: finalQty,
+                                  unit: selectedUnit,
+                                  servings: finalServings,
+                                ),
+                              );
+
+                              setState(() {
+                                final currentMeal = _meals[mealIndex];
+                                final updatedFoods = List<PrescribedFoodItem>.from(currentMeal.foods);
+                                if (isEditing) {
+                                  updatedFoods[foodIndex] = updatedItem;
+                                } else {
+                                  updatedFoods.add(updatedItem);
+                                }
+                                _meals[mealIndex] = PrescribedMeal(
+                                  mealType: currentMeal.mealType,
+                                  timing: currentMeal.timing,
+                                  notes: currentMeal.notes,
+                                  foods: updatedFoods,
+                                );
+                              });
+
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(
+                              isEditing ? 'SAVE CHANGES' : 'ADD TO MEAL',
+                              style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _removeFoodFromMeal(int mealIndex, int foodIndex) {
@@ -413,26 +837,151 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
                     const Divider(color: AppColors.borderSubtle, height: 16),
                     ...List.generate(meal.foods.length, (fIdx) {
                       final food = meal.foods[fIdx];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(food.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                                  Text(
-                                    '${food.servingDisplay} • ${food.calories.toInt()} kcal • P:${food.protein.toStringAsFixed(1)}g',
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            // Food Header
+                            Row(
+                              children: [
+                                Text(PrescribedFoodItem.getFoodEmoji(food.name), style: const TextStyle(fontSize: 18)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    food.name,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
                                   ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceCard,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: AppColors.borderSubtle),
+                                  ),
+                                  child: Text(
+                                    food.effectiveServingDisplay,
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+
+                            // Quantity and Servings display row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Quantity', style: TextStyle(color: AppColors.textTertiary, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surfaceCard,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: AppColors.borderSubtle),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(food.quantityDisplay, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                            Text(food.unit, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Servings', style: TextStyle(color: AppColors.textTertiary, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surfaceCard,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: AppColors.borderSubtle),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(food.servingsDisplay, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                            const Text('serving', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+
+                            // Nutrition values
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceCard.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Calories: ${food.calories.round()} kcal', style: const TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('Protein: ${food.protein.toStringAsFixed(1)} g', style: const TextStyle(color: AppColors.accentRed, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('Carbs: ${food.carbs.toStringAsFixed(1)} g', style: const TextStyle(color: AppColors.info, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  Text('Fat: ${food.fat.toStringAsFixed(1)} g', style: const TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 16, color: AppColors.textTertiary),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => _removeFoodFromMeal(mIdx, fIdx),
+                            const SizedBox(height: 8),
+
+                            // Actions: [ Edit ] and [ Remove ]
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    side: const BorderSide(color: AppColors.border),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.edit_outlined, size: 13, color: Colors.white),
+                                  label: const Text('Edit', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _showFoodServingDialog(
+                                    mealIndex: mIdx,
+                                    existingFoodItem: food,
+                                    foodIndex: fIdx,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    side: BorderSide(color: AppColors.primaryRed.withOpacity(0.6)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.delete_outline, size: 13, color: AppColors.primaryRed),
+                                  label: const Text('Remove', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _removeFoodFromMeal(mIdx, fIdx),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -483,6 +1032,35 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
             ),
           ),
           const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNutritionPill(String label, String value, String unit, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          RichText(
+            text: TextSpan(
+              text: value,
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+              children: [
+                TextSpan(
+                  text: ' $unit',
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 9, fontWeight: FontWeight.normal),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

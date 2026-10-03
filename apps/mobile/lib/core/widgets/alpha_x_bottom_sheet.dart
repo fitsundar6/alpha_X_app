@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../theme/alpha_x_design_system.dart';
+import '../theme/app_colors.dart';
 
+/// Athletic Premium Bottom Sheet Modal Component
+/// Rounded top 24, grabber handle, surface background, accessible touch targets.
 class AlphaXBottomSheet {
   static Future<T?> show<T>({
     required BuildContext context,
@@ -9,20 +11,20 @@ class AlphaXBottomSheet {
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = theme.bottomSheetTheme.backgroundColor ?? theme.cardTheme.color ?? AlphaXColors.surfaceCard;
-    final borderColor = theme.dividerTheme.color ?? AlphaXColors.border;
-    final primaryTextColor = isDark ? AlphaXColors.textPrimary : const Color(0xFF111827);
-    final secondaryTextColor = isDark ? AlphaXColors.textSecondary : const Color(0xFF4B5563);
+    final surfaceColor = isDark ? AppColors.surfaceElevated : AppColors.lightSurface;
+    final borderColor = isDark ? AppColors.border : AppColors.lightBorder;
+    final primaryTextColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final secondaryTextColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
 
     double dragStartX = 0;
 
     return showModalBottomSheet<T>(
       context: context,
       backgroundColor: surfaceColor,
-      barrierColor: Colors.black.withValues(alpha: 0.65),
+      barrierColor: Colors.black.withOpacity(0.7),
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         side: BorderSide(color: borderColor, width: 1.0),
       ),
       builder: (ctx) {
@@ -44,15 +46,15 @@ class AlphaXBottomSheet {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Drag handle
+                  // Grabber handle
                   Center(
                     child: Container(
                       margin: const EdgeInsets.only(top: 12, bottom: 8),
-                      width: 38,
-                      height: 4,
+                      width: 44,
+                      height: 5,
                       decoration: BoxDecoration(
-                        color: borderColor,
-                        borderRadius: BorderRadius.circular(2),
+                        color: isDark ? AppColors.border : AppColors.lightBorder,
+                        borderRadius: BorderRadius.circular(3),
                       ),
                     ),
                   ),
@@ -64,26 +66,33 @@ class AlphaXBottomSheet {
                         children: [
                           Text(
                             title.toUpperCase(),
-                            style: AlphaXTypography.headlineMedium.copyWith(color: primaryTextColor),
+                            style: TextStyle(
+                              fontFamily: 'Sora',
+                              color: primaryTextColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                           IconButton(
                             icon: Icon(
                               Icons.close_rounded,
                               color: secondaryTextColor,
-                              size: 20,
+                              size: 22,
                             ),
+                            tooltip: 'Close',
                             onPressed: () => Navigator.pop(ctx),
                           ),
                         ],
                       ),
                     ),
-                Flexible(child: child),
-              ],
+                  Flexible(child: child),
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 }

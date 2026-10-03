@@ -54,13 +54,17 @@ class AuthService extends ChangeNotifier {
   bool get isClient => !_isAuthenticated || _role == UserRole.client;
   bool get isAuthenticated => _isAuthenticated;
   bool get hasPendingAssessmentSync => _hasPendingAssessmentSync;
-  String get currentUserId => _userId.isNotEmpty ? _userId : 'client_guest';
+  String get currentUserId => _userId;
   String get currentClientId => _clientId;
   String get currentUserName => _userName.isNotEmpty ? _userName : 'Athlete Member';
   String get currentUserEmail => _userEmail;
   String? get currentUserPhone => _userPhone;
   String? get currentUserPhotoUrl => _photoUrl;
-  String get currentToken => _token.isNotEmpty ? _token : 'alpha_x_mock_token_for_client';
+  String get currentToken {
+    if (_token.isNotEmpty) return _token;
+    if (_role == UserRole.admin) return 'local_admin_session_token';
+    return 'alpha_x_mock_token_for_client';
+  }
   String get token => currentToken;
   bool get isInitialized => _isInitialized;
   bool get onboardingCompleted => _onboardingCompleted;
@@ -89,20 +93,20 @@ class AuthService extends ChangeNotifier {
       await ApiConfig.initialize();
       final prefs = await SharedPreferences.getInstance();
 
-      // Purge any legacy mock/demo client accounts from local storage to ensure REAL data only
-      final storedClients = await _loadClientAccounts();
-      final filteredClients = storedClients.where((c) {
-        final email = (c['email'] as String? ?? '').toLowerCase();
-        final name = (c['name'] as String? ?? '').toLowerCase();
-        return email != 'john.doe@alphaxgym.com' &&
-            email != 'marcus.vance@alphaxgym.com' &&
-            email != 'elena.rostova@alphaxgym.com' &&
-            name != 'john doe' &&
-            name != 'marcus vance' &&
-            name != 'elena rostova';
-      }).toList();
-      if (filteredClients.length != storedClients.length) {
-        await _saveClientAccounts(filteredClients);
+      // Purge all existing legacy client accounts from local storage to ensure fresh real client data only
+      final clientCleanupKey = 'alpha_x_existing_clients_purged_v1';
+      if (!prefs.containsKey(clientCleanupKey)) {
+        await prefs.remove(_storageKeyClients);
+        final sessionJson = prefs.getString(_storageKeySession);
+        if (sessionJson != null && sessionJson.isNotEmpty) {
+          try {
+            final session = jsonDecode(sessionJson) as Map<String, dynamic>;
+            if (session['role'] == 'CLIENT') {
+              await prefs.remove(_storageKeySession);
+            }
+          } catch (_) {}
+        }
+        await prefs.setBool(clientCleanupKey, true);
       }
 
       // Check for saved session

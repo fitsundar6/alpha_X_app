@@ -68,7 +68,7 @@ void main() {
       expect(auth.isClient, isTrue);
       expect(auth.isAuthenticated, isFalse);
       expect(auth.currentToken, 'alpha_x_mock_token_for_client');
-      expect(auth.currentUserId, 'client_guest');
+      expect(auth.currentUserId, isEmpty);
     });
 
     test('TEST 4: Client login after Admin logout never inherits admin privileges', () async {

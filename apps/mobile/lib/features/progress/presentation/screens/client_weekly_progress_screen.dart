@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in.dart';
@@ -24,6 +25,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
   List<WeeklyCheckIn> _history = [];
   WeeklyCheckIn? _selectedCheckIn;
   bool _isLoading = true;
+  String _selectedView = 'Week';
 
   @override
   void initState() {
@@ -60,6 +62,8 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
     if (result != null) {
       await _loadData();
       if (mounted) {
+        AlphaXHaptics.celebrate();
+        AlphaXCelebrationBurst.show(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Weekly Check-In Completed ✓'),
@@ -115,6 +119,261 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                       // Weekly Availability & Locking Card
                       AlphaXSubtleEntrance(
                         child: _buildWeeklyStatusCard(),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Segmented Week / Month Toggle
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceCard,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: ['Week', 'Month'].map((mode) {
+                              final isSel = _selectedView == mode;
+                              return AlphaXPressable(
+                                onTap: () {
+                                  AlphaXHaptics.selection();
+                                  setState(() => _selectedView = mode);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSel
+                                        ? (colors.isDark ? AppColors.primary : AppColors.lightPrimary)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    mode.toUpperCase(),
+                                    style: TextStyle(
+                                      fontFamily: 'Plus Jakarta Sans',
+                                      color: isSel
+                                          ? AppColors.onPrimary
+                                          : colors.textSecondary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Big Stat Summary Hero Numbers
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: colors.surfaceCard,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: colors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.05),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CYCLE PROGRESSION',
+                              style: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                color: colors.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedCheckIn != null ? _selectedCheckIn!.weightDisplay : '78.5 kg',
+                                      style: TextStyle(
+                                        fontFamily: 'Sora',
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.w900,
+                                        color: colors.isDark ? AppColors.primary : AppColors.lightPrimary,
+                                        letterSpacing: -1.0,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Current Check-in Weight',
+                                      style: TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        color: colors.textTertiary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: (colors.isDark ? AppColors.primary : AppColors.lightPrimary).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: (colors.isDark ? AppColors.primary : AppColors.lightPrimary).withOpacity(0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.trending_down_rounded,
+                                        color: colors.isDark ? AppColors.primary : AppColors.lightPrimary,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _selectedCheckIn?.weightChangeDisplay ?? '-0.6 kg',
+                                        style: TextStyle(
+                                          fontFamily: 'Sora',
+                                          color: colors.isDark ? AppColors.primary : AppColors.lightPrimary,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Streak & PR Cards Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: colors.surfaceCard,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: colors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'STREAK',
+                                        style: TextStyle(
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          color: colors.textSecondary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                      const AlphaXStreakFlame(streakDays: 12, size: 18),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '12 DAYS',
+                                    style: TextStyle(
+                                      fontFamily: 'Sora',
+                                      color: colors.textPrimary,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Consistent Check-ins',
+                                    style: TextStyle(color: colors.textTertiary, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AlphaXPressable(
+                              onTap: () {
+                                AlphaXHaptics.celebrate();
+                                AlphaXCelebrationBurst.show(context);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: colors.surfaceCard,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.gold.withOpacity(0.4),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.gold.withOpacity(0.12),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'PR RECORDS',
+                                          style: TextStyle(
+                                            fontFamily: 'Plus Jakarta Sans',
+                                            color: colors.textSecondary,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                        const Icon(Icons.emoji_events_rounded, color: AppColors.gold, size: 18),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '3 ACHIEVED',
+                                      style: TextStyle(
+                                        fontFamily: 'Sora',
+                                        color: colors.textPrimary,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Deadlift & Bench PRs',
+                                      style: TextStyle(color: colors.textTertiary, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 

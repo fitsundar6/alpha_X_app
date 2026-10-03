@@ -16,6 +16,11 @@ import { adminRoutes } from './modules/admin/admin.routes';
 import { clientRoutes } from './modules/client/client.routes';
 import { foodPhotoRoutes } from './modules/food/food.photo.routes';
 import { automationRoutes } from './modules/automation/automation.routes';
+import { aiCoachRoutes } from './modules/ai_coach/ai_coach.routes';
+import { aiProposalsRoutes } from './modules/ai_coach/ai_proposals.routes';
+import { notificationsRoutes } from './modules/notifications/notifications.routes';
+import { aiNotificationEngine } from './modules/notifications/ai_notifications.service';
+import cron from 'node-cron';
 
 const app = express();
 
@@ -188,6 +193,20 @@ app.use('/api/food-photos', foodPhotoRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
+// Master Alpha X AI Coach Operations
+app.use('/api/admin/ai-coach', aiCoachRoutes);
+app.use('/api/v1/admin/ai-coach', aiCoachRoutes);
+app.use('/api/ai', aiCoachRoutes);
+app.use('/api/v1/ai', aiCoachRoutes);
+
+// AI Plan Proposals — Admin review & approve generated plans
+app.use('/api/admin/ai-proposals', aiProposalsRoutes);
+app.use('/api/v1/admin/ai-proposals', aiProposalsRoutes);
+
+// Push Notifications — Device registration & AI daily sweep routes
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/notifications', notificationsRoutes);
+
 // Automation & Engagement Engine Routes
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/automation', automationRoutes);
@@ -225,6 +244,22 @@ if (!isTestRun && !isVercel && isDirectRun) {
     } catch (e) {
       console.warn('Startup database auto-seed notice:', e);
     }
+
+    // ── AI Push Notification Cron Job ─────────────────────────────────────
+    // Fires every day at 6:00 PM local server time
+    // Gemini generates a personal message per client, sent via OneSignal
+    if (env.ONESIGNAL_APP_ID && env.ONESIGNAL_REST_API_KEY) {
+      cron.schedule('0 18 * * *', () => {
+        console.log('[CRON] 6:00 PM — Starting AI push notification sweep...');
+        aiNotificationEngine.runDailySweep().catch((err) =>
+          console.error('[CRON] Notification sweep error:', err?.message)
+        );
+      });
+      console.log('🔔 AI Push Notifications: scheduled daily at 6:00 PM');
+    } else {
+      console.warn('🔔 AI Push Notifications: ONESIGNAL credentials not set — skipped');
+    }
+    // ─────────────────────────────────────────────────────────────────────
   });
 }
 

@@ -8,6 +8,7 @@ import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { prisma } from '../../config/prisma';
 import { foodPhotoController } from '../food/food.photo.controller';
 import { automationController } from '../automation/automation.controller';
+import { maskPhone, maskEmail } from '../../utils/pii_mask';
 
 const router = Router();
 
@@ -133,8 +134,8 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
         id: user.id,
         clientId: cp.clientId,
         name: user.name,
-        email: user.email,
-        phone: cp.phone,
+        email: maskEmail(user.email),
+        phone: maskPhone(cp.phone),
         createdAt: user.createdAt.toISOString(),
         assessmentCompleted: cp.onboardingCompleted,
         onboardingCompleted: cp.onboardingCompleted,
@@ -939,8 +940,8 @@ router.get('/clients/:id/weekly-check-ins', async (req: Request, res: Response) 
         id: user.id,
         clientId: cp.clientId,
         name: user.name,
-        email: user.email,
-        phone: cp.phone,
+        email: maskEmail(user.email),
+        phone: maskPhone(cp.phone),
         currentWeightKg: cp.weightKg,
         primaryGoal: cp.primaryGoal,
       },

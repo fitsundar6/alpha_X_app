@@ -16,15 +16,17 @@ enum UserRole {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  passwordHash String?
-  name         String
-  role         UserRole      @default(CLIENT)
-  googleUid    String?       @unique
-  photoUrl     String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  email              String        @unique
+  passwordHash       String?
+  name               String
+  role               UserRole      @default(CLIENT)
+  googleUid          String?       @unique
+  photoUrl           String?
+  oneSignalPlayerId  String?       // Push notification device token
+  notificationsEnabled Boolean     @default(true) // Client can opt out
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   clientProfile   ClientProfile?
   assignedClients ClientProfile[]     @relation("TrainerClients")
@@ -754,6 +756,89 @@ model AdminAttentionItem {
   @@index([isReviewed])
   @@index([createdAt])
   @@map("admin_attention_items")
+}
+
+// ==========================================
+// ALPHA X AI COACH ENTITIES
+// ==========================================
+
+model AIConversation {
+  id             String       @id @default(uuid())
+  adminId        String
+  title          String       @default("Alpha X AI Session")
+  activeClientId String?      // Selected client context (AXG-XXXX or UUID)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  messages       AIMessage[]
+  proposals      AIProposal[]
+
+  @@index([adminId])
+  @@index([activeClientId])
+  @@map("ai_conversations")
+}
+
+model AIMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String         // "ADMIN" | "AI"
+  content        String
+  intent         String?        // "REPORT" | "WORKOUT_PROPOSAL" | "DIET_PROPOSAL" | "CLIENT_ANALYSIS" | "MULTI_CLIENT" | "GENERAL"
+  metadataJson   String?        // Structured metadata (completeness, dates, cards)
+  createdAt      DateTime       @default(now())
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+model AIProposal {
+  id               String          @id @default(uuid())
+  conversationId   String?
+  conversation     AIConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  clientProfileId  String
+  clientId         String?         // AXG-XXXX
+  clientName       String
+  proposalType     String          // "WORKOUT" | "DIET" | "PROGRESSION"
+  status           String          @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "EDITED"
+  title            String
+  summary          String
+  reason           String
+  currentDataJson  String?         // Snapshot of existing plan/history
+  proposedDataJson String          // The AI proposal payload
+  finalDataJson    String?         // Admin-edited payload (if edited)
+  approvedById     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  rejectedById     String?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([clientProfileId])
+  @@index([clientId])
+  @@index([status])
+  @@index([proposalType])
+  @@map("ai_proposals")
+}
+
+model AIAuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  adminName    String?
+  clientId     String?
+  clientName   String?
+  action       String   // "CHAT_QUERY" | "WORKOUT_PROPOSED" | "DIET_PROPOSED" | "PROGRESSION_PROPOSED" | "PROPOSAL_APPROVED" | "PROPOSAL_REJECTED" | "PROPOSAL_EDITED" | "PLAN_ACTIVATED"
+  details      String
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([clientId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("ai_audit_logs")
 }
 
 

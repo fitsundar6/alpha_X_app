@@ -21,6 +21,9 @@ import 'package:alpha_x_gym/features/progress/presentation/screens/admin_weekly_
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/admin_food_photos_monitoring_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
+import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
+import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
+import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -45,6 +48,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   bool _isLoadingClients = false;
   String? _clientsError;
   late final WeeklyProgressRepository _weeklyProgressRepo;
+  late final AiCoachRepository _aiCoachRepo;
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -62,6 +66,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   void initState() {
     super.initState();
     _weeklyProgressRepo = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
+    _aiCoachRepo = AiCoachRepository();
     _loadClients();
   }
 
@@ -266,6 +271,22 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             ),
           ),
           _drawerItem(0, 'Dashboard', Icons.dashboard_outlined),
+          ListTile(
+            leading: const Text('🤖', style: TextStyle(fontSize: 20)),
+            title: const Text('Alpha X AI Coach', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            subtitle: const Text('Master Intelligence Controller', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminAiCoachScreen(
+                    aiCoachRepository: _aiCoachRepo,
+                    workoutRepository: widget.workoutRepository,
+                  ),
+                ),
+              );
+            },
+          ),
           _drawerItem(1, 'Clients', Icons.groups_outlined),
           _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined),
           ListTile(
@@ -437,6 +458,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         ),
         const SizedBox(height: 20),
 
+        // 🤖 ALPHA X AI COACH Summary Card
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 50),
+          child: _buildAiCoachDashboardCard(),
+        ),
+        const SizedBox(height: 20),
+
         // Section Title: CORE GYM KPIs (6 Required Metrics)
         AlphaXSubtleEntrance(
           delay: const Duration(milliseconds: 70),
@@ -532,6 +560,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
+            _adminActionChip('Alpha X AI Coach', Icons.smart_toy_outlined, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AdminAiCoachScreen(
+                    aiCoachRepository: _aiCoachRepo,
+                    workoutRepository: widget.workoutRepository,
+                  ),
+                ),
+              );
+            }),
             _adminActionChip('New Workout Session', Icons.add_circle_outline, () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -634,6 +672,148 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       ],
     );
   }
+
+  Widget _buildAiCoachDashboardCard() {
+    return FutureBuilder<AiDailySummary>(
+      future: _aiCoachRepo.getDailySummary(),
+      builder: (context, snapshot) {
+        final summary = snapshot.data ?? AiDailySummary.fallback();
+
+        return AlphaXCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primaryRed, width: 1.5),
+                    ),
+                    child: const Center(
+                      child: Text('🤖', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ALPHA X AI COACH',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        Text(
+                          "Today's AI Summary",
+                          style: TextStyle(
+                            color: AppColors.primaryRed,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.statusGreen.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.statusGreen.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.bolt, color: AppColors.statusGreen, size: 12),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'ONLINE',
+                          style: TextStyle(color: AppColors.statusGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Metrics
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    _aiSummaryRow(Icons.fitness_center, '${summary.workoutsCompleted} workouts completed today', AppColors.statusGreen),
+                    const SizedBox(height: 8),
+                    _aiSummaryRow(Icons.restaurant, '${summary.foodLogsRecorded} food logs recorded', Colors.amber),
+                    const SizedBox(height: 8),
+                    _aiSummaryRow(Icons.assignment_outlined, '${summary.weeklyCheckInsPending} weekly check-ins pending', Colors.lightBlueAccent),
+                    const SizedBox(height: 8),
+                    _aiSummaryRow(Icons.warning_amber_rounded, '${summary.clientsNeedReview} clients need review', AppColors.primaryRed),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Open AI Coach',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (ctx) => AdminAiCoachScreen(
+                          aiCoachRepository: _aiCoachRepo,
+                          workoutRepository: widget.workoutRepository,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _aiSummaryRow(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
 
   Widget _adminActionChip(String label, IconData icon, VoidCallback onTap) {
     return InkWell(
@@ -819,12 +999,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     const Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
                     const SizedBox(height: 12),
                     const Text(
-                      'No Registered Clients Found',
+                      'No Clients Yet',
                       style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Clients who register via "Join Now" will appear here automatically.',
+                      'New clients will appear here after registration.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),

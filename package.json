@@ -5,9 +5,12 @@
   "description": "Alpha X Gym monorepo root",
   "scripts": {
     "dev": "npm --prefix backend run dev",
-    "backend": "npm --prefix backend run dev",
     "backend:dev": "npm --prefix backend run dev",
     "backend:build": "npm --prefix backend run build",
-    "backend:start": "npm --prefix backend start"
+    "backend:start": "npm --prefix backend start",
+    "ai:dev": "python -m uvicorn backend.ai.main:app --host 0.0.0.0 --port 8000 --reload",
+    "ai:start": "python backend/ai/main.py",
+    "ai:test": "pytest backend/ai/tests",
+    "ai:eval": "python backend/ai/run_eval.py"
   }
 }

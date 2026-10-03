@@ -606,7 +606,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -619,7 +619,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(999),
                 border: Border.all(color: AppColors.border),
               ),
               child: Row(
@@ -628,7 +628,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   const Icon(Icons.chevron_left, size: 16, color: AppColors.textPrimary),
                   Text(
                     DateFormat('d MMM').format(prevDate),
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontFamily: 'Plus Jakarta Sans', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -639,25 +639,38 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
           AlphaXPressable(
             onTap: _pickDate,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: _isToday ? AppColors.primaryRed.withOpacity(0.12) : AppColors.surface,
-                borderRadius: BorderRadius.circular(8),
+                color: _isToday ? AppColors.primary : AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: _isToday ? AppColors.primaryRed : AppColors.border,
+                  color: _isToday ? AppColors.primary : AppColors.border,
                 ),
+                boxShadow: _isToday
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.35),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.calendar_today, size: 14, color: _isToday ? AppColors.primaryRed : Colors.white),
+                  Icon(
+                    Icons.calendar_today,
+                    size: 13,
+                    color: _isToday ? AppColors.onPrimary : Colors.white,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     dateDisplay,
                     style: TextStyle(
-                      color: _isToday ? AppColors.primaryRed : Colors.white,
+                      fontFamily: 'Sora',
+                      color: _isToday ? AppColors.onPrimary : Colors.white,
                       fontSize: 11,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -671,12 +684,26 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
             AlphaXPressable(
               onTap: _jumpToToday,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.35),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
-                child: const Text('TODAY', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                child: const Text(
+                  'TODAY',
+                  style: TextStyle(
+                    fontFamily: 'Sora',
+                    color: AppColors.onPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
           ] else ...[
@@ -686,7 +713,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
@@ -694,7 +721,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   children: [
                     Text(
                       DateFormat('d MMM').format(nextDate),
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontFamily: 'Plus Jakarta Sans', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
                     ),
                     const Icon(Icons.chevron_right, size: 16, color: AppColors.textPrimary),
                   ],
@@ -975,11 +1002,18 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -992,8 +1026,9 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               Text(
                 meal.displayName.toUpperCase(),
                 style: const TextStyle(
+                  fontFamily: 'Sora',
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   fontSize: 13,
                   letterSpacing: 1.0,
                 ),
@@ -1004,12 +1039,13 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Text(
                   '$cal kcal • P:${prot}g C:${carbs}g F:${fat}g',
                   style: const TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
                     color: AppColors.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -1029,7 +1065,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Row(
@@ -1043,7 +1079,12 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                               Flexible(
                                 child: Text(
                                   entry.foodName,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                                  style: const TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -1052,11 +1093,16 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                 decoration: BoxDecoration(
                                   color: AppColors.surfaceElevated,
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
                                   '× ${entry.quantityDisplay}',
-                                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w800),
+                                  style: const TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    color: AppColors.textPrimary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 6),
@@ -1066,7 +1112,12 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                           const SizedBox(height: 3),
                           Text(
                             '${entry.totalCalories.round()} kcal  •  P: ${FoodLogEntry.formatMacro(entry.totalProtein)}g  C: ${FoodLogEntry.formatMacro(entry.totalCarbs)}g  F: ${FoodLogEntry.formatMacro(entry.totalFat)}g',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
@@ -1095,7 +1146,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderSubtle),
               ),
               child: Row(
@@ -1104,6 +1155,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   Text(
                     '${meal.displayName.toUpperCase()} TOTAL',
                     style: const TextStyle(
+                      fontFamily: 'Plus Jakarta Sans',
                       color: AppColors.textSecondary,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -1113,6 +1165,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   Text(
                     '$cal kcal  •  P: ${prot}g  C: ${carbs}g  Fat: ${fat}g',
                     style: const TextStyle(
+                      fontFamily: 'Sora',
                       color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -1126,7 +1179,12 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'No foods logged yet for ${meal.displayName}.',
-                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12, fontStyle: FontStyle.italic),
+                style: const TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
           ],
@@ -1139,21 +1197,28 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 child: AlphaXPressable(
                   onTap: () => _openAddFood(meal),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Icon(Icons.add, size: 16, color: AppColors.primaryRed),
+                        Icon(Icons.add_rounded, size: 16, color: AppColors.onPrimary),
                         SizedBox(width: 4),
                         Text(
                           'ADD FOOD',
                           style: TextStyle(
-                            color: Colors.white,
+                            fontFamily: 'Sora',
+                            color: AppColors.onPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.8,
@@ -1170,23 +1235,24 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 child: AlphaXPressable(
                   onTap: () => _openCameraScanner(meal),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryRed.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.6)),
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Icon(Icons.camera_alt, size: 15, color: AppColors.primaryRed),
+                        Icon(Icons.camera_alt, size: 15, color: AppColors.primary),
                         SizedBox(width: 4),
                         Text(
                           '📷 SCAN FOOD',
                           style: TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
                             color: Colors.white,
                             fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 0.8,
                           ),
                         ),
@@ -1491,28 +1557,78 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                 const SizedBox(height: 10),
                                 ...meal.items.map((item) {
                                   return Container(
-                                    margin: const EdgeInsets.only(bottom: 6),
-                                    padding: const EdgeInsets.all(10),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
                                       color: AppColors.surfaceCard,
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(10),
                                       border: Border.all(color: AppColors.border),
                                     ),
                                     child: Row(
                                       children: [
+                                        Container(
+                                          width: 38,
+                                          height: 38,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.surfaceElevated,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            PrescribedFoodItem.getFoodEmoji(item.name),
+                                            style: const TextStyle(fontSize: 18),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 item.name,
-                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
-                                                '${item.quantityDisplay} ${item.unit} • ${item.calories.round()} kcal | P: ${item.protein.round()}g C: ${item.carbs.round()}g F: ${item.fat.round()}g',
-                                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                                                '${item.calories.round()} kcal • P:${item.protein.round()}g C:${item.carbs.round()}g F:${item.fat.round()}g',
+                                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
                                               ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryRed.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: AppColors.primaryRed.withOpacity(0.5)),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                item.simpleQuantityDisplay,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                              if (item.servings > 0 &&
+                                                  item.unit != 'piece' &&
+                                                  item.unit != 'pieces' &&
+                                                  item.unit != 'serving' &&
+                                                  item.unit != 'egg' &&
+                                                  item.unit != 'eggs')
+                                                Text(
+                                                  item.servings == 1 ? '1 serving' : '${item.servingsDisplay} servings',
+                                                  style: const TextStyle(
+                                                    color: AppColors.textTertiary,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
                                             ],
                                           ),
                                         ),

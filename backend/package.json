@@ -24,7 +24,9 @@
   "author": "Alpha X Gym Engineering",
   "license": "UNLICENSED",
   "dependencies": {
+    "@google/genai": "^2.26.0",
     "@prisma/client": "^6.4.1",
+    "@types/node-cron": "^3.0.11",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -32,6 +34,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.6.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

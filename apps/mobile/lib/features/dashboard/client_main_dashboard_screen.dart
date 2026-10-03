@@ -26,6 +26,7 @@ import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 
+
 class ClientMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final ActivityRepository activityRepository;
@@ -87,6 +88,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
 
   void _selectTab(int idx) {
     if (_currentTabIndex != idx) {
+      AlphaXHaptics.selection();
       setState(() {
         _currentTabIndex = idx;
         if (_tabHistory.isEmpty || _tabHistory.last != idx) {
@@ -265,44 +267,89 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               ),
             ],
           ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors.border, width: 1)),
-              color: colors.surface,
-            ),
-            child: NavigationBar(
-              selectedIndex: _currentTabIndex.clamp(0, 4),
-              onDestinationSelected: _selectTab,
-              backgroundColor: colors.surface,
-              indicatorColor: colors.glowRed,
-              elevation: 0,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home, color: AppColors.primaryRed),
-                  label: 'Home',
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: AlphaXGlassBar(
+                blur: 20.0,
+                borderRadius: BorderRadius.circular(24),
+                color: colors.surfaceElevated.withOpacity(colors.isDark ? 0.85 : 0.90),
+                border: Border.all(
+                  color: colors.isDark ? Colors.white.withOpacity(0.08) : colors.border,
+                  width: 1,
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.fitness_center_outlined),
-                  selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
-                  label: 'Workout',
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(colors.isDark ? 0.45 : 0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+                child: NavigationBarTheme(
+                  data: NavigationBarThemeData(
+                    backgroundColor: Colors.transparent,
+                    indicatorColor: colors.primaryRed.withOpacity(0.18),
+                    labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return TextStyle(
+                          fontFamily: 'Plus Jakarta Sans',
+                          color: colors.primaryRed,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        );
+                      }
+                      return TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        color: colors.textTertiary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      );
+                    }),
+                    iconTheme: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return IconThemeData(color: colors.primaryRed, size: 22);
+                      }
+                      return IconThemeData(color: colors.textTertiary, size: 20);
+                    }),
+                  ),
+                  child: NavigationBar(
+                    height: 64,
+                    selectedIndex: _currentTabIndex.clamp(0, 4),
+                    onDestinationSelected: _selectTab,
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.home_outlined),
+                        selectedIcon: Icon(Icons.home, color: AppColors.primaryRed),
+                        label: 'Home',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.fitness_center_outlined),
+                        selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
+                        label: 'Workout',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.format_list_bulleted_rounded),
+                        selectedIcon: Icon(Icons.format_list_bulleted, color: AppColors.primaryRed),
+                        label: 'Exercises',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.pie_chart_outline_rounded),
+                        selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryRed),
+                        label: 'Nutrition',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.directions_walk_outlined),
+                        selectedIcon: Icon(Icons.directions_walk, color: AppColors.primaryRed),
+                        label: 'Steps',
+                      ),
+                    ],
+                  ),
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.format_list_bulleted_rounded),
-                  selectedIcon: Icon(Icons.format_list_bulleted, color: AppColors.primaryRed),
-                  label: 'Exercises',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.pie_chart_outline_rounded),
-                  selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryRed),
-                  label: 'Nutrition',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.directions_walk_outlined),
-                  selectedIcon: Icon(Icons.directions_walk, color: AppColors.primaryRed),
-                  label: 'Steps',
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -335,7 +382,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                       backgroundColor: colors.primaryRed,
                       child: Text(
                         AuthService().currentUserName.isNotEmpty ? AuthService().currentUserName.substring(0, 1) : 'A',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
+                        style: const TextStyle(color: AppColors.onPrimary, fontWeight: FontWeight.w900, fontSize: 18),
                       ),
                     ),
                     const AlphaXLogo(size: 30),
@@ -631,6 +678,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         ? 'Good morning'
         : (currentHour < 17 ? 'Good afternoon' : 'Good evening');
 
+    final colors = ClientThemeColors(context);
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
@@ -645,18 +694,25 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     Stack(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(2),
+                          padding: const EdgeInsets.all(2.5),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: AlphaXColors.redAccent, width: 1.5),
+                            border: Border.all(color: colors.primaryRed, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: colors.primaryRed.withOpacity(0.35),
+                                blurRadius: 10,
+                              ),
+                            ],
                           ),
                           child: CircleAvatar(
                             radius: 20,
-                            backgroundColor: AlphaXColors.surfaceElevated,
+                            backgroundColor: colors.surfaceElevated,
                             child: Text(
                               firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
-                              style: const TextStyle(
-                                color: AlphaXColors.textPrimary,
+                              style: TextStyle(
+                                fontFamily: 'Sora',
+                                color: colors.primaryRed,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 16,
                               ),
@@ -667,12 +723,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           right: 1,
                           bottom: 1,
                           child: Container(
-                            width: 9,
-                            height: 9,
+                            width: 10,
+                            height: 10,
                             decoration: BoxDecoration(
-                              color: AlphaXColors.success,
+                              color: AppColors.success,
                               shape: BoxShape.circle,
-                              border: Border.all(color: AlphaXColors.background, width: 1.5),
+                              border: Border.all(color: colors.background, width: 2),
                             ),
                           ),
                         ),
@@ -686,21 +742,42 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           Text(
                             '$greetingText, $firstName',
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AlphaXColors.textPrimary,
+                            style: TextStyle(
+                              fontFamily: 'Sora',
+                              color: colors.textPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                               letterSpacing: -0.3,
                             ),
                           ),
-                          const Text(
-                            "Train Strong • Move Better",
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AlphaXColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: colors.primaryRed,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colors.primaryRed.withOpacity(0.6),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$greetingText • Train Strong',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -716,18 +793,25 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AlphaXColors.surfaceCard,
-                      borderRadius: AlphaXRadius.roundedXs,
-                      border: Border.all(color: AlphaXColors.border),
+                      color: colors.primaryRed.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: colors.primaryRed.withOpacity(0.5), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.primaryRed.withOpacity(0.18),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.local_fire_department_rounded, size: 14, color: AlphaXColors.redAccent),
-                        SizedBox(width: 4),
+                        const AlphaXStreakFlame(streakDays: 12, size: 16),
+                        const SizedBox(width: 4),
                         Text(
                           '12 DAYS',
                           style: TextStyle(
-                            color: AlphaXColors.textPrimary,
+                            fontFamily: 'Sora',
+                            color: colors.textPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
@@ -747,16 +831,16 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         AlphaXSubtleEntrance(
           delay: const Duration(milliseconds: 50),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AlphaXColors.surfaceCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AlphaXColors.redAccent.withOpacity(0.35)),
+              color: colors.surfaceCard,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colors.border, width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: AlphaXColors.redAccent.withOpacity(0.08),
-                  blurRadius: 16,
-                  spreadRadius: 1,
+                  color: colors.isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.04),
+                  blurRadius: 18,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -772,34 +856,39 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                         children: [
                           Text(
                             'Welcome, ${AuthService().currentUserName}',
-                            style: const TextStyle(
-                              color: AlphaXColors.textPrimary,
-                              fontWeight: FontWeight.w900,
+                            style: TextStyle(
+                              fontFamily: 'Sora',
+                              color: colors.textPrimary,
+                              fontWeight: FontWeight.w800,
                               fontSize: 16,
-                              letterSpacing: 0.5,
+                              letterSpacing: 0.2,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              const Text(
+                              Text(
                                 'Client ID: ',
-                                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                ),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AlphaXColors.redAccent.withOpacity(0.15),
+                                  color: colors.primaryRed.withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: AlphaXColors.redAccent, width: 0.8),
+                                  border: Border.all(color: colors.primaryRed, width: 0.8),
                                 ),
                                 child: Text(
                                   AuthService().currentClientId,
-                                  style: const TextStyle(
-                                    color: AlphaXColors.redAccent,
+                                  style: TextStyle(
+                                    color: colors.primaryRed,
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontFamily: 'monospace',
                                     letterSpacing: 1.0,
                                   ),
@@ -813,7 +902,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Divider(color: AlphaXColors.border, height: 1),
+                Divider(color: colors.border, height: 1),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -821,27 +910,27 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('GOAL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          Text('GOAL', style: TextStyle(fontFamily: 'Plus Jakarta Sans', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
                           const SizedBox(height: 2),
                           Text(
                             (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString(),
-                            style: const TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
+                            style: TextStyle(fontFamily: 'Sora', color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    Container(width: 1, height: 26, color: AlphaXColors.border),
+                    Container(width: 1, height: 26, color: colors.border),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('FITNESS LEVEL', style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          Text('FITNESS LEVEL', style: TextStyle(fontFamily: 'Plus Jakarta Sans', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
                           const SizedBox(height: 2),
                           Text(
                             (AuthService().clientProfile['fitnessLevel'] ?? 'Intermediate').toString().toUpperCase(),
-                            style: const TextStyle(color: AlphaXColors.redAccent, fontWeight: FontWeight.w800, fontSize: 13),
+                            style: TextStyle(fontFamily: 'Sora', color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -894,6 +983,185 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         ),
         const SizedBox(height: 20),
 
+        // Hero Gradient Card with Animated Ring
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 140),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.primaryRed.withOpacity(0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: AlphaXAuroraBackground(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      colors.surfaceElevated.withOpacity(0.9),
+                      colors.primaryRed.withOpacity(0.06),
+                      colors.surfaceCard.withOpacity(0.9),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: colors.primaryRed.withOpacity(0.35),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: colors.primaryRed,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colors.primaryRed.withOpacity(0.6),
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'DAILY READINESS & ENERGY',
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.0,
+                                  color: colors.primaryRed,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Peak Condition',
+                            style: TextStyle(
+                              fontFamily: 'Sora',
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: colors.textPrimary,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Hydration, macros, and recovery are aligned for today\'s session.',
+                            style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 12,
+                              color: colors.textSecondary,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: colors.primaryRed.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: colors.primaryRed.withOpacity(0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.bolt_rounded, size: 12, color: colors.primaryRed),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '92% READY',
+                                      style: TextStyle(
+                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        color: colors.primaryRed,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: colors.surfaceCard,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: colors.border),
+                                ),
+                                child: Text(
+                                  '12-DAY STREAK',
+                                  style: TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    AlphaXArcProgress(
+                      progress: 0.92,
+                      size: 96,
+                      strokeWidth: 8,
+                      progressColor: colors.primaryRed,
+                      centerChild: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AlphaXCountUpText(
+                            text: '92',
+                            style: TextStyle(
+                              fontFamily: 'Sora',
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: colors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'SCORE',
+                            style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: colors.primaryRed,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
         // 2. Large Hero Section (Cinematic gym photography blending into black background)
         AlphaXHero(
           imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1200&q=80',
@@ -925,7 +1193,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         ),
         const SizedBox(height: 20),
 
-        // 3. Today's Metrics (Clean 2x2 Grid of real tracked metrics)
+        // 3. Today's Metrics (Clean 2x2 Grid of real tracked metrics with mini rings)
         const AlphaXSectionHeader(title: 'TODAY'),
         GridView.count(
           crossAxisCount: 2,
@@ -940,7 +1208,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               label: 'Steps',
               value: widget.activityRepository.todayRecord.formattedSteps,
               subtext: '/ ${widget.activityRepository.todayRecord.formattedGoal} goal',
-              accentColor: AlphaXColors.redAccent,
+              accentColor: colors.primaryRed,
+              progress: widget.activityRepository.todayRecord.visualProgressClamped,
               onTap: () => _selectTab(4),
             ),
             AlphaXStatCard(
@@ -948,7 +1217,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               label: 'Workout',
               value: history.isNotEmpty ? 'Logged' : 'Ready',
               subtext: recommended != null ? recommended.title : (history.isNotEmpty ? '${history.length} completed' : 'Tap to start'),
-              accentColor: history.isNotEmpty ? AlphaXColors.success : AlphaXColors.redAccent,
+              accentColor: history.isNotEmpty ? AppColors.success : colors.primaryRed,
+              progress: history.isNotEmpty ? 1.0 : 0.4,
               onTap: () => _selectTab(1),
             ),
             AlphaXStatCard(
@@ -962,7 +1232,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                 RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
                 (Match m) => '${m[1]},',
               )} kcal',
-              accentColor: AlphaXColors.redAccent,
+              accentColor: colors.primaryRed,
+              progress: dailySummary.calorieProgress,
               onTap: () => _selectTab(3),
             ),
             AlphaXStatCard(
@@ -970,7 +1241,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               label: 'Protein',
               value: '${FoodLogEntry.formatMacro(dailySummary.consumedProtein)} g',
               subtext: '/ ${dailySummary.targetProtein.round()} g target',
-              accentColor: AlphaXColors.redAccent,
+              accentColor: colors.primaryRed,
+              progress: dailySummary.proteinProgress,
               onTap: () => _selectTab(3),
             ),
           ],
@@ -1498,26 +1770,47 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     );
   }
 
-  Widget _clientSectionChip(String label, IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Widget _clientSectionChip(String label, IconData icon, VoidCallback onTap, {bool isSelected = false}) {
+    final colors = ClientThemeColors(context);
+    return AlphaXPressable(
+      onTap: () {
+        AlphaXHaptics.selection();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: AlphaXColors.surfaceCard,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AlphaXColors.border),
+          color: isSelected ? colors.primaryRed : colors.surfaceCard,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? colors.primaryRed : colors.border,
+            width: 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: colors.primaryRed.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: AlphaXColors.redAccent),
-            const SizedBox(width: 6),
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? AppColors.onPrimary : colors.primaryRed,
+            ),
+            const SizedBox(width: 7),
             Text(
               label,
-              style: const TextStyle(
-                color: AlphaXColors.textPrimary,
+              style: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                color: isSelected ? AppColors.onPrimary : colors.textPrimary,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
@@ -2426,11 +2719,18 @@ class ClientProfileSubScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
                   color: colors.surfaceCard,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: colors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.isDark ? Colors.black.withOpacity(0.35) : Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [
@@ -2439,15 +2739,16 @@ class ClientProfileSubScreen extends StatelessWidget {
                       children: [
                         const AlphaXLogo(size: 32),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                           decoration: BoxDecoration(
                             color: colors.primaryRed.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(999),
                             border: Border.all(color: colors.primaryRed.withOpacity(0.4)),
                           ),
                           child: Text(
                             'ATHLETE MEMBER',
                             style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
                               color: colors.primaryRed,
                               fontWeight: FontWeight.w800,
                               fontSize: 10,
@@ -2458,34 +2759,63 @@ class ClientProfileSubScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: colors.primaryRed,
-                      child: Text(
-                        userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colors.primaryRed, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primaryRed.withOpacity(0.35),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 36,
+                        backgroundColor: colors.primaryRed,
+                        child: Text(
+                          userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
+                          style: const TextStyle(
+                            fontFamily: 'Sora',
+                            color: AppColors.onPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 26,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Text(
                       userName.isNotEmpty ? userName : 'Alpha X Athlete',
-                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 20),
+                      style: TextStyle(
+                        fontFamily: 'Sora',
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       userEmail,
-                      style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                      style: TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: colors.surfaceElevated,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: colors.border),
                       ),
                       child: Text(
                         'Client ID: $userId',
-                        style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -2509,14 +2839,83 @@ class ClientProfileSubScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
+              // Section: Achievement Badges (Next-Level Delight)
+              const AlphaXSectionHeader(title: 'ATHLETE TROPHIES & BADGES'),
+              GridView.count(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 0.88,
+                children: [
+                  _buildAchievementBadge(
+                    context,
+                    'FIRST BLOOD',
+                    '1st Session Done',
+                    Icons.military_tech_rounded,
+                    true,
+                    colors,
+                  ),
+                  _buildAchievementBadge(
+                    context,
+                    '12-DAY STREAK',
+                    'Active Habit',
+                    Icons.local_fire_department_rounded,
+                    true,
+                    colors,
+                  ),
+                  _buildAchievementBadge(
+                    context,
+                    'MACRO SNIPER',
+                    'Target Met',
+                    Icons.track_changes_rounded,
+                    true,
+                    colors,
+                  ),
+                  _buildAchievementBadge(
+                    context,
+                    'CENTURION',
+                    '100 Workouts',
+                    Icons.workspace_premium_rounded,
+                    false,
+                    colors,
+                  ),
+                  _buildAchievementBadge(
+                    context,
+                    'IRON MASTER',
+                    '5,000 kg Volume',
+                    Icons.fitness_center_rounded,
+                    false,
+                    colors,
+                  ),
+                  _buildAchievementBadge(
+                    context,
+                    'EARLY BIRD',
+                    '6 AM Session',
+                    Icons.alarm_on_rounded,
+                    true,
+                    colors,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
               // Section: Appearance Settings
               const AlphaXSectionHeader(title: 'APPEARANCE'),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: colors.surfaceCard,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: colors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.04),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2528,6 +2927,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                         Text(
                           'Theme Mode',
                           style: TextStyle(
+                            fontFamily: 'Sora',
                             color: colors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -2636,7 +3036,10 @@ class ClientProfileSubScreen extends StatelessWidget {
     required ClientThemeColors colors,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        AlphaXHaptics.selection();
+        onTap();
+      },
       borderRadius: BorderRadius.circular(10),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
@@ -2685,6 +3088,90 @@ class ClientProfileSubScreen extends StatelessWidget {
     );
   }
 
+  static Widget _buildAchievementBadge(
+    BuildContext context,
+    String title,
+    String subtitle,
+    IconData icon,
+    bool isUnlocked,
+    ClientThemeColors colors,
+  ) {
+    final limeColor = colors.primaryRed;
+    return AlphaXPressable(
+      onTap: () {
+        if (isUnlocked) {
+          AlphaXHaptics.celebrate();
+          AlphaXCelebrationBurst.show(context);
+        } else {
+          AlphaXHaptics.tap();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: isUnlocked ? limeColor.withOpacity(0.08) : colors.surfaceCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isUnlocked ? limeColor.withOpacity(0.55) : colors.border,
+            width: isUnlocked ? 1.5 : 1.0,
+          ),
+          boxShadow: isUnlocked
+              ? [
+                  BoxShadow(
+                    color: limeColor.withOpacity(0.22),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isUnlocked ? limeColor.withOpacity(0.18) : colors.surfaceElevated,
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isUnlocked ? limeColor : colors.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: isUnlocked ? colors.textPrimary : colors.textTertiary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: isUnlocked ? limeColor : colors.textTertiary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _profileMetric(String label, String value, IconData icon, ClientThemeColors colors) {
     return Column(
       children: [
@@ -2708,9 +3195,10 @@ class ClientProfileSubScreen extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
+            fontFamily: 'Sora',
             color: colors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
           ),
         ),
       ],

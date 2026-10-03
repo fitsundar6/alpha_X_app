@@ -57,13 +57,13 @@ class ApiConfig {
       final saved = prefs.getString(storageKey);
       if (saved != null && saved.trim().isNotEmpty) {
         final normalized = normalizeUrl(saved.trim());
-        // Prune stale local development IPs (10.0.2.2, 192.168., localhost)
+        // Prune stale local development IPs only in release mode
         final isLocalAddress = normalized.contains('10.0.2.2') ||
             normalized.contains('127.0.0.1') ||
             normalized.contains('localhost') ||
             normalized.contains('192.168.');
-        if (isLocalAddress) {
-          debugPrint('[API CONFIG] Pruning stale local server URL: $normalized -> using production $productionUrl');
+        if (isLocalAddress && kReleaseMode) {
+          debugPrint('[API CONFIG] Pruning stale local server URL in release: $normalized -> using production $productionUrl');
           customServerUrl = null;
           await prefs.remove(storageKey);
         } else {
@@ -141,7 +141,7 @@ class ApiConfig {
   /// 3. Compile-time `--dart-define=SERVER_IP=...` or `--dart-define=LAN_IP=...`
   /// 4. Compile-time `--dart-define=ENV=production` -> [productionUrl]
   /// 5. Compile-time `--dart-define=ENV=emulator` -> [emulatorUrl]
-  /// 6. Desktop (Windows, macOS, Linux) or Web -> [localhostUrl] (or [productionUrl] in release mode)
+  /// 6. Desktop (Windows, macOS, Linux) or Web development -> [localhostUrl]
   /// 7. Mobile platforms (iOS and Android) -> [productionUrl] (HTTPS production cloud backend)
   static String get baseUrl {
     // 1. Runtime override
@@ -172,9 +172,17 @@ class ApiConfig {
       return localhostUrl;
     }
 
-    // 5. Unified Production Target for all platforms (Mobile, Desktop, Web)
-    // Ensures that the Admin app (desktop/web/mobile) and Client app (mobile)
-    // always synchronize against the same live production cloud backend (PostgreSQL).
+    // 5. Desktop (Windows, macOS, Linux) or Web development -> localhostUrl
+    if (kDebugMode || !kReleaseMode) {
+      if (kIsWeb ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        return localhostUrl;
+      }
+    }
+
+    // 6. Unified Production Target for release builds
     return productionUrl;
   }
 }

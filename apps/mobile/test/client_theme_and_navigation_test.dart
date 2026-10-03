@@ -69,9 +69,9 @@ void main() {
             builder: (context) {
               final colors = ClientThemeColors.of(context);
               expect(colors.isDark, isFalse);
-              expect(colors.background, const Color(0xFFF7F8FA));
+              expect(colors.background, AppColors.lightBackground);
               expect(colors.surfaceCard, const Color(0xFFFFFFFF));
-              expect(colors.textPrimary, const Color(0xFF111827));
+              expect(colors.textPrimary, AppColors.lightTextPrimary);
               expect(colors.primaryRed, AppColors.primaryRed);
               return Container(color: colors.background);
             },

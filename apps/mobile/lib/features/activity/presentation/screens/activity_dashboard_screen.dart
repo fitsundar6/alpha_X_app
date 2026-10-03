@@ -314,9 +314,12 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen> {
               status: repo.connectionStatus,
               syncStatus: repo.syncStatus,
               lastSyncedAt: repo.lastSyncedAt,
+              stepSourceLabel: repo.stepSourceLabel,
+              activeStepSource: repo.activeStepSource,
               onConnectTap: () => _showPermissionBottomSheet(),
               onDisconnectTap: () => repo.disconnectHealthTracking(),
               onSyncTap: () => repo.refreshActivityData(),
+              onManualStepsSubmit: (steps) => repo.submitManualSteps(steps),
             ),
 
             const SizedBox(height: 32),

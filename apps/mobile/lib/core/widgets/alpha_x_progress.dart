@@ -1,40 +1,53 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../theme/alpha_x_design_system.dart';
+import '../theme/app_colors.dart';
 
-/// Minimal Linear Progress Bar in Red Accent
+/// Athletic Premium Linear Progress Bar with Smooth 0 -> Value Animation
 class AlphaXLinearProgress extends StatelessWidget {
   final double progress; // 0.0 to 1.0
   final double height;
   final Color? progressColor;
   final Color? trackColor;
+  final Duration duration;
 
   const AlphaXLinearProgress({
     super.key,
     required this.progress,
-    this.height = 6.0,
+    this.height = 8.0,
     this.progressColor,
     this.trackColor,
+    this.duration = const Duration(milliseconds: 500),
   });
 
   @override
   Widget build(BuildContext context) {
     final clamped = progress.clamp(0.0, 1.0);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(height / 2),
-      child: LinearProgressIndicator(
-        value: clamped,
-        minHeight: height,
-        backgroundColor: trackColor ?? AlphaXColors.surfaceElevated,
-        valueColor: AlwaysStoppedAnimation<Color>(
-          progressColor ?? AlphaXColors.redAccent,
-        ),
-      ),
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final effectiveProgressColor = progressColor ?? (isDark ? AppColors.primary : AppColors.lightPrimary);
+    final effectiveTrackColor = trackColor ?? (isDark ? AppColors.surfaceElevated : AppColors.lightBorder);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: clamped),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, _) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(height / 2),
+          child: LinearProgressIndicator(
+            value: animatedValue,
+            minHeight: height,
+            backgroundColor: effectiveTrackColor,
+            valueColor: AlwaysStoppedAnimation<Color>(effectiveProgressColor),
+          ),
+        );
+      },
     );
   }
 }
 
-/// Minimal Arc / Circular Progress Ring for Steps & Daily Targets
+/// Athletic Premium Circular Progress Ring for Steps, Macros & Workouts
+/// Animates 0 -> value smoothly with electric lime accent.
 class AlphaXArcProgress extends StatelessWidget {
   final double progress; // 0.0 to 1.0
   final double size;
@@ -42,6 +55,7 @@ class AlphaXArcProgress extends StatelessWidget {
   final Widget? centerChild;
   final Color? progressColor;
   final Color? trackColor;
+  final Duration duration;
 
   const AlphaXArcProgress({
     super.key,
@@ -51,29 +65,41 @@ class AlphaXArcProgress extends StatelessWidget {
     this.centerChild,
     this.progressColor,
     this.trackColor,
+    this.duration = const Duration(milliseconds: 700),
   });
 
   @override
   Widget build(BuildContext context) {
     final clamped = progress.clamp(0.0, 1.0);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final effectiveProgressColor = progressColor ?? (isDark ? AppColors.primary : AppColors.lightPrimary);
+    final effectiveTrackColor = trackColor ?? (isDark ? AppColors.surfaceElevated : AppColors.lightBorder);
 
     return SizedBox(
       width: size,
       height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: Size(size, size),
-            painter: _ArcProgressPainter(
-              progress: clamped,
-              strokeWidth: strokeWidth,
-              progressColor: progressColor ?? AlphaXColors.redAccent,
-              trackColor: trackColor ?? AlphaXColors.surfaceElevated,
-            ),
-          ),
-          if (centerChild != null) ...[centerChild!],
-        ],
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.0, end: clamped),
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        builder: (context, animatedValue, _) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: Size(size, size),
+                painter: _ArcProgressPainter(
+                  progress: animatedValue,
+                  strokeWidth: strokeWidth,
+                  progressColor: effectiveProgressColor,
+                  trackColor: effectiveTrackColor,
+                ),
+              ),
+              ?centerChild,
+            ],
+          );
+        },
       ),
     );
   }
@@ -104,6 +130,8 @@ class _ArcProgressPainter extends CustomPainter {
       ..strokeWidth = strokeWidth;
 
     canvas.drawCircle(center, radius, trackPaint);
+
+    if (progress <= 0.0) return;
 
     // Active arc starting from top (-pi / 2)
     final progressPaint = Paint()

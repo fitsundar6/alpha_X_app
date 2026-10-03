@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/theme/app_typography.dart';
 import 'package:alpha_x_gym/features/activity/domain/models/activity_models.dart';
+import 'package:alpha_x_gym/features/activity/data/services/health_service.dart';
 
 /// 1. Hero Step Progress Card
 class StepProgressCard extends StatelessWidget {
@@ -937,13 +938,16 @@ class ActivityHistoryList extends StatelessWidget {
 }
 
 /// 5. Health Platform Connection Card
-class HealthConnectionCard extends StatelessWidget {
+class HealthConnectionCard extends StatefulWidget {
   final HealthConnectionStatus status;
   final VoidCallback onConnectTap;
   final VoidCallback onDisconnectTap;
   final VoidCallback onSyncTap;
   final SyncStatus syncStatus;
   final DateTime? lastSyncedAt;
+  final String stepSourceLabel;
+  final StepSource activeStepSource;
+  final Future<void> Function(int steps)? onManualStepsSubmit;
 
   const HealthConnectionCard({
     super.key,
@@ -952,15 +956,59 @@ class HealthConnectionCard extends StatelessWidget {
     required this.onDisconnectTap,
     required this.onSyncTap,
     required this.syncStatus,
+    required this.stepSourceLabel,
+    required this.activeStepSource,
     this.lastSyncedAt,
+    this.onManualStepsSubmit,
   });
 
   @override
+  State<HealthConnectionCard> createState() => _HealthConnectionCardState();
+}
+
+class _HealthConnectionCardState extends State<HealthConnectionCard> {
+  final _manualController = TextEditingController();
+  bool _isSubmittingManual = false;
+
+  @override
+  void dispose() {
+    _manualController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitManual() async {
+    final steps = int.tryParse(_manualController.text.trim());
+    if (steps == null || steps < 0) return;
+    setState(() => _isSubmittingManual = true);
+    await widget.onManualStepsSubmit?.call(steps);
+    _manualController.clear();
+    setState(() => _isSubmittingManual = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isConnected = status == HealthConnectionStatus.authorized;
-    final lastSyncText = lastSyncedAt != null
-        ? DateFormat('h:mm a').format(lastSyncedAt!)
+    final isConnected = widget.status == HealthConnectionStatus.authorized;
+    final isManual = widget.activeStepSource == StepSource.manual ||
+        widget.activeStepSource == StepSource.unavailable;
+    final isPedometer = widget.activeStepSource == StepSource.pedometer;
+    final isHealthConnect = widget.activeStepSource == StepSource.healthConnect;
+    final lastSyncText = widget.lastSyncedAt != null
+        ? DateFormat('h:mm a').format(widget.lastSyncedAt!)
         : 'Never';
+
+    // Source icon and color
+    IconData sourceIcon = Icons.sensors_off;
+    Color sourceColor = AppColors.textTertiary;
+    if (isHealthConnect) {
+      sourceIcon = Icons.watch;
+      sourceColor = AppColors.success;
+    } else if (isPedometer) {
+      sourceIcon = Icons.directions_walk;
+      sourceColor = AppColors.info;
+    } else if (isManual) {
+      sourceIcon = Icons.edit_note;
+      sourceColor = AppColors.warning;
+    }
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -972,6 +1020,7 @@ class HealthConnectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header row ──────────────────────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -998,7 +1047,7 @@ class HealthConnectionCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  isConnected ? 'Health Data Connected' : 'Health Data Not Connected',
+                  isConnected ? 'Connected' : 'Not Connected',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -1009,23 +1058,126 @@ class HealthConnectionCard extends StatelessWidget {
             ],
           ),
 
+          const SizedBox(height: 12),
+
+          // ── Active Step Source Indicator ─────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Row(
+              children: [
+                Icon(sourceIcon, size: 16, color: sourceColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'ACTIVE STEP SOURCE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.stepSourceLabel,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: sourceColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 10),
 
+          // ── Smartwatch info row (only when Health Connect active) ─────
+          if (isHealthConnect) ...[  
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.success.withAlpha(12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.success.withAlpha(60)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.watch, size: 15, color: AppColors.success),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Smartwatch data auto-included — Wear OS, Galaxy Watch, Fitbit, and Apple Watch steps are merged via Health Connect / Apple Health.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.success,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // ── Pedometer info row ───────────────────────────────────────
+          if (isPedometer) ...[  
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.info.withAlpha(12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.info.withAlpha(60)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.sensors, size: 15, color: AppColors.info),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Using phone built-in sensor. To include smartwatch steps, install Health Connect and connect your wearable.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.info,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // ── Sync description ─────────────────────────────────────────
           Text(
             isConnected
-                ? 'Syncs automatically with Android Health Connect & Apple Health. Last sync: $lastSyncText (${syncStatus.displayName}).'
-                : 'Connect Health Connect or Apple Health for automatic daily activity tracking.',
+                ? 'Last sync: $lastSyncText (${widget.syncStatus.displayName}).'
+                : 'Connect Health Connect or Apple Health for automatic daily step tracking.',
             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.3),
           ),
 
           const SizedBox(height: 14),
 
+          // ── Action Buttons ────────────────────────────────────────────
           Row(
             children: [
               if (!isConnected)
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: onConnectTap,
+                    onPressed: widget.onConnectTap,
                     icon: const Icon(Icons.link, size: 16),
                     label: const Text('Connect Health Platform'),
                     style: ElevatedButton.styleFrom(
@@ -1038,7 +1190,7 @@ class HealthConnectionCard extends StatelessWidget {
               else ...[
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onSyncTap,
+                    onPressed: widget.onSyncTap,
                     icon: const Icon(Icons.sync, size: 16),
                     label: const Text('Sync Now'),
                     style: OutlinedButton.styleFrom(
@@ -1048,7 +1200,7 @@ class HealthConnectionCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 TextButton(
-                  onPressed: onDisconnectTap,
+                  onPressed: widget.onDisconnectTap,
                   child: const Text(
                     'Disconnect',
                     style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
@@ -1057,6 +1209,77 @@ class HealthConnectionCard extends StatelessWidget {
               ],
             ],
           ),
+
+          // ── Manual Entry (shown when sensor unavailable) ──────────────
+          if (isManual && widget.onManualStepsSubmit != null) ...[  
+            const SizedBox(height: 14),
+            const Divider(color: AppColors.borderSubtle, height: 1),
+            const SizedBox(height: 14),
+            const Text(
+              'MANUAL STEP ENTRY',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+                color: AppColors.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _manualController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "Enter today's step count",
+                      hintStyle: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 13,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.surfaceElevated,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _isSubmittingManual ? null : _submitManual,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _isSubmittingManual
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Save', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

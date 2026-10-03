@@ -36,7 +36,7 @@ void main() {
       await auth.logout();
       expect(auth.isAdmin, isFalse);
       expect(auth.isClient, isTrue);
-      expect(auth.currentUserId, 'client_guest');
+      expect(auth.currentUserId, isEmpty);
       expect(auth.isAuthenticated, isFalse);
     });
   });

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
 import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
@@ -6,12 +7,8 @@ import 'auth_service.dart';
 import 'create_account_screen.dart';
 
 /// The official Alpha X Gym Welcome & Authentication Login Screen.
-///
-/// Shows ONLY:
-/// 1. Email / Client ID input
-/// 2. Password input (hidden by default with show/hide toggle)
-/// 3. Login button
-/// 4. Create New Account button (opens separate [CreateAccountScreen])
+/// Redesigned with Athletic Premium Aesthetics:
+/// Full-bleed athletic imagery + dark scrim, bold headline, lime pill CTA, clean inputs.
 class LoginScreen extends StatefulWidget {
   final bool initialIsJoinNow;
 
@@ -134,373 +131,403 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    // If opened with initialIsJoinNow: true (e.g. from tests or Join Now buttons), render CreateAccountScreen
     if (widget.initialIsJoinNow) {
       return const CreateAccountScreen();
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Top Action: Server Settings for physical mobile testing
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 20),
-                    tooltip: 'Server Settings',
-                    onPressed: () => ServerConfigDialog.show(context),
-                  ),
-                ),
+      body: Stack(
+        children: [
+          // 1. Full-bleed athletic hero image with dark scrim
+          Positioned.fill(
+            child: Image.network(
+              'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&q=80',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
+            ),
+          ),
 
-                // 1. Alpha X Gym Official Brand Logo (Emblem + Text unified asset)
-                Center(
-                  child: const AlphaXLogo.auth(
-                    size: 96,
-                  ),
+          // Dark Gradient Scrim for crystal clear readability & athletic depth
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.background.withOpacity(0.65),
+                    AppColors.background.withOpacity(0.88),
+                    AppColors.background,
+                  ],
+                  stops: const [0.0, 0.45, 0.85],
                 ),
-                const SizedBox(height: 12),
+              ),
+            ),
+          ),
 
-                // Accessible semantic branding title (0-height to avoid duplicate visual text)
-                const SizedBox(
-                  height: 0,
-                  width: 0,
-                  child: Text(
-                    'ALPHA X GYM',
-                    style: TextStyle(fontSize: 0, color: Colors.transparent),
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                // Pill Badge
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Text(
-                      'MEMBER & ATHLETE PORTAL',
-                      style: TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 2. Error / Status Banners
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryRed.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
-                    ),
+          // 2. Foreground Form & Interactive Content
+          SafeArea(
+            child: Center(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.only(top: 2),
-                              child: Icon(Icons.error_outline, color: AppColors.primaryRed, size: 18),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMessage!,
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_errorMessage!.toLowerCase().contains('connection') ||
-                            _errorMessage!.toLowerCase().contains('server') ||
-                            _errorMessage!.toLowerCase().contains('reach') ||
-                            _errorMessage!.toLowerCase().contains('socket') ||
-                            _errorMessage!.toLowerCase().contains('timeout')) ...[
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: () => ServerConfigDialog.show(context),
-                              icon: const Icon(Icons.settings_ethernet, size: 14, color: AppColors.primaryRed),
-                              label: const Text(
-                                'Configure Server IP',
-                                style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                if (_statusMessage != null && _isLoading) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
-                    ),
-                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _statusMessage!,
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // 3. Login Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Form(
-                    key: _loginFormKey,
-                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          'LOG IN TO YOUR ACCOUNT',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14,
-                            letterSpacing: 0.8,
+                        // Server configuration action
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: IconButton(
+                            icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 20),
+                            tooltip: 'Server Settings',
+                            onPressed: () => ServerConfigDialog.show(context),
+                          ),
+                        ),
+
+                        // Official Brand Logo
+                        const Center(
+                          child: AlphaXLogo.auth(size: 64),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Bold Athletic Headline
+                        Center(
+                          child: Text(
+                            'ALPHA X GYM',
+                            style: GoogleFonts.sora(
+                              color: AppColors.textPrimary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Enter your email or Client ID (e.g. AXG-0001) and password.',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                        ),
-                        const SizedBox(height: 18),
 
-                        // 1. Email / Client ID Field
-                        TextFormField(
-                          controller: _loginIdController,
-                          keyboardType: TextInputType.emailAddress,
-                          textCapitalization: TextCapitalization.none,
-                          autocorrect: false,
-                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                          decoration: InputDecoration(
-                            labelText: 'Client ID / Email',
-                            hintText: 'e.g. AXG-0001 or name@example.com',
-                            labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                            prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primaryRed, size: 20),
-                            filled: true,
-                            fillColor: AppColors.surface,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed, width: 1.5)),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Please enter your Client ID or Email.';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        // 2. Password Field
-                        TextFormField(
-                          controller: _loginPasswordController,
-                          obscureText: _loginObscurePassword,
-                          keyboardType: TextInputType.visiblePassword,
-                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primaryRed, size: 20),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _loginObscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                color: AppColors.textSecondary,
-                                size: 20,
-                              ),
-                              onPressed: () => setState(() => _loginObscurePassword = !_loginObscurePassword),
+                        // Subtitle Tagline & Badge
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.border),
                             ),
-                            filled: true,
-                            fillColor: AppColors.surface,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed, width: 1.5)),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return 'Please enter your password.';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-
-                        // 3. Login Button
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleClientLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primaryRed,
-                              disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.5),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : Stack(
-                                    alignment: Alignment.center,
-                                    children: const [
-                                      Text(
-                                        'CLIENT LOGIN',
-                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0),
-                                      ),
-                                      SizedBox(
-                                        width: 0,
-                                        height: 0,
-                                        child: Text('LOGIN', style: TextStyle(fontSize: 0, color: Colors.transparent)),
-                                      ),
-                                    ],
-                                  ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Divider
-                      Row(
-                        children: [
-                          const Expanded(child: Divider(color: AppColors.border)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12.0),
                             child: Text(
-                              'OR',
-                              style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700),
+                              'MEMBER & ATHLETE PORTAL',
+                              style: GoogleFonts.plusJakartaSans(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
-                          const Expanded(child: Divider(color: AppColors.border)),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
+                        ),
+                        const SizedBox(height: 16),
 
-                      // 4. Create New Account Button
-                      SizedBox(
-                        height: 48,
-                        child: OutlinedButton(
-                          onPressed: _isLoading ? null : _openCreateAccountScreen,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: const [
-                              Text(
-                                'CREATE ACCOUNT',
-                                style: TextStyle(
-                                  color: AppColors.primaryRed,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 13,
-                                  letterSpacing: 1.0,
+                        // Error / Status Banners
+                        if (_errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.danger.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: 0,
-                                height: 0,
-                                child: Text('CREATE NEW ACCOUNT', style: TextStyle(fontSize: 0, color: Colors.transparent)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        if (_statusMessage != null && _isLoading) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _statusMessage!,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // Main Login Card
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppColors.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.4),
+                                blurRadius: 20,
+                                offset: const Offset(0, 6),
                               ),
                             ],
                           ),
+                          child: Form(
+                            key: _loginFormKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'LOG IN TO YOUR ACCOUNT',
+                                  style: GoogleFonts.sora(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Enter your email or Client ID (e.g. AXG-0001) and password.',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+
+                                // 1. Email / Client ID Input
+                                TextFormField(
+                                  controller: _loginIdController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  textCapitalization: TextCapitalization.none,
+                                  autocorrect: false,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Client ID / Email',
+                                    hintText: 'e.g. AXG-0001 or name@example.com',
+                                    prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary, size: 20),
+                                    filled: true,
+                                    fillColor: AppColors.surfaceElevated,
+                                  ),
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) return 'Please enter your Client ID or Email.';
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+
+                                // 2. Password Input
+                                TextFormField(
+                                  controller: _loginPasswordController,
+                                  obscureText: _loginObscurePassword,
+                                  keyboardType: TextInputType.visiblePassword,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Password',
+                                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary, size: 20),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _loginObscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                        color: AppColors.textSecondary,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => setState(() => _loginObscurePassword = !_loginObscurePassword),
+                                    ),
+                                    filled: true,
+                                    fillColor: AppColors.surfaceElevated,
+                                  ),
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) return 'Please enter your password.';
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+
+                                // 3. Primary Lime Pill Login CTA Button
+                                Container(
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: AppColors.glow,
+                                        blurRadius: 16,
+                                        spreadRadius: 1,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading ? null : _handleClientLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: AppColors.onPrimary, // #0A0B0D dark text on lime
+                                      shape: const StadiumBorder(),
+                                      elevation: 0,
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.2,
+                                              color: AppColors.onPrimary,
+                                            ),
+                                          )
+                                        : Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              Text(
+                                                'CLIENT LOGIN',
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  color: AppColors.onPrimary,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14,
+                                                  letterSpacing: 1.0,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                width: 0,
+                                                height: 0,
+                                                child: Text('LOGIN', style: TextStyle(fontSize: 0, color: Colors.transparent)),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Divider
+                                Row(
+                                  children: [
+                                    const Expanded(child: Divider(color: AppColors.border)),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                                      child: Text(
+                                        'OR',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          color: AppColors.textTertiary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const Expanded(child: Divider(color: AppColors.border)),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // 4. Secondary Outlined Pill Button for Create Account
+                                SizedBox(
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    onPressed: _isLoading ? null : _openCreateAccountScreen,
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: AppColors.primary, width: 1.5),
+                                      shape: const StadiumBorder(),
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Text(
+                                          'CREATE ACCOUNT',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13,
+                                            letterSpacing: 1.0,
+                                          ),
+                                        ),
+                                        Opacity(
+                                          opacity: 0.0,
+                                          child: Text(
+                                            'CREATE NEW ACCOUNT',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13,
+                                              letterSpacing: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 20),
+
+                        // 5. Bottom Action: Dedicated Admin Login
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
+                            icon: const Icon(Icons.shield_outlined, size: 16, color: AppColors.primary),
+                            label: Text(
+                              'ADMIN LOGIN',
+                              style: GoogleFonts.plusJakartaSans(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // 5. Bottom Actions: Guest Exploration & Dedicated Admin Login
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  runSpacing: 4,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (route) => false),
-                      child: const Text(
-                        'Continue as Guest',
-                        style: TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
-                      icon: const Icon(Icons.shield_outlined, size: 16, color: AppColors.primaryRed),
-                      label: const Text(
-                        'ADMIN LOGIN',
-                        style: TextStyle(
-                          color: AppColors.primaryRed,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
-    ),
-  ),
-);
-}
+    );
+  }
 }

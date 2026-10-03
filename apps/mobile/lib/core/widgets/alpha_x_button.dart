@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../theme/alpha_x_design_system.dart';
+import '../theme/app_colors.dart';
 import 'alpha_x_pressable.dart';
 
 enum AlphaXButtonVariant { primary, secondary, text }
 
+/// Athletic Premium Button Component
+/// Primary: Electric Lime Pill + Dark Text (#0A0B0D) + Lime Glow
+/// Secondary: Outlined Pill
 class AlphaXButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -29,15 +33,21 @@ class AlphaXButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveWidth = isFullWidth ? double.infinity : width;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     Widget childWidget;
     if (isLoading) {
-      childWidget = const SizedBox(
+      childWidget = SizedBox(
         width: 20,
         height: 20,
         child: CircularProgressIndicator(
           strokeWidth: 2.2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          valueColor: AlwaysStoppedAnimation<Color>(
+            variant == AlphaXButtonVariant.primary
+                ? AppColors.onPrimary
+                : (isDark ? Colors.white : AppColors.lightTextPrimary),
+          ),
         ),
       );
     } else if (icon != null) {
@@ -49,10 +59,13 @@ class AlphaXButton extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 13,
               letterSpacing: 1.1,
+              color: variant == AlphaXButtonVariant.primary
+                  ? AppColors.onPrimary
+                  : null,
             ),
           ),
         ],
@@ -60,10 +73,13 @@ class AlphaXButton extends StatelessWidget {
     } else {
       childWidget = Text(
         label.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w800,
           fontSize: 13,
           letterSpacing: 1.1,
+          color: variant == AlphaXButtonVariant.primary
+              ? AppColors.onPrimary
+              : null,
         ),
       );
     }
@@ -71,15 +87,14 @@ class AlphaXButton extends StatelessWidget {
     Widget buttonWidget;
 
     if (variant == AlphaXButtonVariant.secondary) {
-      final theme = Theme.of(context);
       buttonWidget = OutlinedButton(
         style: OutlinedButton.styleFrom(
           foregroundColor: theme.colorScheme.onSurface,
           side: BorderSide(
-            color: theme.dividerTheme.color ?? AlphaXColors.border,
-            width: 1.2,
+            color: isDark ? AppColors.border : AppColors.lightBorder,
+            width: 1.5,
           ),
-          shape: RoundedRectangleBorder(borderRadius: AlphaXRadius.roundedMd),
+          shape: const StadiumBorder(), // Pill button
           padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
         onPressed: isLoading ? null : onPressed,
@@ -88,25 +103,40 @@ class AlphaXButton extends StatelessWidget {
     } else if (variant == AlphaXButtonVariant.text) {
       buttonWidget = TextButton(
         style: TextButton.styleFrom(
-          foregroundColor: AlphaXColors.redAccent,
+          foregroundColor: isDark ? AppColors.primary : AppColors.lightPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
         onPressed: isLoading ? null : onPressed,
         child: childWidget,
       );
     } else {
-      // Primary Red CTA Button
-      buttonWidget = ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AlphaXColors.redAccent,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          shadowColor: AlphaXColors.redAccent.withValues(alpha: 0.35),
-          shape: RoundedRectangleBorder(borderRadius: AlphaXRadius.roundedMd),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+      // Primary Lime Pill CTA Button with vibrant glow
+      final primaryColor = isDark ? AppColors.primary : AppColors.lightPrimary;
+      final glowColor = isDark ? AppColors.glow : const Color(0x334AD400);
+
+      buttonWidget = Container(
+        decoration: BoxDecoration(
+          borderRadius: AlphaXRadius.roundedFull,
+          boxShadow: [
+            BoxShadow(
+              color: glowColor,
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        onPressed: isLoading ? null : onPressed,
-        child: childWidget,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryColor,
+            foregroundColor: AppColors.onPrimary, // Dark text #0A0B0D on lime
+            elevation: 0,
+            shape: const StadiumBorder(), // Pill button
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+          ),
+          onPressed: isLoading ? null : onPressed,
+          child: childWidget,
+        ),
       );
     }
 

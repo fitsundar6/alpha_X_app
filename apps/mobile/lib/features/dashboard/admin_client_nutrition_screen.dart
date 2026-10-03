@@ -797,16 +797,42 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
                   if (meal.foods.isNotEmpty) ...[
                     const Divider(color: AppColors.borderSubtle, height: 14),
                     ...meal.foods.map((food) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.borderSubtle),
+                        ),
                         child: Row(
                           children: [
+                            Text(PrescribedFoodItem.getFoodEmoji(food.name), style: const TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: Text(food.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(food.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${food.calories.round()} kcal • P:${food.protein.toStringAsFixed(1)}g C:${food.carbs.toStringAsFixed(1)}g F:${food.fat.toStringAsFixed(1)}g',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                  ),
+                                ],
+                              ),
                             ),
-                            Text(
-                              '${food.servingDisplay} • ${food.calories.toInt()} kcal',
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceCard,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Text(
+                                food.effectiveServingDisplay,
+                                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ],
                         ),

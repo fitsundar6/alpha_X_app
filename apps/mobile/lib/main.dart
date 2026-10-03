@@ -27,11 +27,17 @@ import 'features/onboarding/client_onboarding_screen.dart';
 import 'features/progress/data/repositories/weekly_progress_repository.dart';
 import 'features/progress/presentation/screens/client_weekly_progress_screen.dart';
 import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService().initialize();
   await ClientThemeService().initialize();
+
+  // OneSignal Push Notifications — Admin-triggered, client-received
+  OneSignal.initialize('56c1791b-aa5e-4042-8fba-e370433b8055');
+  // Request permission (shows iOS/Android system permission dialog)
+  OneSignal.Notifications.requestPermission(true);
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
   debugPrint('====================================================');

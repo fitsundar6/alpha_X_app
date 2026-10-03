@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_colors.dart';
-import 'alpha_x_design_system.dart';
 import 'app_theme.dart';
 
 enum ClientThemeMode {
@@ -37,7 +36,7 @@ class ClientThemeService extends ChangeNotifier {
       } else if (savedMode == 'system') {
         _themeMode = ClientThemeMode.system;
       } else {
-        // Default to dark mode for Alpha X Gym branding
+        // Default to dark mode for Alpha X Gym Athletic Premium branding
         _themeMode = ClientThemeMode.dark;
       }
     } catch (e) {
@@ -93,36 +92,42 @@ class ClientThemeColors {
   bool get isDark => ClientThemeService().isDarkMode(context);
 
   // Background & Surfaces
-  Color get background => isDark ? AppColors.background : const Color(0xFFF7F8FA);
-  Color get surface => isDark ? AppColors.surface : const Color(0xFFFFFFFF);
-  Color get surfaceCard => isDark ? AppColors.surfaceCard : const Color(0xFFFFFFFF);
-  Color get surfaceElevated => isDark ? AppColors.surfaceElevated : const Color(0xFFF3F4F6);
+  Color get background => isDark ? AppColors.background : AppColors.lightBackground;
+  Color get surface => isDark ? AppColors.surface : AppColors.lightSurface;
+  Color get surfaceCard => isDark ? AppColors.surfaceCard : AppColors.lightSurface;
+  Color get surfaceElevated => isDark ? AppColors.surfaceElevated : AppColors.lightSurfaceElevated;
   Color get surfaceGlass => isDark ? AppColors.surfaceGlass : const Color(0xF2FFFFFF);
 
   // Borders & Dividers
-  Color get border => isDark ? AppColors.border : const Color(0xFFE5E7EB);
-  Color get borderSubtle => isDark ? AppColors.borderSubtle : const Color(0xFFF3F4F6);
-  Color get borderActive => AppColors.borderActive;
+  Color get border => isDark ? AppColors.border : AppColors.lightBorder;
+  Color get borderSubtle => isDark ? AppColors.borderSubtle : AppColors.lightBorder;
+  Color get borderActive => isDark ? AppColors.borderActive : AppColors.lightPrimary;
 
   // Typography
-  Color get textPrimary => isDark ? AppColors.textPrimary : const Color(0xFF111827);
-  Color get textSecondary => isDark ? AppColors.textSecondary : const Color(0xFF4B5563);
-  Color get textTertiary => isDark ? AppColors.textTertiary : const Color(0xFF9CA3AF);
-  Color get textDisabled => isDark ? AppColors.textDisabled : const Color(0xFFD1D5DB);
+  Color get textPrimary => isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+  Color get textSecondary => isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+  Color get textTertiary => isDark ? AppColors.textTertiary : AppColors.lightTextMuted;
+  Color get textMuted => isDark ? AppColors.textMuted : AppColors.lightTextMuted;
+  Color get textDisabled => isDark ? AppColors.textDisabled : const Color(0xFFC4C8D0);
 
-  // Brand Red & Accents
+  // Primary Lime Accent & CTAs
+  Color get primary => isDark ? AppColors.primary : AppColors.lightPrimary;
+  Color get primaryPressed => isDark ? AppColors.primaryPressed : AppColors.lightPrimaryPressed;
+  Color get onPrimary => AppColors.onPrimary; // Dark text #0A0B0D on lime
+  Color get secondary => isDark ? AppColors.secondary : AppColors.lightSecondary;
+  Color get success => isDark ? AppColors.success : AppColors.lightSuccess;
+  Color get warning => isDark ? AppColors.warning : AppColors.lightWarning;
+  Color get danger => isDark ? AppColors.danger : AppColors.lightDanger;
+  Color get error => isDark ? AppColors.danger : AppColors.lightDanger;
+  Color get glow => isDark ? AppColors.glow : const Color(0x334AD400);
+
+  // Backward-compatibility aliases
   Color get primaryRed => AppColors.primaryRed;
-  Color get accentRed => AppColors.accentRed;
-  Color get glowRed => isDark ? AppColors.glowRed : const Color(0x22E53935);
-  Color get redSubtle => isDark ? AlphaXColors.redSubtle : const Color(0x14E50914);
-
-  // Status
-  Color get success => AppColors.success;
-  Color get warning => AppColors.warning;
-  Color get error => AppColors.error;
-  Color get info => AppColors.info;
+  Color get accentRed => primary;
+  Color get glowRed => glow;
+  Color get redSubtle => isDark ? const Color(0x26C6FF3A) : const Color(0x1F4AD400);
 
   // Input & Card helpers
-  Color get inputFill => isDark ? AppColors.surface : const Color(0xFFF9FAFB);
-  Color get cardShadow => isDark ? const Color(0x40000000) : const Color(0x0D000000);
+  Color get inputFill => isDark ? AppColors.surface : AppColors.lightSurface;
+  Color get cardShadow => isDark ? const Color(0x59000000) : const Color(0x14000000);
 }

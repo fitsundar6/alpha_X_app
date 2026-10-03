@@ -44,6 +44,11 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   crypto: ^3.0.7
   camera: ^0.12.1
+  google_fonts: ^9.0.0
+  phosphor_flutter: ^2.1.0
+  onesignal_flutter: ^5.7.0
+  pedometer: ^4.0.2
+  permission_handler: ^11.4.0
 
 dev_dependencies:
   flutter_test:

@@ -325,7 +325,7 @@ class MacroRepository extends ChangeNotifier {
       final cId = AuthService().currentClientId;
       if (cId.isNotEmpty) return cId;
       final uId = AuthService().currentUserId;
-      if (uId.isNotEmpty && uId != 'client_guest') return uId;
+      if (uId.isNotEmpty) return uId;
     }
     return 'athlete_client';
   }

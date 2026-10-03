@@ -18,6 +18,9 @@ const envSchema = z.object({
   WGER_API_URL: z.string().default('https://wger.de/api/v2'),
   EXERCISE_DB_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  ONESIGNAL_APP_ID: z.string().optional(),
+  ONESIGNAL_REST_API_KEY: z.string().optional(),
+  PYTHON_AI_URL: z.string().default('http://127.0.0.1:8000/api/v1/ai'),
   // Master Administrator Email & Password Credentials
   // Exactly ONE authorized master admin account
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),

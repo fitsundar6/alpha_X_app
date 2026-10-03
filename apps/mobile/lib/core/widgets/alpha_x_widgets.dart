@@ -9,3 +9,4 @@ export 'alpha_x_logo.dart';
 export 'alpha_x_pressable.dart';
 export 'alpha_x_feedback_states.dart';
 export 'alpha_x_subtle_entrance.dart';
+export '../theme/alpha_x_motion.dart';

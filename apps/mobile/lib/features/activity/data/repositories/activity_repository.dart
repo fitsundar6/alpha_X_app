@@ -56,6 +56,12 @@ class ActivityRepository extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   List<ClientActivityProfile> get managedClients => List.unmodifiable(_managedClients);
 
+  /// Which data source is actively counting steps (Health Connect / Pedometer / Manual)
+  StepSource get activeStepSource => _healthService.activeSource;
+
+  /// Human-readable label for the active step source
+  String get stepSourceLabel => _healthService.stepSourceLabel;
+
   /// Return Today's activity record.
   /// If no record exists for today yet, returns a clean starting record with 0 steps.
   /// NEVER returns hardcoded/fake step counts.
@@ -645,6 +651,32 @@ class ActivityRepository extends ChangeNotifier {
 
   /// Public trigger to sync pending records with backend immediately
   Future<void> syncWithBackend() async {
+    await _syncPendingRecordsWithBackend();
+  }
+
+  /// Manually submit today's step count (fallback for when no sensor is available)
+  Future<void> submitManualSteps(int steps) async {
+    if (steps < 0) return;
+    final todayKey = _dateToKey(DateTime.now());
+    final todayDate = _healthService.getLocalStartOfDay(DateTime.now());
+    final calories = steps * 0.045;
+    final distance = steps * 0.76;
+
+    final record = DailyActivityRecord(
+      id: 'rec_${_currentClientId}_$todayKey',
+      clientId: _currentClientId,
+      date: todayDate,
+      steps: steps,
+      stepGoal: _currentStepGoal,
+      cardioMinutes: 0,
+      caloriesBurned: calories,
+      distanceMeters: distance,
+      isGoalAchieved: steps >= _currentStepGoal,
+      syncStatus: SyncStatus.pending,
+    );
+    _recordsMap[todayKey] = record;
+    await _persistLocalCache();
+    notifyListeners();
     await _syncPendingRecordsWithBackend();
   }
 

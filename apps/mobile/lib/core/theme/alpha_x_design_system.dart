@@ -1,62 +1,77 @@
 import 'package:flutter/material.dart';
+import 'app_colors.dart';
 
-/// Alpha X Gym - Core Color System
-/// Pure Black + Soft Dark Surfaces + White Typography + Subtle Red Accent
+/// Alpha X Gym - Athletic Premium Core Color System
+/// Deep near-black backgrounds + electric-lime neon accent + energetic gradients.
 class AlphaXColors {
-  // Pure Black & Dark Surfaces
-  static const Color background = Color(0xFF000000);
-  static const Color surface = Color(0xFF101010);
-  static const Color surfaceCard = Color(0xFF161616);
-  static const Color surfaceElevated = Color(0xFF1E1E1E);
-  static const Color surfaceGlass = Color(0xCC161616);
+  // Dark Background & Surfaces
+  static const Color background = AppColors.background;
+  static const Color surface = AppColors.surface;
+  static const Color surfaceCard = AppColors.surfaceCard;
+  static const Color surfaceElevated = AppColors.surfaceElevated;
+  static const Color surfaceGlass = AppColors.surfaceGlass;
 
-  // Subtle Red Accent (Luxury athletic intensity)
-  static const Color redAccent = Color(0xFFE50914);
-  static const Color redAccentHover = Color(0xFFCC0812);
-  static const Color redGlow = Color(0x33E50914);
-  static const Color redSubtle = Color(0x1AE50914);
+  // Primary Lime Accent (CTA, highlights, active states)
+  static const Color primary = AppColors.primary;
+  static const Color primaryPressed = AppColors.primaryPressed;
+  static const Color onPrimary = AppColors.onPrimary;
+  static const Color glow = AppColors.glow;
+
+  // Backward compatibility aliases
+  static const Color redAccent = AppColors.primary;
+  static const Color redAccentHover = AppColors.primaryPressed;
+  static const Color redGlow = AppColors.glow;
+  static const Color redSubtle = Color(0x26C6FF3A);
 
   // High-Contrast Borders
-  static const Color border = Color(0xFF242424);
-  static const Color borderSubtle = Color(0xFF1A1A1A);
-  static const Color borderActive = Color(0xFFE50914);
+  static const Color border = AppColors.border;
+  static const Color borderSubtle = AppColors.borderSubtle;
+  static const Color borderActive = AppColors.borderActive;
 
   // Typography
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFA5A5A5);
-  static const Color textTertiary = Color(0xFF6B6B6B);
-  static const Color textMuted = Color(0xFF4A4A4A);
+  static const Color textPrimary = AppColors.textPrimary;
+  static const Color textSecondary = AppColors.textSecondary;
+  static const Color textTertiary = AppColors.textTertiary;
+  static const Color textMuted = AppColors.textMuted;
 
   // Functional Status
-  static const Color success = Color(0xFF388E3C);
-  static const Color warning = Color(0xFFF57C00);
-  static const Color error = Color(0xFFD32F2F);
-  static const Color info = Color(0xFF1976D2);
+  static const Color success = AppColors.success;
+  static const Color warning = AppColors.warning;
+  static const Color error = AppColors.danger;
+  static const Color info = AppColors.secondary;
 
   // Metal Badges
-  static const Color gold = Color(0xFFFFD700);
-  static const Color silver = Color(0xFFE0E0E0);
-  static const Color bronze = Color(0xFFCD7F32);
+  static const Color gold = AppColors.gold;
+  static const Color silver = AppColors.silver;
+  static const Color bronze = AppColors.bronze;
+
+  // Gradients
+  static const LinearGradient gradientEnergy = AppColors.gradientEnergy;
+  static const LinearGradient gradientViolet = AppColors.gradientViolet;
 }
 
-/// Alpha X Gym - Spacing Tokens
+/// Alpha X Gym - 8pt Spacing Tokens
 class AlphaXSpacing {
-  static const double xxs = 2.0;
-  static const double xs = 4.0;
-  static const double sm = 8.0;
+  static const double xxs = 4.0;
+  static const double xs = 8.0;
+  static const double sm = 12.0;
   static const double md = 16.0;
   static const double lg = 20.0;
   static const double xl = 24.0;
   static const double xxl = 32.0;
   static const double xxxl = 48.0;
+
+  // Screen standard padding
+  static const double screenPadding = 20.0;
 }
 
-/// Alpha X Gym - Corner Radius Tokens
+/// Alpha X Gym - Shape & Corner Radius Tokens
+/// Card radius: 20-24, Buttons: 16/pill, Chips: pill
 class AlphaXRadius {
-  static const double xs = 6.0;
-  static const double sm = 10.0;
-  static const double md = 14.0;
-  static const double lg = 18.0;
+  static const double xs = 8.0;
+  static const double sm = 12.0;
+  static const double md = 16.0;
+  static const double lg = 20.0;
   static const double xl = 24.0;
   static const double full = 999.0;
 
@@ -68,85 +83,116 @@ class AlphaXRadius {
   static BorderRadius get roundedFull => BorderRadius.circular(full);
 }
 
-/// Alpha X Gym - Typography System
+/// Alpha X Gym - Athletic Premium Typography System
+/// Headings: Sora (weights 700-800)
+/// Body/UI: Plus Jakarta Sans (400/500/600)
 class AlphaXTypography {
-  static const TextStyle displayLarge = TextStyle(
-    fontSize: 36.0,
-    fontWeight: FontWeight.w900,
-    letterSpacing: -1.0,
-    color: AlphaXColors.textPrimary,
-    height: 1.1,
-  );
+  static const String headingFont = 'Sora';
+  static const String bodyFont = 'Plus Jakarta Sans';
 
-  static const TextStyle displayMedium = TextStyle(
-    fontSize: 28.0,
-    fontWeight: FontWeight.w900,
-    letterSpacing: -0.5,
+  static const TextStyle displayLarge = TextStyle(
+    fontFamily: headingFont,
+    fontSize: 34.0,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -1.0,
     color: AlphaXColors.textPrimary,
     height: 1.15,
   );
 
-  static const TextStyle headlineLarge = TextStyle(
-    fontSize: 22.0,
+  static const TextStyle displayMedium = TextStyle(
+    fontFamily: headingFont,
+    fontSize: 28.0,
     fontWeight: FontWeight.w800,
-    letterSpacing: 0.0,
+    letterSpacing: -0.5,
+    color: AlphaXColors.textPrimary,
+    height: 1.2,
+  );
+
+  static const TextStyle headlineLarge = TextStyle(
+    fontFamily: headingFont,
+    fontSize: 28.0,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.3,
     color: AlphaXColors.textPrimary,
   );
 
   static const TextStyle headlineMedium = TextStyle(
-    fontSize: 18.0,
+    fontFamily: headingFont,
+    fontSize: 22.0,
     fontWeight: FontWeight.w700,
     letterSpacing: 0.0,
     color: AlphaXColors.textPrimary,
   );
 
+  static const TextStyle headlineSmall = TextStyle(
+    fontFamily: headingFont,
+    fontSize: 18.0,
+    fontWeight: FontWeight.w700,
+    color: AlphaXColors.textPrimary,
+  );
+
   static const TextStyle titleMedium = TextStyle(
-    fontSize: 15.0,
+    fontFamily: bodyFont,
+    fontSize: 16.0,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.1,
     color: AlphaXColors.textPrimary,
   );
 
   static const TextStyle bodyLarge = TextStyle(
-    fontSize: 14.0,
+    fontFamily: bodyFont,
+    fontSize: 16.0,
     fontWeight: FontWeight.w400,
     letterSpacing: 0.1,
     color: AlphaXColors.textPrimary,
-    height: 1.45,
+    height: 1.5,
   );
 
   static const TextStyle bodyMedium = TextStyle(
-    fontSize: 13.0,
+    fontFamily: bodyFont,
+    fontSize: 15.0,
     fontWeight: FontWeight.w400,
     color: AlphaXColors.textSecondary,
-    height: 1.4,
+    height: 1.45,
   );
 
   static const TextStyle caption = TextStyle(
-    fontSize: 11.0,
+    fontFamily: bodyFont,
+    fontSize: 13.0,
     fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     color: AlphaXColors.textTertiary,
   );
 
+  static const TextStyle overline = TextStyle(
+    fontFamily: bodyFont,
+    fontSize: 11.0,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.2,
+    color: AlphaXColors.textMuted,
+  );
+
   static const TextStyle metricLarge = TextStyle(
-    fontSize: 32.0,
-    fontWeight: FontWeight.w900,
-    letterSpacing: -0.5,
-    color: AlphaXColors.textPrimary,
-    fontFamily: 'monospace',
+    fontFamily: headingFont,
+    fontSize: 48.0,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -1.0,
+    color: AppColors.primary,
   );
 
   static const TextStyle metricMedium = TextStyle(
-    fontSize: 22.0,
+    fontFamily: headingFont,
+    fontSize: 32.0,
     fontWeight: FontWeight.w800,
+    letterSpacing: -0.5,
     color: AlphaXColors.textPrimary,
   );
 
   static const TextStyle tag = TextStyle(
-    fontSize: 10.0,
+    fontFamily: bodyFont,
+    fontSize: 11.0,
     fontWeight: FontWeight.w800,
     letterSpacing: 1.2,
-    color: AlphaXColors.redAccent,
+    color: AppColors.primary,
   );
 }

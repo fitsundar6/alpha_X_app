@@ -176,7 +176,7 @@ class _MyFoodPhotosScreenState extends State<MyFoodPhotosScreen> {
         height: height,
         width: double.infinity,
         fit: fit,
-        errorBuilder: (_, __, ___) => _buildFallbackThumbnail(),
+        errorBuilder: (context, error, stackTrace) => _buildFallbackThumbnail(),
         loadingBuilder: (_, child, progress) {
           if (progress == null) return child;
           return Container(
