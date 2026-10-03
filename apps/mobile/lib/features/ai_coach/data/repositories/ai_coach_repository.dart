@@ -55,11 +55,27 @@ class AiCoachRepository extends ChangeNotifier {
       if (customStartDate != null) payload['customStartDate'] = customStartDate;
       if (customEndDate != null) payload['customEndDate'] = customEndDate;
 
-      final resp = await _httpClient.post(
+      var resp = await _httpClient.post(
         url,
         headers: _buildHeaders(),
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 15));
+
+      // Automatic 401 recovery: JWT access token expired — refresh and retry
+      if (resp.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
+        debugPrint('[AI COACH REPO] Session token expired. Re-authenticating...');
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          resp = await _httpClient.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $freshToken',
+            },
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 15));
+        }
+      }
 
       if (resp.statusCode == 200) {
         final decoded = jsonDecode(resp.body);
