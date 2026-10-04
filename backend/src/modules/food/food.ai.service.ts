@@ -260,7 +260,7 @@ Example format:
     });
 
     const apiKey = env.GEMINI_API_KEY!;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`;
 
     return new Promise((resolve, reject) => {
       const parsedUrl = new URL(url);

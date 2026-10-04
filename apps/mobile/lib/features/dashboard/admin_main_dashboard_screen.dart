@@ -49,6 +49,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   String? _clientsError;
   late final WeeklyProgressRepository _weeklyProgressRepo;
   late final AiCoachRepository _aiCoachRepo;
+  late final Future<AiDailySummary> _aiSummaryFuture;
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -67,6 +68,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     super.initState();
     _weeklyProgressRepo = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
     _aiCoachRepo = AiCoachRepository();
+    // Memoize the future so it is only created once — not on every rebuild.
+    // Calling getDailySummary() directly inside build() would spawn a new HTTP
+    // request on every setState(), causing repeated AI_SERVICE_UNAVAILABLE logs.
+    _aiSummaryFuture = _aiCoachRepo.getDailySummary();
     _loadClients();
   }
 
@@ -675,7 +680,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
 
   Widget _buildAiCoachDashboardCard() {
     return FutureBuilder<AiDailySummary>(
-      future: _aiCoachRepo.getDailySummary(),
+      future: _aiSummaryFuture,
       builder: (context, snapshot) {
         final summary = snapshot.data ?? AiDailySummary.fallback();
 

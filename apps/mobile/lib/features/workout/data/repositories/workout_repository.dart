@@ -30,11 +30,16 @@ class WorkoutRepository extends ChangeNotifier {
   static const String _storageKeyHistory = 'alpha_x_workout_history';
   static const String _storageKeyChangeRequests = 'alpha_x_change_requests';
   static const String _storageKeyPendingSync = 'alpha_x_pending_workout_records';
+  static const String _storageKeyActiveSession = 'alpha_x_workout_active_session_state';
+  static const String _storageKeyActiveSessionTimestamp = 'alpha_x_workout_active_session_timestamp';
+  static const String _storageKeyActiveSessionDuration = 'alpha_x_workout_active_session_duration';
 
   final http.Client _httpClient;
   void Function(WorkoutRecord record)? onWorkoutCompleted;
 
   late WorkoutSession _activeSession;
+  bool _hasRestoredActiveSession = false;
+  DateTime? _activeSessionSavedAt;
   final List<WorkoutSession> _sessions = [];
   final List<WorkoutAssignmentData> _assignments = [];
   final List<WorkoutRecord> _workoutHistory = [];
@@ -62,12 +67,21 @@ class WorkoutRepository extends ChangeNotifier {
       _initTestWorkoutHistory();
     }
     _loadFromLocalStorage();
-    fetchClientsList();
+    // Only prefetch clients if a token is already available (i.e. user is already
+    // authenticated from a previous session). If there's no token yet (cold start
+    // before login), skip silently — the dashboard will call fetchClientsList()
+    // again after the admin logs in, at which point the token will be present.
+    if (AuthService().currentToken.isNotEmpty) {
+      fetchClientsList();
+    }
   }
 
   WorkoutSession get activeSession => _activeSession;
   List<WorkoutSession> get adminSessions => List.unmodifiable(_sessions);
   List<Map<String, String>> get clientsList => List.unmodifiable(_clients);
+  int get pendingSyncCount => _pendingSyncRecords.length;
+  bool get hasActiveSavedSession => _hasRestoredActiveSession && !_activeSession.isCompleted;
+  DateTime? get activeSessionSavedAt => _activeSessionSavedAt;
   /// Fetches real registered clients exclusively from the shared backend database (PostgreSQL).
   /// NEVER falls back to demo/sample/example data.
   Future<List<Map<String, String>>> fetchClientsList({bool forceRefresh = false}) async {
@@ -1081,6 +1095,9 @@ class WorkoutRepository extends ChangeNotifier {
         );
       }).toList(),
     );
+    _hasRestoredActiveSession = true;
+    _activeSessionSavedAt = DateTime.now();
+    saveActiveSessionToLocalStorage(elapsedSeconds: 0);
     notifyListeners();
   }
 
@@ -1111,6 +1128,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
   }
 
@@ -1142,6 +1160,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
 
     return evaluateNewPR(
@@ -1172,6 +1191,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
   }
 
@@ -1188,6 +1208,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = updatedExercise;
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
   }
 
@@ -1200,6 +1221,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = updatedExercise;
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
   }
 
@@ -1230,6 +1252,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
   }
 
@@ -1250,6 +1273,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
     return true;
   }
@@ -1307,6 +1331,7 @@ class WorkoutRepository extends ChangeNotifier {
     updatedExercises[exerciseIndex] = updatedExercise;
 
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
     notifyListeners();
     return true;
   }
@@ -1381,6 +1406,9 @@ class WorkoutRepository extends ChangeNotifier {
     );
 
     _currentSessionSwaps.clear();
+    _hasRestoredActiveSession = false;
+    _activeSessionSavedAt = null;
+    discardActiveSession();
     _workoutHistory.insert(0, record);
     _saveToLocalStorage();
     notifyListeners();
@@ -1787,11 +1815,72 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
+      // Restore active in-progress workout session if saved within 24 hours
+      final activeRaw = prefs.getString(_storageKeyActiveSession);
+      if (activeRaw != null && activeRaw.isNotEmpty) {
+        try {
+          final activeMap = jsonDecode(activeRaw) as Map<String, dynamic>;
+          final restored = WorkoutSession.fromJson(activeMap);
+          final age = DateTime.now().difference(restored.startedAt);
+          if (!restored.isCompleted && age.inHours < 24) {
+            _activeSession = restored;
+            _hasRestoredActiveSession = true;
+            final tsStr = prefs.getString(_storageKeyActiveSessionTimestamp);
+            if (tsStr != null) {
+              _activeSessionSavedAt = DateTime.tryParse(tsStr);
+            }
+          }
+        } catch (e) {
+          debugPrint('[WorkoutRepository] Failed to restore active session: $e');
+        }
+      }
+
       notifyListeners();
 
       // Attempt to sync any pending records saved from offline mode
       syncPendingRecordsWithBackend();
     } catch (_) {}
+  }
+
+  Future<void> saveActiveSessionToLocalStorage({int? elapsedSeconds}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final sessionJson = _activeSession.toJson();
+      await prefs.setString(_storageKeyActiveSession, jsonEncode(sessionJson));
+      final now = DateTime.now().toUtc().toIso8601String();
+      await prefs.setString(_storageKeyActiveSessionTimestamp, now);
+      if (elapsedSeconds != null) {
+        await prefs.setInt(_storageKeyActiveSessionDuration, elapsedSeconds);
+      }
+      _hasRestoredActiveSession = true;
+      _activeSessionSavedAt = DateTime.now();
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to save active session locally: $e');
+    }
+  }
+
+  Future<void> discardActiveSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKeyActiveSession);
+      await prefs.remove(_storageKeyActiveSessionTimestamp);
+      await prefs.remove(_storageKeyActiveSessionDuration);
+      _hasRestoredActiveSession = false;
+      _activeSessionSavedAt = null;
+      _currentSessionSwaps.clear();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to discard active session: $e');
+    }
+  }
+
+  Future<int?> getSavedActiveSessionDuration() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_storageKeyActiveSessionDuration);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _saveToLocalStorage() async {

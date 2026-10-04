@@ -30,7 +30,7 @@ class Settings:
     # AI Models & Keys
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    DEFAULT_AI_MODEL: str = os.getenv("AI_MODEL", "gpt-4o-mini")
+    DEFAULT_AI_MODEL: str = os.getenv("AI_MODEL", "gemini-flash-lite-latest")
 
     # Knowledge / RAG
     KNOWLEDGE_DIR: Path = BASE_DIR / "knowledge" / "documents"

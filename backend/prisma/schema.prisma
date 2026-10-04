@@ -16,17 +16,17 @@ enum UserRole {
 }
 
 model User {
-  id                 String        @id @default(uuid())
-  email              String        @unique
-  passwordHash       String?
-  name               String
-  role               UserRole      @default(CLIENT)
-  googleUid          String?       @unique
-  photoUrl           String?
-  oneSignalPlayerId  String?       // Push notification device token
-  notificationsEnabled Boolean     @default(true) // Client can opt out
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                   String   @id @default(uuid())
+  email                String   @unique
+  passwordHash         String?
+  name                 String
+  role                 UserRole @default(CLIENT)
+  googleUid            String?  @unique
+  photoUrl             String?
+  oneSignalPlayerId    String? // Push notification device token
+  notificationsEnabled Boolean  @default(true) // Client can opt out
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   clientProfile   ClientProfile?
   assignedClients ClientProfile[]     @relation("TrainerClients")
@@ -37,37 +37,37 @@ model User {
 }
 
 model ClientProfile {
-  id                  String   @id @default(uuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clientId            String?  @unique
-  googleUid           String?  @unique
-  photoUrl            String?
-  phone               String?
-  adminNotes          String?
-  trainerId           String?
-  trainer             User?    @relation("TrainerClients", fields: [trainerId], references: [id])
-  dailyStepGoal       Int      @default(6000)
+  id            String  @id @default(uuid())
+  userId        String  @unique
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId      String? @unique
+  googleUid     String? @unique
+  photoUrl      String?
+  phone         String?
+  adminNotes    String?
+  trainerId     String?
+  trainer       User?   @relation("TrainerClients", fields: [trainerId], references: [id])
+  dailyStepGoal Int     @default(6000)
 
   // Onboarding & Fitness Assessment Fields
-  fitnessLevel        String?  // beginner, intermediate, advanced, returning
-  primaryGoal         String?  // Fat Loss, Muscle Gain, Build Strength, etc.
+  fitnessLevel        String? // beginner, intermediate, advanced, returning
+  primaryGoal         String? // Fat Loss, Muscle Gain, Build Strength, etc.
   secondaryGoal       String?
   weightKg            Float?
   heightCm            Float?
   age                 Int?
   gender              String?
-  trainingExperience  String?  // New to training, Less than 3 months, etc.
-  trainingDaysPerWeek Int?     // 2 to 7
+  trainingExperience  String? // New to training, Less than 3 months, etc.
+  trainingDaysPerWeek Int? // 2 to 7
   hasCurrentInjury    Boolean  @default(false)
   injuryAreas         String[] @default([])
   injuryDescription   String?
   hasPreviousSurgery  Boolean  @default(false)
   surgeryDetails      String?
-  activityLevel       String?  // LOW, LIGHT, MODERATE, HIGH
-  sleepHours          String?  // Less than 5 hours, 5–6 hours, etc.
+  activityLevel       String? // LOW, LIGHT, MODERATE, HIGH
+  sleepHours          String? // Less than 5 hours, 5–6 hours, etc.
   dailySteps          Int?     @default(6000)
-  trainingTimePref    String?  // Morning, Afternoon, Evening, Night
+  trainingTimePref    String? // Morning, Afternoon, Evening, Night
   preferredDays       String[] @default([])
   trainingPreferences String[] @default([])
   onboardingCompleted Boolean  @default(false)
@@ -75,56 +75,56 @@ model ClientProfile {
 
   // Activity, Engagement & Membership Tracking
   lastAppOpenAt       DateTime?
-  membershipPlan      String?  @default("ELITE")
-  membershipStatus    String   @default("ACTIVE") // ACTIVE, EXPIRING_SOON, EXPIRED
+  membershipPlan      String?   @default("ELITE")
+  membershipStatus    String    @default("ACTIVE") // ACTIVE, EXPIRING_SOON, EXPIRED
   membershipExpiresAt DateTime?
-  aiEngagementEnabled Boolean  @default(true)
+  aiEngagementEnabled Boolean   @default(true)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  activityRecords   ActivityRecord[]
-  stepGoalHistories StepGoalHistory[]
-  dietPlans         DietPlan[]
-  dietPlanHistories DietPlanHistory[]
-  foodLogs          ClientFoodLog[]
-  macroPlans        MacroPlan[]
-  attendanceRecords ClientAttendance[]
-  progressRecords   ClientProgress[]
-  weeklyCheckIns    WeeklyCheckIn[]
-  mealPhotos        MealPhoto[]
-  notifications     Notification[]
-  notificationPref  NotificationPreference?
+  activityRecords          ActivityRecord[]
+  stepGoalHistories        StepGoalHistory[]
+  dietPlans                DietPlan[]
+  dietPlanHistories        DietPlanHistory[]
+  foodLogs                 ClientFoodLog[]
+  macroPlans               MacroPlan[]
+  attendanceRecords        ClientAttendance[]
+  progressRecords          ClientProgress[]
+  weeklyCheckIns           WeeklyCheckIn[]
+  mealPhotos               MealPhoto[]
+  notifications            Notification[]
+  notificationPref         NotificationPreference?
   transformationMilestones TransformationMilestone[]
-  attentionItems    AdminAttentionItem[]
+  attentionItems           AdminAttentionItem[]
 
   @@map("client_profiles")
 }
 
 model DietPlan {
-  id                String            @id @default(uuid())
+  id                String        @id @default(uuid())
   clientProfileId   String
-  clientProfile     ClientProfile     @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId          String?           // AXG-XXXX
+  clientProfile     ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String? // AXG-XXXX
   planName          String
-  version           Int               @default(1)
+  version           Int           @default(1)
   assignedById      String?
   assignedByName    String?
   startDate         DateTime?
   endDate           DateTime?
-  dailyCalories     Float             @default(2000)
-  protein           Float             @default(150)
-  carbohydrates     Float             @default(200)
-  fat               Float             @default(60)
-  fiber             Float             @default(30)
-  waterTargetLiters Float             @default(3.0)
-  isActive          Boolean           @default(true)
-  mealsJson         String?           // JSON-encoded structured meals and food items
+  dailyCalories     Float         @default(2000)
+  protein           Float         @default(150)
+  carbohydrates     Float         @default(200)
+  fat               Float         @default(60)
+  fiber             Float         @default(30)
+  waterTargetLiters Float         @default(3.0)
+  isActive          Boolean       @default(true)
+  mealsJson         String? // JSON-encoded structured meals and food items
   notes             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  histories         DietPlanHistory[]
+  histories DietPlanHistory[]
 
   @@index([clientProfileId])
   @@index([clientId])
@@ -132,26 +132,26 @@ model DietPlan {
 }
 
 model DietPlanHistory {
-  id                String         @id @default(uuid())
+  id                String        @id @default(uuid())
   dietPlanId        String?
-  dietPlan          DietPlan?      @relation(fields: [dietPlanId], references: [id], onDelete: SetNull)
+  dietPlan          DietPlan?     @relation(fields: [dietPlanId], references: [id], onDelete: SetNull)
   clientProfileId   String
-  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientProfile     ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
   clientId          String?
   adminId           String?
   adminName         String?
-  version           Int            @default(1)
+  version           Int           @default(1)
   planName          String
   dailyCalories     Float
   protein           Float
   carbohydrates     Float
   fat               Float
   fiber             Float
-  waterTargetLiters Float          @default(3.0)
+  waterTargetLiters Float         @default(3.0)
   mealsJson         String?
   notes             String?
   changeSummary     String?
-  createdAt         DateTime       @default(now())
+  createdAt         DateTime      @default(now())
 
   @@index([dietPlanId])
   @@index([clientProfileId])
@@ -163,10 +163,10 @@ model ClientFoodLog {
   id              String        @id @default(uuid())
   clientProfileId String
   clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String?       // AXG-XXXX
+  clientId        String? // AXG-XXXX
   date            DateTime      @db.Date
-  dateString      String        // 'yyyy-MM-dd'
-  mealType        String        // Breakfast, Lunch, Snacks, Dinner
+  dateString      String // 'yyyy-MM-dd'
+  mealType        String // Breakfast, Lunch, Snacks, Dinner
   foodId          String?
   foodName        String
   category        String        @default("General")
@@ -181,7 +181,7 @@ model ClientFoodLog {
   source          String        @default("FOOD_LIBRARY") // AI_CAMERA, FOOD_LIBRARY, CUSTOM_FOOD
   weightSource    String        @default("CLIENT_ENTERED") // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
   isAiConfirmed   Boolean       @default(true)
-  mealId          String?       // Grouping identifier for meal
+  mealId          String? // Grouping identifier for meal
   photoAvailable  Boolean       @default(false)
   mealPhotoId     String?
   mealPhoto       MealPhoto?    @relation(fields: [mealPhotoId], references: [id], onDelete: SetNull)
@@ -198,20 +198,20 @@ model ClientFoodLog {
 }
 
 model MacroPlan {
-  id                String         @id @default(uuid())
-  clientProfileId   String
-  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId          String?        // AXG-XXXX
-  calories          Float          @default(2000)
-  protein           Float          @default(150)
-  carbs             Float          @default(200)
-  fat               Float          @default(60)
-  fiber             Float          @default(30)
-  waterLiters       Float          @default(3.0)
-  isActive          Boolean        @default(true)
-  notes             String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String? // AXG-XXXX
+  calories        Float         @default(2000)
+  protein         Float         @default(150)
+  carbs           Float         @default(200)
+  fat             Float         @default(60)
+  fiber           Float         @default(30)
+  waterLiters     Float         @default(3.0)
+  isActive        Boolean       @default(true)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([clientProfileId])
   @@index([clientId])
@@ -219,16 +219,16 @@ model MacroPlan {
 }
 
 model ClientAttendance {
-  id                String         @id @default(uuid())
-  clientProfileId   String
-  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId          String?        // AXG-XXXX
-  date              DateTime       @db.Date
-  present           Boolean        @default(true)
-  method            String         @default("MANUAL") // QR_SCAN, MANUAL
-  checkInTime       DateTime       @default(now())
-  notes             String?
-  createdAt         DateTime       @default(now())
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String? // AXG-XXXX
+  date            DateTime      @db.Date
+  present         Boolean       @default(true)
+  method          String        @default("MANUAL") // QR_SCAN, MANUAL
+  checkInTime     DateTime      @default(now())
+  notes           String?
+  createdAt       DateTime      @default(now())
 
   @@index([clientProfileId])
   @@index([clientId])
@@ -237,15 +237,15 @@ model ClientAttendance {
 }
 
 model ClientProgress {
-  id                String         @id @default(uuid())
-  clientProfileId   String
-  clientProfile     ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId          String?        // AXG-XXXX
-  date              DateTime       @default(now())
-  weightKg          Float
-  waistCm           Float?
-  notes             String?
-  createdAt         DateTime       @default(now())
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String? // AXG-XXXX
+  date            DateTime      @default(now())
+  weightKg        Float
+  waistCm         Float?
+  notes           String?
+  createdAt       DateTime      @default(now())
 
   @@index([clientProfileId])
   @@index([clientId])
@@ -290,21 +290,21 @@ model StepGoalHistory {
 // ==========================================
 
 model WorkoutSession {
-  id                       String   @id @default(uuid())
+  id                       String    @id @default(uuid())
   title                    String
-  workoutType              String   // Strength, Hypertrophy, Full Body, Conditioning, HIIT, Cardio, Mobility
-  targetMuscleGroup        String   // e.g. "Chest • Shoulders • Triceps"
-  difficulty               String   // Beginner, Intermediate, Advanced
-  estimatedDurationMinutes Int      @default(45)
+  workoutType              String // Strength, Hypertrophy, Full Body, Conditioning, HIIT, Cardio, Mobility
+  targetMuscleGroup        String // e.g. "Chest • Shoulders • Triceps"
+  difficulty               String // Beginner, Intermediate, Advanced
+  estimatedDurationMinutes Int       @default(45)
   description              String?
-  isActive                 Boolean  @default(true)
+  isActive                 Boolean   @default(true)
   startDate                DateTime?
   endDate                  DateTime?
-  recurringSchedule        String?  // Optional recurring schedule string
-  availabilityType         String   @default("ALL") // "ALL", "SELECTED", "INDIVIDUAL"
+  recurringSchedule        String? // Optional recurring schedule string
+  availabilityType         String    @default("ALL") // "ALL", "SELECTED", "INDIVIDUAL"
   createdById              String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   exercises   WorkoutSessionExercise[]
   assignments WorkoutAssignment[]
@@ -314,28 +314,28 @@ model WorkoutSession {
 }
 
 model WorkoutSessionExercise {
-  id               String          @id @default(uuid())
+  id               String         @id @default(uuid())
   sessionId        String
-  session          WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session          WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exerciseId       String
   exerciseName     String
-  category         String          @default("General")
-  orderIndex       Int             @default(0)
-  supersetTag      String?         // e.g. "A1", "A2", "B1"
-  numberOfSets     Int             @default(3)
-  targetReps       String          @default("8-12")
+  category         String         @default("General")
+  orderIndex       Int            @default(0)
+  supersetTag      String? // e.g. "A1", "A2", "B1"
+  numberOfSets     Int            @default(3)
+  targetReps       String         @default("8-12")
   targetWeight     Float?
-  restSeconds      Int             @default(90)
-  targetRir        Int?            @default(2)
-  targetRpe        Float?          @default(8.0)
-  tempo            String?         @default("3-1-1-0")
-  setType          String          @default("WORKING") // WARMUP, WORKING, FAILURE, DROP_SET, REST_PAUSE
+  restSeconds      Int            @default(90)
+  targetRir        Int?           @default(2)
+  targetRpe        Float?         @default(8.0)
+  tempo            String?        @default("3-1-1-0")
+  setType          String         @default("WORKING") // WARMUP, WORKING, FAILURE, DROP_SET, REST_PAUSE
   exerciseNotes    String?
   adminInstruction String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  setTemplates     WorkoutSetTemplate[]
+  setTemplates WorkoutSetTemplate[]
 
   @@index([sessionId])
   @@map("workout_session_exercises")
@@ -362,7 +362,7 @@ model WorkoutAssignment {
   id            String         @id @default(uuid())
   sessionId     String
   session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  clientId      String?        // null means assigned to ALL clients
+  clientId      String? // null means assigned to ALL clients
   client        User?          @relation("ClientAssignments", fields: [clientId], references: [id], onDelete: Cascade)
   isRecommended Boolean        @default(false)
   assignedById  String
@@ -376,28 +376,28 @@ model WorkoutAssignment {
 }
 
 model WorkoutRecord {
-  id                  String                  @id @default(uuid())
+  id                  String          @id @default(uuid())
   clientId            String
-  client              User                    @relation("ClientWorkoutRecords", fields: [clientId], references: [id], onDelete: Cascade)
+  client              User            @relation("ClientWorkoutRecords", fields: [clientId], references: [id], onDelete: Cascade)
   sessionId           String?
-  session             WorkoutSession?         @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  session             WorkoutSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   sessionTitle        String
   workoutType         String
   startedAt           DateTime
   completedAt         DateTime?
-  durationSeconds     Int                     @default(0)
-  totalVolume         Float                   @default(0.0)
-  completedSetsCount  Int                     @default(0)
-  skippedSetsCount    Int                     @default(0)
+  durationSeconds     Int             @default(0)
+  totalVolume         Float           @default(0.0)
+  completedSetsCount  Int             @default(0)
+  skippedSetsCount    Int             @default(0)
   averageRpe          Float?
   averageRir          Float?
-  isCompleted         Boolean                 @default(false)
-  personalRecordsJson String?                 // JSON serialized PR list
+  isCompleted         Boolean         @default(false)
+  personalRecordsJson String? // JSON serialized PR list
   notes               String?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
-  exerciseRecords     WorkoutExerciseRecord[]
+  exerciseRecords WorkoutExerciseRecord[]
 
   @@index([clientId])
   @@index([sessionId])
@@ -405,19 +405,19 @@ model WorkoutRecord {
 }
 
 model WorkoutExerciseRecord {
-  id           String             @id @default(uuid())
+  id           String        @id @default(uuid())
   recordId     String
-  record       WorkoutRecord      @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record       WorkoutRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
   exerciseId   String
   exerciseName String
-  orderIndex   Int                @default(0)
+  orderIndex   Int           @default(0)
   supersetTag  String?
-  isSkipped    Boolean            @default(false)
+  isSkipped    Boolean       @default(false)
   skipReason   String?
   clientNote   String?
   adminNote    String?
 
-  setRecords   WorkoutSetRecord[]
+  setRecords WorkoutSetRecord[]
 
   @@index([recordId])
   @@map("workout_exercise_records")
@@ -519,29 +519,29 @@ model ExerciseSyncLog {
 // ==========================================
 
 model Food {
-  id            String   @id @default(uuid())
-  name          String
+  id             String   @id @default(uuid())
+  name           String
   normalizedName String
-  category      String   // Protein, Rice & Meals, South Indian, Dal & Legumes, Vegetables, Fruits, Nuts & Seeds, Snacks, Dairy, Custom
-  servingSize   Float    @default(100)
-  servingUnit   String   @default("g") // g, ml, piece, cup, tablespoon, scoop
-  calories      Float
-  protein       Float
-  carbohydrates Float
-  fat           Float
-  fiber         Float    @default(0.0)
-  sugar         Float?   @default(0.0)
-  sodium        Float?   @default(0.0)
-  source        String   @default("SYSTEM") // SYSTEM, USDA, USER
-  sourceId      String?
-  isCustom      Boolean  @default(false)
-  createdBy     String?  // Client ID (e.g. AXG-0001) or User ID
-  createdByName String?
-  isPublic      Boolean  @default(true)
-  isVerified    Boolean  @default(false)
-  status        String   @default("PUBLISHED") // PUBLISHED, PENDING, APPROVED, REJECTED
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  category       String // Protein, Rice & Meals, South Indian, Dal & Legumes, Vegetables, Fruits, Nuts & Seeds, Snacks, Dairy, Custom
+  servingSize    Float    @default(100)
+  servingUnit    String   @default("g") // g, ml, piece, cup, tablespoon, scoop
+  calories       Float
+  protein        Float
+  carbohydrates  Float
+  fat            Float
+  fiber          Float    @default(0.0)
+  sugar          Float?   @default(0.0)
+  sodium         Float?   @default(0.0)
+  source         String   @default("SYSTEM") // SYSTEM, USDA, USER
+  sourceId       String?
+  isCustom       Boolean  @default(false)
+  createdBy      String? // Client ID (e.g. AXG-0001) or User ID
+  createdByName  String?
+  isPublic       Boolean  @default(true)
+  isVerified     Boolean  @default(false)
+  status         String   @default("PUBLISHED") // PUBLISHED, PENDING, APPROVED, REJECTED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([normalizedName])
   @@index([category])
@@ -552,67 +552,67 @@ model Food {
 }
 
 model WeeklyCheckIn {
-  id                 String        @id @default(uuid())
-  clientProfileId    String
-  clientProfile      ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId           String?       // AXG-XXXX
-  weekNumber         Int           // 1, 2, 3...
-  year               Int           // e.g. 2026
-  checkInDate        DateTime      @default(now())
-  nextCheckInDate    DateTime
+  id              String        @id @default(uuid())
+  clientProfileId String
+  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId        String? // AXG-XXXX
+  weekNumber      Int // 1, 2, 3...
+  year            Int // e.g. 2026
+  checkInDate     DateTime      @default(now())
+  nextCheckInDate DateTime
 
   // Body Progress
-  weightKg           Float
-  waistCm            Float?
-  chestCm            Float?
-  armsCm             Float?
-  hipsCm             Float?
-  thighsCm           Float?
-  weightChange       Float?        // Calculated vs previous week
-  waistChange        Float?        // Calculated vs previous week
+  weightKg     Float
+  waistCm      Float?
+  chestCm      Float?
+  armsCm       Float?
+  hipsCm       Float?
+  thighsCm     Float?
+  weightChange Float? // Calculated vs previous week
+  waistChange  Float? // Calculated vs previous week
 
   // Nutrition Adherence (Previous 7 days)
-  nutritionCalories  String        // Good, Mostly, Poor
-  nutritionProtein   String        // Good, Mostly, Poor
-  nutritionWater     String        // Good, Average, Poor
-  dietAdherence      String        // Good, Mostly, Poor
+  nutritionCalories String // Good, Mostly, Poor
+  nutritionProtein  String // Good, Mostly, Poor
+  nutritionWater    String // Good, Average, Poor
+  dietAdherence     String // Good, Mostly, Poor
 
   // Sleep & Recovery
-  sleepQuality       String        // Good, Average, Poor
-  sleepHours         Float
-  recoveryQuality    String        // Good, Average, Poor
+  sleepQuality    String // Good, Average, Poor
+  sleepHours      Float
+  recoveryQuality String // Good, Average, Poor
 
   // Workout
-  workoutCompletion  String        // All, Most, Some, None
-  workoutFeeling     String        // Very Good, Good, Average, Difficult
-  energyLevel        String        // High, Good, Low
+  workoutCompletion String // All, Most, Some, None
+  workoutFeeling    String // Very Good, Good, Average, Difficult
+  energyLevel       String // High, Good, Low
 
   // Pain / Discomfort
-  hasPain            Boolean       @default(false)
-  painLocation       String?
-  painExercise       String?
-  painLevel          Int?          // 1 - 10
-  painDescription    String?
+  hasPain         Boolean @default(false)
+  painLocation    String?
+  painExercise    String?
+  painLevel       Int? // 1 - 10
+  painDescription String?
 
   // Weekly Problems & Client Notes
-  weeklyProblems     String[]      @default([])
-  clientNotes        String?
+  weeklyProblems String[] @default([])
+  clientNotes    String?
 
   // Coach Review
-  hasCoachReview     Boolean       @default(false)
-  reviewedById       String?
-  reviewedByName     String?
-  reviewedAt         DateTime?
-  whatWentWell       String?
-  needsImprovement   String?
-  nextWeekFocus      String?
-  workoutNotes       String?
-  nutritionNotes     String?
-  recoveryNotes      String?
-  followUpRequired   Boolean       @default(false)
+  hasCoachReview   Boolean   @default(false)
+  reviewedById     String?
+  reviewedByName   String?
+  reviewedAt       DateTime?
+  whatWentWell     String?
+  needsImprovement String?
+  nextWeekFocus    String?
+  workoutNotes     String?
+  nutritionNotes   String?
+  recoveryNotes    String?
+  followUpRequired Boolean   @default(false)
 
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([clientProfileId, year, weekNumber], name: "client_year_week_unique")
   @@index([clientProfileId])
@@ -622,39 +622,39 @@ model WeeklyCheckIn {
 }
 
 model MealPhoto {
-  id              String         @id @default(uuid())
-  clientProfileId String
-  clientProfile   ClientProfile  @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String?        // AXG-XXXX
-  mealId          String         // Grouping identifier for confirmed meal
-  dateString      String         // 'yyyy-MM-dd'
-  mealType        String         // Breakfast, Lunch, Snacks, Dinner
-  storagePath     String         // Relative path in secure storage
-  storageProvider String         @default("LOCAL_SECURE") // LOCAL_SECURE, S3, R2
-  mimeType        String         @default("image/jpeg")
-  fileSizeBytes   Int            @default(0)
-  capturedAt      DateTime       @default(now())
-  confirmedAt     DateTime       @default(now())
-  retentionUntil  DateTime?      // Configurable retention expiration date (null = keep indefinitely)
-  isDeleted       Boolean        @default(false)
-  deletedAt       DateTime?
-  itemsJson       String?        // JSON-encoded list of confirmed food items
-  weightSource    String         @default("AI_ESTIMATE") // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
-  totalCalories   Float          @default(0.0)
-  totalProtein    Float          @default(0.0)
-  totalCarbs      Float          @default(0.0)
-  totalFat        Float          @default(0.0)
-  totalFiber      Float          @default(0.0)
-  status          String         @default("PENDING") // PENDING, VERIFIED, NEEDS_ATTENTION
-  clientNote      String?
-  adminNote       String?
+  id                String        @id @default(uuid())
+  clientProfileId   String
+  clientProfile     ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
+  clientId          String? // AXG-XXXX
+  mealId            String // Grouping identifier for confirmed meal
+  dateString        String // 'yyyy-MM-dd'
+  mealType          String // Breakfast, Lunch, Snacks, Dinner
+  storagePath       String // Relative path in secure storage
+  storageProvider   String        @default("LOCAL_SECURE") // LOCAL_SECURE, S3, R2
+  mimeType          String        @default("image/jpeg")
+  fileSizeBytes     Int           @default(0)
+  capturedAt        DateTime      @default(now())
+  confirmedAt       DateTime      @default(now())
+  retentionUntil    DateTime? // Configurable retention expiration date (null = keep indefinitely)
+  isDeleted         Boolean       @default(false)
+  deletedAt         DateTime?
+  itemsJson         String? // JSON-encoded list of confirmed food items
+  weightSource      String        @default("AI_ESTIMATE") // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
+  totalCalories     Float         @default(0.0)
+  totalProtein      Float         @default(0.0)
+  totalCarbs        Float         @default(0.0)
+  totalFat          Float         @default(0.0)
+  totalFiber        Float         @default(0.0)
+  status            String        @default("PENDING") // PENDING, VERIFIED, NEEDS_ATTENTION
+  clientNote        String?
+  adminNote         String?
   verifiedByAdminId String?
-  verifiedAt      DateTime?
-  timezone        String?        @default("UTC")
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  verifiedAt        DateTime?
+  timezone          String?       @default("UTC")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  foodLogs        ClientFoodLog[]
+  foodLogs ClientFoodLog[]
 
   @@index([clientProfileId])
   @@index([clientId])
@@ -672,10 +672,10 @@ model Notification {
   id              String        @id @default(uuid())
   clientProfileId String
   clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String?       // AXG-XXXX
+  clientId        String? // AXG-XXXX
   title           String
   message         String
-  type            String        // WORKOUT, NUTRITION, CHECK_IN, ACTIVITY, MEMBERSHIP, SYSTEM
+  type            String // WORKOUT, NUTRITION, CHECK_IN, ACTIVITY, MEMBERSHIP, SYSTEM
   category        String        @default("GENERAL")
   priority        String        @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
   source          String        @default("AUTOMATION_RULE") // AUTOMATION_RULE, AI_COACH, ADMIN, SYSTEM
@@ -714,8 +714,8 @@ model TransformationMilestone {
   id              String        @id @default(uuid())
   clientProfileId String
   clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String?       // AXG-XXXX
-  weekNumber      Int           // 1, 4, 8, 12...
+  clientId        String? // AXG-XXXX
+  weekNumber      Int // 1, 4, 8, 12...
   date            DateTime      @default(now())
   frontPhotoUrl   String?
   sidePhotoUrl    String?
@@ -736,9 +736,9 @@ model AdminAttentionItem {
   id              String        @id @default(uuid())
   clientProfileId String
   clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String?       // AXG-XXXX
+  clientId        String? // AXG-XXXX
   clientName      String
-  attentionType   String        // INACTIVE, MISSED_WORKOUT, MISSING_CHECKIN, MISSING_FOOD, LOW_PROTEIN, LOW_WATER, LOW_STEPS, PAIN_REPORTED, POOR_SLEEP, MEMBERSHIP_EXPIRING
+  attentionType   String // INACTIVE, MISSED_WORKOUT, MISSING_CHECKIN, MISSING_FOOD, LOW_PROTEIN, LOW_WATER, LOW_STEPS, PAIN_REPORTED, POOR_SLEEP, MEMBERSHIP_EXPIRING
   severity        String        @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
   title           String
   details         String
@@ -763,15 +763,15 @@ model AdminAttentionItem {
 // ==========================================
 
 model AIConversation {
-  id             String       @id @default(uuid())
+  id             String   @id @default(uuid())
   adminId        String
-  title          String       @default("Alpha X AI Session")
-  activeClientId String?      // Selected client context (AXG-XXXX or UUID)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  title          String   @default("Alpha X AI Session")
+  activeClientId String? // Selected client context (AXG-XXXX or UUID)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  messages       AIMessage[]
-  proposals      AIProposal[]
+  messages  AIMessage[]
+  proposals AIProposal[]
 
   @@index([adminId])
   @@index([activeClientId])
@@ -782,10 +782,10 @@ model AIMessage {
   id             String         @id @default(uuid())
   conversationId String
   conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         String         // "ADMIN" | "AI"
+  sender         String // "ADMIN" | "AI"
   content        String
-  intent         String?        // "REPORT" | "WORKOUT_PROPOSAL" | "DIET_PROPOSAL" | "CLIENT_ANALYSIS" | "MULTI_CLIENT" | "GENERAL"
-  metadataJson   String?        // Structured metadata (completeness, dates, cards)
+  intent         String? // "REPORT" | "WORKOUT_PROPOSAL" | "DIET_PROPOSAL" | "CLIENT_ANALYSIS" | "MULTI_CLIENT" | "GENERAL"
+  metadataJson   String? // Structured metadata (completeness, dates, cards)
   createdAt      DateTime       @default(now())
 
   @@index([conversationId])
@@ -797,16 +797,16 @@ model AIProposal {
   conversationId   String?
   conversation     AIConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   clientProfileId  String
-  clientId         String?         // AXG-XXXX
+  clientId         String? // AXG-XXXX
   clientName       String
-  proposalType     String          // "WORKOUT" | "DIET" | "PROGRESSION"
+  proposalType     String // "WORKOUT" | "DIET" | "PROGRESSION"
   status           String          @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "EDITED"
   title            String
   summary          String
   reason           String
-  currentDataJson  String?         // Snapshot of existing plan/history
-  proposedDataJson String          // The AI proposal payload
-  finalDataJson    String?         // Admin-edited payload (if edited)
+  currentDataJson  String? // Snapshot of existing plan/history
+  proposedDataJson String // The AI proposal payload
+  finalDataJson    String? // Admin-edited payload (if edited)
   approvedById     String?
   approvedByName   String?
   approvedAt       DateTime?
@@ -829,7 +829,7 @@ model AIAuditLog {
   adminName    String?
   clientId     String?
   clientName   String?
-  action       String   // "CHAT_QUERY" | "WORKOUT_PROPOSED" | "DIET_PROPOSED" | "PROGRESSION_PROPOSED" | "PROPOSAL_APPROVED" | "PROPOSAL_REJECTED" | "PROPOSAL_EDITED" | "PLAN_ACTIVATED"
+  action       String // "CHAT_QUERY" | "WORKOUT_PROPOSED" | "DIET_PROPOSED" | "PROGRESSION_PROPOSED" | "PROPOSAL_APPROVED" | "PROPOSAL_REJECTED" | "PROPOSAL_EDITED" | "PLAN_ACTIVATED"
   details      String
   metadataJson String?
   createdAt    DateTime @default(now())
@@ -840,5 +840,3 @@ model AIAuditLog {
   @@index([createdAt])
   @@map("ai_audit_logs")
 }
-
-

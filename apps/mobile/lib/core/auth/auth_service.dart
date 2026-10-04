@@ -63,7 +63,8 @@ class AuthService extends ChangeNotifier {
   String get currentToken {
     if (_token.isNotEmpty) return _token;
     if (_role == UserRole.admin) return 'local_admin_session_token';
-    return 'alpha_x_mock_token_for_client';
+    // Never return a mock client token — empty string forces re-authentication
+    return '';
   }
   String get token => currentToken;
   bool get isInitialized => _isInitialized;
@@ -451,9 +452,7 @@ class AuthService extends ChangeNotifier {
 
     // 1. Check if user is entering Master Admin credentials
     final normalizedInput = cleanId.toLowerCase();
-    if (normalizedInput == AdminConfig.adminEmail.trim().toLowerCase() ||
-        normalizedInput == 'fitsundar6@gmail.com' ||
-        normalizedInput == 'admin@alphaxgym.com') {
+    if (normalizedInput == AdminConfig.adminEmail.trim().toLowerCase()) {
       await adminLogin(email: cleanId, password: password);
       return {
         'role': 'ADMIN',
@@ -745,22 +744,12 @@ class AuthService extends ChangeNotifier {
     final cleanEmail = email.trim().toLowerCase();
     final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
     final configured = AdminConfig.adminPassword;
-    final cleanEntered = password.trim();
-    final cleanConfigured = configured.trim();
 
     final isEmailMatch = (cleanEmail == configuredEmail) ||
-        (cleanEmail == 'fitsundar6@gmail.com') ||
-        (cleanEmail == 'admin@alphaxgym.com');
+        (cleanEmail == 'fitsundar6@gmail.com');
 
-    final match = (password == configured) ||
-        (cleanEntered == cleanConfigured) ||
-        (cleanEntered.replaceAll('!', '') == cleanConfigured.replaceAll('!', '')) ||
-        ('${cleanEntered.replaceAll('!', '')}!' == cleanConfigured) ||
-        (cleanEntered == 'AlphaXAdmin2026!') ||
-        (cleanEntered == 'AlphaXAdmin2026') ||
-        (cleanEntered.toLowerCase() == cleanConfigured.toLowerCase()) ||
-        (cleanEntered.toLowerCase() == 'alphaxadmin2026!') ||
-        (cleanEntered.toLowerCase() == 'alphaxadmin2026');
+    // Strict exact-match only — backend bcrypt is the authoritative gate
+    final match = password == configured;
 
     if (!isEmailMatch || !match) {
       throw Exception('Invalid admin email or password.');

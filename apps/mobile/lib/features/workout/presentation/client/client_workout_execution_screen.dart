@@ -23,12 +23,14 @@ class ClientWorkoutExecutionScreen extends StatefulWidget {
   State<ClientWorkoutExecutionScreen> createState() => _ClientWorkoutExecutionScreenState();
 }
 
-class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScreen> {
+class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScreen>
+    with WidgetsBindingObserver {
   int _currentExerciseIndex = 0;
 
   // Elapsed workout timer
   Timer? _elapsedTimer;
   int _elapsedSeconds = 0;
+  DateTime? _appPausedTime;
 
   // Rest Timer State
   Timer? _restTimer;
@@ -51,19 +53,191 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startElapsedTimer();
     _initControllersForExercise(_currentExerciseIndex);
     widget.workoutRepository.addListener(_onRepoChange);
+
+    // If resuming an active session with saved elapsed seconds, restore accurately
+    widget.workoutRepository.getSavedActiveSessionDuration().then((savedDuration) {
+      if (savedDuration != null && savedDuration > 0 && mounted) {
+        setState(() {
+          _elapsedSeconds = savedDuration;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _elapsedTimer?.cancel();
     _restTimer?.cancel();
     _disposeControllers();
     _clientNoteController.dispose();
     widget.workoutRepository.removeListener(_onRepoChange);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _appPausedTime = DateTime.now();
+      widget.workoutRepository.saveActiveSessionToLocalStorage(elapsedSeconds: _elapsedSeconds);
+    } else if (state == AppLifecycleState.resumed) {
+      if (_appPausedTime != null) {
+        final awaySeconds = DateTime.now().difference(_appPausedTime!).inSeconds;
+        if (awaySeconds > 0) {
+          setState(() {
+            _elapsedSeconds += awaySeconds;
+          });
+          if (_isRestActive && !_isRestPaused) {
+            final remaining = _restSecondsRemaining - awaySeconds;
+            if (remaining <= 0) {
+              _stopRestTimer();
+              HapticFeedback.heavyImpact();
+              setState(() => _showNextSetBanner = true);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.fitness_center, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'REST FINISHED while away! Ready for next set on $_restExerciseName',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: AppColors.primaryRed,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              }
+            } else {
+              setState(() {
+                _restSecondsRemaining = remaining;
+              });
+            }
+          }
+        }
+        _appPausedTime = null;
+        widget.workoutRepository.saveActiveSessionToLocalStorage(elapsedSeconds: _elapsedSeconds);
+      }
+    }
+  }
+
+  void _showBasementShieldInfo() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.success, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.shield_outlined, color: AppColors.success, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ALPHA X BASEMENT SHIELD',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  Text(
+                    '100% OFFLINE-FIRST PERSISTENCE',
+                    style: TextStyle(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _shieldFeatureRow(
+              icon: Icons.bolt_rounded,
+              title: 'Zero Latency Writes (<1ms)',
+              desc: 'Every set, rep, weight change, and rest interval is instantly committed locally without waiting for any server roundtrip.',
+            ),
+            const SizedBox(height: 14),
+            _shieldFeatureRow(
+              icon: Icons.battery_charging_full_rounded,
+              title: 'Crash & Battery Resilient',
+              desc: 'If your phone locks, runs out of battery, or closes mid-workout, your progress is preserved and resumes seamlessly.',
+            ),
+            const SizedBox(height: 14),
+            _shieldFeatureRow(
+              icon: Icons.cloud_sync_rounded,
+              title: 'Automatic Cloud Upload',
+              desc: 'When finished in areas with zero cellular reception, your workout record is safely queued and automatically uploaded as soon as connectivity returns.',
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('GOT IT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shieldFeatureRow({required IconData icon, required String title, required String desc}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.gold, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   void _onRepoChange() {
@@ -694,8 +868,49 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
           ],
         ),
         actions: [
+          // Alpha X Basement Shield Status Indicator
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            child: AlphaXPressable(
+              onTap: _showBasementShieldInfo,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.success.withOpacity(0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    const Icon(Icons.shield_rounded, size: 12, color: AppColors.success),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'BASEMENT SAFE',
+                      style: TextStyle(
+                        color: AppColors.success,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            margin: const EdgeInsets.fromLTRB(0, 8, 10, 8),
             child: AlphaXPressable(
               onTap: _onFinishWorkout,
               child: Container(

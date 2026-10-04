@@ -66,17 +66,84 @@ router.patch('/opt-out', requireAuth, async (req: Request, res: Response) => {
 /**
  * POST /admin/trigger-sweep (Admin only)
  * Manually triggers the daily AI notification sweep.
- * Useful for testing without waiting for 6 PM.
  */
 router.post('/admin/trigger-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    // Run in background — don't await so the request returns immediately
     aiNotificationEngine.runDailySweep().catch((err) =>
       console.error('[NOTIFICATIONS] Manual sweep error:', err?.message)
     );
     sendSuccess(res, { message: 'Daily AI notification sweep triggered' }, HttpStatus.OK);
   } catch (err: any) {
     sendError(res, 'SWEEP_ERROR', 'Failed to trigger sweep', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/trigger-morning-sweep (Admin only)
+ * Manually triggers the 7:30 AM Morning Readiness Sweep.
+ */
+router.post('/admin/trigger-morning-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await aiNotificationEngine.runMorningCheckInSweep();
+    sendSuccess(res, { message: 'Morning Readiness Sweep triggered', ...result }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'SWEEP_ERROR', err?.message || 'Failed to trigger morning sweep', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/trigger-missed-sweep (Admin only)
+ * Manually triggers the 10:30 AM Missed Workout Auto-Regulation Sweep.
+ */
+router.post('/admin/trigger-missed-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await aiNotificationEngine.runMissedWorkoutSweep();
+    sendSuccess(res, { message: 'Missed Workout Sweep triggered', ...result }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'SWEEP_ERROR', err?.message || 'Failed to trigger missed workout sweep', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/trigger-evening-sweep (Admin only)
+ * Manually triggers the 8:30 PM Evening Accountability Sweep.
+ */
+router.post('/admin/trigger-evening-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await aiNotificationEngine.runEveningCheckInSweep();
+    sendSuccess(res, { message: 'Evening Accountability Sweep triggered', ...result }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'SWEEP_ERROR', err?.message || 'Failed to trigger evening sweep', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/simulate-post-workout (Admin only)
+ * Simulates workout completion and dispatches immediate PR / celebration notification.
+ */
+router.post('/admin/simulate-post-workout', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { clientId, sessionTitle, totalVolume, personalRecords } = req.body;
+  if (!clientId) {
+    sendError(res, 'VALIDATION_ERROR', 'clientId is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  try {
+    const simulatedRecord = {
+      id: `sim-${Date.now()}`,
+      sessionTitle: sessionTitle || 'Deadlift & Posterior Chain',
+      durationSeconds: 3600,
+      totalVolume: totalVolume || 4200,
+      completedSetsCount: 16,
+      personalRecords: personalRecords || [
+        { exerciseName: 'Deadlift', type: 'VOLUME', value: 4200, weight: 180 },
+      ],
+    };
+
+    const dispatched = await aiNotificationEngine.sendPostWorkoutCelebration(clientId, simulatedRecord);
+    sendSuccess(res, { dispatched, simulatedRecord }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'SIMULATION_ERROR', err?.message || 'Failed to simulate post workout push', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
 

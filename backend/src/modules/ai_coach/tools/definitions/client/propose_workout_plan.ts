@@ -70,7 +70,30 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
       weeklySchedule: {
         type: 'array',
         description: 'Array of workout days in the weekly plan',
-        items: { type: 'object' },
+        items: {
+          type: 'object',
+          properties: {
+            day: { type: 'string', description: 'Day of the week e.g. Monday' },
+            sessionTitle: { type: 'string', description: 'Session name e.g. Upper Body Strength' },
+            workoutType: { type: 'string', description: 'Type of workout e.g. Strength, Hypertrophy, Cardio' },
+            targetMuscleGroup: { type: 'string', description: 'Target muscle groups e.g. Chest · Triceps' },
+            estimatedDurationMinutes: { type: 'number', description: 'Estimated session duration in minutes' },
+            exercises: {
+              type: 'array',
+              description: 'List of exercises for this session',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: 'Exercise name' },
+                  sets: { type: 'number', description: 'Number of sets' },
+                  reps: { type: 'string', description: 'Rep range e.g. 8-12 or 30 sec' },
+                  restSeconds: { type: 'number', description: 'Rest between sets in seconds' },
+                  notes: { type: 'string', description: 'Optional coaching cues' },
+                },
+              } as any,
+            },
+          },
+        } as any,
       },
     },
     required: ['clientIdentifier', 'planTitle', 'reason', 'summary', 'weeklySchedule'],

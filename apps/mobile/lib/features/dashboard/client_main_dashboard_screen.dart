@@ -5,6 +5,7 @@ import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_session_overview_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_execution_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_history_screen.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/activity/presentation/screens/activity_dashboard_screen.dart';
@@ -1166,17 +1167,27 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
         AlphaXHero(
           imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1200&q=80',
           tag: "TODAY'S WORKOUT",
-          title: 'READY TO TRAIN?',
-          subtitle: recommended != null
-              ? 'Today\'s workout: ${recommended.title} • ${recommended.targetMuscleGroup}'
-              : 'Push • Chest • Shoulders • Triceps',
+          title: widget.workoutRepository.hasActiveSavedSession ? 'WORKOUT IN PROGRESS' : 'READY TO TRAIN?',
+          subtitle: widget.workoutRepository.hasActiveSavedSession
+              ? '${widget.workoutRepository.activeSession.title} • ${widget.workoutRepository.activeSession.totalCompletedSets}/${widget.workoutRepository.activeSession.totalSets} sets logged'
+              : (recommended != null
+                  ? 'Today\'s workout: ${recommended.title} • ${recommended.targetMuscleGroup}'
+                  : 'Push • Chest • Shoulders • Triceps'),
           height: 280,
           action: AlphaXButton(
-            label: 'START WORKOUT',
-            icon: Icons.play_arrow_rounded,
+            label: widget.workoutRepository.hasActiveSavedSession ? 'RESUME WORKOUT' : 'START WORKOUT',
+            icon: widget.workoutRepository.hasActiveSavedSession ? Icons.restore_rounded : Icons.play_arrow_rounded,
             height: 48,
             onPressed: () {
-              if (recommended != null) {
+              if (widget.workoutRepository.hasActiveSavedSession) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => ClientWorkoutExecutionScreen(
+                      workoutRepository: widget.workoutRepository,
+                    ),
+                  ),
+                );
+              } else if (recommended != null) {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (ctx) => ClientSessionOverviewScreen(

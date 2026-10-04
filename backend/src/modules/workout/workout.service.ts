@@ -5,6 +5,8 @@ import {
   StoredWorkoutRecord,
 } from './workout.repository';
 import { prisma } from '../../config/prisma';
+import { maskEmail, maskPhone } from '../../utils/pii_mask';
+import { aiNotificationEngine } from '../notifications/ai_notifications.service';
 
 export class WorkoutService {
   // --- Admin Session Operations ---
@@ -84,6 +86,8 @@ export class WorkoutService {
               clientId: true,
               googleUid: true,
               photoUrl: true,
+              phone: true,
+              adminNotes: true,
               dailyStepGoal: true,
               fitnessLevel: true,
               primaryGoal: true,
@@ -121,7 +125,10 @@ export class WorkoutService {
           clientId: displayClientId,
           userId: u.id,
           name: u.name,
-          email: u.email,
+          // PII masking: admin list shows partial email & phone only
+          email: maskEmail(u.email) ?? '',
+          phone: maskPhone(cp?.phone ?? null),
+          adminNotes: cp?.adminNotes ?? null,
           photoUrl: cp?.photoUrl || u.photoUrl || null,
           googleUid: cp?.googleUid || u.googleUid || null,
           status: 'Active',
@@ -206,7 +213,14 @@ export class WorkoutService {
   }
 
   async recordWorkout(clientId: string, data: any): Promise<StoredWorkoutRecord> {
-    return workoutRepository.saveWorkoutRecord(clientId, data);
+    const savedRecord = await workoutRepository.saveWorkoutRecord(clientId, data);
+
+    // Autonomous Proactive AI Event Trigger: Post-Workout Celebration & Recovery Guidance
+    aiNotificationEngine.sendPostWorkoutCelebration(clientId, savedRecord).catch((err) => {
+      console.warn('[WORKOUT SERVICE] Post-workout proactive notification error:', err?.message);
+    });
+
+    return savedRecord;
   }
 
   async getClientHistory(clientId: string): Promise<StoredWorkoutRecord[]> {

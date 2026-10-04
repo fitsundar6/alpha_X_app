@@ -13,7 +13,7 @@ export interface SearchClientsInput {
 
 export const searchClientsTool: ToolDefinition<SearchClientsInput> = {
   name: 'search_clients',
-  description: 'Searches for Alpha X clients by name, client ID (e.g. AXG-XXXX), or email. Returns matching clients with minimal identifying details to safely resolve client identity.',
+  description: 'Searches for Alpha X clients by name, client ID (e.g. AXG-XXXX), or email. Pass an empty string or "all" to list all clients. Returns matching clients with minimal identifying details to safely resolve client identity.',
   category: 'READ',
   permission: ToolPermission.READ_CLIENT,
   inputSchema: {
@@ -21,8 +21,7 @@ export const searchClientsTool: ToolDefinition<SearchClientsInput> = {
     properties: {
       query: {
         type: 'string',
-        description: 'Client name, AXG-XXXX ID, or email search query',
-        minLength: 1,
+        description: 'Client name, AXG-XXXX ID, or email search query. Use empty string or "all" to list all clients.',
         maxLength: 100,
       },
       limit: {
@@ -36,7 +35,10 @@ export const searchClientsTool: ToolDefinition<SearchClientsInput> = {
     additionalProperties: false,
   },
   handler: async (args, _context) => {
-    return await clientDataService.searchClients(args.query, args.limit);
+    // Treat empty / "all" as a broad search to list all clients
+    const q = args.query?.trim() || '';
+    const effectiveQuery = (q === '' || q.toLowerCase() === 'all') ? 'AXG' : q;
+    return await clientDataService.searchClients(effectiveQuery, args.limit);
   },
   enabled: true,
 };

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
@@ -9,6 +10,13 @@ import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart
 class AiCoachRepository extends ChangeNotifier {
   final http.Client _httpClient;
   AiDailySummary? _cachedSummary;
+
+  // Direct Gemini conversation history (used when backend is unreachable)
+  final List<Content> _directHistory = [];
+
+  // Gemini API key — read securely from environment without hardcoding secrets
+  static const String _geminiApiKey =
+      String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   AiCoachRepository({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
 
@@ -59,7 +67,7 @@ class AiCoachRepository extends ChangeNotifier {
         url,
         headers: _buildHeaders(),
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 45)); // Gemini 2.5-flash + tool calls can take 20-40s
 
       // Automatic 401 recovery: JWT access token expired — refresh and retry
       if (resp.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
@@ -73,7 +81,7 @@ class AiCoachRepository extends ChangeNotifier {
               'Authorization': 'Bearer $freshToken',
             },
             body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 15));
+          ).timeout(const Duration(seconds: 45));
         }
       }
 
@@ -84,45 +92,80 @@ class AiCoachRepository extends ChangeNotifier {
         }
       }
 
-      // If backend returns an explicit error envelope (e.g. 503, 400, 401, 500)
-      if (resp.body.isNotEmpty) {
+      // Check for user validation error (HTTP 400)
+      if (resp.statusCode == 400 && resp.body.isNotEmpty) {
         try {
           final decoded = jsonDecode(resp.body);
           final errorMsg = (decoded['error']?['message'] ?? decoded['message'])?.toString() ?? '';
-          final errorCode = (decoded['error']?['code'] ?? decoded['code'])?.toString() ?? '';
-
-          // Silently fall through to local fallback for Gemini config/auth issues.
-          // This allows full AI Coach testing without a live Gemini API key.
-          final isGeminiConfigError = errorMsg.contains('authentication failed') ||
-              errorMsg.contains('API key') ||
-              errorMsg.contains('GEMINI_API_KEY') ||
-              errorMsg.contains('temporarily unavailable') ||
-              errorCode == 'AI_CONFIGURATION_REQUIRED' ||
-              errorCode == 'AUTHENTICATION_ERROR' ||
-              resp.statusCode == 503;
-
-          if (isGeminiConfigError) {
-            debugPrint('[AI COACH REPO] Gemini not configured — using local AI fallback.');
-            return _buildLocalFallbackResponse(message, selectedClientId);
-          }
-
           if (errorMsg.isNotEmpty) {
             return AiChatMessage(
               id: UniqueKey().toString(),
               sender: 'AI',
-              content: '⚠️ **Alpha X AI Notice:** $errorMsg',
+              content: '⚠️ $errorMsg',
               isError: true,
-              intent: errorCode.isNotEmpty ? errorCode : 'SERVER_NOTICE',
+              intent: 'VALIDATION_ERROR',
             );
           }
         } catch (_) {}
       }
-    } catch (e) {
-      debugPrint('[AI COACH REPO] Network error: $e');
-    }
 
-    // Fallback response for offline or test environments
-    return _buildLocalFallbackResponse(message, selectedClientId);
+      // If the primary server returned an error (e.g. 503 from remote Vercel) and wasn't localhost,
+      // attempt to connect to the local dev server (http://localhost:5000) before going offline
+      final urlStr = url.toString();
+      if (!urlStr.contains('localhost:5000') && !urlStr.contains('127.0.0.1:5000')) {
+        try {
+          final localUrl = Uri.parse('http://localhost:5000/api/v1/admin/ai-coach/chat');
+          debugPrint('[AI COACH REPO] Remote backend status ${resp.statusCode}, trying local server: $localUrl');
+          final localResp = await _httpClient.post(
+            localUrl,
+            headers: _buildHeaders(),
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 15));
+          if (localResp.statusCode == 200) {
+            final decoded = jsonDecode(localResp.body);
+            if (decoded['success'] == true && decoded['data'] != null) {
+              debugPrint('[AI COACH REPO] Local backend responded successfully with database tools!');
+              return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
+            }
+          }
+        } catch (localErr) {
+          debugPrint('[AI COACH REPO] Local server attempt failed: $localErr');
+        }
+      }
+
+      // For any backend AI service error, fall back transparently to direct Gemini
+      debugPrint('[AI COACH REPO] Backend status ${resp.statusCode} — failing over to direct Gemini');
+      return await _callGeminiDirectly(message, selectedClientId);
+    } catch (e) {
+      debugPrint('[AI COACH REPO] Network or backend error: $e — trying local backend then direct Gemini');
+
+      // If primary failed due to network, try localhost if primary wasn't localhost
+      final primaryUrlStr = AppConstants.apiBaseUrl;
+      if (!primaryUrlStr.contains('localhost:5000') && !primaryUrlStr.contains('127.0.0.1:5000')) {
+        try {
+          final payload = <String, dynamic>{'message': message};
+          if (conversationId != null) payload['conversationId'] = conversationId;
+          if (selectedClientId != null && selectedClientId.isNotEmpty && selectedClientId != 'ALL') {
+            payload['selectedClientId'] = selectedClientId;
+          }
+          final localUrl = Uri.parse('http://localhost:5000/api/v1/admin/ai-coach/chat');
+          final localResp = await _httpClient.post(
+            localUrl,
+            headers: _buildHeaders(),
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 10));
+          if (localResp.statusCode == 200) {
+            final decoded = jsonDecode(localResp.body);
+            if (decoded['success'] == true && decoded['data'] != null) {
+              debugPrint('[AI COACH REPO] Local backend responded successfully after network error!');
+              return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
+            }
+          }
+        } catch (_) {}
+      }
+
+      return await _callGeminiDirectly(message, selectedClientId);
+    }
   }
 
   /// Initializes a new isolated conversation session on the backend.
@@ -130,6 +173,9 @@ class AiCoachRepository extends ChangeNotifier {
     if (_isTestEnvironment) {
       return 'conv_test_${DateTime.now().millisecondsSinceEpoch}';
     }
+
+    // Clear direct Gemini conversation history for a fresh session
+    _directHistory.clear();
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/new-chat');
@@ -243,6 +289,99 @@ class AiCoachRepository extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AI COACH REPO] Edit error: $e');
       return true;
+    }
+  }
+
+  /// Calls Gemini API directly from Flutter when the backend is unreachable.
+  /// Maintains multi-turn conversation history and uses Alpha X system prompt.
+  Future<AiChatMessage> _callGeminiDirectly(
+      String message, String? selectedClientId) async {
+    try {
+      debugPrint('[AI COACH REPO] Backend offline or error — calling Gemini directly');
+
+      // Candidate models with active quotas and tool/text capability
+      final modelCandidates = [
+        'gemini-flash-lite-latest',
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3.8-flash',
+      ];
+
+      GenerateContentResponse? response;
+      for (final modelName in modelCandidates) {
+        try {
+          final model = GenerativeModel(
+            model: modelName,
+            apiKey: _geminiApiKey,
+            systemInstruction: Content.system(
+              'You are the Alpha X Gym Master AI Coach — an elite fitness intelligence '
+              'system for a professional gym management platform. '
+              'You assist the gym administrator with:\n'
+              '• Workout programming and progressive overload\n'
+              '• Client nutrition and macro planning\n'
+              '• Athlete performance analysis and check-in reviews\n'
+              '• Exercise selection and coaching cues\n'
+              '• Gym operations and client management\n\n'
+              'Technical Context: The local Alpha X backend API runs on port 5000 (http://localhost:5000/api/v1 for desktop/web, or your LAN IP http://192.168.1.5:5000/api/v1 for physical mobile devices), and cloud on https://alpha-x-app.vercel.app/api/v1. Do not invent non-existent domains like api.alphaxgym.com.\n\n'
+              'Respond like a professional strength and conditioning coach. '
+              'Be concise, evidence-based, and actionable. '
+              'When creating workout or diet proposals, format them clearly with sets, '
+              'reps, weights, and macros.\n\n'
+              'IMPORTANT: Always respond directly to what the user asks. '
+              'Never give a generic non-answer.',
+            ),
+            generationConfig: GenerationConfig(
+              temperature: 0.4,
+              maxOutputTokens: 1024,
+            ),
+          );
+
+          final chat = model.startChat(history: _directHistory);
+          final res = await chat.sendMessage(Content.text(message));
+          if (res.text != null && res.text!.trim().isNotEmpty) {
+            response = res;
+            debugPrint('[AI COACH REPO] Direct Gemini succeeded using model: $modelName');
+            break; // success — stop trying models
+          }
+        } catch (modelErr) {
+          debugPrint('[AI COACH REPO] Model $modelName failed: $modelErr — trying next');
+          continue;
+        }
+      }
+
+      final replyText = response?.text?.trim();
+      if (replyText == null || replyText.isEmpty) {
+        throw Exception('All direct Gemini models failed or returned empty response');
+      }
+
+      // Save this turn to history for multi-turn context
+      _directHistory.add(Content.text(message));
+      _directHistory.add(Content.model([TextPart(replyText)]));
+
+      // Keep history bounded to last 10 turns (20 entries)
+      if (_directHistory.length > 20) {
+        _directHistory.removeRange(0, _directHistory.length - 20);
+      }
+
+      debugPrint('[AI COACH REPO] Gemini direct response: ${replyText.substring(0, replyText.length.clamp(0, 80))}...');
+
+      return AiChatMessage(
+        id: UniqueKey().toString(),
+        sender: 'AI',
+        content: replyText,
+        intent: 'DIRECT_GEMINI',
+        suggestedFollowUps: const [
+          'Create a workout plan',
+          'Give me nutrition advice',
+          'Explain progressive overload',
+        ],
+      );
+    } catch (e) {
+      debugPrint('[AI COACH REPO] Direct Gemini error: $e');
+      // If all Gemini remote calls fail, use keyword responses with actionable proposal cards
+      return _buildLocalFallbackResponse(message, selectedClientId);
     }
   }
 

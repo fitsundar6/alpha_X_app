@@ -51,9 +51,17 @@ export class GeminiService {
   public get promptVersion(): string {
     return GeminiService.PROMPT_VERSION;
   }
-  private static readonly DEFAULT_MODEL = 'gemini-2.5-flash';
-  private static readonly FALLBACK_MODEL = 'gemini-3.8-flash';
-  private static readonly DEFAULT_TIMEOUT_MS = 30000;
+  // Primary: gemini-flash-lite-latest (fastest GA workhorse, active free quota, supports tool calling)
+  // Fallbacks: gemini-3.5-flash, gemini-3.6-flash, gemini-3.5-flash-lite, gemini-3.8-flash
+  private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
+  private static readonly FALLBACK_MODELS = [
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+  ];
+  private static readonly MAX_RETRIES = 3;
+  private static readonly DEFAULT_TIMEOUT_MS = 45000;
 
   /**
    * Generates an AI response from Google Gemini with safety controls,
@@ -139,8 +147,12 @@ export class GeminiService {
       verifiedClient: verifiedClient || null,
     };
 
-    // 5. Execute with Timeout & Fallback (passing multi-turn history & tool execution context)
-    try {
+    // 5. Execute with Retry + Timeout (retries on Gemini 503 "high demand" spikes)
+    const MAX_RETRIES = GeminiService.MAX_RETRIES;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
       const response = await this.executeWithTimeout(
         ai,
         targetModel,
@@ -192,30 +204,42 @@ export class GeminiService {
         toolsInvokedNames: response.toolsInvokedNames,
         verifiedClient: verifiedClient || null,
       };
-    } catch (err: any) {
-      const latencyMs = Date.now() - startTime;
-      const errorMsg = err?.message || String(err);
-      // ── TEMP DEBUG: log real Gemini error ─────────────────────────────────
-      console.error('[GEMINI RAW ERROR]', errorMsg);
-      // ─────────────────────────────────────────────────────────────────────
-      const isTimeout = errorMsg.includes('timed out');
-      const isAuthError = errorMsg.includes('API key not valid') || errorMsg.includes('403') || errorMsg.includes('400');
-      const isRateLimit = errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
-      const isModelError = errorMsg.includes('404') || errorMsg.includes('no longer available') || errorMsg.includes('NOT_FOUND');
+      } catch (err: any) {
+        lastError = err;
+        const rawMsg = err?.message || String(err);
+        console.error('[GEMINI RAW ERROR]', rawMsg);
+        const isOverloaded = rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('high demand') || rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED');
+        if (isOverloaded && attempt < MAX_RETRIES) {
+          const delayMs = Math.min(Math.pow(2, attempt) * 1500, 30000); // cap at 30s
+          console.warn(`[GEMINI RETRY] Attempt ${attempt}/${MAX_RETRIES} — high demand 503. Retrying in ${delayMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        break;
+      }
+    }
 
+    // All attempts exhausted — map to safe client-facing error
+    {
+      const latencyMs = Date.now() - startTime;
+      const errorMsg = lastError?.message || String(lastError);
+      const isTimeout = errorMsg.includes('timed out');
+      const isAuthError = errorMsg.includes('API key not valid') || errorMsg.includes('403');
+      const isRateLimit = errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('503') || errorMsg.includes('high demand');
+      const isModelError = errorMsg.includes('not found') || errorMsg.includes('thought_signature') || errorMsg.includes('INVALID_ARGUMENT');
 
       let errorCategory = 'GEMINI_API_ERROR';
       let clientFacingMessage = 'AI service is temporarily unavailable. Please try again shortly.';
 
       if (isTimeout) {
         errorCategory = 'TIMEOUT';
-        clientFacingMessage = 'AI service request timed out after 15 seconds. Please try again.';
+        clientFacingMessage = 'AI service request timed out. Please try again.';
       } else if (isAuthError) {
         errorCategory = 'AUTHENTICATION_ERROR';
         clientFacingMessage = 'AI service authentication failed. Please verify server API key configuration.';
       } else if (isRateLimit) {
         errorCategory = 'RATE_LIMIT_EXCEEDED';
-        clientFacingMessage = 'Gemini API rate limit reached. Please wait a moment before trying again.';
+        clientFacingMessage = 'Gemini is experiencing high demand. Please wait a moment and try again.';
       }
 
       this.logAudit({
@@ -232,7 +256,6 @@ export class GeminiService {
         message: errorCategory,
       });
 
-      // Never leak internal stack trace, API keys, or raw system URLs to client
       throw new Error(clientFacingMessage);
     }
   }
@@ -318,22 +341,31 @@ export class GeminiService {
           const toolResult = await toolExecutor.executeTool(call.name, call.args, context);
           console.log(`[DEBUG GEMINI] Tool result for ${call.name}: success=${toolResult.success}, hasData=${toolResult.data !== undefined}`);
 
-          // Append model turn with functionCall
+          // Build the model turn with functionCall
+          // IMPORTANT: thought_signature must be forwarded from the model response part
+          // to satisfy gemini-3.8-flash's requirement for tool-call continuations
+          const modelParts: any[] = [];
+          if (currentResponse?.candidates?.[0]?.content?.parts) {
+            for (const part of currentResponse.candidates[0].content.parts) {
+              if (part.functionCall && part.functionCall.name === call.name) {
+                // Carry the full part including thought_signature if present
+                modelParts.push(part);
+              }
+            }
+          }
+          // Fallback: plain functionCall if we couldn't find the signed part
+          if (modelParts.length === 0) {
+            modelParts.push({ functionCall: { name: call.name, args: call.args || {} } });
+          }
+
           contentsPayload.push({
             role: 'model',
-            parts: [
-              {
-                functionCall: {
-                  name: call.name,
-                  args: call.args || {},
-                },
-              },
-            ],
+            parts: modelParts,
           });
 
-          // Append tool response
+          // Append tool response — use role:'user' (role:'tool' is not supported by this model)
           contentsPayload.push({
-            role: 'tool',
+            role: 'user',
             parts: [
               {
                 functionResponse: {
@@ -375,7 +407,7 @@ export class GeminiService {
   }
 
   /**
-   * Helper that calls Gemini generateContent with fallback from 2.5-flash to 1.5-flash
+   * Helper that calls Gemini generateContent with fallback across resilient models
    */
   private async callModelWithFallback(
     ai: GoogleGenAI,
@@ -392,24 +424,25 @@ export class GeminiService {
       config.tools = toolsConfig;
     }
 
-    try {
-      return await ai.models.generateContent({
-        model: modelName,
-        contents,
-        config,
-      });
-    } catch (firstErr: any) {
-      // If primary model fails with not found / 404, fallback to 1.5-flash
-      if (modelName !== GeminiService.FALLBACK_MODEL && firstErr?.message?.includes('not found')) {
-        console.warn(`[GEMINI SERVICE] Primary model ${modelName} unavailable, falling back to ${GeminiService.FALLBACK_MODEL}`);
+    const candidateModels = [
+      modelName,
+      ...GeminiService.FALLBACK_MODELS.filter((m) => m !== modelName),
+    ];
+
+    let lastErr: any;
+    for (const currentModel of candidateModels) {
+      try {
         return await ai.models.generateContent({
-          model: GeminiService.FALLBACK_MODEL,
+          model: currentModel,
           contents,
           config,
         });
+      } catch (err: any) {
+        lastErr = err;
+        console.warn(`[GEMINI SERVICE] Model ${currentModel} failed (${err?.message?.substring(0, 80)}), trying fallback...`);
       }
-      throw firstErr;
     }
+    throw lastErr;
   }
 
   /**

@@ -39,13 +39,14 @@ export function validateToolPermission(
     );
   }
 
-  // In Phase 6-9, safe read-only client and calculation/analysis tools are activated:
+  // In Phase 6-9, safe read-only client, calculation/analysis, and proposal tools are activated:
   const allowedPermissions: Set<ToolPermission> = new Set([
     ToolPermission.READ_SYSTEM,
     ToolPermission.READ_KNOWLEDGE,
     ToolPermission.CALCULATE_METRIC,
     ToolPermission.READ_CLIENT,
     ToolPermission.ANALYZE_DATA,
+    ToolPermission.PROPOSE_PLAN,  // Phase 7+: AI can save PENDING proposals for admin review
   ]);
 
   if (!allowedPermissions.has(tool.permission)) {

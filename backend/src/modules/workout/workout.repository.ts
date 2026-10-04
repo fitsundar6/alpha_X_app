@@ -479,6 +479,11 @@ export class WorkoutRepository {
       ],
     };
     this.records.set(pastRecordId, pastRecord);
+    this.records.set('rec_seed_push_a_marcus', {
+      ...pastRecord,
+      id: 'rec_seed_push_a_marcus',
+      clientId: 'client_marcus_vance',
+    });
   }
 
   // --- Admin Session Operations ---

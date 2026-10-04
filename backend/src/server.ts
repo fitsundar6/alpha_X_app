@@ -20,6 +20,8 @@ import { aiCoachRoutes } from './modules/ai_coach/ai_coach.routes';
 import { aiProposalsRoutes } from './modules/ai_coach/ai_proposals.routes';
 import { notificationsRoutes } from './modules/notifications/notifications.routes';
 import { aiNotificationEngine } from './modules/notifications/ai_notifications.service';
+import { telemetryRoutes } from './modules/telemetry/telemetry.routes';
+import { telemetryService } from './modules/telemetry/telemetry.service';
 import cron from 'node-cron';
 
 const app = express();
@@ -207,6 +209,10 @@ app.use('/api/v1/admin/ai-proposals', aiProposalsRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 
+// Weekly Alpha Telemetry — Sunday "Spotify-Wrapped for Lifting"
+app.use('/api/v1/telemetry', telemetryRoutes);
+app.use('/api/telemetry', telemetryRoutes);
+
 // Automation & Engagement Engine Routes
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/automation', automationRoutes);
@@ -245,19 +251,47 @@ if (!isTestRun && !isVercel && isDirectRun) {
       console.warn('Startup database auto-seed notice:', e);
     }
 
-    // ── AI Push Notification Cron Job ─────────────────────────────────────
-    // Fires every day at 6:00 PM local server time
-    // Gemini generates a personal message per client, sent via OneSignal
+    // ── Proactive AI Coach Push Notification Schedulers ───────────────────
+    // Autonomous scheduled triggers:
+    // 1. Morning Readiness Check-in at 7:30 AM ("Leg Day today at 6 PM. Drink water...")
+    // 2. Missed Workout Auto-Regulation at 10:30 AM ("Missed yesterday? Swap to today...")
+    // 3. Evening Accountability & Nutrition Sweep at 8:30 PM (Protein & recovery sleep)
     if (env.ONESIGNAL_APP_ID && env.ONESIGNAL_REST_API_KEY) {
-      cron.schedule('0 18 * * *', () => {
-        console.log('[CRON] 6:00 PM — Starting AI push notification sweep...');
-        aiNotificationEngine.runDailySweep().catch((err) =>
-          console.error('[CRON] Notification sweep error:', err?.message)
+      // 1. 7:30 AM — Morning Readiness Check-in
+      cron.schedule('30 7 * * *', () => {
+        console.log('[CRON] 7:30 AM — Starting AI Morning Readiness Check-in sweep...');
+        aiNotificationEngine.runMorningCheckInSweep().catch((err) =>
+          console.error('[CRON] Morning check-in sweep error:', err?.message)
         );
       });
-      console.log('🔔 AI Push Notifications: scheduled daily at 6:00 PM');
+
+      // 2. 10:30 AM — Missed Workout Auto-Regulation Sweep
+      cron.schedule('30 10 * * *', () => {
+        console.log('[CRON] 10:30 AM — Starting AI Missed Workout Auto-Regulation sweep...');
+        aiNotificationEngine.runMissedWorkoutSweep().catch((err) =>
+          console.error('[CRON] Missed workout sweep error:', err?.message)
+        );
+      });
+
+      // 3. 8:30 PM — Evening Accountability & Recovery Sleep Sweep
+      cron.schedule('30 20 * * *', () => {
+        console.log('[CRON] 8:30 PM — Starting AI Evening Accountability sweep...');
+        aiNotificationEngine.runEveningCheckInSweep().catch((err) =>
+          console.error('[CRON] Evening check-in sweep error:', err?.message)
+        );
+      });
+
+      // 4. 8:00 PM Sunday — "Spotify-Wrapped for Lifting" Alpha Telemetry Report
+      cron.schedule('0 20 * * 0', () => {
+        console.log('[CRON] Sunday 8:00 PM — Starting Sunday Alpha Telemetry sweep...');
+        telemetryService.dispatchSundayTelemetrySweep().catch((err) =>
+          console.error('[CRON] Sunday Telemetry sweep error:', err?.message)
+        );
+      });
+
+      console.log('🔔 Proactive AI Coach & Sunday Telemetry: Autonomous Push Crons active (7:30 AM, 10:30 AM, 8:30 PM, Sun 8:00 PM)');
     } else {
-      console.warn('🔔 AI Push Notifications: ONESIGNAL credentials not set — skipped');
+      console.warn('🔔 Proactive AI Coach: ONESIGNAL credentials not set — push notifications skipped');
     }
     // ─────────────────────────────────────────────────────────────────────
   });

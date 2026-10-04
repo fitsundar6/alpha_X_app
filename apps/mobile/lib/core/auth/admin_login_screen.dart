@@ -76,45 +76,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     final enteredEmail = _emailController.text.trim().toLowerCase();
     final enteredPassword = _passwordController.text;
 
-    final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
-    final configuredPassword = AdminConfig.adminPassword;
+    debugPrint('[AUTH DEBUG] AdminPortal attempting login for: $enteredEmail');
 
-    final cleanEntered = enteredPassword.trim();
-    final cleanConfigured = configuredPassword.trim();
-
-    final isEmailMatch = (enteredEmail == configuredEmail) ||
-        (enteredEmail == 'fitsundar6@gmail.com') ||
-        (enteredEmail == 'admin@alphaxgym.com');
-
-    final isPasswordMatch = (enteredPassword == configuredPassword) ||
-        (cleanEntered == cleanConfigured) ||
-        (cleanEntered.replaceAll('!', '') == cleanConfigured.replaceAll('!', '')) ||
-        ('${cleanEntered.replaceAll('!', '')}!' == cleanConfigured) ||
-        (cleanEntered == 'AlphaXAdmin2026!') ||
-        (cleanEntered == 'AlphaXAdmin2026') ||
-        (cleanEntered.toLowerCase() == cleanConfigured.toLowerCase()) ||
-        (cleanEntered.toLowerCase() == 'alphaxadmin2026!') ||
-        (cleanEntered.toLowerCase() == 'alphaxadmin2026');
-
-    debugPrint('[AUTH DEBUG] AdminPortal entered email: $enteredEmail');
-    debugPrint('[AUTH DEBUG] AdminPortal isEmailMatch: $isEmailMatch');
-    debugPrint('[AUTH DEBUG] AdminPortal isPasswordMatch: $isPasswordMatch');
-
-    if (isEmailMatch && isPasswordMatch) {
-      debugPrint('[AUTH DEBUG] AdminPortal local authentication successful');
-      final auth = AuthService();
-      await auth.setAdminSession(
-        email: configuredEmail.isNotEmpty ? configuredEmail : enteredEmail,
-        password: enteredPassword,
-      );
-
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/admin');
-      }
-      return;
-    }
-
-    // Authoritative Backend Fallback Check
+    // ── Step 1: Authoritative Backend Authentication (PRIMARY) ─────────────────
+    // The backend bcrypt-verifies the password against the secure hash.
+    // This is the canonical login path — always tried first.
     try {
       final res = await http.post(
         Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
@@ -123,7 +89,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
           'email': enteredEmail,
           'password': enteredPassword,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint('[AUTH DEBUG] AdminPortal backend status: ${res.statusCode}');
 
       if (res.statusCode == 200) {
         debugPrint('[AUTH DEBUG] AdminPortal backend authentication successful');
@@ -138,11 +106,49 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
         }
         return;
       }
+
+      // Backend explicitly rejected the credentials
+      if (res.statusCode == 401) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Invalid admin email or password.';
+            _isLoading = false;
+          });
+        }
+        return;
+      }
     } catch (e) {
-      debugPrint('[AUTH DEBUG] AdminPortal backend fallback attempt: $e');
+      debugPrint('[AUTH DEBUG] AdminPortal backend unreachable: $e');
+      // Backend unreachable — fall through to local check below
     }
 
-    debugPrint('[AUTH DEBUG] AdminPortal authentication failed');
+    // ── Step 2: Local Fallback (only when backend is unreachable) ──────────────
+    // Uses compile-time dart-define values. Works for development without backend.
+    final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
+    final configuredPassword = AdminConfig.adminPassword;
+
+    final isEmailMatch = (enteredEmail == configuredEmail) ||
+        (enteredEmail == 'fitsundar6@gmail.com');
+    // configuredPassword may be empty if not compiled with --dart-define
+    final isPasswordMatch = configuredPassword.isNotEmpty &&
+        enteredPassword == configuredPassword;
+
+    if (isEmailMatch && isPasswordMatch) {
+      debugPrint('[AUTH DEBUG] AdminPortal local fallback auth successful (backend offline)');
+      final auth = AuthService();
+      await auth.setAdminSession(
+        email: enteredEmail,
+        password: enteredPassword,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/admin');
+      }
+      return;
+    }
+
+    // All authentication methods failed
+    debugPrint('[AUTH DEBUG] AdminPortal authentication failed — all methods exhausted');
     if (mounted) {
       setState(() {
         _errorMessage = 'Invalid admin email or password.';

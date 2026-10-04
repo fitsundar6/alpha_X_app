@@ -80,6 +80,7 @@ export class ToolExecutor {
       const safeArgs = { ...(rawArgs || {}) };
       const pronouns = ['he', 'she', 'they', 'him', 'her', 'his', 'their', 'the client', 'this client', 'this member', 'current', 'client'];
 
+      // Bind verified client context to 'clientId' field (standard read tools)
       if (tool.inputSchema?.properties?.clientId) {
         const rawClientId = typeof safeArgs.clientId === 'string' ? safeArgs.clientId.trim().toLowerCase() : '';
         const isPronounOrEmpty = !safeArgs.clientId || pronouns.includes(rawClientId);
@@ -91,6 +92,23 @@ export class ToolExecutor {
             throw new ToolValidationError(
               tool.name,
               `No verified client context is active in this conversation to resolve '${safeArgs.clientId || 'pronoun'}'. Please identify the client first.`
+            );
+          }
+        }
+      }
+
+      // Bind verified client context to 'clientIdentifier' field (propose_workout_plan, propose_diet_plan)
+      if (tool.inputSchema?.properties?.clientIdentifier) {
+        const rawIdentifier = typeof safeArgs.clientIdentifier === 'string' ? safeArgs.clientIdentifier.trim().toLowerCase() : '';
+        const isPronounOrEmpty = !safeArgs.clientIdentifier || pronouns.includes(rawIdentifier);
+
+        if (isPronounOrEmpty) {
+          if (context.verifiedClient) {
+            safeArgs.clientIdentifier = context.verifiedClient.clientId;
+          } else {
+            throw new ToolValidationError(
+              tool.name,
+              `No verified client context is active in this conversation to resolve '${safeArgs.clientIdentifier || 'pronoun'}'. Please identify the client first.`
             );
           }
         }

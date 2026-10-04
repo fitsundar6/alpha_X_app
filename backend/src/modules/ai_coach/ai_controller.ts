@@ -964,32 +964,49 @@ ${attentionItems.length > 0 ? attentionItems.map((a, i) => `#### ${i + 1}. ${a.c
   }
 
   private async handleGeneralQuery(conversationId: string, rawQuery: string): Promise<AiCoachResponse> {
-    const text = `I am your **Alpha X AI Coach**. I have direct, secure access to the Alpha X client database, exercise database, and food library.
+    // Call Gemini directly for general fitness questions
+    const { geminiService } = await import('./gemini.service');
+    const requestId = `req_general_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-You can ask me to:
-* **"Give me today's report"** — Get a live snapshot of workouts, nutrition, and pending items.
-* **"Show clients needing review"** — Review athletes with missed workouts, missing logs, or pain.
-* **"Analyze [Client Name]"** — Deep-dive into an athlete's last 30 days of training, nutrition, and check-ins.
-* **"Create a workout for [Client Name]"** — Formulate a goal-tailored workout with your review and approval.
-* **"Progress [Client Name]'s bench press"** — Propose progressive overload based on actual workout history.
-* **"Create a diet for [Client Name]"** — Generate a meal plan with exact servings and macros from our Food Library.
+    try {
+      const geminiResult = await geminiService.generateFitnessResponse({
+        message: rawQuery,
+        adminId: 'system',
+        requestId,
+        conversationId,
+      });
 
-*Remember: All workout and diet proposals require your administrative review and approval before becoming active for clients.*`;
+      const replyText = geminiResult.replyText;
+      await this.saveAiMessage(conversationId, replyText, 'GENERAL_AI');
 
-    await this.saveAiMessage(conversationId, text, 'GENERAL');
-
-    return {
-      conversationId,
-      replyText: text,
-      intent: 'GENERAL',
-      dateRange: { label: 'Now', startDate: '', endDate: '' },
-      suggestedFollowUps: [
-        'Give me today\'s report',
-        'Show clients needing review',
-        'Who missed workouts today?',
-        'Who has incomplete food tracking?',
-      ],
-    };
+      return {
+        conversationId,
+        replyText,
+        intent: 'GENERAL_AI',
+        dateRange: { label: 'Now', startDate: '', endDate: '' },
+        suggestedFollowUps: geminiResult.suggestedFollowUps || [
+          "Give me today's report",
+          'Show clients needing review',
+          'Who missed workouts today?',
+        ],
+      };
+    } catch (_err) {
+      // Fallback only if Gemini is unavailable
+      const text = `I am your **Alpha X AI Coach**. I have direct, secure access to the Alpha X client database, exercise library, and food library.\n\nYou can ask me to:\n* **"Give me today's report"** — Live snapshot of workouts, nutrition, and pending items.\n* **"Show clients needing review"** — Athletes with missed workouts, missing logs, or pain.\n* **"Analyze [Client Name]"** — Deep-dive analysis of an athlete's last 30 days.\n* **"Create a workout for [Client Name]"** — Goal-tailored workout proposal for your review.\n* **"Progress [Client Name]'s bench press"** — Progressive overload based on actual workout history.\n* **"Create a diet for [Client Name]"** — Meal plan with macros from our Food Library.\n\n*All proposals require your administrative review and approval before becoming active.*`;
+      await this.saveAiMessage(conversationId, text, 'GENERAL');
+      return {
+        conversationId,
+        replyText: text,
+        intent: 'GENERAL',
+        dateRange: { label: 'Now', startDate: '', endDate: '' },
+        suggestedFollowUps: [
+          "Give me today's report",
+          'Show clients needing review',
+          'Who missed workouts today?',
+          'Who has incomplete food tracking?',
+        ],
+      };
+    }
   }
 
   // ==========================================

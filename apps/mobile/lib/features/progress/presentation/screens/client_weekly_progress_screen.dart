@@ -10,6 +10,8 @@ import 'package:alpha_x_gym/features/progress/presentation/widgets/weekly_progre
 import 'package:alpha_x_gym/features/progress/presentation/widgets/coach_review_card.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_check_in_form_screen.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
+import 'package:alpha_x_gym/features/telemetry/data/repositories/weekly_telemetry_repository.dart';
+import 'package:alpha_x_gym/features/telemetry/presentation/screens/client_weekly_telemetry_screen.dart';
 
 class ClientWeeklyProgressScreen extends StatefulWidget {
   final WeeklyProgressRepository repository;
@@ -26,10 +28,12 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
   WeeklyCheckIn? _selectedCheckIn;
   bool _isLoading = true;
   String _selectedView = 'Week';
+  final WeeklyTelemetryRepository _telemetryRepository = WeeklyTelemetryRepository();
 
   @override
   void initState() {
     super.initState();
+    _telemetryRepository.init();
     _loadData();
   }
 
@@ -114,6 +118,10 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                     children: [
                       // Top Motivational Quote Card
                       const MotivationalQuoteCard(),
+                      const SizedBox(height: 16),
+
+                      // Sunday "Spotify-Wrapped" Alpha Telemetry Banner
+                      _buildSundayTelemetryBanner(),
                       const SizedBox(height: 16),
 
                       // Weekly Availability & Locking Card
@@ -939,6 +947,115 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
             label: const Text('Submit Week 1 Check-In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSundayTelemetryBanner() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF0D1527),
+            Color(0xFF132038),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF00F0FF).withOpacity(0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00F0FF).withOpacity(0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            AlphaXHaptics.celebrate();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ClientWeeklyTelemetryScreen(
+                  repository: _telemetryRepository,
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00F0FF), Color(0xFF00FF87)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00FF87).withOpacity(0.4),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.analytics_rounded, color: Colors.black, size: 26),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00F0FF).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'SPOTIFY-WRAPPED FOR LIFTING',
+                              style: TextStyle(
+                                color: Color(0xFF00F0FF),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Weekly Alpha Telemetry',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'Explore 3D Muscle Heatmap, Iron Tonnage & PR Shelf',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF00F0FF), size: 18),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

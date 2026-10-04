@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'core/constants/app_constants.dart';
@@ -28,16 +30,26 @@ import 'features/progress/data/repositories/weekly_progress_repository.dart';
 import 'features/progress/presentation/screens/client_weekly_progress_screen.dart';
 import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService().initialize();
   await ClientThemeService().initialize();
 
+  // Disable Google Fonts network fetching in release mode — use bundled assets only.
+  // Eliminates "missing Noto fonts" warnings and prevents network-dependent font loading.
+  if (kReleaseMode) {
+    GoogleFonts.config.allowRuntimeFetching = false;
+  }
+
   // OneSignal Push Notifications — Admin-triggered, client-received
-  OneSignal.initialize('56c1791b-aa5e-4042-8fba-e370433b8055');
-  // Request permission (shows iOS/Android system permission dialog)
-  OneSignal.Notifications.requestPermission(true);
+  // Only initialize on native mobile platforms (not web, Windows, macOS, Linux)
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    OneSignal.initialize('56c1791b-aa5e-4042-8fba-e370433b8055');
+    // Request permission (shows iOS/Android system permission dialog)
+    OneSignal.Notifications.requestPermission(true);
+  }
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
   debugPrint('====================================================');
@@ -357,6 +369,7 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: const [
                     Icon(
                       Icons.check_circle_outline,
@@ -364,9 +377,12 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
                       size: 18,
                     ),
                     SizedBox(width: 8),
-                    Text(
-                      'All Feature Modules Online',
-                      style: AppTypography.titleSmall,
+                    Flexible(
+                      child: Text(
+                        'All Feature Modules Online',
+                        style: AppTypography.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),

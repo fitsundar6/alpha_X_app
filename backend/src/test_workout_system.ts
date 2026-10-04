@@ -110,13 +110,13 @@ async function runTests() {
       headers: adminHeaders,
       body: JSON.stringify({
         assignmentType: 'INDIVIDUAL',
-        individualClientId: 'client_john_doe',
+        individualClientId: 'client_marcus_vance',
         isRecommended: true,
       }),
     });
     const assignJson = await assignRes.json();
     console.assert(assignRes.status === 200, 'Failed to assign session');
-    console.log('✔ 6. Admin assigned session to client_john_doe as Recommended');
+    console.log('✔ 6. Admin assigned session to client_marcus_vance as Recommended');
 
     // 7. Client queries authorized sessions
     const clientSessionsRes = await fetch(`${baseUrl}/workout/client/sessions`, { headers: clientHeaders });

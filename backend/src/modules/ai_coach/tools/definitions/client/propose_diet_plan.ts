@@ -105,7 +105,19 @@ export const proposeDietPlanTool: ToolDefinition<ProposeDietPlanInput> = {
       mealSuggestions: {
         type: 'array',
         description: 'Optional suggested meals per day',
-        items: { type: 'object' },
+        items: {
+          type: 'object',
+          properties: {
+            mealName: { type: 'string', description: 'Meal name e.g. Breakfast, Lunch, Post-Workout' },
+            targetCalories: { type: 'number', description: 'Target calories for this meal' },
+            targetProtein: { type: 'number', description: 'Target protein in grams for this meal' },
+            foods: {
+              type: 'array',
+              description: 'List of foods e.g. ["3 eggs", "oats 80g", "banana"]',
+              items: { type: 'string' },
+            },
+          },
+        } as any,
       },
       notes: {
         type: 'string',

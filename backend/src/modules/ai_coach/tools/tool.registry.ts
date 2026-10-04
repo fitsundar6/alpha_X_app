@@ -88,6 +88,36 @@ export class ToolRegistry {
   }
 
   /**
+   * Recursively converts a JSON schema property into Gemini-compatible schema format.
+   * Handles nested objects and arrays with full items/properties support.
+   */
+  private convertSchemaProperty(prop: any): any {
+    if (!prop || typeof prop !== 'object') return prop;
+
+    const result: any = {
+      type: (prop.type || 'string').toUpperCase(),
+    };
+
+    if (prop.description) result.description = prop.description;
+    if (prop.enum) result.enum = prop.enum;
+
+    // Handle array type — must include items
+    if (prop.type === 'array' && prop.items) {
+      result.items = this.convertSchemaProperty(prop.items);
+    }
+
+    // Handle object type — include nested properties if present
+    if (prop.type === 'object' && prop.properties) {
+      result.properties = {};
+      for (const [k, v] of Object.entries(prop.properties)) {
+        result.properties[k] = this.convertSchemaProperty(v);
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Converts all active registered tools into Gemini SDK FunctionDeclaration format
    */
   public getGeminiDeclarations(): GeminiFunctionDeclaration[] {
@@ -97,11 +127,7 @@ export class ToolRegistry {
       const toolProps = tool.inputSchema?.properties || {};
 
       for (const [key, prop] of Object.entries(toolProps)) {
-        properties[key] = {
-          type: prop.type.toUpperCase(),
-          description: prop.description,
-          ...(prop.enum ? { enum: prop.enum } : {}),
-        };
+        properties[key] = this.convertSchemaProperty(prop);
       }
 
       return {
