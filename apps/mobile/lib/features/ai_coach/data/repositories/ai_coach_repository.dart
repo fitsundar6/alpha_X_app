@@ -109,27 +109,27 @@ class AiCoachRepository extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // If the primary server returned an error (e.g. 503 from remote Vercel) and wasn't localhost,
-      // attempt to connect to the local dev server (http://localhost:5000) before going offline
+      // If the primary server returned an error (e.g. 503 from remote Vercel) and wasn't LAN IP,
+      // attempt to connect to LAN IP or local dev server before going offline
       final urlStr = url.toString();
-      if (!urlStr.contains('localhost:5000') && !urlStr.contains('127.0.0.1:5000')) {
+      final lanChatUrl = Uri.parse('${ApiConfig.physicalLanUrl}/admin/ai-coach/chat');
+      if (!urlStr.contains(ApiConfig.defaultHostIp) && !urlStr.contains('localhost')) {
         try {
-          final localUrl = Uri.parse('http://localhost:5000/api/v1/admin/ai-coach/chat');
-          debugPrint('[AI COACH REPO] Remote backend status ${resp.statusCode}, trying local server: $localUrl');
-          final localResp = await _httpClient.post(
-            localUrl,
+          debugPrint('[AI COACH REPO] Remote backend status ${resp.statusCode}, trying LAN server: $lanChatUrl');
+          final lanResp = await _httpClient.post(
+            lanChatUrl,
             headers: _buildHeaders(),
             body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 15));
-          if (localResp.statusCode == 200) {
-            final decoded = jsonDecode(localResp.body);
+          ).timeout(const Duration(seconds: 4));
+          if (lanResp.statusCode == 200) {
+            final decoded = jsonDecode(lanResp.body);
             if (decoded['success'] == true && decoded['data'] != null) {
-              debugPrint('[AI COACH REPO] Local backend responded successfully with database tools!');
+              debugPrint('[AI COACH REPO] LAN backend responded successfully with database tools!');
               return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
             }
           }
-        } catch (localErr) {
-          debugPrint('[AI COACH REPO] Local server attempt failed: $localErr');
+        } catch (lanErr) {
+          debugPrint('[AI COACH REPO] LAN server attempt failed: $lanErr');
         }
       }
 
@@ -137,27 +137,27 @@ class AiCoachRepository extends ChangeNotifier {
       debugPrint('[AI COACH REPO] Backend status ${resp.statusCode} — failing over to direct Gemini');
       return await _callGeminiDirectly(message, selectedClientId);
     } catch (e) {
-      debugPrint('[AI COACH REPO] Network or backend error: $e — trying local backend then direct Gemini');
+      debugPrint('[AI COACH REPO] Network or backend error: $e — trying LAN backend then direct Gemini');
 
-      // If primary failed due to network, try localhost if primary wasn't localhost
+      // If primary failed due to network, try LAN host if primary wasn't already LAN
       final primaryUrlStr = AppConstants.apiBaseUrl;
-      if (!primaryUrlStr.contains('localhost:5000') && !primaryUrlStr.contains('127.0.0.1:5000')) {
+      if (!primaryUrlStr.contains(ApiConfig.defaultHostIp) && !primaryUrlStr.contains('localhost')) {
         try {
           final payload = <String, dynamic>{'message': message};
           if (conversationId != null) payload['conversationId'] = conversationId;
           if (selectedClientId != null && selectedClientId.isNotEmpty && selectedClientId != 'ALL') {
             payload['selectedClientId'] = selectedClientId;
           }
-          final localUrl = Uri.parse('http://localhost:5000/api/v1/admin/ai-coach/chat');
-          final localResp = await _httpClient.post(
-            localUrl,
+          final lanChatUrl = Uri.parse('${ApiConfig.physicalLanUrl}/admin/ai-coach/chat');
+          final lanResp = await _httpClient.post(
+            lanChatUrl,
             headers: _buildHeaders(),
             body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 10));
-          if (localResp.statusCode == 200) {
-            final decoded = jsonDecode(localResp.body);
+          ).timeout(const Duration(seconds: 4));
+          if (lanResp.statusCode == 200) {
+            final decoded = jsonDecode(lanResp.body);
             if (decoded['success'] == true && decoded['data'] != null) {
-              debugPrint('[AI COACH REPO] Local backend responded successfully after network error!');
+              debugPrint('[AI COACH REPO] LAN backend responded successfully after network error!');
               return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
             }
           }
@@ -302,6 +302,8 @@ class AiCoachRepository extends ChangeNotifier {
       // Candidate models with active quotas and tool/text capability
       final modelCandidates = [
         'gemini-flash-lite-latest',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
         'gemini-3.5-flash',
         'gemini-3.6-flash',
         'gemini-3.5-flash-lite',

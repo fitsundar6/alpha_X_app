@@ -70,12 +70,16 @@ export class AiNotificationEngine {
    * Helper to execute Gemini generation with robust model fallback and timeout.
    */
   private async callGemini(prompt: string, fallbackText: string): Promise<string> {
-    const apiKey = env.GEMINI_API_KEY;
+    const rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = (rawApiKey || '')
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .trim();
     if (!apiKey) {
       return fallbackText;
     }
 
-    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+    const ai = new GoogleGenAI({ apiKey });
     const modelsToTry = [this.defaultModel, ...this.fallbackModels];
 
     for (const model of modelsToTry) {

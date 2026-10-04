@@ -52,9 +52,11 @@ export class GeminiService {
     return GeminiService.PROMPT_VERSION;
   }
   // Primary: gemini-flash-lite-latest (fastest GA workhorse, active free quota, supports tool calling)
-  // Fallbacks: gemini-3.5-flash, gemini-3.6-flash, gemini-3.5-flash-lite, gemini-3.8-flash
+  // Fallbacks: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.5-flash, gemini-3.6-flash, gemini-3.8-flash
   private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
   private static readonly FALLBACK_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     'gemini-3.5-flash',
     'gemini-3.6-flash',
     'gemini-3.5-flash-lite',
@@ -96,9 +98,14 @@ export class GeminiService {
       throw new Error('Message prompt cannot be empty');
     }
 
-    // 2. Validate API Key
-    const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey || !apiKey.trim()) {
+    // 2. Validate API Key & Sanitize Quotes/Whitespace
+    const rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+    const apiKey = (rawApiKey || '')
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .trim();
+
+    if (!apiKey) {
       this.logAudit({
         requestId,
         conversationId: effectiveConvId,
@@ -240,6 +247,12 @@ export class GeminiService {
       } else if (isRateLimit) {
         errorCategory = 'RATE_LIMIT_EXCEEDED';
         clientFacingMessage = 'Gemini is experiencing high demand. Please wait a moment and try again.';
+      } else if (isModelError) {
+        errorCategory = 'MODEL_ERROR';
+        clientFacingMessage = `AI model configuration error: ${errorMsg.substring(0, 120)}`;
+      } else {
+        errorCategory = 'GEMINI_API_ERROR';
+        clientFacingMessage = `AI service error: ${errorMsg.substring(0, 150)}`;
       }
 
       this.logAudit({

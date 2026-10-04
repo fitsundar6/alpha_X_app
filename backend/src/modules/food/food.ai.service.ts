@@ -133,7 +133,8 @@ export class FoodAiService {
       fiber?: number;
     }> | null = null;
 
-    if (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0) {
+    const activeApiKey = (env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim();
+    if (activeApiKey.length > 0) {
       try {
         rawDetections = await this.callGeminiVisionApi(cleanBase64, mimeType);
       } catch (err) {
@@ -259,7 +260,7 @@ Example format:
       },
     });
 
-    const apiKey = env.GEMINI_API_KEY!;
+    const apiKey = (env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`;
 
     return new Promise((resolve, reject) => {

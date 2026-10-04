@@ -155,10 +155,14 @@ export class TelemetryService {
    * Helper to execute Gemini generation with fallback.
    */
   private async generateAiCommentary(prompt: string, fallback: string): Promise<string> {
-    const apiKey = env.GEMINI_API_KEY;
+    const rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = (rawApiKey || '')
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .trim();
     if (!apiKey) return fallback;
 
-    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+    const ai = new GoogleGenAI({ apiKey });
     const models = [this.defaultModel, ...this.fallbackModels];
 
     for (const model of models) {

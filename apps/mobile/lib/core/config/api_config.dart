@@ -16,8 +16,8 @@ class ApiConfig {
   /// DEFAULT HOST IP FOR PHYSICAL MOBILE DEVICES (iPhone & Android)
   ///
   /// Set this to your Windows PC's LAN IPv4 address (found via `ipconfig`).
-  /// Currently detected: 192.168.1.5
-  static const String defaultHostIp = '192.168.1.5';
+  /// Currently detected: 192.168.29.2
+  static const String defaultHostIp = '192.168.29.2';
 
   /// Backend server TCP listening port
   static const int defaultPort = 5000;

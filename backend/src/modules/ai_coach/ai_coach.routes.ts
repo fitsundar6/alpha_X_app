@@ -155,10 +155,14 @@ router.post('/chat', async (req: Request, res: Response) => {
   // 7. Extract bounded multi-turn conversation history
   const history = conversationService.getRecentHistory(conversation);
 
-  const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+  const apiKey = (rawApiKey || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
 
   // 8. Call Google Gemini Foundation Model if API Key is configured
-  if (apiKey && apiKey.trim().length > 0) {
+  if (apiKey && apiKey.length > 0) {
     try {
       const geminiResult = await geminiService.generateFitnessResponse({
         message: cleanMessage,
