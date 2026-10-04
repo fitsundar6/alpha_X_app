@@ -1,0 +1,8 @@
+# Alpha X Gym — Android Release Signing Properties Template
+# Copy this file to `apps/mobile/android/key.properties` and fill in your actual keystore credentials.
+# NEVER commit `key.properties` or keystore files to version control!
+
+storePassword=your_keystore_password
+keyPassword=your_key_password
+keyAlias=upload
+storeFile=app/upload-keystore.jks

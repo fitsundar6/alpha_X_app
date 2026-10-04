@@ -6,6 +6,13 @@ node_modules/
 # Testing & Coverage
 coverage/
 *.lcov
+.pytest_cache/
+
+# Python caches & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
 
 # Production build artifacts
 dist/
@@ -17,6 +24,8 @@ build/
 *.ipa
 uploads/
 backend/uploads/
+build_outputs/
+AlphaX-Release.apk
 
 # Environment & Secrets (CRITICAL: Never commit .env or secret files)
 .env
@@ -24,12 +33,24 @@ backend/uploads/
 *.env
 backend/.env
 backend/.env.*
+!.env.example
+!backend/.env.example
 secrets/
 credentials/
+
+# Certificates, Keys, Signing & Provisioning Profiles
 *.pem
 *.key
 *.cert
+*.cer
 *.p12
+*.pfx
+*.keystore
+*.jks
+key.properties
+local.properties
+*.mobileprovision
+*.provisionprofile
 
 # Prisma
 /backend/prisma/*.db
@@ -49,3 +70,6 @@ pubspec.lock
 *.sublime-workspace
 .DS_Store
 Thumbs.db
+*.iml
+*.ipr
+*.iws

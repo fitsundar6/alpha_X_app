@@ -18,14 +18,11 @@ class Settings:
     DEBUG: bool = ENVIRONMENT != "production"
 
     # Database
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://neondb_owner:npg_GCMBSVF1Z3fJ@ep-wispy-scene-a5yzabm1-pooler.us-east-2.aws.neon.tech/alpha-x-mobile-db?sslmode=require"
-    )
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     # Security & Auth
-    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", "alpha_x_dev_access_secret_key_change_in_production_32_chars")
-    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "fitsundar6@gmail.com").strip().lower()
+    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", "")
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "").strip().lower()
 
     # AI Models & Keys
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

@@ -84,15 +84,24 @@ jobs:
         working-directory: apps/mobile
         run: flutter pub get
 
-      - name: Build Android Release APK
+      - name: Build Android Release APK & AAB
         working-directory: apps/mobile
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AlphaXGym-Android-Release
+          name: AlphaXGym-Android-Release-APK
           path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+
+      - name: Upload Android AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlphaXGym-Android-Release-AAB
+          path: apps/mobile/build/app/outputs/bundle/release/app-release.aab
           retention-days: 14
 
   publish-release:
@@ -111,13 +120,22 @@ jobs:
       - name: Download Android APK Artifact
         uses: actions/download-artifact@v4
         with:
-          name: AlphaXGym-Android-Release
+          name: AlphaXGym-Android-Release-APK
           path: release-artifacts
 
-      - name: Rename APK for Release
+      - name: Download Android AAB Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AlphaXGym-Android-Release-AAB
+          path: release-artifacts
+
+      - name: Rename Artifacts for Release
         run: |
           if [ -f "release-artifacts/app-release.apk" ]; then
             mv release-artifacts/app-release.apk release-artifacts/AlphaXGym-Release.apk
+          fi
+          if [ -f "release-artifacts/app-release.aab" ]; then
+            mv release-artifacts/app-release.aab release-artifacts/AlphaXGym-Release.aab
           fi
 
       - name: Publish GitHub Release
@@ -130,7 +148,8 @@ jobs:
 
             ### Included Binaries:
             * **iOS IPA:** `AlphaXGym-Release.ipa` (for iPhone / iPad installation via AltStore, Sideloadly, Scarlet, TrollStore, or Apple Configurator)
-            * **Android APK:** `AlphaXGym-Release.apk` (direct install on Android devices)
+            * **Android APK:** `AlphaXGym-Release.apk` (direct sideload install on Android devices)
+            * **Android AAB:** `AlphaXGym-Release.aab` (Google Play Console App Bundle)
 
             ### Features:
             * Real-time Gemini Foundation AI Coach integration
@@ -141,3 +160,4 @@ jobs:
           files: |
             release-artifacts/AlphaXGym-Release.ipa
             release-artifacts/AlphaXGym-Release.apk
+            release-artifacts/AlphaXGym-Release.aab

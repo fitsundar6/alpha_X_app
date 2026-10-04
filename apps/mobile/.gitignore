@@ -46,3 +46,20 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Android signing & credentials
+*.keystore
+*.jks
+key.properties
+local.properties
+
+# iOS credentials & profiles
+*.mobileprovision
+*.cer
+*.cert
+*.p12
+
+# Application packages
+*.apk
+*.aab
+*.ipa
