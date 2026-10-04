@@ -51,6 +51,9 @@ dependencies:
   permission_handler: ^11.4.0
   google_generative_ai: ^0.4.7
 
+dependency_overrides:
+  camera_avfoundation: ^0.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

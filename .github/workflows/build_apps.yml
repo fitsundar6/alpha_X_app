@@ -29,6 +29,14 @@ jobs:
         working-directory: apps/mobile
         run: flutter pub get
 
+      - name: Patch camera_avfoundation for Xcode 16 / iOS 18
+        run: |
+          for f in $(find ~/.pub-cache -name "DefaultCamera.swift" 2>/dev/null); do
+            echo "Patching $f for Xcode 16 compatibility..."
+            sed -i '' 's/AVCaptureSession\.wasInterruptedNotification/NSNotification.Name("AVCaptureSessionWasInterruptedNotification")/g' "$f"
+            sed -i '' 's/AVCaptureSession\.runtimeErrorNotification/NSNotification.Name("AVCaptureSessionRuntimeErrorNotification")/g' "$f"
+          done
+
       - name: Verify Code Quality
         working-directory: apps/mobile
         run: flutter analyze
