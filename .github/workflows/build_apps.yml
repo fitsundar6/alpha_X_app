@@ -115,27 +115,23 @@ jobs:
           storeFile=keystore.jks
           EOF
 
-      - name: Build Android Release APK & AAB
+      - name: Build Android Release APK
+        # Note: Only APK is built in CI. AAB (App Bundle) is built locally and
+        # uploaded manually to Google Play Console — the bundleRelease Gradle task
+        # fails in CI due to a Flutter/NDK debug-symbol stripping bug with
+        # third-party native plugins (health, pedometer) on ubuntu-latest runners.
         working-directory: apps/mobile
         env:
-          # Pass Gradle memory settings — 4GB is safe on GitHub-hosted runners (7GB total)
+          # Cap Gradle heap — GitHub-hosted runners have ~7GB total RAM
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=2g"
         run: |
           flutter build apk --release
-          flutter build appbundle --release
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AlphaXGym-Android-Release-APK
           path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 14
-
-      - name: Upload Android AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AlphaXGym-Android-Release-AAB
-          path: apps/mobile/build/app/outputs/bundle/release/app-release.aab
           retention-days: 14
 
   publish-release:
@@ -157,19 +153,10 @@ jobs:
           name: AlphaXGym-Android-Release-APK
           path: release-artifacts
 
-      - name: Download Android AAB Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: AlphaXGym-Android-Release-AAB
-          path: release-artifacts
-
       - name: Rename Artifacts for Release
         run: |
           if [ -f "release-artifacts/app-release.apk" ]; then
             mv release-artifacts/app-release.apk release-artifacts/AlphaXGym-Release.apk
-          fi
-          if [ -f "release-artifacts/app-release.aab" ]; then
-            mv release-artifacts/app-release.aab release-artifacts/AlphaXGym-Release.aab
           fi
 
       - name: Publish GitHub Release
@@ -182,8 +169,9 @@ jobs:
 
             ### Included Binaries:
             * **iOS IPA:** `AlphaXGym-Release.ipa` (for iPhone / iPad installation via AltStore, Sideloadly, Scarlet, TrollStore, or Apple Configurator)
-            * **Android APK:** `AlphaXGym-Release.apk` (direct sideload install on Android devices)
-            * **Android AAB:** `AlphaXGym-Release.aab` (Google Play Console App Bundle)
+            * **Android APK:** `AlphaXGym-Release.apk` (direct sideload on Android — enable "Install from unknown sources")
+
+            > **Google Play Console AAB:** Build locally with `flutter build appbundle --release` and upload manually.
 
             ### Features:
             * Real-time Gemini Foundation AI Coach integration
@@ -194,4 +182,3 @@ jobs:
           files: |
             release-artifacts/AlphaXGym-Release.ipa
             release-artifacts/AlphaXGym-Release.apk
-            release-artifacts/AlphaXGym-Release.aab
