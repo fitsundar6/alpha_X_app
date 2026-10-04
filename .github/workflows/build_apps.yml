@@ -64,6 +64,10 @@ jobs:
   build-android:
     name: 🤖 Build Android APK & AAB
     runs-on: ubuntu-latest
+    env:
+      # Expose secret as env var so it can be used in step `if:` conditions
+      # (secrets context is not available in step-level if expressions)
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -95,14 +99,19 @@ jobs:
       - name: Setup Release Signing (if secrets available)
         # Only runs when KEYSTORE_BASE64 secret is set in the repository.
         # Falls back to debug signing automatically when the secret is missing.
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        # Note: must check env context (not secrets) in step-level if: expressions.
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
         working-directory: apps/mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
+          echo "$KEYSTORE_BASE64" | base64 --decode > app/keystore.jks
           cat > key.properties <<EOF
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
           storeFile=keystore.jks
           EOF
 
