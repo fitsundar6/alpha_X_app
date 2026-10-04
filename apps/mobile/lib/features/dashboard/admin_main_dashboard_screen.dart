@@ -45,11 +45,15 @@ class AdminMainDashboardScreen extends StatefulWidget {
 
 class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   int _selectedIndex = 0;
+  final List<int> _tabHistory = [0];
+  DateTime? _lastBackPressTime;
+  double? _dragStartX;
   bool _isLoadingClients = false;
   String? _clientsError;
   late final WeeklyProgressRepository _weeklyProgressRepo;
   late final AiCoachRepository _aiCoachRepo;
   late final Future<AiDailySummary> _aiSummaryFuture;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -73,6 +77,54 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     // request on every setState(), causing repeated AI_SERVICE_UNAVAILABLE logs.
     _aiSummaryFuture = _aiCoachRepo.getDailySummary();
     _loadClients();
+  }
+
+  /// Select an admin tab and record it in history for back-gesture support.
+  void _selectAdminTab(int idx) {
+    if (_selectedIndex != idx) {
+      setState(() {
+        _selectedIndex = idx;
+        if (_tabHistory.isEmpty || _tabHistory.last != idx) {
+          _tabHistory.add(idx);
+        }
+      });
+      if (idx == 1) {
+        _loadClients(forceRefresh: true);
+      }
+    }
+  }
+
+  /// Handles Android back gesture inside the admin dashboard.
+  /// Steps back through tab history, or shows a double-back exit prompt.
+  bool _navigateBack() {
+    // 1. Close drawer if open
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      _scaffoldKey.currentState?.closeDrawer();
+      return true;
+    }
+
+    // 2. Step back through tab history
+    if (_tabHistory.length > 1) {
+      setState(() {
+        _tabHistory.removeLast();
+        _selectedIndex = _tabHistory.last;
+      });
+      return true;
+    }
+
+    // 3. If on a non-home tab, return to Dashboard (tab 0)
+    if (_selectedIndex != 0) {
+      setState(() {
+        _selectedIndex = 0;
+        _tabHistory
+          ..clear()
+          ..add(0);
+      });
+      return true;
+    }
+
+    // At root — caller will handle double-back exit
+    return false;
   }
 
   Future<void> _loadClients({bool forceRefresh = false}) async {
@@ -111,7 +163,53 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        if (_navigateBack()) return;
+
+        // Double-back to exit protection at root Dashboard tab
+        final now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2, milliseconds: 500)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Press back again to exit Admin Panel',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.surfaceElevated,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: const BorderSide(color: AppColors.border),
+              ),
+            ),
+          );
+          return;
+        }
+        SystemNavigator.pop();
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (details) {
+          _dragStartX = details.globalPosition.dx;
+        },
+        onHorizontalDragEnd: (details) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isLeftEdgeSwipe = _dragStartX != null && _dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150;
+          final isRightEdgeSwipe = _dragStartX != null && _dragStartX! >= (screenWidth - 60.0) && (details.primaryVelocity ?? 0) < -150;
+          if (isLeftEdgeSwipe || isRightEdgeSwipe) {
+            _navigateBack();
+          }
+          _dragStartX = null;
+        },
+        child: Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.background,
       appBar: AppBar(
         titleSpacing: 16,
@@ -171,12 +269,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         ),
         child: NavigationBar(
           selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
-          onDestinationSelected: (idx) {
-            setState(() => _selectedIndex = idx);
-            if (idx == 1) {
-              _loadClients(forceRefresh: true);
-            }
-          },
+          onDestinationSelected: _selectAdminTab,
           backgroundColor: AppColors.surface,
           indicatorColor: AppColors.glowRed,
           elevation: 0,
@@ -209,6 +302,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           ],
         ),
       ),
+      ),
+    ),
     );
   }
 
@@ -377,11 +472,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       ),
       selected: isSelected,
       onTap: () {
-        setState(() => _selectedIndex = index);
+        _selectAdminTab(index);
         Navigator.of(context).pop();
-        if (index == 1) {
-          _loadClients(forceRefresh: true);
-        }
       },
     );
   }
@@ -604,7 +696,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               );
             }),
             _adminActionChip('Client Food Photos', Icons.camera_alt_outlined, () {
-              setState(() => _selectedIndex = 9);
+              _selectAdminTab(9);
             }),
             _adminActionChip('Global Step Target', Icons.flag_outlined, () {
               _showSetStepGoalDialog();
@@ -633,7 +725,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: AlphaXCard(
               padding: const EdgeInsets.all(14),
-              onTap: () => setState(() => _selectedIndex = 2),
+              onTap: () => _selectAdminTab(2),
               child: Row(
                 children: [
                   Container(
@@ -1416,7 +1508,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           formatJoinDate: _formatJoinDate,
           onAssignWorkout: () {
             Navigator.of(ctx).pop();
-            setState(() => _selectedIndex = 2);
+            _selectAdminTab(2);
           },
           onAssignDietPlan: (c) {
             Navigator.of(ctx).pop();

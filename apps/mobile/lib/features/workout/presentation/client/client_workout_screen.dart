@@ -93,51 +93,13 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 s.title.toLowerCase().contains(cat);
           }).toList();
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: colors.background,
-              elevation: 0,
-              iconTheme: IconThemeData(color: colors.textPrimary),
-              title: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const AlphaXLogo.appBar(size: 24),
-                  const SizedBox(width: 8),
-                  Text(
-                    'WORKOUT',
-                    style: GoogleFonts.sora(
-                      color: colors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton.icon(
-                  onPressed: _openWorkoutHistory,
-                  icon: Icon(Icons.history, color: isDark ? AppColors.primary : AppColors.lightPrimary, size: 18),
-                  label: Text(
-                    'History',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: isDark ? AppColors.primary : AppColors.lightPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : null,
-      body: RefreshIndicator(
-        color: isDark ? AppColors.primary : AppColors.lightPrimary,
-        backgroundColor: colors.surfaceCard,
-        onRefresh: () async {
-          await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
-        },
-        child: ListView(
+    final content = RefreshIndicator(
+      color: isDark ? AppColors.primary : AppColors.lightPrimary,
+      backgroundColor: colors.surfaceCard,
+      onRefresh: () async {
+        await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+      },
+      child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           children: [
@@ -233,9 +195,51 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ...filteredSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
         ],
       ),
-    ),
-  );
-}
+    );
+
+    if (!widget.showAppBar) {
+      return content;
+    }
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        elevation: 0,
+        iconTheme: IconThemeData(color: colors.textPrimary),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AlphaXLogo.appBar(size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'WORKOUT',
+              style: GoogleFonts.sora(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: _openWorkoutHistory,
+            icon: Icon(Icons.history, color: isDark ? AppColors.primary : AppColors.lightPrimary, size: 18),
+            label: Text(
+              'History',
+              style: GoogleFonts.plusJakartaSans(
+                color: isDark ? AppColors.primary : AppColors.lightPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: content,
+    );
+  }
 
   Widget _sectionTitle(String title, ClientThemeColors colors) {
     return Text(
@@ -367,12 +371,12 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     _metaChip(Icons.fitness_center_rounded, '${session.exercises.length} Exercises', colors),
-                    const SizedBox(width: 8),
                     _metaChip(Icons.repeat_rounded, '$totalSets Sets', colors),
-                    const SizedBox(width: 8),
                     _metaChip(Icons.speed_rounded, session.difficulty, colors),
                   ],
                 ),

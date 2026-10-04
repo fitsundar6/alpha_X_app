@@ -318,7 +318,10 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
           dragStartX = details.globalPosition.dx;
         },
         onHorizontalDragEnd: (details) {
-          if (dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final isLeftEdge = dragStartX != null && dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150;
+          final isRightEdge = dragStartX != null && dragStartX! >= (screenWidth - 60.0) && (details.primaryVelocity ?? 0) < -150;
+          if (isLeftEdge || isRightEdge) {
             if (_isUploading) return;
             if (_capturedImagePath != null) {
               _retakePhoto();

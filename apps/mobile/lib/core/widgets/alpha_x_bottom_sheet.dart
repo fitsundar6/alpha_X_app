@@ -34,7 +34,10 @@ class AlphaXBottomSheet {
             dragStartX = details.globalPosition.dx;
           },
           onHorizontalDragEnd: (details) {
-            if (dragStartX <= 60 && (details.primaryVelocity ?? 0) > 150) {
+            final screenWidth = MediaQuery.of(ctx).size.width;
+            final isLeftEdge = dragStartX <= 60 && (details.primaryVelocity ?? 0) > 150;
+            final isRightEdge = dragStartX >= (screenWidth - 60) && (details.primaryVelocity ?? 0) < -150;
+            if (isLeftEdge || isRightEdge) {
               Navigator.pop(ctx);
             }
           },

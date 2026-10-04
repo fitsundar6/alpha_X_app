@@ -114,7 +114,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   bool _navigateBack() {
     // 1. If Drawer is open, close it
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
-      Navigator.of(context).pop();
+      _scaffoldKey.currentState?.closeDrawer();
       return true;
     }
 
@@ -185,11 +185,15 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           SystemNavigator.pop();
         },
         child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
           onHorizontalDragStart: (details) {
             _dragStartX = details.globalPosition.dx;
           },
           onHorizontalDragEnd: (details) {
-            if (_dragStartX != null && _dragStartX! <= 50.0 && (details.primaryVelocity ?? 0) > 150) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isLeftEdgeSwipe = _dragStartX != null && _dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150;
+            final isRightEdgeSwipe = _dragStartX != null && _dragStartX! >= (screenWidth - 60.0) && (details.primaryVelocity ?? 0) < -150;
+            if (isLeftEdgeSwipe || isRightEdgeSwipe) {
               _navigateBack();
             }
             _dragStartX = null;
@@ -792,14 +796,16 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                '$greetingText • Train Strong',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontFamily: 'Plus Jakarta Sans',
-                                  color: colors.textSecondary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                              Expanded(
+                                child: Text(
+                                  '$greetingText • Train Strong',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    color: colors.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
