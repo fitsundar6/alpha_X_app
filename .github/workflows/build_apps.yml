@@ -94,3 +94,50 @@ jobs:
           name: AlphaXGym-Android-Release
           path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
+
+  publish-release:
+    name: 🚀 Publish GitHub Release
+    needs: [build-ios, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download iOS IPA Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AlphaXGym-iOS-Release
+          path: release-artifacts
+
+      - name: Download Android APK Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AlphaXGym-Android-Release
+          path: release-artifacts
+
+      - name: Rename APK for Release
+        run: |
+          if [ -f "release-artifacts/app-release.apk" ]; then
+            mv release-artifacts/app-release.apk release-artifacts/AlphaXGym-Release.apk
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "Alpha X Gym v1.0.0 (Production Release)"
+          body: |
+            ## Alpha X Gym — Production Release (v1.0.0)
+
+            ### Included Binaries:
+            * **iOS IPA:** `AlphaXGym-Release.ipa` (for iPhone / iPad installation via AltStore, Sideloadly, Scarlet, TrollStore, or Apple Configurator)
+            * **Android APK:** `AlphaXGym-Release.apk` (direct install on Android devices)
+
+            ### Features:
+            * Real-time Gemini Foundation AI Coach integration
+            * Automatic failover and LAN Wi-Fi backend fallback
+            * Master Administrator controls and client performance tracking
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/AlphaXGym-Release.ipa
+            release-artifacts/AlphaXGym-Release.apk
