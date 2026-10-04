@@ -367,7 +367,7 @@ class _AdminCreateEditSessionScreenState
     );
   }
 
-  void _saveSession() {
+  Future<void> _saveSession() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_exercises.isEmpty) {
@@ -414,10 +414,12 @@ class _AdminCreateEditSessionScreenState
     );
 
     if (isEditing) {
-      widget.workoutRepository.updateSession(session);
+      await widget.workoutRepository.updateSession(session);
     } else {
-      widget.workoutRepository.createSession(session);
+      await widget.workoutRepository.createSession(session);
     }
+
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

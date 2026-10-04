@@ -30,6 +30,7 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
   void initState() {
     super.initState();
     widget.workoutRepository.addListener(_onRepositoryUpdate);
+    widget.workoutRepository.fetchAdminSessions();
   }
 
   @override

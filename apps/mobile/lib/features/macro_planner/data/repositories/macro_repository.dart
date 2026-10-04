@@ -271,6 +271,7 @@ class MacroRepository extends ChangeNotifier {
   static const String _prefFoodLogsKey = 'alpha_x_food_logs_v1';
   static const String _prefCustomFoodsKey = 'alpha_x_custom_foods_v1';
   static const String _prefServerFoodsKey = 'alpha_x_server_foods_v1';
+  static const String _prefAssignedDietPlanKey = 'alpha_x_assigned_diet_plan_v1';
 
   List<FoodItem> get customFoods {
     final currentUserId = resolveClientId(null);
@@ -568,22 +569,29 @@ class MacroRepository extends ChangeNotifier {
   /// Fetch currently assigned diet plan from Coach/Trainer
   Future<void> fetchAssignedDietPlan() async {
     try {
+      final token = AuthService().currentToken;
+      if (token.isEmpty) return;
+
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/diet-plan');
       final headers = <String, String>{
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       };
-      final token = AuthService().token;
-      if (token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
 
-      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
+      final response = await http.get(url, headers: headers).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final data = decoded['data'] ?? decoded;
         if (data != null && data is Map<String, dynamic> && data['planName'] != null) {
           final plan = AssignedDietPlan.fromJson(data);
           _assignedDietPlan = plan;
+
+          // Cache to local preferences to ensure availability on cold start/offline
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(_prefAssignedDietPlanKey, jsonEncode(plan.toJson()));
+          } catch (_) {}
+
           // Apply assigned targets
           setCustomDailyTargets(
             calories: plan.dailyCalories,
@@ -873,14 +881,22 @@ class MacroRepository extends ChangeNotifier {
     required List<PrescribedMeal> meals,
   }) async {
     try {
+      var token = AuthService().currentToken;
+
+      // In production or when token is a placeholder, refresh admin JWT token
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/diet-plans');
       final headers = <String, String>{
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       };
-      final token = AuthService().token;
-      if (token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
 
       final body = jsonEncode({
         'planName': planName,
@@ -894,7 +910,18 @@ class MacroRepository extends ChangeNotifier {
         'meals': meals.map((m) => m.toJson()).toList(),
       });
 
-      final response = await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8));
+      var response = await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 10));
+
+      // Automatic 401 retry with re-authenticated admin token
+      if (response.statusCode == 401 && AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          headers['Authorization'] = 'Bearer $token';
+          response = await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 10));
+        }
+      }
+
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {
       return false;
@@ -1079,10 +1106,31 @@ class MacroRepository extends ChangeNotifier {
       } else {
         _seedFoodLogData();
       }
+
+      // Restore assigned diet plan cache from trainer/admin
+      final dietJson = prefs.getString(_prefAssignedDietPlanKey);
+      if (dietJson != null && dietJson.isNotEmpty) {
+        try {
+          final decodedDiet = jsonDecode(dietJson) as Map<String, dynamic>;
+          final plan = AssignedDietPlan.fromJson(decodedDiet);
+          _assignedDietPlan = plan;
+          setCustomDailyTargets(
+            calories: plan.dailyCalories,
+            protein: plan.protein,
+            carbs: plan.carbohydrates,
+            fat: plan.fat,
+            fiber: plan.fiber,
+          );
+        } catch (_) {}
+      }
+
       notifyListeners();
 
       // Trigger asynchronous background fetch from backend
       fetchGlobalFoods();
+      if (AuthService().currentToken.isNotEmpty) {
+        fetchAssignedDietPlan();
+      }
     } catch (_) {
       // In test environments or first run, fallback to in-memory seeds
       if (_foodLogs.isEmpty) {

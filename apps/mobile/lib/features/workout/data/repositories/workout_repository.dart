@@ -23,10 +23,27 @@ class WorkoutAssignmentData {
     this.isRecommended = false,
     DateTime? assignedAt,
   }) : assignedAt = assignedAt ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'sessionId': sessionId,
+    'clientId': clientId,
+    'isRecommended': isRecommended,
+    'assignedAt': assignedAt.toIso8601String(),
+  };
+
+  factory WorkoutAssignmentData.fromJson(Map<String, dynamic> json) => WorkoutAssignmentData(
+    id: json['id'] as String? ?? '',
+    sessionId: json['sessionId'] as String? ?? '',
+    clientId: json['clientId'] as String?,
+    isRecommended: json['isRecommended'] as bool? ?? false,
+    assignedAt: json['assignedAt'] != null ? DateTime.tryParse(json['assignedAt'] as String) : null,
+  );
 }
 
 class WorkoutRepository extends ChangeNotifier {
   static const String _storageKeySessions = 'alpha_x_workout_sessions';
+  static const String _storageKeyAssignments = 'alpha_x_workout_assignments';
   static const String _storageKeyHistory = 'alpha_x_workout_history';
   static const String _storageKeyChangeRequests = 'alpha_x_change_requests';
   static const String _storageKeyPendingSync = 'alpha_x_pending_workout_records';
@@ -72,7 +89,12 @@ class WorkoutRepository extends ChangeNotifier {
     // before login), skip silently — the dashboard will call fetchClientsList()
     // again after the admin logs in, at which point the token will be present.
     if (AuthService().currentToken.isNotEmpty) {
-      fetchClientsList();
+      if (AuthService().isAdmin) {
+        fetchClientsList();
+        fetchAdminSessions();
+      } else {
+        fetchClientWorkouts();
+      }
     }
   }
 
@@ -871,12 +893,82 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   // --- Admin Session Operations ---
-  void createSession(WorkoutSession session) {
+  Future<bool> createSession(WorkoutSession session) async {
     _sessions.insert(0, session);
+    _saveToLocalStorage();
     notifyListeners();
+
+    try {
+      var token = AuthService().currentToken;
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          !_isTestEnvironment &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts');
+      final payload = jsonEncode({
+        'title': session.title,
+        'workoutType': session.workoutType,
+        'targetMuscleGroup': session.targetMuscleGroup,
+        'difficulty': session.difficulty,
+        'estimatedDurationMinutes': session.estimatedDurationMinutes,
+        'description': session.description,
+        'isActive': session.isActive,
+        'availabilityType': session.availabilityType,
+        'exercises': session.exercises.map((e) => {
+          'exerciseId': e.exerciseId,
+          'exerciseName': e.exerciseName,
+          'category': e.category,
+          'orderIndex': session.exercises.indexOf(e),
+          'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
+          'targetReps': e.sets.isNotEmpty ? '${e.sets.first.targetRepsMin}–${e.sets.first.targetRepsMax}' : '8–12',
+          'targetWeight': e.sets.isNotEmpty ? e.sets.first.targetWeight : null,
+          'restSeconds': e.restSeconds,
+          'targetRir': e.sets.isNotEmpty ? e.sets.first.targetRir : 2,
+          'targetRpe': e.sets.isNotEmpty ? e.sets.first.targetRpe : 8.0,
+          'tempo': e.tempo,
+          'setType': e.sets.isNotEmpty && e.sets.first.setType == SetType.warmup ? 'Warm-up' : 'Working',
+          'exerciseNotes': e.trainerNote,
+          'adminInstruction': e.trainerNote,
+        }).toList(),
+      });
+
+      var response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          response = await _httpClient.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: payload,
+          ).timeout(const Duration(seconds: 10));
+        }
+      }
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] createSession sync error: $e');
+      return false;
+    }
   }
 
-  void updateSession(WorkoutSession session) {
+  Future<bool> updateSession(WorkoutSession session) async {
     final index = _sessions.indexWhere((s) => s.id == session.id);
     if (index != -1) {
       final old = _sessions[index];
@@ -896,6 +988,75 @@ class WorkoutRepository extends ChangeNotifier {
       _saveToLocalStorage();
       notifyListeners();
     }
+
+    try {
+      var token = AuthService().currentToken;
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          !_isTestEnvironment &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/${session.id}');
+      final payload = jsonEncode({
+        'title': session.title,
+        'workoutType': session.workoutType,
+        'targetMuscleGroup': session.targetMuscleGroup,
+        'difficulty': session.difficulty,
+        'estimatedDurationMinutes': session.estimatedDurationMinutes,
+        'description': session.description,
+        'isActive': session.isActive,
+        'availabilityType': session.availabilityType,
+        'exercises': session.exercises.map((e) => {
+          'exerciseId': e.exerciseId,
+          'exerciseName': e.exerciseName,
+          'category': e.category,
+          'orderIndex': session.exercises.indexOf(e),
+          'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
+          'targetReps': e.sets.isNotEmpty ? '${e.sets.first.targetRepsMin}–${e.sets.first.targetRepsMax}' : '8–12',
+          'targetWeight': e.sets.isNotEmpty ? e.sets.first.targetWeight : null,
+          'restSeconds': e.restSeconds,
+          'targetRir': e.sets.isNotEmpty ? e.sets.first.targetRir : 2,
+          'targetRpe': e.sets.isNotEmpty ? e.sets.first.targetRpe : 8.0,
+          'tempo': e.tempo,
+          'setType': e.sets.isNotEmpty && e.sets.first.setType == SetType.warmup ? 'Warm-up' : 'Working',
+          'exerciseNotes': e.trainerNote,
+          'adminInstruction': e.trainerNote,
+        }).toList(),
+      });
+
+      var response = await _httpClient.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          response = await _httpClient.put(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: payload,
+          ).timeout(const Duration(seconds: 10));
+        }
+      }
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] updateSession sync error: $e');
+      return false;
+    }
   }
 
   void duplicateSession(String sessionId) {
@@ -913,6 +1074,7 @@ class WorkoutRepository extends ChangeNotifier {
       }).toList(),
     );
     _sessions.insert(0, duplicated);
+    _saveToLocalStorage();
     notifyListeners();
   }
 
@@ -921,27 +1083,53 @@ class WorkoutRepository extends ChangeNotifier {
     if (index != -1) {
       final current = _sessions[index];
       _sessions[index] = current.copyWith(isActive: !current.isActive);
+      _saveToLocalStorage();
       notifyListeners();
     }
   }
 
-  void deleteSession(String sessionId) {
+  Future<bool> deleteSession(String sessionId) async {
     _sessions.removeWhere((s) => s.id == sessionId);
     _assignments.removeWhere((a) => a.sessionId == sessionId);
     if (_activeSession.id == sessionId && _sessions.isNotEmpty) {
       _activeSession = _sessions.first;
     }
+    _saveToLocalStorage();
     notifyListeners();
+
+    try {
+      var token = AuthService().currentToken;
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          !_isTestEnvironment &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/$sessionId');
+      await _httpClient.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 8));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // --- Assignment Operations ---
-  void assignSession({
+  Future<bool> assignSession({
     required String sessionId,
     required String assignmentType, // 'ALL', 'SELECTED', 'INDIVIDUAL'
     List<String>? clientIds,
     String? individualClientId,
     bool isRecommended = false,
-  }) {
+  }) async {
     if (isRecommended) {
       // Clear previous recommendations for the matching target
       for (int i = 0; i < _assignments.length; i++) {
@@ -998,12 +1186,221 @@ class WorkoutRepository extends ChangeNotifier {
       }
     }
 
+    _saveToLocalStorage();
     notifyListeners();
+
+    // Persist assignment to backend database
+    try {
+      var token = AuthService().currentToken;
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          !_isTestEnvironment &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/$sessionId/assign');
+      final payload = jsonEncode({
+        'assignmentType': assignmentType,
+        'clientIds': clientIds ?? [],
+        'individualClientId': individualClientId,
+        'isRecommended': isRecommended,
+      });
+
+      var response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          response = await _httpClient.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: payload,
+          ).timeout(const Duration(seconds: 10));
+        }
+      }
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to sync assignment to backend: $e');
+      return false;
+    }
   }
 
-  void unassignSession(String sessionId, String? clientId) {
+  Future<bool> unassignSession(String sessionId, String? clientId) async {
     _assignments.removeWhere((a) => a.sessionId == sessionId && a.clientId == clientId);
+    _saveToLocalStorage();
     notifyListeners();
+
+    try {
+      var token = AuthService().currentToken;
+      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+          !_isTestEnvironment &&
+          AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshAdminToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+        }
+      }
+
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/assignments/$sessionId');
+      await _httpClient.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 8));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fetches all admin sessions directly from backend
+  Future<void> fetchAdminSessions({bool forceRefresh = false}) async {
+    var token = AuthService().currentToken;
+    if ((token == 'local_admin_session_token' || !token.contains('.')) &&
+        !_isTestEnvironment &&
+        AuthService().isAdmin) {
+      final freshToken = await AuthService().refreshAdminToken();
+      if (freshToken != null && freshToken.isNotEmpty) {
+        token = freshToken;
+      }
+    }
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts');
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<dynamic> list = decoded['data'] ?? [];
+        if (list.isNotEmpty) {
+          for (final item in list) {
+            if (item is Map<String, dynamic>) {
+              try {
+                final s = WorkoutSession.fromJson(item);
+                final idx = _sessions.indexWhere((x) => x.id == s.id);
+                if (idx != -1) {
+                  _sessions[idx] = s;
+                } else {
+                  _sessions.add(s);
+                }
+              } catch (_) {}
+            }
+          }
+          _saveToLocalStorage();
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to fetch admin sessions: $e');
+    }
+  }
+
+  /// Fetches real authorized workout sessions assigned to the current client from backend
+  Future<void> fetchClientWorkouts({bool forceRefresh = false}) async {
+    final token = AuthService().currentToken;
+    if (token.isEmpty) return;
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions');
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          final data = decoded['data'];
+          final List<dynamic> availableJson = data['available'] as List<dynamic>? ?? [];
+          final Map<String, dynamic>? recJson = data['recommended'] as Map<String, dynamic>?;
+
+          final List<WorkoutSession> fetchedSessions = [];
+          for (final item in availableJson) {
+            if (item is Map<String, dynamic>) {
+              try {
+                final s = WorkoutSession.fromJson(item);
+                fetchedSessions.add(s);
+              } catch (pe) {
+                debugPrint('[WorkoutRepository] Session parse error: $pe');
+              }
+            }
+          }
+
+          if (recJson != null) {
+            try {
+              final recSession = WorkoutSession.fromJson(recJson).copyWith(isRecommended: true);
+              final idx = fetchedSessions.indexWhere((s) => s.id == recSession.id);
+              if (idx != -1) {
+                fetchedSessions[idx] = recSession;
+              } else {
+                fetchedSessions.insert(0, recSession);
+              }
+            } catch (_) {}
+          }
+
+          if (fetchedSessions.isNotEmpty) {
+            for (final fs in fetchedSessions) {
+              final existingIdx = _sessions.indexWhere((s) => s.id == fs.id);
+              if (existingIdx != -1) {
+                _sessions[existingIdx] = fs;
+              } else {
+                _sessions.add(fs);
+              }
+            }
+
+            final currentClientId = AuthService().currentUserId;
+            _assignments.removeWhere((a) => a.clientId == currentClientId);
+
+            for (final fs in fetchedSessions) {
+              _assignments.add(WorkoutAssignmentData(
+                id: 'assign_${fs.id}_$currentClientId',
+                sessionId: fs.id,
+                clientId: currentClientId,
+                isRecommended: fs.isRecommended,
+              ));
+            }
+
+            if (_sessions.isNotEmpty) {
+              final rec = getRecommendedSessionForClient(currentClientId);
+              if (rec != null) {
+                _activeSession = rec;
+              }
+            }
+
+            _saveToLocalStorage();
+            notifyListeners();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to fetch client workouts: $e');
+    }
   }
 
   // --- Client Discovery & Access Scoping ---
@@ -1788,6 +2185,17 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
+      final assignmentsRaw = prefs.getString(_storageKeyAssignments);
+      if (assignmentsRaw != null && assignmentsRaw.isNotEmpty) {
+        final list = jsonDecode(assignmentsRaw) as List<dynamic>;
+        if (list.isNotEmpty) {
+          _assignments.clear();
+          for (final item in list) {
+            _assignments.add(WorkoutAssignmentData.fromJson(item as Map<String, dynamic>));
+          }
+        }
+      }
+
       final historyRaw = prefs.getString(_storageKeyHistory);
       if (historyRaw != null && historyRaw.isNotEmpty) {
         final list = jsonDecode(historyRaw) as List<dynamic>;
@@ -1889,6 +2297,9 @@ class WorkoutRepository extends ChangeNotifier {
 
       final sessionsList = _sessions.map((s) => s.toJson()).toList();
       await prefs.setString(_storageKeySessions, jsonEncode(sessionsList));
+
+      final assignmentsList = _assignments.map((a) => a.toJson()).toList();
+      await prefs.setString(_storageKeyAssignments, jsonEncode(assignmentsList));
 
       final historyList = _workoutHistory.map((r) => r.toJson()).toList();
       await prefs.setString(_storageKeyHistory, jsonEncode(historyList));

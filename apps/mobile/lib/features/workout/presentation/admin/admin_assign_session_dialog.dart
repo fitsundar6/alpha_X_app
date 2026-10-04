@@ -49,7 +49,11 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
     }
   }
 
-  void _saveAssignment() {
+  bool _isSaving = false;
+
+  Future<void> _saveAssignment() async {
+    if (_isSaving) return;
+
     if (_assignmentType == 'INDIVIDUAL' && (_individualClientId == null || _individualClientId!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an individual client.'), backgroundColor: AppColors.error),
@@ -64,7 +68,9 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
       return;
     }
 
-    widget.workoutRepository.assignSession(
+    setState(() => _isSaving = true);
+
+    final success = await widget.workoutRepository.assignSession(
       sessionId: widget.session.id,
       assignmentType: _assignmentType,
       clientIds: _selectedClientIds.toList(),
@@ -72,14 +78,19 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
       isRecommended: _isRecommended,
     );
 
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
     Navigator.of(context).pop();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Assigned "${widget.session.title}" (${_assignmentType == "ALL" ? "All Clients" : _assignmentType == "INDIVIDUAL" ? "Individual" : "${_selectedClientIds.length} Clients"})${_isRecommended ? " as Recommended ⭐" : ""}',
+          success
+              ? 'Assigned "${widget.session.title}" (${_assignmentType == "ALL" ? "All Clients" : _assignmentType == "INDIVIDUAL" ? "Individual" : "${_selectedClientIds.length} Clients"})${_isRecommended ? " as Recommended ⭐" : ""} (Saved to Database)'
+              : 'Assigned locally (Server sync pending)',
         ),
-        backgroundColor: AppColors.primaryRed,
+        backgroundColor: success ? AppColors.primaryRed : AppColors.gold,
       ),
     );
   }
@@ -257,8 +268,14 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
             backgroundColor: AppColors.primaryRed,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: _saveAssignment,
-          child: const Text('Save Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          onPressed: _isSaving ? null : _saveAssignment,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Save Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         ),
       ],
     );

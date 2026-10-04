@@ -261,6 +261,13 @@ router.post('/clients/:id/workouts', async (req: Request, res: Response) => {
       return;
     }
 
+    if (isRecommended === true) {
+      await prisma.workoutAssignment.updateMany({
+        where: { clientId: user.id, isRecommended: true },
+        data: { isRecommended: false },
+      });
+    }
+
     // Check if assignment already exists
     const existing = await prisma.workoutAssignment.findUnique({
       where: {
@@ -272,7 +279,17 @@ router.post('/clients/:id/workouts', async (req: Request, res: Response) => {
     });
 
     if (existing) {
-      sendSuccess(res, existing, HttpStatus.OK);
+      const updated = await prisma.workoutAssignment.update({
+        where: { id: existing.id },
+        data: {
+          isRecommended: isRecommended === true,
+          active: true,
+          assignedAt: new Date(),
+          assignedById: req.user!.id,
+        },
+        include: { session: true },
+      });
+      sendSuccess(res, updated, HttpStatus.OK);
       return;
     }
 

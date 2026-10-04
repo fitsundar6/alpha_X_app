@@ -69,6 +69,10 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     _weeklyProgressRepository.fetchCheckInStatus();
     _notificationRepository.sendActivityPing();
     _notificationRepository.fetchNotifications();
+
+    // Automatically synchronize assigned workouts and diet plan from shared database
+    widget.workoutRepository.fetchClientWorkouts();
+    widget.macroRepository.fetchAssignedDietPlan();
   }
 
   @override
@@ -96,6 +100,14 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           _tabHistory.add(idx);
         }
       });
+
+      // Synchronize latest plans from database whenever the client switches tabs
+      if (idx == 0 || idx == 1) {
+        widget.workoutRepository.fetchClientWorkouts();
+      }
+      if (idx == 0 || idx == 3) {
+        widget.macroRepository.fetchAssignedDietPlan();
+      }
     }
   }
 
@@ -681,9 +693,21 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
 
     final colors = ClientThemeColors(context);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      children: [
+    return RefreshIndicator(
+      color: colors.primaryRed,
+      backgroundColor: colors.surfaceElevated,
+      onRefresh: () async {
+        await Future.wait([
+          widget.workoutRepository.fetchClientWorkouts(forceRefresh: true),
+          widget.macroRepository.fetchAssignedDietPlan(),
+          _weeklyProgressRepository.fetchCheckInStatus(),
+          _notificationRepository.fetchNotifications(),
+        ]);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
         // 1. User Header & Profile Avatar
         AlphaXSubtleEntrance(
           child: Row(
@@ -1366,8 +1390,9 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           }),
         const SizedBox(height: 16),
       ],
-    );
-  }
+    ),
+  );
+}
 
   Widget _transformationMiniStat(String label, String value, {bool isAccent = false, String? delta}) {
     return Column(

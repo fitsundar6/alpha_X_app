@@ -216,12 +216,19 @@ router.put(['/me/profile', '/profile', '/me/assessment'], async (req: Request, r
 router.get('/me/workout', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
+    const profile = await getAuthenticatedClientProfile(userId);
+
+    const clientIdsToMatch: Array<string | null> = [userId];
+    if (profile) {
+      if (profile.clientId) clientIdsToMatch.push(profile.clientId);
+      if (profile.id) clientIdsToMatch.push(profile.id);
+    }
 
     // Check assignments for this specific client or global ("ALL") assignments
     const assignment = await prisma.workoutAssignment.findFirst({
       where: {
         OR: [
-          { clientId: userId },
+          { clientId: { in: clientIdsToMatch.filter(Boolean) as string[] } },
           { clientId: null }, // Global gym assignment
         ],
         active: true,
@@ -261,7 +268,11 @@ router.get('/me/diet-plan', async (req: Request, res: Response) => {
 
     const activeDietPlan = await prisma.dietPlan.findFirst({
       where: {
-        clientProfileId: profile.id,
+        OR: [
+          { clientProfileId: profile.id },
+          { clientId: profile.clientId },
+          { clientId: req.user!.id },
+        ],
         isActive: true,
       },
       orderBy: { createdAt: 'desc' },

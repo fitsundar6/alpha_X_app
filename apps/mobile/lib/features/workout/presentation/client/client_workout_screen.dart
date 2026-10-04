@@ -42,6 +42,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
   void initState() {
     super.initState();
     widget.workoutRepository.addListener(_onRepoChange);
+    widget.workoutRepository.fetchClientWorkouts();
   }
 
   @override
@@ -130,9 +131,16 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               ],
             )
           : null,
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        children: [
+      body: RefreshIndicator(
+        color: isDark ? AppColors.primary : AppColors.lightPrimary,
+        backgroundColor: colors.surfaceCard,
+        onRefresh: () async {
+          await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          children: [
           // Section 1: Recommended Session Hero Card
           if (recommended != null) ...[
             _sectionTitle('⭐ RECOMMENDED FOR YOU', colors),
@@ -225,8 +233,9 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ...filteredSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _sectionTitle(String title, ClientThemeColors colors) {
     return Text(
