@@ -1,11 +1,11 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
-import java.util.Properties
-import java.io.FileInputStream
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
@@ -51,7 +51,11 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // Disable minification and resource shrinking to avoid R8/ProGuard issues in CI
+            isMinifyEnabled = false
+            isShrinkResources = false
             ndk {
+                // Suppress NDK debug symbol stripping — avoids CI native-lib strip failures
                 debugSymbolLevel = "none"
             }
         }

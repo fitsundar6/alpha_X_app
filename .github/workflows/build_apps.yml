@@ -62,7 +62,7 @@ jobs:
           retention-days: 14
 
   build-android:
-    name: 🤖 Build Android APK
+    name: 🤖 Build Android APK & AAB
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -80,12 +80,37 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Install Android NDK
+        # Explicitly install the NDK version declared in build.gradle.kts
+        # This prevents "Release app bundle failed to strip debug symbols" errors
+        # because the CI runner may not have the matching NDK pre-installed.
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;28.2.13676358'
+
       - name: Install Dependencies
         working-directory: apps/mobile
         run: flutter pub get
 
+      - name: Setup Release Signing (if secrets available)
+        # Only runs when KEYSTORE_BASE64 secret is set in the repository.
+        # Falls back to debug signing automatically when the secret is missing.
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        working-directory: apps/mobile/android
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
+          cat > key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=keystore.jks
+          EOF
+
       - name: Build Android Release APK & AAB
         working-directory: apps/mobile
+        env:
+          # Pass Gradle memory settings — 4GB is safe on GitHub-hosted runners (7GB total)
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=2g"
         run: |
           flutter build apk --release
           flutter build appbundle --release
