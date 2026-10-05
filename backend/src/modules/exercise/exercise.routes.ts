@@ -1,22 +1,15 @@
 import { Router } from 'express';
-import { requireAuth, requireRoles } from '../../middlewares/auth';
-import { UserRole } from '../../constants/roles';
+import { optionalAuth, requireAdmin } from '../../middlewares/auth';
 import { exerciseController } from './exercise.controller';
 
 const router = Router();
-
-// ==========================================
-// PUBLIC / AUTHENTICATED EXERCISE ACCESS
-// (Both ADMIN and CLIENT can search and view exercises)
-// ==========================================
-router.use(requireAuth);
 
 // ==========================================
 // ADMIN EXERCISE MANAGEMENT ROUTES
 // (Only ADMIN role can sync, create, edit, archive)
 // ==========================================
 const adminRouter = Router();
-adminRouter.use(requireRoles([UserRole.ADMIN]));
+adminRouter.use(requireAdmin);
 
 adminRouter.post('/', (req, res) => exerciseController.createCustomExercise(req, res));
 adminRouter.put('/:id', (req, res) => exerciseController.updateExercise(req, res));
@@ -28,13 +21,13 @@ adminRouter.get('/sync/status', (req, res) => exerciseController.getSyncStatus(r
 router.use('/admin', adminRouter);
 
 // ==========================================
-// PUBLIC / AUTHENTICATED EXERCISE ACCESS
-// (Both ADMIN and CLIENT can search and view exercises)
+// PUBLIC & ATHLETE EXERCISE ACCESS
+// (Exercises can be browsed publicly or personalized when authenticated)
 // ==========================================
-router.post('/seed', (req, res) => exerciseController.seedDatabase(req, res));
-router.get('/', (req, res) => exerciseController.searchExercises(req, res));
+router.post('/seed', requireAdmin, (req, res) => exerciseController.seedDatabase(req, res));
+router.get('/', optionalAuth, (req, res) => exerciseController.searchExercises(req, res));
 router.get('/attribution', (req, res) => exerciseController.getAttributionInfo(req, res));
-router.get('/:id', (req, res) => exerciseController.getExerciseById(req, res));
-router.get('/:id/alternatives', (req, res) => exerciseController.getAlternatives(req, res));
+router.get('/:id', optionalAuth, (req, res) => exerciseController.getExerciseById(req, res));
+router.get('/:id/alternatives', optionalAuth, (req, res) => exerciseController.getAlternatives(req, res));
 
 export const exerciseRoutes = router;

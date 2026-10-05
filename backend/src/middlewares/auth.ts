@@ -115,3 +115,49 @@ export const requireRoles = (allowedRoles: UserRole[]) => {
  * AND their email strictly matches the configured master ADMIN_EMAIL.
  */
 export const requireAdmin = requireRoles([UserRole.ADMIN]);
+
+/**
+ * Middleware that parses authentication token if present, but does not reject unauthenticated requests.
+ * Useful for public endpoints like catalog search that can personalize data if logged in.
+ */
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  const token = authHeader.split(' ')[1];
+  if (!token) return next();
+
+  if (env.NODE_ENV !== 'production') {
+    if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
+      req.user = {
+        id: 'admin_alex_stone',
+        email: env.ADMIN_EMAIL.trim().toLowerCase(),
+        role: UserRole.ADMIN,
+      };
+      return next();
+    }
+    if (token === 'alpha_x_mock_token_for_client') {
+      req.user = {
+        id: 'client_marcus_vance',
+        email: 'marcus@client.alphax.gym',
+        role: UserRole.CLIENT,
+      };
+      return next();
+    }
+  }
+
+  try {
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    const normalizedEmail = (decoded.email || '').trim().toLowerCase();
+    const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+    req.user = {
+      id: decoded.id,
+      email: normalizedEmail,
+      role: isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT,
+    };
+  } catch (_) {
+    // Non-blocking: continue as guest if token is invalid or expired
+  }
+  next();
+};
