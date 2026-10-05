@@ -222,7 +222,7 @@ class ActivityRepository extends ChangeNotifier {
   /// Loads real clients from backend for Admin view
   Future<void> loadManagedClientsFromBackend() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final res = await _httpClient.get(
         Uri.parse('${AppConstants.apiBaseUrl}/admin/clients'),
         headers: {
@@ -262,7 +262,7 @@ class ActivityRepository extends ChangeNotifier {
     if (clientId.isEmpty) return [];
 
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final isAdmin = AuthService().isAdmin;
       final url = isAdmin
           ? Uri.parse('${AppConstants.apiBaseUrl}/activity/client/$clientId')
@@ -716,9 +716,8 @@ class ActivityRepository extends ChangeNotifier {
         'records': pendingRecords.map((r) => r.toJson()).toList(),
       });
 
-      final token = AuthService().currentToken.isNotEmpty
-          ? AuthService().currentToken
-          : 'alpha_x_mock_token_for_client';
+      final validToken = await AuthService().getValidToken();
+      final token = validToken.isNotEmpty ? validToken : 'alpha_x_mock_token_for_client';
 
       final response = await _httpClient
           .post(
@@ -750,7 +749,7 @@ class ActivityRepository extends ChangeNotifier {
   Future<void> _syncGoalWithBackend(String clientId, int newGoal) async {
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/activity/client/$clientId/goal');
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
 
       await _httpClient
           .put(

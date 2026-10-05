@@ -13,7 +13,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),
-  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('30d'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
   QR_SECRET_KEY: z.string().default('alpha_x_qr_dynamic_secret_key_rotation'),
   CORS_ORIGIN: z.string().default('*'),

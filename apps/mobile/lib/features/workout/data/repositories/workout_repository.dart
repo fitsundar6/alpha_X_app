@@ -107,17 +107,7 @@ class WorkoutRepository extends ChangeNotifier {
   /// Fetches real registered clients exclusively from the shared backend database (PostgreSQL).
   /// NEVER falls back to demo/sample/example data.
   Future<List<Map<String, String>>> fetchClientsList({bool forceRefresh = false}) async {
-    var token = AuthService().currentToken;
-
-    // In production or when token is a local placeholder, acquire live JWT token
-    if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-        !_isTestEnvironment &&
-        AuthService().isAdmin) {
-      final freshToken = await AuthService().refreshAdminToken();
-      if (freshToken != null && freshToken.isNotEmpty) {
-        token = freshToken;
-      }
-    }
+    var token = await AuthService().getValidToken();
 
     final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients');
 
@@ -326,7 +316,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   /// Fetches complete, latest client profile & assessment data directly from backend
   Future<Map<String, dynamic>?> fetchClientProfile(String clientIdOrId) async {
-    final token = AuthService().currentToken;
+    final token = await AuthService().getValidToken();
     final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientIdOrId');
 
     try {
@@ -362,7 +352,7 @@ class WorkoutRepository extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/notes');
       final resp = await _httpClient.put(
         url,
@@ -381,7 +371,7 @@ class WorkoutRepository extends ChangeNotifier {
   /// Assigns a custom Diet Plan to a specific client.
   Future<bool> assignDietPlanToClient(String clientId, Map<String, dynamic> dietData) async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/diet-plans');
       final resp = await _httpClient.post(
         url,
@@ -400,7 +390,7 @@ class WorkoutRepository extends ChangeNotifier {
   /// Assigns custom Macro targets to a specific client.
   Future<bool> assignMacroPlanToClient(String clientId, Map<String, dynamic> macroData) async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/macros');
       final resp = await _httpClient.post(
         url,
@@ -899,15 +889,7 @@ class WorkoutRepository extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var token = AuthService().currentToken;
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          !_isTestEnvironment &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      var token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts');
       final payload = jsonEncode({
@@ -1009,15 +991,7 @@ class WorkoutRepository extends ChangeNotifier {
     }
 
     try {
-      var token = AuthService().currentToken;
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          !_isTestEnvironment &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      var token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/${session.id}');
       final payload = jsonEncode({
@@ -1122,15 +1096,7 @@ class WorkoutRepository extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var token = AuthService().currentToken;
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          !_isTestEnvironment &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      final token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/$sessionId');
       await _httpClient.delete(
@@ -1215,15 +1181,7 @@ class WorkoutRepository extends ChangeNotifier {
 
     // Persist assignment to backend database
     try {
-      var token = AuthService().currentToken;
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          !_isTestEnvironment &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      var token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/$sessionId/assign');
       final payload = jsonEncode({
@@ -1291,15 +1249,7 @@ class WorkoutRepository extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var token = AuthService().currentToken;
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          !_isTestEnvironment &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      final token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/assignments/$sessionId');
       await _httpClient.delete(
@@ -1317,15 +1267,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   /// Fetches all admin sessions directly from backend
   Future<void> fetchAdminSessions({bool forceRefresh = false}) async {
-    var token = AuthService().currentToken;
-    if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-        !_isTestEnvironment &&
-        AuthService().isAdmin) {
-      final freshToken = await AuthService().refreshAdminToken();
-      if (freshToken != null && freshToken.isNotEmpty) {
-        token = freshToken;
-      }
-    }
+    final token = await AuthService().getValidToken();
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts');
@@ -2513,7 +2455,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> fetchClientAttendance() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/attendance');
       final res = await _httpClient.get(
         url,
@@ -2536,7 +2478,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> fetchClientChallenge() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/challenge');
       final res = await _httpClient.get(
         url,
@@ -2559,7 +2501,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> fetchClientProgress() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/progress');
       final res = await _httpClient.get(
         url,
@@ -2582,7 +2524,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<bool> logClientProgress({required double weightKg, double? waistCm, String? notes}) async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/progress');
       final payload = <String, dynamic>{'weightKg': weightKg};
       if (waistCm != null) payload['waistCm'] = waistCm;
@@ -2610,7 +2552,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> fetchAdminAttendance() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/attendance');
       final res = await _httpClient.get(
         url,
@@ -2633,7 +2575,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> fetchAdminChallenges() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/challenges');
       final res = await _httpClient.get(
         url,

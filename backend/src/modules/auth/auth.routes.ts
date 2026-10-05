@@ -68,6 +68,80 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v1/auth/refresh
+ * Refreshes an expired or existing valid session token.
+ * Accepts Authorization Bearer token (including tokens expired within 30-day grace period).
+ * Returns a fresh 30-day JWT access token.
+ */
+router.post('/refresh', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    sendError(res, 'UNAUTHORIZED', 'Missing Authorization header', HttpStatus.UNAUTHORIZED);
+    return;
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as {
+      id: string;
+      email: string;
+      role?: UserRole;
+      exp?: number;
+    };
+    const expTimeMs = (decoded.exp || 0) * 1000;
+    const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+    if (Date.now() - expTimeMs > gracePeriodMs) {
+      sendError(res, 'TOKEN_EXPIRED', 'Session has expired beyond recovery. Please log in again.', HttpStatus.UNAUTHORIZED);
+      return;
+    }
+
+    const normalizedEmail = (decoded.email || '').trim().toLowerCase();
+    const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+
+    let user: any = null;
+    let clientId: string | null = null;
+    if (isMasterAdmin) {
+      user = { id: 'admin_alex_stone', email: env.ADMIN_EMAIL, role: UserRole.ADMIN, name: 'Alpha X Administrator' };
+      clientId = 'AXG-ADMIN';
+    } else {
+      user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        include: { clientProfile: true },
+      });
+      if (!user) {
+        sendError(res, 'USER_NOT_FOUND', 'User account not found', HttpStatus.UNAUTHORIZED);
+        return;
+      }
+      clientId = user.clientProfile?.clientId ?? null;
+    }
+
+    const effectiveRole = isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT;
+    const newToken = jwt.sign(
+      {
+        id: user.id,
+        email: normalizedEmail,
+        role: effectiveRole,
+      },
+      env.JWT_ACCESS_SECRET,
+      {
+        expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
+      }
+    );
+
+    sendSuccess(res, {
+      token: newToken,
+      user: {
+        id: user.id,
+        email: normalizedEmail,
+        role: effectiveRole,
+        clientId,
+      },
+    });
+  } catch (err: any) {
+    sendError(res, 'INVALID_TOKEN', 'Session token is invalid or corrupted', HttpStatus.UNAUTHORIZED, undefined, err);
+  }
+});
+
+/**
  * POST /api/v1/auth/register
  * "Create Your Alpha X Gym Account"
  * Fields:

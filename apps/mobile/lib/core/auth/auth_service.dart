@@ -68,6 +68,67 @@ class AuthService extends ChangeNotifier {
     return '';
   }
   String get token => currentToken;
+
+  /// Checks whether the active JWT token is expired or within 60 seconds of expiring.
+  bool get isTokenExpired {
+    if (_token.isEmpty || _token == 'local_admin_session_token' || !_token.contains('.')) {
+      return false;
+    }
+    try {
+      final parts = _token.split('.');
+      if (parts.length != 3) return false;
+      final normalized = base64Url.normalize(parts[1]);
+      final payloadJson = utf8.decode(base64Url.decode(normalized));
+      final payload = jsonDecode(payloadJson);
+      if (payload is Map && payload.containsKey('exp')) {
+        final expSeconds = payload['exp'] as int;
+        final expiryDate = DateTime.fromMillisecondsSinceEpoch(expSeconds * 1000, isUtc: true);
+        return DateTime.now().toUtc().isAfter(expiryDate.subtract(const Duration(seconds: 60)));
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Authenticates with the backend to refresh an existing client session token.
+  Future<String?> refreshClientToken() async {
+    if (_token.isEmpty || _role != UserRole.client) return null;
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        final token = decoded['data']?['token']?.toString();
+        if (token != null && token.isNotEmpty) {
+          _token = token;
+          await _saveActiveSession();
+          debugPrint('[AuthService] Successfully acquired fresh Client JWT token');
+          return token;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Client token refresh notice: $e');
+    }
+    return null;
+  }
+
+  /// Returns a valid JWT token, automatically acquiring or refreshing admin & client tokens if expired.
+  Future<String> getValidToken() async {
+    if (_role == UserRole.admin && (isTokenExpired || _token.isEmpty || _token == 'local_admin_session_token' || !_token.contains('.')) && !_isTestEnvironment) {
+      final fresh = await refreshAdminToken();
+      if (fresh != null && fresh.isNotEmpty) return fresh;
+    } else if (_role == UserRole.client && isTokenExpired && !_isTestEnvironment) {
+      final fresh = await refreshClientToken();
+      if (fresh != null && fresh.isNotEmpty) return fresh;
+    }
+    return currentToken;
+  }
   bool get isInitialized => _isInitialized;
   bool get onboardingCompleted => _onboardingCompleted;
   bool get assessmentCompleted => _onboardingCompleted;

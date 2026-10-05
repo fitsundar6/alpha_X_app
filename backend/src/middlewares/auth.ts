@@ -67,7 +67,30 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    let decoded: { id: string; email: string; role?: UserRole };
+    try {
+      decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    } catch (verifyErr: any) {
+      if (verifyErr?.name === 'TokenExpiredError') {
+        // Grace period for authentic tokens signed with our secret (e.g. issued with earlier 15m expiration)
+        const unexpiredPayload = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as {
+          id: string;
+          email: string;
+          role?: UserRole;
+          exp?: number;
+        };
+        const expTimeMs = (unexpiredPayload.exp || 0) * 1000;
+        const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30-day grace period
+        if (Date.now() - expTimeMs < gracePeriodMs) {
+          decoded = unexpiredPayload;
+        } else {
+          throw verifyErr;
+        }
+      } else {
+        throw verifyErr;
+      }
+    }
+
     const normalizedEmail = (decoded.email || '').trim().toLowerCase();
     const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
 

@@ -569,7 +569,7 @@ class MacroRepository extends ChangeNotifier {
   /// Fetch currently assigned diet plan from Coach/Trainer
   Future<void> fetchAssignedDietPlan() async {
     try {
-      final token = AuthService().currentToken;
+      final token = await AuthService().getValidToken();
       if (token.isEmpty) return;
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/diet-plan');
@@ -615,7 +615,7 @@ class MacroRepository extends ChangeNotifier {
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };
-      final token = AuthService().token;
+      final token = await AuthService().getValidToken();
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
@@ -657,7 +657,7 @@ class MacroRepository extends ChangeNotifier {
         'Content-Type': 'application/json',
         'x-client-id': entry.clientId,
       };
-      final token = AuthService().token;
+      final token = await AuthService().getValidToken();
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
@@ -717,7 +717,7 @@ class MacroRepository extends ChangeNotifier {
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };
-      final token = AuthService().token;
+      final token = await AuthService().getValidToken();
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
@@ -881,16 +881,7 @@ class MacroRepository extends ChangeNotifier {
     required List<PrescribedMeal> meals,
   }) async {
     try {
-      var token = AuthService().currentToken;
-
-      // In production or when token is a placeholder, refresh admin JWT token
-      if ((token == 'local_admin_session_token' || !token.contains('.')) &&
-          AuthService().isAdmin) {
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          token = freshToken;
-        }
-      }
+      var token = await AuthService().getValidToken();
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/diet-plans');
       final headers = <String, String>{
