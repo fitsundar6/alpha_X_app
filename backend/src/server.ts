@@ -73,6 +73,11 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
+// Trust the first proxy hop (Vercel edge / load balancer).
+// Required so express-rate-limit can safely read X-Forwarded-For
+// to identify real client IPs instead of the proxy's IP.
+app.set('trust proxy', 1);
+
 // Rate limiting to protect against brute force and DDoS
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
