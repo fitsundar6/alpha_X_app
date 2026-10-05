@@ -31,9 +31,16 @@ export class FoodController {
         limit: limit ? parseInt(limit as string, 10) : 100,
       });
 
-      sendSuccess(res, result);
+      sendSuccess(res, result, HttpStatus.OK, `Found ${result.items.length} food items matching search criteria`, {
+        count: result.items.length,
+        total: result.total,
+        page: result.page,
+      });
     } catch (err: any) {
-      sendError(res, 'FOOD_SEARCH_ERROR', err.message || 'Failed to search foods', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+      sendError(res, 'FOOD_SEARCH_ERROR', err.message || 'Failed to search foods', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+        activity: 'Search Foods',
+        explanation: 'Database query failed while searching food catalog.',
+      });
     }
   }
 
@@ -41,16 +48,25 @@ export class FoodController {
    * Get single food by ID
    */
   public async getFoodById(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
     try {
-      const id = req.params.id as string;
       const food = await foodService.getFoodById(id);
       if (!food) {
-        sendError(res, 'NOT_FOUND', `Food with ID "${id}" was not found`, HttpStatus.NOT_FOUND);
+        sendError(res, 'NOT_FOUND', `Food with ID "${id}" was not found`, HttpStatus.NOT_FOUND, undefined, undefined, {
+          activity: 'Get Food By ID',
+          resourceId: id,
+          resourceType: 'FoodItem',
+          explanation: 'The requested food ID was not found in database or catalog.',
+        });
         return;
       }
-      sendSuccess(res, food);
+      sendSuccess(res, food, HttpStatus.OK, `Retrieved food item "${id}" ("${food.name}")`);
     } catch (err: any) {
-      sendError(res, 'FOOD_FETCH_ERROR', err.message || 'Failed to fetch food', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+      sendError(res, 'FOOD_FETCH_ERROR', err.message || 'Failed to fetch food', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+        activity: 'Get Food By ID',
+        resourceId: id,
+        resourceType: 'FoodItem',
+      });
     }
   }
 
@@ -75,12 +91,20 @@ export class FoodController {
       } = req.body;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
-        sendError(res, 'VALIDATION_ERROR', 'Food name is required', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Food name is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Create Custom Food',
+          explanation: 'The food name field was missing or empty.',
+          receivedPayload: req.body,
+        });
         return;
       }
 
       if (protein === undefined || carbohydrates === undefined || fat === undefined) {
-        sendError(res, 'VALIDATION_ERROR', 'Protein, carbohydrates, and fat are required', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Protein, carbohydrates, and fat are required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Create Custom Food',
+          explanation: 'One or more required macronutrient fields (protein, carbohydrates, fat) were missing.',
+          receivedPayload: req.body,
+        });
         return;
       }
 
@@ -111,10 +135,16 @@ export class FoodController {
       sendSuccess(
         res,
         { ...result.food, isDuplicate: result.isDuplicate },
-        result.isDuplicate ? HttpStatus.OK : HttpStatus.CREATED
+        result.isDuplicate ? HttpStatus.OK : HttpStatus.CREATED,
+        `Saved custom food item "${result.food.id}" ("${result.food.name}")`,
+        { id: result.food.id, name: result.food.name, isDuplicate: result.isDuplicate }
       );
     } catch (err: any) {
-      sendError(res, 'CREATE_FOOD_ERROR', err.message || 'Failed to create custom food', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'CREATE_FOOD_ERROR', err.message || 'Failed to create custom food', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+        activity: 'Create Custom Food',
+        explanation: 'Database insertion failed while creating custom food.',
+        receivedPayload: req.body,
+      });
     }
   }
 
@@ -122,19 +152,28 @@ export class FoodController {
    * Delete food item
    */
   public async deleteFood(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
     try {
-      const id = req.params.id as string;
       const user = (req as any).user || {};
       const deleted = await foodService.deleteFood(id, user);
 
       if (!deleted) {
-        sendError(res, 'NOT_FOUND', `Food with ID "${id}" was not found`, HttpStatus.NOT_FOUND);
+        sendError(res, 'NOT_FOUND', `Food with ID "${id}" was not found or already deleted`, HttpStatus.NOT_FOUND, undefined, undefined, {
+          activity: 'Delete Food Item',
+          resourceId: id,
+          resourceType: 'FoodItem',
+          explanation: 'The food item record does not exist or user lacks permission to delete.',
+        });
         return;
       }
 
-      sendSuccess(res, { deleted: true, id });
+      sendSuccess(res, { deleted: true, id }, HttpStatus.OK, `Deleted food item "${id}" from database`);
     } catch (err: any) {
-      sendError(res, 'DELETE_FOOD_ERROR', err.message || 'Failed to delete food', HttpStatus.BAD_REQUEST);
+      sendError(res, 'DELETE_FOOD_ERROR', err.message || 'Failed to delete food', HttpStatus.BAD_REQUEST, undefined, err, {
+        activity: 'Delete Food Item',
+        resourceId: id,
+        resourceType: 'FoodItem',
+      });
     }
   }
 

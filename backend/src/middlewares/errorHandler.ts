@@ -50,16 +50,18 @@ export const errorHandler = (
   // Handle Zod validation errors
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({
-      field: e.path.join('.'),
+      field: e.path.join('.') || 'body',
       message: e.message,
     }));
+    const reasonText = details.map((d) => `${d.field}: ${d.message}`).join('; ');
     sendError(
       res,
       'VALIDATION_ERROR',
-      'Input validation failed',
-      HttpStatus.UNPROCESSABLE_ENTITY,
+      `Validation failed: ${reasonText}`,
+      HttpStatus.BAD_REQUEST,
       details,
-      err
+      err,
+      { explanation: 'One or more required fields are missing or invalid in the request body.' }
     );
     return;
   }

@@ -24,13 +24,24 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    sendError(res, 'UNAUTHORIZED', 'Authentication token is required', HttpStatus.UNAUTHORIZED);
+    sendError(
+      res,
+      'UNAUTHORIZED',
+      'Invalid/expired authentication token: Missing Authorization header',
+      HttpStatus.UNAUTHORIZED,
+      undefined,
+      undefined,
+      {
+        activity: 'Verify Authentication Token',
+        explanation: !authHeader
+          ? 'No Authorization header was provided in the request. Athletes and admins must send "Authorization: Bearer <token>".'
+          : 'Authorization header did not start with "Bearer ".',
+      }
+    );
     return;
   }
 
   const token = authHeader.split(' ')[1];
-
-
 
   // Development / test mock tokens bypass (strictly disabled in production)
   if (env.NODE_ENV !== 'production') {
@@ -71,15 +82,40 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
       role: effectiveRole,
     };
     next();
-  } catch (err) {
-    sendError(res, 'INVALID_TOKEN', 'Session token is invalid or expired', HttpStatus.UNAUTHORIZED, undefined, err);
+  } catch (err: any) {
+    const isExpired = err?.name === 'TokenExpiredError';
+    sendError(
+      res,
+      'INVALID_TOKEN',
+      isExpired ? 'Invalid/expired authentication token' : 'Session token is invalid or corrupted',
+      HttpStatus.UNAUTHORIZED,
+      undefined,
+      err,
+      {
+        activity: 'Verify Authentication Token',
+        explanation: isExpired
+          ? `JWT token expired at ${err?.expiredAt ? new Date(err.expiredAt).toISOString() : 'earlier'}. Please log in again to refresh your session.`
+          : `JWT verification failed (${err?.message || 'invalid signature'}).`,
+      }
+    );
   }
 };
 
 export const requireRoles = (allowedRoles: UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      sendError(res, 'UNAUTHORIZED', 'Authentication is required', HttpStatus.UNAUTHORIZED);
+      sendError(
+        res,
+        'UNAUTHORIZED',
+        'Authentication is required',
+        HttpStatus.UNAUTHORIZED,
+        undefined,
+        undefined,
+        {
+          activity: 'Verify Role Authorization',
+          explanation: 'No authenticated user identity found on request.',
+        }
+      );
       return;
     }
 
@@ -94,14 +130,31 @@ export const requireRoles = (allowedRoles: UserRole[]) => {
           res,
           'FORBIDDEN',
           'Access denied: This operation requires authorized administrator privileges',
-          HttpStatus.FORBIDDEN
+          HttpStatus.FORBIDDEN,
+          undefined,
+          undefined,
+          {
+            activity: 'Authorize Admin Role',
+            explanation: `User "${req.user.email}" (Role: ${req.user.role}) is not authorized for administrator endpoints. Master admin email is "${env.ADMIN_EMAIL}".`,
+          }
         );
         return;
       }
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      sendError(res, 'FORBIDDEN', 'Access denied for this role', HttpStatus.FORBIDDEN);
+      sendError(
+        res,
+        'FORBIDDEN',
+        `Access denied for role "${req.user.role}"`,
+        HttpStatus.FORBIDDEN,
+        undefined,
+        undefined,
+        {
+          activity: 'Verify Role Authorization',
+          explanation: `Endpoint requires one of roles [${allowedRoles.join(', ')}], but user has role "${req.user.role}".`,
+        }
+      );
       return;
     }
 

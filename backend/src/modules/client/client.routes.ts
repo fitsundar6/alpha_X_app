@@ -74,7 +74,12 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     });
 
     if (!existingProfile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found for user', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Client profile not found for user "${userId}"`, HttpStatus.NOT_FOUND, undefined, undefined, {
+        activity: 'Save Client Assessment',
+        resourceId: userId,
+        resourceType: 'ClientProfile',
+        explanation: 'Authenticated user exists, but no client profile record was found in the database.',
+      });
       return;
     }
 
@@ -111,7 +116,13 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     if (weightKg !== undefined && weightKg !== null && weightKg !== '') {
       const w = Number(weightKg);
       if (isNaN(w) || w <= 0 || w < 20 || w > 350) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid weight in kg (20 - 350 kg).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid weight in kg (20 - 350 kg).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Client Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid weight value: ${weightKg}. Must be a valid numeric weight between 20 and 350 kg.`,
+          receivedPayload: { weightKg },
+        });
         return;
       }
     }
@@ -119,7 +130,13 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     if (heightCm !== undefined && heightCm !== null && heightCm !== '') {
       const h = Number(heightCm);
       if (isNaN(h) || h <= 0 || h < 50 || h > 280) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid height in cm (50 - 280 cm).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid height in cm (50 - 280 cm).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Client Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid height value: ${heightCm}. Must be a valid numeric height between 50 and 280 cm.`,
+          receivedPayload: { heightCm },
+        });
         return;
       }
     }
@@ -127,7 +144,13 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     if (age !== undefined && age !== null && age !== '') {
       const a = Number(age);
       if (isNaN(a) || a <= 0 || a < 10 || a > 120 || !Number.isInteger(a)) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid whole age (10 - 120).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid whole age (10 - 120).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Client Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid age value: ${age}. Must be an integer age between 10 and 120.`,
+          receivedPayload: { age },
+        });
         return;
       }
     }
@@ -135,7 +158,13 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     if (trainingDaysPerWeek !== undefined && trainingDaysPerWeek !== null && trainingDaysPerWeek !== '') {
       const d = Number(trainingDaysPerWeek);
       if (isNaN(d) || d < 1 || d > 7 || !Number.isInteger(d)) {
-        sendError(res, 'VALIDATION_ERROR', 'Training days per week must be a whole number between 1 and 7.', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Training days per week must be a whole number between 1 and 7.', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Client Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid training days per week: ${trainingDaysPerWeek}. Must be an integer between 1 and 7.`,
+          receivedPayload: { trainingDaysPerWeek },
+        });
         return;
       }
     }
@@ -199,16 +228,27 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
       },
     });
 
-    sendSuccess(res, {
-      message: 'Fitness assessment saved successfully',
-      clientId: updatedProfile.clientId,
-      assessmentCompleted: updatedProfile.onboardingCompleted,
-      onboardingCompleted: updatedProfile.onboardingCompleted,
-      onboardingStep: updatedProfile.onboardingStep,
-      profile: updatedProfile,
-    });
+    sendSuccess(
+      res,
+      {
+        message: 'Fitness assessment saved successfully',
+        clientId: updatedProfile.clientId,
+        assessmentCompleted: updatedProfile.onboardingCompleted,
+        onboardingCompleted: updatedProfile.onboardingCompleted,
+        onboardingStep: updatedProfile.onboardingStep,
+        profile: updatedProfile,
+      },
+      HttpStatus.OK,
+      `Saved fitness assessment for client "${updatedProfile.clientId}" (Completed: ${updatedProfile.onboardingCompleted})`,
+      { clientId: updatedProfile.clientId, onboardingCompleted: updatedProfile.onboardingCompleted, step: updatedProfile.onboardingStep }
+    );
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data in database', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+      activity: 'Save Client Assessment',
+      resourceId: userId,
+      resourceType: 'ClientProfile',
+      explanation: 'Database write failed while updating client assessment.',
+    });
   }
 };
 router.put(assessmentPaths, handleAssessmentUpdate);

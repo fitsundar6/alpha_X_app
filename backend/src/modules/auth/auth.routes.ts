@@ -85,27 +85,45 @@ router.post('/register', async (req: Request, res: Response) => {
 
   // 1. Validation
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    sendError(res, 'VALIDATION_ERROR', 'Full name is required', HttpStatus.BAD_REQUEST);
+    sendError(res, 'VALIDATION_ERROR', 'Full name is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'Client Account Registration',
+      explanation: 'Full name was empty or missing in request payload.',
+      receivedPayload: req.body,
+    });
     return;
   }
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
-    sendError(res, 'VALIDATION_ERROR', 'Valid email address is required', HttpStatus.BAD_REQUEST);
+    sendError(res, 'VALIDATION_ERROR', 'Valid email address is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'Client Account Registration',
+      explanation: 'Email field was missing or invalid (missing @).',
+      receivedPayload: req.body,
+    });
     return;
   }
 
   if (!phone || typeof phone !== 'string' || phone.trim().length === 0) {
-    sendError(res, 'VALIDATION_ERROR', 'Phone number is required', HttpStatus.BAD_REQUEST);
+    sendError(res, 'VALIDATION_ERROR', 'Phone number is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'Client Account Registration',
+      explanation: 'Phone number was empty or missing in request payload.',
+      receivedPayload: req.body,
+    });
     return;
   }
 
   if (!password || typeof password !== 'string' || password.length < 6) {
-    sendError(res, 'VALIDATION_ERROR', 'Password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+    sendError(res, 'VALIDATION_ERROR', 'Password must be at least 6 characters', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'Client Account Registration',
+      explanation: 'Password must be a string of at least 6 characters.',
+    });
     return;
   }
 
   if (confirmPassword && password !== confirmPassword) {
-    sendError(res, 'VALIDATION_ERROR', 'Password and Confirm Password do not match', HttpStatus.BAD_REQUEST);
+    sendError(res, 'VALIDATION_ERROR', 'Password and Confirm Password do not match', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'Client Account Registration',
+      explanation: 'Password confirmation failed because confirmPassword did not match password.',
+    });
     return;
   }
 
@@ -116,7 +134,12 @@ router.post('/register', async (req: Request, res: Response) => {
 
   // Admin email cannot be registered as a normal client
   if (normalizedEmail === configuredAdminEmail) {
-    sendError(res, 'FORBIDDEN', 'This email is reserved for administration. Please sign in.', HttpStatus.FORBIDDEN);
+    sendError(res, 'FORBIDDEN', 'This email is reserved for administration. Please sign in.', HttpStatus.FORBIDDEN, undefined, undefined, {
+      activity: 'Client Account Registration',
+      resourceId: normalizedEmail,
+      resourceType: 'User',
+      explanation: 'The requested registration email matches the configured master administrator email.',
+    });
     return;
   }
 
@@ -127,7 +150,12 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      sendError(res, 'USER_EXISTS', 'This email is already registered. Please login.', HttpStatus.CONFLICT);
+      sendError(res, 'USER_EXISTS', `This email (${normalizedEmail}) is already registered. Please login.`, HttpStatus.CONFLICT, undefined, undefined, {
+        activity: 'Client Account Registration',
+        resourceId: normalizedEmail,
+        resourceType: 'User',
+        explanation: `An account with email "${normalizedEmail}" already exists in the database.`,
+      });
       return;
     }
 
@@ -137,7 +165,12 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     if (existingPhone) {
-      sendError(res, 'PHONE_EXISTS', 'This phone number is already registered.', HttpStatus.CONFLICT);
+      sendError(res, 'PHONE_EXISTS', `This phone number (${cleanPhone}) is already registered.`, HttpStatus.CONFLICT, undefined, undefined, {
+        activity: 'Client Account Registration',
+        resourceId: cleanPhone,
+        resourceType: 'ClientProfile',
+        explanation: `An account with phone number "${cleanPhone}" already exists in the database.`,
+      });
       return;
     }
 
@@ -206,10 +239,15 @@ router.post('/register', async (req: Request, res: Response) => {
         },
         profile: clientProfile,
       },
-      HttpStatus.CREATED
+      HttpStatus.CREATED,
+      `Registered client account "${uniqueClientId}" (${cleanName}) in database`,
+      { clientId: uniqueClientId, email: normalizedEmail }
     );
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to register client account in database', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to register client account in database', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+      activity: 'Client Account Registration',
+      explanation: 'Database insertion failed while creating User or ClientProfile records.',
+    });
   }
 });
 
@@ -397,12 +435,19 @@ router.post('/login', async (req: Request, res: Response) => {
 
   const rawIdentifier = (clientId || clientIdOrEmail || username || email || '').trim();
   if (!rawIdentifier) {
-    sendError(res, 'INVALID_CREDENTIALS', 'Client ID or Email is required', HttpStatus.BAD_REQUEST);
+    sendError(res, 'INVALID_CREDENTIALS', 'Client ID or Email is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'User Login Authentication',
+      explanation: 'No Client ID or Email was provided in request body.',
+      receivedPayload: req.body,
+    });
     return;
   }
 
   if (!password || typeof password !== 'string') {
-    sendError(res, 'INVALID_CREDENTIALS', 'Password is required', HttpStatus.BAD_REQUEST);
+    sendError(res, 'INVALID_CREDENTIALS', 'Password is required', HttpStatus.BAD_REQUEST, undefined, undefined, {
+      activity: 'User Login Authentication',
+      explanation: 'No password was provided in request body.',
+    });
     return;
   }
 
@@ -414,12 +459,17 @@ router.post('/login', async (req: Request, res: Response) => {
   if (normalizedIdentifier === configuredAdminEmail) {
     const isValidAdmin = await adminAuthService.verifyAdminCredentials(normalizedIdentifier, password);
     if (!isValidAdmin) {
-      sendError(res, 'INVALID_CREDENTIALS', 'Invalid administrator credentials', HttpStatus.UNAUTHORIZED);
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid administrator credentials', HttpStatus.UNAUTHORIZED, undefined, undefined, {
+        activity: 'Admin Login Authentication',
+        resourceId: normalizedIdentifier,
+        resourceType: 'AdminAccount',
+        explanation: 'Provided password did not match master admin password.',
+      });
       return;
     }
 
     const session = adminAuthService.generateAdminSession();
-    sendSuccess(res, session, HttpStatus.OK);
+    sendSuccess(res, session, HttpStatus.OK, 'Admin Login Authentication: Session granted', { adminEmail: normalizedIdentifier });
     return;
   }
 
@@ -443,19 +493,34 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!dbUser) {
-      sendError(res, 'INVALID_CREDENTIALS', 'Invalid Client ID or password', HttpStatus.UNAUTHORIZED);
+      sendError(res, 'INVALID_CREDENTIALS', `Account not found for "${rawIdentifier}"`, HttpStatus.UNAUTHORIZED, undefined, undefined, {
+        activity: 'Client Login Authentication',
+        resourceId: rawIdentifier,
+        resourceType: 'ClientAccount',
+        explanation: `No athlete user account in database with Client ID or Email "${rawIdentifier}".`,
+      });
       return;
     }
 
     // Verify client password with bcrypt
     if (!dbUser.passwordHash) {
-      sendError(res, 'INVALID_CREDENTIALS', 'No password set for this account. Please contact gym administration.', HttpStatus.UNAUTHORIZED);
+      sendError(res, 'INVALID_CREDENTIALS', 'No password set for this account. Please contact gym administration.', HttpStatus.UNAUTHORIZED, undefined, undefined, {
+        activity: 'Client Login Authentication',
+        resourceId: dbUser.id,
+        resourceType: 'ClientAccount',
+        explanation: 'User record exists but has no password hash registered.',
+      });
       return;
     }
 
     const isPasswordValid = await bcrypt.compare(password, dbUser.passwordHash);
     if (!isPasswordValid) {
-      sendError(res, 'INVALID_CREDENTIALS', 'Invalid Client ID or password', HttpStatus.UNAUTHORIZED);
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid password for account', HttpStatus.UNAUTHORIZED, undefined, undefined, {
+        activity: 'Client Login Authentication',
+        resourceId: dbUser.clientProfile?.clientId || dbUser.email,
+        resourceType: 'ClientAccount',
+        explanation: 'Provided password does not match the bcrypt password hash on file.',
+      });
       return;
     }
 
@@ -477,24 +542,34 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     );
 
-    sendSuccess(res, {
-      token,
-      clientId: resolvedClientId,
-      assessmentCompleted: isAssessmentCompleted,
-      onboardingCompleted: isAssessmentCompleted,
-      onboardingStep: currentAssessmentStep,
-      user: {
-        id: dbUser.id,
+    sendSuccess(
+      res,
+      {
+        token,
         clientId: resolvedClientId,
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: clientProfile?.phone || null,
-        role: dbUser.role,
+        assessmentCompleted: isAssessmentCompleted,
+        onboardingCompleted: isAssessmentCompleted,
+        onboardingStep: currentAssessmentStep,
+        user: {
+          id: dbUser.id,
+          clientId: resolvedClientId,
+          name: dbUser.name,
+          email: dbUser.email,
+          phone: clientProfile?.phone || null,
+          role: dbUser.role,
+        },
+        profile: clientProfile,
       },
-      profile: clientProfile,
-    });
+      HttpStatus.OK,
+      `Client "${resolvedClientId}" (${dbUser.name}) logged in successfully`,
+      { clientId: resolvedClientId, email: dbUser.email }
+    );
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+    sendError(res, 'INTERNAL_ERROR', 'Authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+      activity: 'Client Login Authentication',
+      resourceId: rawIdentifier,
+      explanation: 'Database query failed during login credential lookup.',
+    });
   }
 });
 
@@ -514,7 +589,12 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
     });
 
     if (!existingProfile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found for user', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Client profile not found for user "${userId}"`, HttpStatus.NOT_FOUND, undefined, undefined, {
+        activity: 'Save Fitness Assessment',
+        resourceId: userId,
+        resourceType: 'ClientProfile',
+        explanation: 'Authenticated user exists but does not have a client profile record in PostgreSQL.',
+      });
       return;
     }
 
@@ -550,7 +630,13 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
     if (weightKg !== undefined && weightKg !== null && weightKg !== '') {
       const w = Number(weightKg);
       if (isNaN(w) || w <= 0 || w < 20 || w > 350) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid weight in kg (20 - 350 kg).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid weight in kg (20 - 350 kg).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Fitness Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid weight value: ${weightKg}. Must be numeric between 20 and 350 kg.`,
+          receivedPayload: { weightKg },
+        });
         return;
       }
     }
@@ -558,7 +644,13 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
     if (heightCm !== undefined && heightCm !== null && heightCm !== '') {
       const h = Number(heightCm);
       if (isNaN(h) || h <= 0 || h < 50 || h > 280) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid height in cm (50 - 280 cm).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid height in cm (50 - 280 cm).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Fitness Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid height value: ${heightCm}. Must be numeric between 50 and 280 cm.`,
+          receivedPayload: { heightCm },
+        });
         return;
       }
     }
@@ -566,7 +658,13 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
     if (age !== undefined && age !== null && age !== '') {
       const a = Number(age);
       if (isNaN(a) || a <= 0 || a < 10 || a > 120 || !Number.isInteger(a)) {
-        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid whole age (10 - 120).', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Please enter a valid whole age (10 - 120).', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Fitness Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid age value: ${age}. Must be an integer between 10 and 120.`,
+          receivedPayload: { age },
+        });
         return;
       }
     }
@@ -574,7 +672,13 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
     if (trainingDaysPerWeek !== undefined && trainingDaysPerWeek !== null && trainingDaysPerWeek !== '') {
       const d = Number(trainingDaysPerWeek);
       if (isNaN(d) || d < 1 || d > 7 || !Number.isInteger(d)) {
-        sendError(res, 'VALIDATION_ERROR', 'Training days per week must be a whole number between 1 and 7.', HttpStatus.BAD_REQUEST);
+        sendError(res, 'VALIDATION_ERROR', 'Training days per week must be a whole number between 1 and 7.', HttpStatus.BAD_REQUEST, undefined, undefined, {
+          activity: 'Save Fitness Assessment',
+          resourceId: existingProfile.clientId || undefined,
+          resourceType: 'ClientProfile',
+          explanation: `Invalid training days: ${trainingDaysPerWeek}. Must be an integer between 1 and 7.`,
+          receivedPayload: { trainingDaysPerWeek },
+        });
         return;
       }
     }
@@ -623,15 +727,26 @@ const onboardingAssessmentHandler = async (req: Request, res: Response) => {
       data: updateData,
     });
 
-    sendSuccess(res, {
-      message: 'Fitness assessment saved successfully',
-      assessmentCompleted: updatedProfile.onboardingCompleted,
-      onboardingCompleted: updatedProfile.onboardingCompleted,
-      onboardingStep: updatedProfile.onboardingStep,
-      profile: updatedProfile,
-    });
+    sendSuccess(
+      res,
+      {
+        message: 'Fitness assessment saved successfully',
+        assessmentCompleted: updatedProfile.onboardingCompleted,
+        onboardingCompleted: updatedProfile.onboardingCompleted,
+        onboardingStep: updatedProfile.onboardingStep,
+        profile: updatedProfile,
+      },
+      HttpStatus.OK,
+      `Saved fitness assessment for client "${updatedProfile.clientId}" (Completed: ${updatedProfile.onboardingCompleted})`,
+      { clientId: updatedProfile.clientId, onboardingCompleted: updatedProfile.onboardingCompleted, step: updatedProfile.onboardingStep }
+    );
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data in database', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {
+      activity: 'Save Fitness Assessment',
+      resourceId: userId,
+      resourceType: 'ClientProfile',
+      explanation: 'Database write failed while updating client assessment data.',
+    });
   }
 };
 router.put(['/onboarding', '/assessment'], requireAuth, onboardingAssessmentHandler);

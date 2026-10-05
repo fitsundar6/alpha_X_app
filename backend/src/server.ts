@@ -272,7 +272,14 @@ app.use((req: Request, res: Response) => {
     res,
     'NOT_FOUND',
     `Endpoint not found: ${req.method} ${req.originalUrl}`,
-    HttpStatus.NOT_FOUND
+    HttpStatus.NOT_FOUND,
+    undefined,
+    undefined,
+    {
+      resourceType: 'API Route',
+      resourceId: `${req.method} ${req.originalUrl}`,
+      explanation: 'No registered Express route matches this HTTP method and URL path on the server.',
+    }
   );
 });
 

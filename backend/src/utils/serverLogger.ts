@@ -3,34 +3,45 @@ import path from 'path';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
-// Augment Request to include unique request ID
+// Augment Request to include unique request ID and timing
 declare global {
   namespace Express {
     interface Request {
       id?: string;
+      _startTime?: number;
     }
   }
 }
 
-export interface ServerErrorInfo {
+export interface ServerActivityInfo {
   req?: Request;
   method?: string;
   url?: string;
   statusCode?: number;
+  activity?: string;
+  reason?: string;
+  errorMessage?: string;
   errorCode?: string;
-  errorMessage: string;
   error?: any;
   stack?: string;
   requestId?: string;
   clientId?: string;
   databaseError?: string;
   details?: any;
+  explanation?: string;
+  resourceId?: string;
+  resourceType?: string;
+  receivedPayload?: any;
+  durationMs?: number;
   timestamp?: string;
 }
 
-// Log file destination: <backend>/logs/server-errors.log
+export type ServerErrorInfo = ServerActivityInfo;
+
+// Log file destinations
 const LOGS_DIR = path.resolve(__dirname, '../../logs');
-const LOG_FILE_PATH = path.join(LOGS_DIR, 'server-errors.log');
+const ERROR_LOG_PATH = path.join(LOGS_DIR, 'server-errors.log');
+const ACTIVITY_LOG_PATH = path.join(LOGS_DIR, 'server-activity.log');
 
 /**
  * Safely ensure the logs directory exists
@@ -85,6 +96,9 @@ export function extractClientId(req?: Request): string | undefined {
     if (req.user.id && typeof req.user.id === 'string') {
       return req.user.id;
     }
+    if ((req.user as any).email && typeof (req.user as any).email === 'string') {
+      return (req.user as any).email;
+    }
   }
 
   // 2. From standard Alpha X headers
@@ -104,6 +118,9 @@ export function extractClientId(req?: Request): string | undefined {
     if (typeof req.body.clientIdOrEmail === 'string' && req.body.clientIdOrEmail.trim()) {
       return req.body.clientIdOrEmail.trim();
     }
+    if (typeof req.body.email === 'string' && req.body.email.trim()) {
+      return req.body.email.trim();
+    }
   }
 
   // 4. From params or query string
@@ -118,6 +135,18 @@ export function extractClientId(req?: Request): string | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Safely extracts client IP address
+ */
+export function extractClientIp(req?: Request): string {
+  if (!req) return '127.0.0.1';
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || (req.socket && req.socket.remoteAddress) || '127.0.0.1';
 }
 
 /**
@@ -189,17 +218,36 @@ export function extractDatabaseError(err: any): string | undefined {
 
 /**
  * Standardized block formatter matching the required Alpha X Gym server log specification
+ * Provides crystal-clear visual banners, status codes, actual reasons, queried IDs, and failed fields.
  */
-export function formatServerErrorLog(info: ServerErrorInfo): string {
+export function formatActivityLog(info: ServerActivityInfo): string {
   const timestamp = info.timestamp || new Date().toISOString();
-  const method = info.method || info.req?.method || 'ERROR';
+  const method = (info.method || info.req?.method || 'GET').toUpperCase();
   const url = info.url || info.req?.originalUrl || info.req?.url || '/';
-  const statusStr = info.statusCode ? ` (Status ${info.statusCode})` : '';
+  const status = info.statusCode || 200;
+  const isSuccess = status >= 200 && status < 400;
+
+  // Banner categorization
+  let banner = '[ACTION SUCCESS]';
+  if (status === 400) banner = '[ACTION BAD REQUEST]';
+  else if (status === 401) banner = '[ACTION AUTH FAILURE - UNAUTHORIZED]';
+  else if (status === 403) banner = '[ACTION FORBIDDEN - ACCESS DENIED]';
+  else if (status === 404) banner = '[ACTION NOT FOUND]';
+  else if (status === 409) banner = '[ACTION CONFLICT]';
+  else if (status === 422) banner = '[ACTION UNPROCESSABLE ENTITY]';
+  else if (status >= 500) banner = info.databaseError ? '[ACTION DATABASE FAILURE]' : '[ACTION SYSTEM FAILURE]';
+
+  const separator = isSuccess
+    ? '----------------------------------------------------------------------'
+    : '======================================================================';
+
+  const durationStr = info.durationMs !== undefined ? ` | Latency: ${info.durationMs}ms` : '';
 
   const lines: string[] = [
-    '======================================================================',
-    `ERROR`,
-    `${method} ${url}${statusStr}`,
+    separator,
+    isSuccess ? banner : `ERROR ${banner} (Status ${status})`,
+    `${method} ${url}`,
+    `Status: ${status} ${isSuccess ? 'SUCCESS' : 'FAILED'}${durationStr}`,
     `Time: ${timestamp}`,
   ];
 
@@ -211,22 +259,57 @@ export function formatServerErrorLog(info: ServerErrorInfo): string {
     lines.push(`Client ID: ${info.clientId}`);
   }
 
+  if (info.activity) {
+    lines.push(`Activity: ${info.activity}`);
+  }
+
+  // The primary, accurate reason
+  const actualReason = info.reason || info.errorMessage;
+  if (actualReason) {
+    if (isSuccess) {
+      lines.push(`Result: ${actualReason}`);
+    } else {
+      lines.push(`Error: ${actualReason}`);
+      lines.push(`Actual Reason: ${actualReason}`);
+    }
+  } else if (!isSuccess) {
+    lines.push(`Error: HTTP ${status} error returned`);
+  }
+
+  // Queried resource details (Crucial for 404 diagnostics)
+  if (info.resourceId || info.resourceType) {
+    const resName = info.resourceType ? `${info.resourceType} ` : 'Resource ';
+    lines.push(`Queried ${resName}: "${info.resourceId || 'unknown'}"`);
+  }
+
+  // Explanation context to eliminate ambiguity
+  if (info.explanation) {
+    lines.push(`Explanation: ${info.explanation}`);
+  }
+
   if (info.errorCode && info.errorCode !== 'INTERNAL_ERROR') {
     lines.push(`Error Code: ${info.errorCode}`);
   }
-
-  lines.push(`Error: ${info.errorMessage}`);
 
   if (info.databaseError) {
     lines.push(`Database Error: ${info.databaseError}`);
   }
 
+  // Detailed validation failure breakdown
   if (info.details) {
     if (Array.isArray(info.details) && info.details.length > 0) {
-      const detailsText = info.details
-        .map((d: any) => (d.field ? `${d.field}: ${d.message}` : d.message))
-        .join('; ');
-      lines.push(`Validation Details: ${detailsText}`);
+      lines.push('Failed Fields / Details:');
+      for (const d of info.details) {
+        if (typeof d === 'object' && d !== null) {
+          const path = (d as any).path
+            ? (Array.isArray((d as any).path) ? (d as any).path.join('.') : String((d as any).path))
+            : (d as any).field || '';
+          const msg = (d as any).message || JSON.stringify(d);
+          lines.push(`  • ${path ? `${path}: ` : ''}${msg}`);
+        } else {
+          lines.push(`  • ${String(d)}`);
+        }
+      }
     } else if (typeof info.details === 'object') {
       try {
         lines.push(`Details: ${JSON.stringify(info.details)}`);
@@ -234,22 +317,37 @@ export function formatServerErrorLog(info: ServerErrorInfo): string {
     }
   }
 
+  // Received payload summary (if bad request or validation error)
+  if (info.receivedPayload && status === 400) {
+    try {
+      const sanitized = { ...info.receivedPayload };
+      if (sanitized.password) sanitized.password = '***REDACTED***';
+      if (sanitized.confirmPassword) sanitized.confirmPassword = '***REDACTED***';
+      lines.push(`Received Payload: ${JSON.stringify(sanitized)}`);
+    } catch (_) {}
+  }
+
+  // Stack trace (for 500 errors)
   if (info.stack) {
     lines.push('Stack trace:');
     lines.push(info.stack);
   }
 
-  lines.push('======================================================================');
+  lines.push(separator);
   return lines.join('\n');
 }
 
+export function formatServerErrorLog(info: ServerErrorInfo): string {
+  return formatActivityLog(info);
+}
+
 /**
- * Primary server logger:
- * 1. Outputs structured error block to console.error (visible in terminal, Docker, PM2, Vercel logs)
- * 2. Persists to backend/logs/server-errors.log file for inspection
+ * Primary Activity Logger:
+ * 1. Outputs structured log block to console (stdout for success, warn for 4xx, error for 5xx)
+ * 2. Persists to backend/logs/server-activity.log (All actions)
+ * 3. Persists errors (4xx & 5xx) to backend/logs/server-errors.log
  */
-export function logServerError(info: ServerErrorInfo): void {
-  // Fill missing fields from req if available
+export function logActivity(info: ServerActivityInfo): void {
   const req = info.req;
   const method = info.method || req?.method || 'UNKNOWN';
   const url = info.url || req?.originalUrl || req?.url || '/';
@@ -258,54 +356,110 @@ export function logServerError(info: ServerErrorInfo): void {
   const databaseError = info.databaseError || (info.error ? extractDatabaseError(info.error) : undefined);
   const timestamp = info.timestamp || new Date().toISOString();
 
+  let durationMs = info.durationMs;
+  if (durationMs === undefined && req?._startTime) {
+    durationMs = Date.now() - req._startTime;
+  }
+
   let stack = info.stack;
   if (!stack && info.error instanceof Error) {
     stack = info.error.stack;
   }
 
-  const formatted = formatServerErrorLog({
+  const formatted = formatActivityLog({
     ...info,
     method,
     url,
     requestId,
     clientId,
     databaseError,
+    durationMs,
     timestamp,
     stack,
   });
 
-  // 1. Write to standard error console (server stdout/stderr)
-  console.error(formatted);
+  // 1. Output to console with proper severity level
+  const status = info.statusCode || 200;
+  if (status >= 500) {
+    console.error(formatted);
+  } else if (status >= 400) {
+    console.warn(formatted);
+  } else {
+    console.log(formatted);
+  }
 
-  // 2. Persist to server log file
+  // 2. Persist to activity log (all requests) and error log (failures only)
   try {
     ensureLogDir();
-    fs.appendFileSync(LOG_FILE_PATH, formatted + '\n\n', 'utf8');
+    fs.appendFileSync(ACTIVITY_LOG_PATH, formatted + '\n\n', 'utf8');
+    if (status >= 400) {
+      fs.appendFileSync(ERROR_LOG_PATH, formatted + '\n\n', 'utf8');
+    }
   } catch (_) {
-    // Non-blocking in serverless/read-only filesystem
+    // Non-blocking in serverless environments
   }
 }
 
 /**
- * Express middleware that initializes unique Request ID on every incoming request
- * and binds response tracking.
+ * Backwards-compatible server error logging function
+ */
+export function logServerError(info: ServerErrorInfo): void {
+  logActivity({
+    ...info,
+    statusCode: info.statusCode || 500,
+  });
+}
+
+/**
+ * Universal Request Tracking & Activity Logger Middleware:
+ * - Initializes X-Request-Id header.
+ * - Records start timestamp for latency calculation.
+ * - Captures response completion on 'finish'.
+ * - If not explicitly logged by controller or responseEnvelope, logs action automatically!
  */
 export const requestIdMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const reqId = extractRequestId(req, res);
   res.setHeader('X-Request-Id', reqId);
+  req._startTime = Date.now();
 
-  // Fallback response finish hook:
-  // If request finishes with status >= 400 and was not already logged, record it
   res.on('finish', () => {
-    if (res.statusCode >= 400 && !(res.locals && res.locals.__errorLogged)) {
-      logServerError({
-        req,
-        statusCode: res.statusCode,
-        errorMessage: `HTTP ${res.statusCode} Error returned to client`,
-        requestId: reqId,
-        clientId: extractClientId(req),
-      });
+    // Check if this response was already logged by sendSuccess, sendError, or route handler
+    if ((res as any).locals && (res as any).locals.__logged) {
+      return;
     }
+
+    const durationMs = req._startTime ? Date.now() - req._startTime : undefined;
+    const statusCode = res.statusCode;
+    const method = req.method;
+    const url = req.originalUrl || req.url;
+
+    // Build intelligent accurate reason based on route and status
+    let reason = `HTTP ${statusCode} response returned`;
+    let explanation: string | undefined;
+
+    if (statusCode === 404) {
+      reason = `Endpoint "${method} ${url}" was not found`;
+      explanation = 'No registered Express route matched this HTTP method and URL path.';
+    } else if (statusCode === 401) {
+      reason = 'Unauthorized request: Missing or invalid authentication token';
+    } else if (statusCode === 403) {
+      reason = 'Forbidden: Access credentials do not have required permissions for this action';
+    } else if (statusCode === 400) {
+      reason = 'Bad Request: Client provided an invalid or malformed request payload';
+    } else if (statusCode >= 200 && statusCode < 300) {
+      reason = `Action completed successfully (${statusCode})`;
+    }
+
+    logActivity({
+      req,
+      statusCode,
+      activity: `${method} ${url}`,
+      reason,
+      explanation,
+      durationMs,
+      requestId: reqId,
+      clientId: extractClientId(req),
+    });
   });
 
   next();
@@ -343,4 +497,5 @@ export function applyExpressAsyncErrorsPatch(): void {
   }
 }
 
-export const serverLogFilePath = LOG_FILE_PATH;
+export const serverLogFilePath = ERROR_LOG_PATH;
+export const serverActivityLogFilePath = ACTIVITY_LOG_PATH;
