@@ -568,6 +568,9 @@ class MacroRepository extends ChangeNotifier {
 
   /// Fetch currently assigned diet plan from Coach/Trainer
   Future<void> fetchAssignedDietPlan() async {
+    // Admins manage diet plans for athletes; they do not have personal assigned diet plans
+    if (AuthService().isAdmin) return;
+
     try {
       final token = await AuthService().getValidToken();
       if (token.isEmpty) return;
@@ -610,6 +613,8 @@ class MacroRepository extends ChangeNotifier {
 
   /// Pull actual food logs from backend for a specific date
   Future<void> fetchFoodLogsFromBackend(String dateString) async {
+    // Admins do not have personal food logs under /client/me
+    if (AuthService().isAdmin) return;
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/food-logs?date=$dateString');
       final headers = <String, String>{

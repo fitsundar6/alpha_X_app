@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../../middlewares/auth';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
+import { UserRole } from '../../constants/roles';
 import { prisma } from '../../config/prisma';
 import { foodPhotoController } from '../food/food.photo.controller';
 import { automationController } from '../automation/automation.controller';
@@ -302,9 +303,14 @@ router.get('/me/workout', async (req: Request, res: Response) => {
 // GET /api/v1/client/me/diet-plan: Active assigned diet plan
 router.get('/me/diet-plan', async (req: Request, res: Response) => {
   try {
+    if (req.user?.role === UserRole.ADMIN) {
+      sendSuccess(res, null);
+      return;
+    }
+
     const profile = await getAuthenticatedClientProfile(req.user!.id);
     if (!profile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      sendSuccess(res, null);
       return;
     }
 
@@ -329,9 +335,14 @@ router.get('/me/diet-plan', async (req: Request, res: Response) => {
 // GET /api/v1/client/me/macros: Active assigned macro targets
 router.get('/me/macros', async (req: Request, res: Response) => {
   try {
+    if (req.user?.role === UserRole.ADMIN) {
+      sendSuccess(res, null);
+      return;
+    }
+
     const profile = await getAuthenticatedClientProfile(req.user!.id);
     if (!profile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      sendSuccess(res, null);
       return;
     }
 
@@ -355,9 +366,14 @@ router.get('/me/food-logs', async (req: Request, res: Response) => {
   const targetDate = dateQuery.trim() || new Date().toISOString().split('T')[0];
 
   try {
+    if (req.user?.role === UserRole.ADMIN) {
+      sendSuccess(res, []);
+      return;
+    }
+
     const profile = await getAuthenticatedClientProfile(req.user!.id);
     if (!profile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
+      sendSuccess(res, []);
       return;
     }
 
