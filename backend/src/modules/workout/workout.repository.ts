@@ -882,7 +882,7 @@ export class WorkoutRepository {
         // Clean up related assignments and exercises first to prevent foreign key errors
         await prisma.workoutAssignment.deleteMany({ where: { sessionId: id } });
         await prisma.workoutSessionExercise.deleteMany({ where: { sessionId: id } });
-        await prisma.workoutSession.delete({ where: { id } });
+        await prisma.workoutSession.deleteMany({ where: { id } });
         return true;
       }
 
