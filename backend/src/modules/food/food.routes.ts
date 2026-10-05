@@ -20,14 +20,27 @@ const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
       return next();
     }
     try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole; clientId?: string };
-      const normalizedEmail = (decoded.email || '').trim().toLowerCase();
-      const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
-      req.user = {
-        id: decoded.id || decoded.clientId || 'client_user',
-        email: normalizedEmail,
-        role: isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT,
-      };
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+      } catch (verifyErr: any) {
+        if (verifyErr?.name === 'TokenExpiredError') {
+          const unexpired = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as any;
+          const expTimeMs = (unexpired.exp || 0) * 1000;
+          if (Date.now() - expTimeMs < 30 * 24 * 60 * 60 * 1000) {
+            decoded = unexpired;
+          }
+        }
+      }
+      if (decoded) {
+        const normalizedEmail = (decoded.email || '').trim().toLowerCase();
+        const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+        req.user = {
+          id: decoded.id || decoded.clientId || 'client_user',
+          email: normalizedEmail,
+          role: isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT,
+        };
+      }
     } catch (_) {
       // Ignore invalid token on optional auth
     }

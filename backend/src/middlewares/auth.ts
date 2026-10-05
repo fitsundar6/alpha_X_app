@@ -224,7 +224,28 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    let decoded: { id: string; email: string; role?: UserRole };
+    try {
+      decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    } catch (verifyErr: any) {
+      if (verifyErr?.name === 'TokenExpiredError') {
+        const unexpiredPayload = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as {
+          id: string;
+          email: string;
+          role?: UserRole;
+          exp?: number;
+        };
+        const expTimeMs = (unexpiredPayload.exp || 0) * 1000;
+        const gracePeriodMs = 30 * 24 * 60 * 60 * 1000;
+        if (Date.now() - expTimeMs < gracePeriodMs) {
+          decoded = unexpiredPayload;
+        } else {
+          throw verifyErr;
+        }
+      } else {
+        throw verifyErr;
+      }
+    }
     const normalizedEmail = (decoded.email || '').trim().toLowerCase();
     const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
     req.user = {
