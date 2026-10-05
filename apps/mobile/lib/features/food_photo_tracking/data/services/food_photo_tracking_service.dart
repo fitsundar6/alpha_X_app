@@ -18,11 +18,11 @@ class FoodPhotoTrackingService {
   bool _isSyncing = false;
 
   /// Helper to get auth headers with Bearer token
-  Map<String, String> _getAuthHeaders() {
-    final token = AuthService().currentToken;
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await AuthService().getValidToken();
     return {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
 
@@ -63,7 +63,7 @@ class FoodPhotoTrackingService {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/food-photos/live');
       final res = await http.post(
         url,
-        headers: _getAuthHeaders(),
+        headers: await _getAuthHeaders(),
         body: jsonEncode({
           'image': imageBase64,
           'mealType': cleanMealType,
@@ -106,7 +106,7 @@ class FoodPhotoTrackingService {
       if (mealType != null && mealType.isNotEmpty) queryParams['mealType'] = mealType;
 
       final uri = Uri.parse('${AppConstants.apiBaseUrl}/food-photos/my-photos').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      final res = await http.get(uri, headers: _getAuthHeaders()).timeout(const Duration(seconds: 10));
+      final res = await http.get(uri, headers: await _getAuthHeaders()).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
@@ -160,7 +160,7 @@ class FoodPhotoTrackingService {
       if (search != null && search.isNotEmpty) queryParams['search'] = search;
 
       final uri = Uri.parse('${AppConstants.apiBaseUrl}/food-photos/admin/monitoring').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      final res = await http.get(uri, headers: _getAuthHeaders()).timeout(const Duration(seconds: 10));
+      final res = await http.get(uri, headers: await _getAuthHeaders()).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
@@ -196,7 +196,7 @@ class FoodPhotoTrackingService {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/food-photos/$photoId/verify');
       final res = await http.patch(
         url,
-        headers: _getAuthHeaders(),
+        headers: await _getAuthHeaders(),
         body: jsonEncode({
           'status': status.toUpperCase(),
           'adminNote': adminNote?.trim(),
@@ -232,7 +232,7 @@ class FoodPhotoTrackingService {
           final url = Uri.parse('${AppConstants.apiBaseUrl}/food-photos/live');
           final res = await http.post(
             url,
-            headers: _getAuthHeaders(),
+            headers: await _getAuthHeaders(),
             body: jsonEncode({
               'image': imageBase64,
               'mealType': photoJson['mealType'],

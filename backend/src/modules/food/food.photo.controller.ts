@@ -38,7 +38,23 @@ export class FoodPhotoController {
     }
 
     try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+      } catch (verifyErr: any) {
+        if (verifyErr?.name === 'TokenExpiredError') {
+          const unexpired = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as any;
+          const expTimeMs = (unexpired.exp || 0) * 1000;
+          const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30-day grace period
+          if (Date.now() - expTimeMs < gracePeriodMs) {
+            decoded = unexpired;
+          } else {
+            return null;
+          }
+        } else {
+          return null;
+        }
+      }
       const normalizedEmail = (decoded.email || '').trim().toLowerCase();
       const isAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
       return {
