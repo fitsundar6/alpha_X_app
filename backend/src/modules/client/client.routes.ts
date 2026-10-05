@@ -57,13 +57,14 @@ router.get('/me', async (req: Request, res: Response) => {
       profile,
     });
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve profile', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve profile', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
-// PUT /api/v1/client/me/profile (also /profile and /me/assessment)
+// PUT & POST /api/v1/client/me/profile (also /profile and /me/assessment, /assessment)
 // Self-service: client updates their own assessment & profile in the database
-router.put(['/me/profile', '/profile', '/me/assessment'], async (req: Request, res: Response) => {
+const assessmentPaths = ['/me/profile', '/profile', '/me/assessment', '/assessment'];
+const handleAssessmentUpdate = async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
   try {
@@ -207,10 +208,11 @@ router.put(['/me/profile', '/profile', '/me/assessment'], async (req: Request, r
       profile: updatedProfile,
     });
   } catch (err: any) {
-    console.error('[CLIENT PROFILE UPDATE ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-});
+};
+router.put(assessmentPaths, handleAssessmentUpdate);
+router.post(assessmentPaths, handleAssessmentUpdate);
 
 // GET /api/v1/client/me/workout: Active assigned workout
 router.get('/me/workout', async (req: Request, res: Response) => {
@@ -253,7 +255,7 @@ router.get('/me/workout', async (req: Request, res: Response) => {
 
     sendSuccess(res, assignment ? assignment.session : null);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned workout', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned workout', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -280,7 +282,7 @@ router.get('/me/diet-plan', async (req: Request, res: Response) => {
 
     sendSuccess(res, activeDietPlan);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned diet plan', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned diet plan', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -303,7 +305,7 @@ router.get('/me/macros', async (req: Request, res: Response) => {
 
     sendSuccess(res, activeMacroPlan);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned macros', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch assigned macros', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -329,7 +331,7 @@ router.get('/me/food-logs', async (req: Request, res: Response) => {
 
     sendSuccess(res, logs);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch actual food logs', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch actual food logs', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -380,8 +382,7 @@ router.post('/me/food-logs', async (req: Request, res: Response) => {
 
     sendSuccess(res, createdList, HttpStatus.CREATED);
   } catch (err: any) {
-    console.error('[CLIENT LOG FOOD ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to log food entry', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to log food entry', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -442,7 +443,7 @@ router.get('/me/food-photos', async (req: Request, res: Response) => {
 
     sendSuccess(res, mapped);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch meal photos', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch meal photos', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -468,7 +469,7 @@ router.delete('/me/food-logs/:id', async (req: Request, res: Response) => {
     await prisma.clientFoodLog.delete({ where: { id } });
     sendSuccess(res, { deleted: true, id });
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to delete food log entry', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to delete food log entry', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -489,7 +490,7 @@ router.get('/me/attendance', async (req: Request, res: Response) => {
 
     sendSuccess(res, records);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch attendance history', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch attendance history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -510,7 +511,7 @@ router.get('/me/progress', async (req: Request, res: Response) => {
 
     sendSuccess(res, records);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch progress history', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch progress history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -549,7 +550,7 @@ router.post('/me/progress', async (req: Request, res: Response) => {
 
     sendSuccess(res, record, HttpStatus.CREATED);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to log progress check-in', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to log progress check-in', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -587,7 +588,7 @@ router.get('/me/challenge', async (req: Request, res: Response) => {
       status: isCompleted ? 'COMPLETED' : 'ACTIVE',
     });
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch challenge status', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch challenge status', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -641,7 +642,7 @@ router.get('/me/weekly-check-ins/status', async (req: Request, res: Response) =>
         : `Weekly Check-In Completed ✓ (Next: ${latestCheckIn.nextCheckInDate.toISOString().split('T')[0]})`,
     });
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in status', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in status', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -661,7 +662,7 @@ router.get('/me/weekly-check-ins', async (req: Request, res: Response) => {
 
     sendSuccess(res, checkIns);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in history', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch weekly check-in history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -686,7 +687,7 @@ router.get('/me/weekly-check-ins/:id', async (req: Request, res: Response) => {
 
     sendSuccess(res, checkIn);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch check-in details', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch check-in details', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -830,10 +831,10 @@ router.post('/me/weekly-check-ins', async (req: Request, res: Response) => {
     );
   } catch (err: any) {
     if (err.code === 'P2002') {
-      sendError(res, 'DUPLICATE_CHECK_IN', 'A check-in for this week already exists.', HttpStatus.CONFLICT);
+      sendError(res, 'DUPLICATE_CHECK_IN', 'A check-in for this week already exists.', HttpStatus.CONFLICT, undefined, err);
       return;
     }
-    sendError(res, 'INTERNAL_ERROR', 'Failed to submit weekly check-in', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to submit weekly check-in', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 

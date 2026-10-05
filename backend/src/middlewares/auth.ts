@@ -72,7 +72,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     };
     next();
   } catch (err) {
-    sendError(res, 'INVALID_TOKEN', 'Session token is invalid or expired', HttpStatus.UNAUTHORIZED);
+    sendError(res, 'INVALID_TOKEN', 'Session token is invalid or expired', HttpStatus.UNAUTHORIZED, undefined, err);
   }
 };
 

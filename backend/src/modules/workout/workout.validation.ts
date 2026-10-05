@@ -1,61 +1,44 @@
 import { z } from 'zod';
 
-export const workoutTypeEnum = z.enum([
-  'Strength',
-  'Hypertrophy',
-  'Full Body',
-  'Conditioning',
-  'HIIT',
-  'Cardio',
-  'Mobility',
-]);
+export const workoutTypeEnum = z.string().default('Strength');
 
-export const difficultyEnum = z.enum([
-  'Beginner',
-  'Intermediate',
-  'Advanced',
-]);
+export const difficultyEnum = z.string().default('Intermediate');
 
-export const setTypeEnum = z.enum([
-  'Warm-up',
-  'Working',
-  'Failure',
-  'Drop set',
-  'Rest-pause',
-]);
+export const setTypeEnum = z.string().default('Working');
 
 export const exerciseInputSchema = z.object({
   id: z.string().optional(),
-  exerciseId: z.string().min(1, 'Exercise ID is required'),
-  exerciseName: z.string().min(1, 'Exercise name is required'),
-  category: z.string().default('General'),
-  orderIndex: z.number().int().min(0).default(0),
+  exerciseId: z.string().optional().default('ex_general'),
+  exerciseName: z.string().optional().default('Exercise'),
+  category: z.string().optional().default('General'),
+  orderIndex: z.coerce.number().int().default(0),
   supersetTag: z.string().optional().nullable(),
-  numberOfSets: z.number().int().min(1).max(20).default(3),
-  targetReps: z.string().min(1).default('8–12'),
-  targetWeight: z.number().nonnegative().optional().nullable(),
-  restSeconds: z.number().int().min(0).max(600).default(90),
-  targetRir: z.number().int().min(0).max(5).optional().nullable().default(2),
-  targetRpe: z.number().min(1).max(10).optional().nullable().default(8.0),
+  numberOfSets: z.coerce.number().int().min(1).max(50).default(3),
+  targetReps: z.string().optional().default('8–12'),
+  targetWeight: z.coerce.number().optional().nullable(),
+  restSeconds: z.coerce.number().int().min(0).max(3600).default(90),
+  targetRir: z.coerce.number().int().min(0).max(10).optional().nullable().default(2),
+  targetRpe: z.coerce.number().min(0).max(10).optional().nullable().default(8.0),
   tempo: z.string().optional().nullable().default('3-1-1-0'),
-  setType: setTypeEnum.default('Working'),
+  setType: z.string().default('Working'),
   exerciseNotes: z.string().optional().nullable(),
   adminInstruction: z.string().optional().nullable(),
 });
 
 export const createSessionSchema = z.object({
-  title: z.string().min(2, 'Session title must be at least 2 characters'),
-  workoutType: workoutTypeEnum.default('Strength'),
-  targetMuscleGroup: z.string().min(2, 'Target muscle group is required'),
-  difficulty: difficultyEnum.default('Intermediate'),
-  estimatedDurationMinutes: z.number().int().min(5).max(300).default(45),
+  id: z.string().optional(),
+  title: z.string().min(1, 'Session title is required'),
+  workoutType: z.string().default('Strength'),
+  targetMuscleGroup: z.string().optional().nullable().default('Full Body'),
+  difficulty: z.string().default('Intermediate'),
+  estimatedDurationMinutes: z.coerce.number().int().min(1).max(1440).default(45),
   description: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
-  startDate: z.string().datetime().optional().nullable(),
-  endDate: z.string().datetime().optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
   recurringSchedule: z.string().optional().nullable(),
-  availabilityType: z.enum(['ALL', 'SELECTED', 'INDIVIDUAL']).default('ALL'),
-  exercises: z.array(exerciseInputSchema).min(1, 'At least 1 exercise is required in a session'),
+  availabilityType: z.string().default('ALL'),
+  exercises: z.array(exerciseInputSchema).optional().default([]),
 });
 
 export const updateSessionSchema = createSessionSchema.partial().extend({

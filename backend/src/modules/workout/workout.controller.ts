@@ -20,7 +20,7 @@ export class WorkoutController {
     const id = String(req.params.id);
     const session = await workoutService.getSessionById(id);
     if (!session) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, session, HttpStatus.OK);
@@ -29,7 +29,8 @@ export class WorkoutController {
   async createSession(req: Request, res: Response): Promise<void> {
     const parsed = createSessionSchema.safeParse(req.body);
     if (!parsed.success) {
-      sendError(res, 'VALIDATION_ERROR', parsed.error.errors[0]?.message ?? 'Invalid input', HttpStatus.BAD_REQUEST);
+      const errorMsg = parsed.error.errors.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      sendError(res, 'VALIDATION_ERROR', errorMsg, HttpStatus.BAD_REQUEST, parsed.error.errors);
       return;
     }
 
@@ -42,13 +43,14 @@ export class WorkoutController {
     const id = String(req.params.id);
     const parsed = updateSessionSchema.safeParse(req.body);
     if (!parsed.success) {
-      sendError(res, 'VALIDATION_ERROR', parsed.error.errors[0]?.message ?? 'Invalid input', HttpStatus.BAD_REQUEST);
+      const errorMsg = parsed.error.errors.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      sendError(res, 'VALIDATION_ERROR', errorMsg, HttpStatus.BAD_REQUEST, parsed.error.errors);
       return;
     }
 
     const updated = await workoutService.updateSession(id, parsed.data);
     if (!updated) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found to update', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found to update`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, updated, HttpStatus.OK);
@@ -58,7 +60,7 @@ export class WorkoutController {
     const id = String(req.params.id);
     const duplicated = await workoutService.duplicateSession(id);
     if (!duplicated) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found to duplicate', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found to duplicate`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, duplicated, HttpStatus.CREATED);
@@ -68,7 +70,7 @@ export class WorkoutController {
     const id = String(req.params.id);
     const updated = await workoutService.toggleActive(id);
     if (!updated) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, updated, HttpStatus.OK);
@@ -78,7 +80,7 @@ export class WorkoutController {
     const id = String(req.params.id);
     const success = await workoutService.deleteSession(id);
     if (!success) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found to delete', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found to delete`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, { deleted: true, id }, HttpStatus.OK);
@@ -94,7 +96,7 @@ export class WorkoutController {
 
     const session = await workoutService.getSessionById(id);
     if (!session) {
-      sendError(res, 'NOT_FOUND', 'Workout session not found to assign', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Workout session "${id}" not found to assign`, HttpStatus.NOT_FOUND);
       return;
     }
 
@@ -114,7 +116,7 @@ export class WorkoutController {
     const assignmentId = String(req.params.assignmentId);
     const success = await workoutService.unassign(assignmentId);
     if (!success) {
-      sendError(res, 'NOT_FOUND', 'Assignment not found to remove', HttpStatus.NOT_FOUND);
+      sendError(res, 'NOT_FOUND', `Assignment "${assignmentId}" not found to remove`, HttpStatus.NOT_FOUND);
       return;
     }
     sendSuccess(res, { unassigned: true, assignmentId }, HttpStatus.OK);
@@ -165,12 +167,30 @@ export class WorkoutController {
     const clientId = req.user!.id;
     const parsed = createWorkoutRecordSchema.safeParse(req.body);
     if (!parsed.success) {
-      sendError(res, 'VALIDATION_ERROR', parsed.error.errors[0]?.message ?? 'Invalid workout record', HttpStatus.BAD_REQUEST);
+      sendError(
+        res,
+        'VALIDATION_ERROR',
+        parsed.error.errors[0]?.message ?? 'Invalid workout record',
+        HttpStatus.BAD_REQUEST,
+        parsed.error.errors.map((e) => ({ field: e.path.join('.'), message: e.message })),
+        parsed.error
+      );
       return;
     }
 
-    const record = await workoutService.recordWorkout(clientId, parsed.data);
-    sendSuccess(res, record, HttpStatus.CREATED);
+    try {
+      const record = await workoutService.recordWorkout(clientId, parsed.data);
+      sendSuccess(res, record, HttpStatus.CREATED);
+    } catch (err: any) {
+      sendError(
+        res,
+        'DATABASE_ERROR',
+        err?.message || 'Database query failed',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        undefined,
+        err
+      );
+    }
   }
 
   async getClientHistory(req: Request, res: Response): Promise<void> {

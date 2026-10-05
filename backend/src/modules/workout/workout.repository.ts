@@ -696,10 +696,27 @@ export class WorkoutRepository {
     return Array.from(this.sessions.values());
   }
 
+  private resolveSessionCandidateIds(id: string): string[] {
+    const aliasMap: Record<string, string> = {
+      'ws_push_day_01': 'ws_push_a_01',
+      'ws_pull_day_02': 'ws_pull_a_02',
+      'ws_legs_day_03': 'ws_legs_a_03',
+      'ws_push_a_01': 'ws_push_day_01',
+      'ws_pull_a_02': 'ws_pull_day_02',
+      'ws_legs_a_03': 'ws_legs_day_03',
+    };
+    const candidates = [id];
+    if (aliasMap[id] && !candidates.includes(aliasMap[id])) {
+      candidates.push(aliasMap[id]);
+    }
+    return candidates;
+  }
+
   async getSessionById(id: string): Promise<StoredWorkoutSession | null> {
+    const candidateIds = this.resolveSessionCandidateIds(id);
     try {
-      const session = await prisma.workoutSession.findUnique({
-        where: { id },
+      const session = await prisma.workoutSession.findFirst({
+        where: { id: { in: candidateIds } },
         include: {
           exercises: {
             include: { setTemplates: true },
@@ -711,7 +728,11 @@ export class WorkoutRepository {
         return mapPrismaSessionToStored(session);
       }
     } catch (_) {}
-    return this.sessions.get(id) ?? null;
+    for (const cid of candidateIds) {
+      const mem = this.sessions.get(cid);
+      if (mem) return mem;
+    }
+    return null;
   }
 
   async createSession(data: any): Promise<StoredWorkoutSession> {
@@ -862,24 +883,32 @@ export class WorkoutRepository {
   }
 
   async deleteSession(id: string): Promise<boolean> {
-    const memoryDeleted = this.sessions.delete(id);
-    for (const [key, assign] of this.assignments.entries()) {
-      if (assign.sessionId === id) {
-        this.assignments.delete(key);
+    const candidateIds = this.resolveSessionCandidateIds(id);
+    let memoryDeleted = false;
+    for (const cid of candidateIds) {
+      if (this.sessions.delete(cid)) {
+        memoryDeleted = true;
+      }
+      for (const [key, assign] of this.assignments.entries()) {
+        if (assign.sessionId === cid) {
+          this.assignments.delete(key);
+        }
       }
     }
 
     try {
-      const existingInDb = await prisma.workoutSession.findUnique({
-        where: { id },
+      const existingInDb = await prisma.workoutSession.findFirst({
+        where: { id: { in: candidateIds } },
         select: { id: true },
       });
 
       if (existingInDb) {
+        const foundId = existingInDb.id;
         // Clean up related assignments and exercises first to prevent foreign key errors
-        await prisma.workoutAssignment.deleteMany({ where: { sessionId: id } });
-        await prisma.workoutSessionExercise.deleteMany({ where: { sessionId: id } });
-        await prisma.workoutSession.deleteMany({ where: { id } });
+        await prisma.workoutAssignment.deleteMany({ where: { sessionId: foundId } });
+        await prisma.workoutSessionExercise.deleteMany({ where: { sessionId: foundId } });
+        await prisma.workoutSession.deleteMany({ where: { id: foundId } });
+        this.sessions.delete(foundId);
         return true;
       }
 
@@ -1281,8 +1310,7 @@ export class WorkoutRepository {
       });
       return mapPrismaRecordToStored(created);
     } catch (e: any) {
-      console.warn('[WorkoutRepository] Failed to save record to DB, stored in cache:', e?.message);
-      return memRecord;
+      throw e;
     }
   }
 

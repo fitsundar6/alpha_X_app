@@ -12,17 +12,17 @@ const adminRouter = Router();
 adminRouter.use(requireAuth, requireRoles([UserRole.ADMIN]));
 
 // Workout Session Management
-adminRouter.get('/sessions', (req, res) => workoutController.getAllAdminSessions(req, res));
-adminRouter.post('/sessions', (req, res) => workoutController.createSession(req, res));
-adminRouter.get('/sessions/:id', (req, res) => workoutController.getAdminSessionById(req, res));
-adminRouter.put('/sessions/:id', (req, res) => workoutController.updateSession(req, res));
-adminRouter.post('/sessions/:id/duplicate', (req, res) => workoutController.duplicateSession(req, res));
-adminRouter.patch('/sessions/:id/toggle-active', (req, res) => workoutController.toggleActive(req, res));
-adminRouter.delete('/sessions/:id', (req, res) => workoutController.deleteSession(req, res));
+adminRouter.get(['/sessions', '/workouts'], (req, res) => workoutController.getAllAdminSessions(req, res));
+adminRouter.post(['/sessions', '/workouts'], (req, res) => workoutController.createSession(req, res));
+adminRouter.get(['/sessions/:id', '/workouts/:id'], (req, res) => workoutController.getAdminSessionById(req, res));
+adminRouter.put(['/sessions/:id', '/workouts/:id'], (req, res) => workoutController.updateSession(req, res));
+adminRouter.post(['/sessions/:id/duplicate', '/workouts/:id/duplicate'], (req, res) => workoutController.duplicateSession(req, res));
+adminRouter.patch(['/sessions/:id/toggle-active', '/workouts/:id/toggle-active'], (req, res) => workoutController.toggleActive(req, res));
+adminRouter.delete(['/sessions/:id', '/workouts/:id'], (req, res) => workoutController.deleteSession(req, res));
 
 // Assignment Management
-adminRouter.post('/sessions/:id/assign', (req, res) => workoutController.assignSession(req, res));
-adminRouter.delete('/assignments/:assignmentId', (req, res) => workoutController.unassign(req, res));
+adminRouter.post(['/sessions/:id/assign', '/workouts/:id/assign'], (req, res) => workoutController.assignSession(req, res));
+adminRouter.delete(['/assignments/:assignmentId', '/workouts/assignments/:assignmentId'], (req, res) => workoutController.unassign(req, res));
 
 // Client Workout Results Review
 adminRouter.get('/clients', (req, res) => workoutController.getClientsList(req, res));
@@ -42,10 +42,14 @@ clientRouter.get('/sessions/:id', (req, res) => workoutController.getClientSessi
 
 // Performance Tracking & Recording
 clientRouter.get('/previous-performance', (req, res) => workoutController.getPreviousPerformance(req, res));
-clientRouter.post('/records', (req, res) => workoutController.recordWorkout(req, res));
+clientRouter.post(['/records', '/save'], (req, res) => workoutController.recordWorkout(req, res));
 clientRouter.get('/history', (req, res) => workoutController.getClientHistory(req, res));
 clientRouter.get('/history/:id', (req, res) => workoutController.getWorkoutRecordById(req, res));
 
 router.use('/client', clientRouter);
 
+// Support root /api/workout/save or /api/v1/workout/save
+router.post(['/records', '/save'], requireAuth, (req, res) => workoutController.recordWorkout(req, res));
+
 export const workoutRoutes = router;
+

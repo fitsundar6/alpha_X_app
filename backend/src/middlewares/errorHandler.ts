@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { HttpStatus } from '../constants/httpStatus';
 import { sendError } from '../utils/responseEnvelope';
-import { env } from '../config/environment';
+import { extractDatabaseError } from '../utils/serverLogger';
 
 export class AppError extends Error {
   public readonly statusCode: number;
@@ -25,36 +25,72 @@ export class AppError extends Error {
 }
 
 export const errorHandler = (
-  err: Error | AppError,
+  err: any,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  next: NextFunction
 ): void => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  // Handle JSON parse syntax errors from express.json()
+  if (err?.name === 'SyntaxError' && 'body' in err) {
+    sendError(
+      res,
+      'INVALID_JSON',
+      `Malformed JSON syntax in request body: ${err.message}`,
+      HttpStatus.BAD_REQUEST,
+      undefined,
+      err
+    );
+    return;
+  }
+
   // Handle Zod validation errors
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({
       field: e.path.join('.'),
       message: e.message,
     }));
-    sendError(res, 'VALIDATION_ERROR', 'Input validation failed', HttpStatus.UNPROCESSABLE_ENTITY, details);
+    sendError(
+      res,
+      'VALIDATION_ERROR',
+      'Input validation failed',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      details,
+      err
+    );
     return;
   }
 
   // Handle custom AppError
   if (err instanceof AppError) {
-    sendError(res, err.errorCode, err.message, err.statusCode, err.details);
+    sendError(res, err.errorCode, err.message, err.statusCode, err.details, err);
     return;
   }
 
-  // Catch unhandled internal errors safely
-  if (env.NODE_ENV !== 'production') {
-    console.error('Unhandled Server Error:', err);
+  // Handle Database / Prisma errors
+  const dbError = extractDatabaseError(err);
+  if (dbError) {
+    sendError(
+      res,
+      'DATABASE_ERROR',
+      err.message || 'Database query or connection failed',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      undefined,
+      err
+    );
+    return;
   }
 
+  // Handle any other unexpected server error with full error & stack trace
   sendError(
     res,
     'INTERNAL_SERVER_ERROR',
-    env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : err.message,
-    HttpStatus.INTERNAL_SERVER_ERROR
+    err?.message || 'An unexpected server error occurred',
+    HttpStatus.INTERNAL_SERVER_ERROR,
+    undefined,
+    err
   );
 };

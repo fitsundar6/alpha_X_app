@@ -3,8 +3,39 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/environment';
-import { sendSuccess } from './utils/responseEnvelope';
+import { sendSuccess, sendError } from './utils/responseEnvelope';
 import { errorHandler } from './middlewares/errorHandler';
+import { HttpStatus } from './constants/httpStatus';
+import {
+  requestIdMiddleware,
+  applyExpressAsyncErrorsPatch,
+  logServerError,
+  extractDatabaseError,
+  serverLogFilePath,
+} from './utils/serverLogger';
+
+// Apply Express 4 async promise rejection patch
+applyExpressAsyncErrorsPatch();
+
+// Global process-level safety traps to catch any unhandled promise rejections or background exceptions
+process.on('unhandledRejection', (reason: any) => {
+  logServerError({
+    errorMessage: `Unhandled Promise Rejection: ${reason?.message || String(reason)}`,
+    error: reason,
+    stack: reason instanceof Error ? reason.stack : undefined,
+    databaseError: extractDatabaseError(reason),
+  });
+});
+
+process.on('uncaughtException', (err: Error) => {
+  logServerError({
+    errorMessage: `Uncaught Exception: ${err.message}`,
+    error: err,
+    stack: err.stack,
+    databaseError: extractDatabaseError(err),
+  });
+});
+
 import { activityRoutes } from './modules/activity/activity.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { workoutRoutes } from './modules/workout/workout.routes';
@@ -27,6 +58,10 @@ import { prisma } from './config/prisma';
 import cron from 'node-cron';
 
 const app = express();
+
+// Track and assign unique Request IDs to all incoming mobile/client requests
+app.use(requestIdMiddleware);
+
 
 // Security Headers (relaxed for development and cross-origin Flutter Web API access)
 app.use(
@@ -224,6 +259,23 @@ app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/automation', automationRoutes);
 
+// Diagnostic error simulation route (strictly enabled only in development/test environments)
+if (env.NODE_ENV !== 'production') {
+  app.get(['/api/v1/simulate-error', '/api/simulate-error'], async (_req, _res) => {
+    throw new Error('Intentional unexpected server exception: failed to calculate telemetry vector');
+  });
+}
+
+// 404 handler for unmatched routes (ensures non-existent endpoints are properly recorded in server logs)
+app.use((req: Request, res: Response) => {
+  sendError(
+    res,
+    'NOT_FOUND',
+    `Endpoint not found: ${req.method} ${req.originalUrl}`,
+    HttpStatus.NOT_FOUND
+  );
+});
+
 // Centralized error handler
 app.use(errorHandler);
 
@@ -249,7 +301,9 @@ if (!isTestRun && !isVercel && isDirectRun) {
     console.log(`🩺 Health check: http://localhost:${env.PORT}/api/v1/health`);
     console.log(`📱 Physical Phone (iPhone / Android) URL: http://<WINDOWS-PC-LAN-IP>:${env.PORT}/api/v1`);
     console.log(`🤖 Android Emulator URL: http://10.0.2.2:${env.PORT}/api/v1`);
+    console.log(`📁 Server Error Log File: ${serverLogFilePath}`);
     console.log(`=========================================`);
+
     try {
       // Warm up connection to cloud PostgreSQL if it was idle/sleeping
       for (let attempt = 1; attempt <= 3; attempt++) {

@@ -209,8 +209,7 @@ router.post('/register', async (req: Request, res: Response) => {
       HttpStatus.CREATED
     );
   } catch (err: any) {
-    console.error('[AUTH REGISTER ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to register client account in database', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to register client account in database', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -379,8 +378,7 @@ router.post('/google', async (req: Request, res: Response) => {
       HttpStatus.CREATED
     );
   } catch (err: any) {
-    console.error('[AUTH GOOGLE ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Google authentication failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Google authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -496,19 +494,18 @@ router.post('/login', async (req: Request, res: Response) => {
       profile: clientProfile,
     });
   } catch (err: any) {
-    console.error('[AUTH LOGIN ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Authentication failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
 /**
- * PUT /api/v1/auth/onboarding (also /api/v1/auth/assessment)
+ * PUT & POST /api/v1/auth/onboarding (also /api/v1/auth/assessment, /api/client/assessment)
  * Incremental and Final Fitness Assessment Persistence.
  * - Saves each section progressively so client never loses work.
  * - On final submission sets onboardingCompleted = true (assessmentCompleted = true).
  * - Enforces realistic numeric types for weight, height, age, steps, training days.
  */
-router.put(['/onboarding', '/assessment'], requireAuth, async (req: Request, res: Response) => {
+const onboardingAssessmentHandler = async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
   try {
@@ -634,10 +631,11 @@ router.put(['/onboarding', '/assessment'], requireAuth, async (req: Request, res
       profile: updatedProfile,
     });
   } catch (err: any) {
-    console.error('[AUTH ASSESSMENT ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save assessment data', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-});
+};
+router.put(['/onboarding', '/assessment'], requireAuth, onboardingAssessmentHandler);
+router.post(['/onboarding', '/assessment'], requireAuth, onboardingAssessmentHandler);
 
 /**
  * GET /api/v1/auth/profile
@@ -676,8 +674,7 @@ router.get('/profile', requireAuth, async (req: Request, res: Response) => {
       profile: user.clientProfile,
     });
   } catch (err: any) {
-    console.error('[AUTH GET PROFILE ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to load profile', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to load profile', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 

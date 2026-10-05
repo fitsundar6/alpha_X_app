@@ -43,14 +43,14 @@ router.post('/login', async (req: Request, res: Response) => {
 router.use(requireAuth, requireAdmin);
 
 // --- Admin Workout Operations ---
-router.get('/workouts', (req: Request, res: Response) => workoutController.getAllAdminSessions(req, res));
-router.post('/workouts', (req: Request, res: Response) => workoutController.createSession(req, res));
-router.get('/workouts/:id', (req: Request, res: Response) => workoutController.getAdminSessionById(req, res));
-router.put('/workouts/:id', (req: Request, res: Response) => workoutController.updateSession(req, res));
-router.delete('/workouts/:id', (req: Request, res: Response) => workoutController.deleteSession(req, res));
-router.post('/workouts/:id/duplicate', (req: Request, res: Response) => workoutController.duplicateSession(req, res));
-router.post('/workouts/:id/assign', (req: Request, res: Response) => workoutController.assignSession(req, res));
-router.delete('/workouts/assignments/:assignmentId', (req: Request, res: Response) => workoutController.unassign(req, res));
+router.get(['/workouts', '/sessions'], (req: Request, res: Response) => workoutController.getAllAdminSessions(req, res));
+router.post(['/workouts', '/sessions'], (req: Request, res: Response) => workoutController.createSession(req, res));
+router.get(['/workouts/:id', '/sessions/:id'], (req: Request, res: Response) => workoutController.getAdminSessionById(req, res));
+router.put(['/workouts/:id', '/sessions/:id'], (req: Request, res: Response) => workoutController.updateSession(req, res));
+router.delete(['/workouts/:id', '/sessions/:id'], (req: Request, res: Response) => workoutController.deleteSession(req, res));
+router.post(['/workouts/:id/duplicate', '/sessions/:id/duplicate'], (req: Request, res: Response) => workoutController.duplicateSession(req, res));
+router.post(['/workouts/:id/assign', '/sessions/:id/assign'], (req: Request, res: Response) => workoutController.assignSession(req, res));
+router.delete(['/workouts/assignments/:assignmentId', '/sessions/assignments/:assignmentId'], (req: Request, res: Response) => workoutController.unassign(req, res));
 
 // --- Admin Exercise Operations ---
 router.get('/exercises', (req: Request, res: Response) => exerciseController.searchExercises(req, res));
@@ -180,8 +180,7 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
 
     sendError(res, 'NOT_FOUND', `Client with ID ${idOrClientId} not found in database.`, HttpStatus.NOT_FOUND);
   } catch (err: any) {
-    console.error('[ADMIN GET CLIENT ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve client profile', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve client profile', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -208,8 +207,7 @@ router.put('/clients/:id/notes', async (req: Request, res: Response) => {
       adminNotes: updated.adminNotes,
     });
   } catch (err: any) {
-    console.error('[ADMIN SAVE NOTES ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to save admin notes', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to save admin notes', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -308,8 +306,7 @@ router.post('/clients/:id/workouts', async (req: Request, res: Response) => {
 
     sendSuccess(res, assignment, HttpStatus.CREATED);
   } catch (err: any) {
-    console.error('[ADMIN ASSIGN WORKOUT ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to assign workout to client', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to assign workout to client', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -436,8 +433,7 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
 
     sendSuccess(res, newDietPlan, HttpStatus.CREATED);
   } catch (err: any) {
-    console.error('[ADMIN CREATE DIET PLAN ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to create diet plan', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to create diet plan', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -628,8 +624,7 @@ router.get('/clients/:id/nutrition-summary', async (req: Request, res: Response)
       },
     });
   } catch (err: any) {
-    console.error('[ADMIN NUTRITION SUMMARY ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to generate nutrition summary', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to generate nutrition summary', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -650,7 +645,7 @@ router.get('/clients/:id/macros', async (req: Request, res: Response) => {
 
     sendSuccess(res, macroPlan);
   } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch macro targets', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch macro targets', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -692,8 +687,7 @@ router.post('/clients/:id/macros', async (req: Request, res: Response) => {
 
     sendSuccess(res, newMacroPlan, HttpStatus.CREATED);
   } catch (err: any) {
-    console.error('[ADMIN ASSIGN MACROS ERROR]', err);
-    sendError(res, 'INTERNAL_ERROR', 'Failed to assign macro targets', HttpStatus.INTERNAL_SERVER_ERROR);
+    sendError(res, 'INTERNAL_ERROR', 'Failed to assign macro targets', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 

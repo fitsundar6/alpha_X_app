@@ -225,7 +225,7 @@ class WorkoutRepository extends ChangeNotifier {
       WorkoutRecord(
         id: 'rec_test_1',
         clientId: 'client_john_doe',
-        sessionId: 'ws_push_day_01',
+        sessionId: 'ws_push_a_01',
         sessionTitle: 'Push A',
         workoutType: 'Strength',
         targetMuscleGroup: 'Chest • Shoulders • Triceps',
@@ -257,7 +257,7 @@ class WorkoutRepository extends ChangeNotifier {
       WorkoutRecord(
         id: 'rec_test_2',
         clientId: 'client_john_doe',
-        sessionId: 'ws_push_day_01',
+        sessionId: 'ws_push_a_01',
         sessionTitle: 'Push A',
         workoutType: 'Strength',
         targetMuscleGroup: 'Chest • Shoulders • Triceps',
@@ -428,7 +428,7 @@ class WorkoutRepository extends ChangeNotifier {
   void _initSeededSessions() {
     // 1. Session: Push A (Recommended by default)
     final pushA = WorkoutSession(
-      id: 'ws_push_day_01',
+      id: 'ws_push_a_01',
       title: 'Push A',
       workoutType: 'Strength',
       targetMuscleGroup: 'Chest • Shoulders • Triceps',
@@ -731,7 +731,7 @@ class WorkoutRepository extends ChangeNotifier {
 
     // 2. Session: Pull A
     final pullA = WorkoutSession(
-      id: 'ws_pull_day_02',
+      id: 'ws_pull_a_02',
       title: 'Pull A',
       workoutType: 'Hypertrophy',
       targetMuscleGroup: 'Back • Biceps • Rear Delts',
@@ -815,7 +815,7 @@ class WorkoutRepository extends ChangeNotifier {
 
     // 3. Session: Legs A
     final legsA = WorkoutSession(
-      id: 'ws_legs_day_03',
+      id: 'ws_legs_a_03',
       title: 'Legs A',
       workoutType: 'Strength',
       targetMuscleGroup: 'Quads • Hamstrings • Calves',
@@ -911,6 +911,7 @@ class WorkoutRepository extends ChangeNotifier {
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts');
       final payload = jsonEncode({
+        'id': session.id,
         'title': session.title,
         'workoutType': session.workoutType,
         'targetMuscleGroup': session.targetMuscleGroup,
@@ -961,7 +962,25 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded['data'] != null && decoded['data'] is Map<String, dynamic>) {
+            final serverSession = WorkoutSession.fromJson(decoded['data'] as Map<String, dynamic>);
+            final idx = _sessions.indexWhere((s) => s.id == session.id || s.id == serverSession.id);
+            if (idx != -1) {
+              _sessions[idx] = serverSession;
+            } else {
+              _sessions.add(serverSession);
+            }
+            _saveToLocalStorage();
+            notifyListeners();
+          }
+        } catch (_) {}
+        return true;
+      }
+      debugPrint('[WorkoutRepository] createSession error: ${response.statusCode} -> ${response.body}');
+      return false;
     } catch (e) {
       debugPrint('[WorkoutRepository] createSession sync error: $e');
       return false;
@@ -1052,7 +1071,9 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      debugPrint('[WorkoutRepository] updateSession error: ${response.statusCode} -> ${response.body}');
+      return false;
     } catch (e) {
       debugPrint('[WorkoutRepository] updateSession sync error: $e');
       return false;
@@ -1076,6 +1097,9 @@ class WorkoutRepository extends ChangeNotifier {
     _sessions.insert(0, duplicated);
     _saveToLocalStorage();
     notifyListeners();
+
+    // Persist duplicated session to backend
+    createSession(duplicated);
   }
 
   void toggleSessionActive(String sessionId) {
@@ -1233,7 +1257,28 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 404) {
+        // If the session exists in local memory but hasn't reached DB, push it first
+        final localIdx = _sessions.indexWhere((s) => s.id == sessionId);
+        if (localIdx != -1) {
+          final localSession = _sessions[localIdx];
+          final synced = await createSession(localSession);
+          if (synced) {
+            response = await _httpClient.post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: payload,
+            ).timeout(const Duration(seconds: 10));
+          }
+        }
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) return true;
+      debugPrint('[WorkoutRepository] assignSession error: ${response.statusCode} -> ${response.body}');
+      return false;
     } catch (e) {
       debugPrint('[WorkoutRepository] Failed to sync assignment to backend: $e');
       return false;

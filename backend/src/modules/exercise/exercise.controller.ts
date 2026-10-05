@@ -43,7 +43,7 @@ export class ExerciseController {
 
       sendSuccess(res, result);
     } catch (err: any) {
-      sendError(res, 'SEARCH_ERROR', err.message || 'Failed to search exercises', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'SEARCH_ERROR', err.message || 'Failed to search exercises', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 
@@ -55,7 +55,7 @@ export class ExerciseController {
       const result = await exerciseService.seedDatabase();
       sendSuccess(res, result);
     } catch (err: any) {
-      sendError(res, 'SEED_ERROR', err.message || 'Failed to seed exercises', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'SEED_ERROR', err.message || 'Failed to seed exercises', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 
@@ -72,7 +72,7 @@ export class ExerciseController {
       }
       sendSuccess(res, exercise);
     } catch (err: any) {
-      sendError(res, 'GET_ERROR', err.message || 'Failed to fetch exercise', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'GET_ERROR', err.message || 'Failed to fetch exercise', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 
@@ -85,7 +85,7 @@ export class ExerciseController {
       const alternatives = await exerciseService.getAlternatives(id);
       sendSuccess(res, alternatives);
     } catch (err: any) {
-      sendError(res, 'ALTERNATIVES_ERROR', err.message || 'Failed to fetch alternatives', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'ALTERNATIVES_ERROR', err.message || 'Failed to fetch alternatives', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 

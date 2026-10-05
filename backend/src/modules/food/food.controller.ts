@@ -33,7 +33,7 @@ export class FoodController {
 
       sendSuccess(res, result);
     } catch (err: any) {
-      sendError(res, 'FOOD_SEARCH_ERROR', err.message || 'Failed to search foods', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'FOOD_SEARCH_ERROR', err.message || 'Failed to search foods', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 
@@ -50,7 +50,7 @@ export class FoodController {
       }
       sendSuccess(res, food);
     } catch (err: any) {
-      sendError(res, 'FOOD_FETCH_ERROR', err.message || 'Failed to fetch food', HttpStatus.INTERNAL_SERVER_ERROR);
+      sendError(res, 'FOOD_FETCH_ERROR', err.message || 'Failed to fetch food', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
     }
   }
 
