@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
+import { Readable } from 'stream';
 
 export interface SavedMealPhotoResult {
   storagePath: string;
@@ -12,23 +14,59 @@ export class MealPhotoStorageService {
   private baseStorageDir: string;
 
   constructor() {
-    // Stored privately on disk outside of any public web static root
-    this.baseStorageDir = process.env.STORAGE_DIR
-      ? path.resolve(process.env.STORAGE_DIR)
-      : path.resolve(__dirname, '../../../uploads/meal_photos');
+    this.baseStorageDir = this.resolveBaseStorageDir();
+    this.ensureBaseDirectory();
+  }
 
-    // Ensure root directory exists
-    if (!fs.existsSync(this.baseStorageDir)) {
-      try {
+  /**
+   * Determine safe, writable base storage directory depending on environment.
+   * In Vercel, AWS Lambda, or serverless environments, root is strictly read-only,
+   * so os.tmpdir() is used.
+   */
+  private resolveBaseStorageDir(): string {
+    if (process.env.STORAGE_DIR) {
+      return path.resolve(process.env.STORAGE_DIR);
+    }
+
+    const isServerless = Boolean(
+      process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT ||
+      __dirname.startsWith('/var/task')
+    );
+
+    if (isServerless) {
+      return path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos');
+    }
+
+    return path.resolve(__dirname, '../../../uploads/meal_photos');
+  }
+
+  /**
+   * Ensure directory exists, falling back to os.tmpdir() if filesystem permissions fail.
+   */
+  private ensureBaseDirectory(): void {
+    try {
+      if (!fs.existsSync(this.baseStorageDir)) {
         fs.mkdirSync(this.baseStorageDir, { recursive: true });
-      } catch (err) {
-        console.error('[STORAGE SERVICE] Could not initialize storage directory:', err);
+      }
+    } catch (err) {
+      console.warn('[STORAGE SERVICE] Could not initialize default storage directory, falling back to os.tmpdir():', err);
+      try {
+        this.baseStorageDir = path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos');
+        if (!fs.existsSync(this.baseStorageDir)) {
+          fs.mkdirSync(this.baseStorageDir, { recursive: true });
+        }
+      } catch (fallbackErr) {
+        console.error('[STORAGE SERVICE] Failed to initialize fallback temp directory:', fallbackErr);
       }
     }
   }
 
   /**
-   * Save a confirmed meal photo buffer to secure private storage
+   * Save a confirmed meal photo buffer to secure storage.
+   * Embeds Base64 representation in hybrid storagePath so photos are permanently available
+   * across ephemeral serverless container recycles and multi-container serverless instances.
    */
   public async saveMealPhoto(
     clientProfileId: string,
@@ -55,48 +93,129 @@ export class MealPhotoStorageService {
     const uniqueFileId = `${crypto.randomUUID()}${ext}`;
 
     const clientDir = path.join(this.baseStorageDir, safeClientId, year, month);
-    if (!fs.existsSync(clientDir)) {
-      fs.mkdirSync(clientDir, { recursive: true });
+    const fullFilePath = path.join(clientDir, uniqueFileId);
+
+    // Save to disk (persisted in traditional hosting, acts as instant fast cache in serverless)
+    try {
+      if (!fs.existsSync(clientDir)) {
+        fs.mkdirSync(clientDir, { recursive: true });
+      }
+      await fs.promises.writeFile(fullFilePath, buffer);
+    } catch (diskErr) {
+      console.warn('[STORAGE SERVICE] Primary disk write failed, attempting /tmp fallback:', diskErr);
+      try {
+        const tmpClientDir = path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos', safeClientId, year, month);
+        if (!fs.existsSync(tmpClientDir)) {
+          fs.mkdirSync(tmpClientDir, { recursive: true });
+        }
+        await fs.promises.writeFile(path.join(tmpClientDir, uniqueFileId), buffer);
+      } catch (tmpErr) {
+        console.warn('[STORAGE SERVICE] Disk caching write failed entirely (persisting via DB):', tmpErr);
+      }
     }
 
-    const fullFilePath = path.join(clientDir, uniqueFileId);
-    await fs.promises.writeFile(fullFilePath, buffer);
+    // Relative storage path for DB reference and legacy file matching
+    const relativeStoragePath = `${safeClientId}/${year}/${month}/${uniqueFileId}`;
 
-    // Compute relative storage path for DB reference
-    const relativeStoragePath = path.relative(this.baseStorageDir, fullFilePath).replace(/\\/g, '/');
+    // Hybrid storage: embeds DB Base64 fallback to ensure photo persists across serverless container recycles
+    const cleanBase64 = buffer.toString('base64');
+    const hybridStoragePath = `db:${relativeStoragePath}:::data:${mimeType};base64,${cleanBase64}`;
 
     return {
-      storagePath: relativeStoragePath,
+      storagePath: hybridStoragePath,
       fileSizeBytes: buffer.length,
       mimeType,
     };
   }
 
   /**
-   * Resolve absolute file path from relative storage path
+   * Helper: Extracts relative file path from storagePath (handles hybrid and legacy formats)
+   */
+  public extractRelativePath(storagePath: string): string {
+    if (!storagePath) return '';
+    if (storagePath.includes(':::data:')) {
+      const dbPart = storagePath.split(':::data:')[0];
+      return dbPart.replace(/^db:/, '');
+    }
+    if (storagePath.startsWith('data:') || storagePath.startsWith('base64:')) {
+      return 'embedded_image.jpg';
+    }
+    return storagePath;
+  }
+
+  /**
+   * Resolve absolute file path from relative storage path.
+   * If file is not present on disk but embedded data is available, materializes it to disk cache.
    */
   public getAbsoluteFilePath(relativeStoragePath: string): string {
-    const normalized = path.normalize(relativeStoragePath).replace(/^(\.\.[\/\\])+/, '');
-    return path.join(this.baseStorageDir, normalized);
+    const rel = this.extractRelativePath(relativeStoragePath);
+    const normalized = path.normalize(rel).replace(/^(\.\.[\/\\])+/, '');
+    const candidatePath = path.join(this.baseStorageDir, normalized);
+
+    // If file doesn't exist on disk but we have embedded data, materialize it to disk cache
+    if (!fs.existsSync(candidatePath) && relativeStoragePath.includes(':::data:')) {
+      try {
+        const base64Part = relativeStoragePath.split(':::data:')[1];
+        const commaIdx = base64Part.indexOf(',');
+        const rawBase64 = commaIdx >= 0 ? base64Part.substring(commaIdx + 1) : base64Part;
+        const buf = Buffer.from(rawBase64, 'base64');
+        const parentDir = path.dirname(candidatePath);
+        if (!fs.existsSync(parentDir)) {
+          fs.mkdirSync(parentDir, { recursive: true });
+        }
+        fs.writeFileSync(candidatePath, buf);
+      } catch (err) {
+        console.warn('[STORAGE SERVICE] Could not materialize cached file to disk:', err);
+      }
+    }
+
+    return candidatePath;
   }
 
   /**
-   * Check if file exists
+   * Check if file exists (either in filesystem or embedded in storagePath)
    */
   public fileExists(relativeStoragePath: string): boolean {
+    if (!relativeStoragePath) return false;
+    if (relativeStoragePath.includes(':::data:') || relativeStoragePath.startsWith('data:') || relativeStoragePath.startsWith('base64:')) {
+      return true;
+    }
     const fullPath = this.getAbsoluteFilePath(relativeStoragePath);
-    return fs.existsSync(fullPath);
+    if (fs.existsSync(fullPath)) return true;
+
+    // Check temp directory fallback
+    const tmpFallback = path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos', this.extractRelativePath(relativeStoragePath));
+    return fs.existsSync(tmpFallback);
   }
 
   /**
-   * Get readable file stream for streaming to authenticated client/admin
+   * Get readable file stream for streaming to authenticated client/admin.
+   * If embedded in DB, streams directly from memory buffer (instant, 0 disk I/O, serverless-safe).
    */
-  public getFileStream(relativeStoragePath: string): fs.ReadStream {
-    const fullPath = this.getAbsoluteFilePath(relativeStoragePath);
-    if (!fs.existsSync(fullPath)) {
-      throw new Error('Meal photo file not found in storage.');
+  public getFileStream(relativeStoragePath: string): Readable {
+    // If embedded data is available, stream directly from buffer (instant & 100% reliable across serverless nodes)
+    if (relativeStoragePath.includes(':::data:') || relativeStoragePath.startsWith('data:')) {
+      const dataUri = relativeStoragePath.includes(':::data:')
+        ? relativeStoragePath.split(':::data:')[1]
+        : relativeStoragePath;
+      const commaIdx = dataUri.indexOf(',');
+      const rawBase64 = commaIdx >= 0 ? dataUri.substring(commaIdx + 1) : dataUri;
+      const buffer = Buffer.from(rawBase64, 'base64');
+      return Readable.from(buffer);
     }
-    return fs.createReadStream(fullPath);
+
+    const fullPath = this.getAbsoluteFilePath(relativeStoragePath);
+    if (fs.existsSync(fullPath)) {
+      return fs.createReadStream(fullPath);
+    }
+
+    // Try temp directory fallback
+    const tmpFallback = path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos', this.extractRelativePath(relativeStoragePath));
+    if (fs.existsSync(tmpFallback)) {
+      return fs.createReadStream(tmpFallback);
+    }
+
+    throw new Error('Meal photo file not found in storage.');
   }
 
   /**
@@ -110,6 +229,12 @@ export class MealPhotoStorageService {
       } catch (err) {
         console.warn(`[STORAGE SERVICE] Failed to delete file ${fullPath}:`, err);
       }
+    }
+    const tmpFallback = path.join(os.tmpdir(), 'alpha_x_uploads', 'meal_photos', this.extractRelativePath(relativeStoragePath));
+    if (fs.existsSync(tmpFallback)) {
+      try {
+        await fs.promises.unlink(tmpFallback);
+      } catch (_) {}
     }
   }
 }

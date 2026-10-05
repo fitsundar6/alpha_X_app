@@ -181,7 +181,7 @@ export class FoodPhotoController {
           dateString: targetDateStr,
           mealType: mealType,
           storagePath: storageResult.storagePath,
-          storageProvider: 'LOCAL_SECURE',
+          storageProvider: storageResult.storagePath.includes(':::data:') ? 'DATABASE_SECURE' : 'LOCAL_SECURE',
           mimeType: storageResult.mimeType,
           fileSizeBytes: storageResult.fileSizeBytes,
           capturedAt: new Date(),
@@ -302,7 +302,7 @@ export class FoodPhotoController {
         id: photo.id,
         mealId: photo.mealId,
         clientId: photo.clientId,
-        clientName: photo.clientProfile.user.name,
+        clientName: photo.clientProfile?.user?.name || 'Athlete Member',
         dateString: photo.dateString,
         mealType: photo.mealType,
         confirmedAt: photo.confirmedAt,
@@ -372,7 +372,9 @@ export class FoodPhotoController {
       }
 
       res.setHeader('Content-Type', photo.mimeType || 'image/jpeg');
-      res.setHeader('Content-Length', photo.fileSizeBytes);
+      if (photo.fileSizeBytes && photo.fileSizeBytes > 0) {
+        res.setHeader('Content-Length', photo.fileSizeBytes);
+      }
       res.setHeader('Cache-Control', 'private, max-age=86400'); // Private cache for authorized user only
       res.setHeader('Content-Disposition', `inline; filename="meal_${photo.id}.jpg"`);
 
@@ -478,8 +480,8 @@ export class FoodPhotoController {
           dateString,
           mealType: validMealType,
           storagePath: storageResult.storagePath,
-          storageProvider: 'LOCAL_SECURE',
-          mimeType: 'image/jpeg',
+          storageProvider: storageResult.storagePath.includes(':::data:') ? 'DATABASE_SECURE' : 'LOCAL_SECURE',
+          mimeType: storageResult.mimeType,
           fileSizeBytes: storageResult.fileSizeBytes,
           capturedAt: captureDate,
           confirmedAt: new Date(),
