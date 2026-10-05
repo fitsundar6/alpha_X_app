@@ -55,12 +55,10 @@ export class GeminiService {
   // Fallbacks: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.5-flash, gemini-3.6-flash, gemini-3.8-flash
   private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
   private static readonly FALLBACK_MODELS = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-3.8-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-pro',
   ];
   private static readonly MAX_RETRIES = 3;
   private static readonly DEFAULT_TIMEOUT_MS = 45000;
@@ -341,6 +339,20 @@ export class GeminiService {
         toolCallsExecuted < maxCalls &&
         context
       ) {
+        // Carry the full model turn including thought_signature from candidates[0].content
+        if (currentResponse?.candidates?.[0]?.content) {
+          contentsPayload.push(currentResponse.candidates[0].content);
+        } else {
+          contentsPayload.push({
+            role: 'model',
+            parts: currentResponse.functionCalls.map((fc: any) => ({
+              functionCall: { name: fc.name, args: fc.args || {} },
+            })),
+          });
+        }
+
+        const functionResponseParts: any[] = [];
+
         for (const call of currentResponse.functionCalls) {
           if (toolCallsExecuted >= maxCalls) {
             break;
@@ -354,43 +366,21 @@ export class GeminiService {
           const toolResult = await toolExecutor.executeTool(call.name, call.args, context);
           console.log(`[DEBUG GEMINI] Tool result for ${call.name}: success=${toolResult.success}, hasData=${toolResult.data !== undefined}`);
 
-          // Build the model turn with functionCall
-          // IMPORTANT: thought_signature must be forwarded from the model response part
-          // to satisfy gemini-3.8-flash's requirement for tool-call continuations
-          const modelParts: any[] = [];
-          if (currentResponse?.candidates?.[0]?.content?.parts) {
-            for (const part of currentResponse.candidates[0].content.parts) {
-              if (part.functionCall && part.functionCall.name === call.name) {
-                // Carry the full part including thought_signature if present
-                modelParts.push(part);
-              }
-            }
-          }
-          // Fallback: plain functionCall if we couldn't find the signed part
-          if (modelParts.length === 0) {
-            modelParts.push({ functionCall: { name: call.name, args: call.args || {} } });
-          }
-
-          contentsPayload.push({
-            role: 'model',
-            parts: modelParts,
-          });
-
-          // Append tool response — use role:'user' (role:'tool' is not supported by this model)
-          contentsPayload.push({
-            role: 'user',
-            parts: [
-              {
-                functionResponse: {
-                  name: call.name,
-                  response: {
-                    output: toolResult.data !== undefined ? toolResult.data : { error: toolResult.error },
-                  },
-                },
+          functionResponseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: {
+                output: toolResult.data !== undefined ? toolResult.data : { error: toolResult.error },
               },
-            ],
+            },
           });
         }
+
+        // Append all tool responses in a single turn
+        contentsPayload.push({
+          role: 'user',
+          parts: functionResponseParts,
+        });
 
         // Call model with tool responses to generate final synthesis
         currentResponse = await this.callModelWithFallback(
@@ -452,7 +442,13 @@ export class GeminiService {
         });
       } catch (err: any) {
         lastErr = err;
-        console.warn(`[GEMINI SERVICE] Model ${currentModel} failed (${err?.message?.substring(0, 80)}), trying fallback...`);
+        const msg = err?.message || String(err);
+        const isAuthError = msg.includes('401') || msg.includes('invalid authentication') || msg.includes('API key not valid') || msg.includes('403');
+        if (isAuthError) {
+          console.warn(`[GEMINI SERVICE] Authentication failure (401/403) with model ${currentModel}: ${msg.substring(0, 100)}. Skipping remaining fallback models.`);
+          throw err;
+        }
+        console.warn(`[GEMINI SERVICE] Model ${currentModel} failed (${msg.substring(0, 80)}), trying fallback...`);
       }
     }
     throw lastErr;

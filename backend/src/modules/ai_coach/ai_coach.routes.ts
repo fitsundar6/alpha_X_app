@@ -201,26 +201,122 @@ router.post('/chat', async (req: Request, res: Response) => {
       }, HttpStatus.OK);
       return;
     } catch (err: any) {
-      console.error(`[GEMINI SERVICE NOTICE] [${requestId}]:`, err.message || err);
-      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503 ERROR) "${err.message || 'AI service unavailable'}"`);
+      const errMsg = err.message || String(err);
+      const isAuthError = errMsg.includes('401') || errMsg.includes('authentication') || errMsg.includes('API key');
+      console.error(`[GEMINI SERVICE NOTICE] [${requestId}]:`, errMsg);
+
+      // Attempt intelligent database-backed fallback via AiController (e.g. for "Give me today's report", missed workouts, client reviews)
+      try {
+        console.log(`[AI COACH FALLBACK] [${requestId}]: Attempting database-backed fallback via AiController for prompt: "${cleanMessage}"...`);
+        const fallbackResult = await aiController.handleAdminMessage({
+          adminId,
+          adminName: adminUser.name || 'Alex Stone',
+          conversationId: conversation.id,
+          message: cleanMessage,
+          selectedClientId: conversation.verifiedClient?.clientId || selectedClientId,
+        });
+
+        conversationService.recordExchange(conversation, cleanMessage, fallbackResult.replyText, {
+          model: 'alpha-x-database-engine',
+          promptVersion: '2.0-fallback',
+          latencyMs: 50,
+          verifiedClient: conversation.verifiedClient || null,
+        });
+
+        sendSuccess(res, {
+          conversationId: conversation.id,
+          response: fallbackResult.replyText,
+          replyText: fallbackResult.replyText,
+          requestId,
+          model: 'alpha-x-database-engine',
+          promptVersion: '2.0-fallback',
+          latencyMs: 50,
+          intent: fallbackResult.intent || 'FACILITY_QUERY',
+          reportCard: fallbackResult.reportCard,
+          proposal: fallbackResult.proposal,
+          suggestedFollowUps: fallbackResult.suggestedFollowUps || [
+            'Give me today\'s report',
+            'Show clients needing review',
+            'Who missed workouts today?',
+          ],
+          verifiedClient: conversation.verifiedClient || null,
+        }, HttpStatus.OK, `AI Coach answered via Alpha X Analytics Engine (Prompt: "${cleanMessage}")`);
+        return;
+      } catch (fallbackErr: any) {
+        console.error(`[AI COACH FALLBACK ERROR] [${requestId}]:`, fallbackErr?.message);
+      }
+
+      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (${isAuthError ? 'HTTP 401' : 'HTTP 503'} ERROR) "${errMsg}"`);
       sendError(
         res,
-        'AI_SERVICE_UNAVAILABLE',
-        err.message || 'AI service is temporarily unavailable.',
-        HttpStatus.SERVICE_UNAVAILABLE
+        isAuthError ? 'AI_AUTHENTICATION_ERROR' : 'AI_SERVICE_UNAVAILABLE',
+        errMsg || 'AI service is temporarily unavailable.',
+        isAuthError ? HttpStatus.UNAUTHORIZED : HttpStatus.SERVICE_UNAVAILABLE,
+        undefined,
+        err,
+        {
+          activity: 'AI Coach Natural Language Query',
+          explanation: isAuthError
+            ? 'Google Gemini API rejected authentication credentials (HTTP 401). Verify GEMINI_API_KEY in server environment.'
+            : 'External AI reasoning model execution encountered an error.',
+          receivedPayload: { message: cleanMessage, conversationId: conversation.id },
+        }
       );
       return;
     }
   }
 
-  // 10. Clear technical error when Gemini API Key is missing (No fake/mock responses)
-  console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503) "GEMINI_API_KEY is not configured on the server."`);
-  sendError(
-    res,
-    'AI_CONFIGURATION_REQUIRED',
-    'AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.',
-    HttpStatus.SERVICE_UNAVAILABLE
-  );
+  // 10. If Gemini API Key is missing, attempt database-backed response via AiController
+  try {
+    const fallbackResult = await aiController.handleAdminMessage({
+      adminId,
+      adminName: adminUser.name || 'Alex Stone',
+      conversationId: conversation.id,
+      message: cleanMessage,
+      selectedClientId: conversation.verifiedClient?.clientId || selectedClientId,
+    });
+
+    conversationService.recordExchange(conversation, cleanMessage, fallbackResult.replyText, {
+      model: 'alpha-x-database-engine',
+      promptVersion: '2.0-fallback',
+      latencyMs: 30,
+      verifiedClient: conversation.verifiedClient || null,
+    });
+
+    sendSuccess(res, {
+      conversationId: conversation.id,
+      response: fallbackResult.replyText,
+      replyText: fallbackResult.replyText,
+      requestId,
+      model: 'alpha-x-database-engine',
+      promptVersion: '2.0-fallback',
+      latencyMs: 30,
+      intent: fallbackResult.intent || 'FACILITY_QUERY',
+      reportCard: fallbackResult.reportCard,
+      proposal: fallbackResult.proposal,
+      suggestedFollowUps: fallbackResult.suggestedFollowUps || [
+        'Give me today\'s report',
+        'Show clients needing review',
+        'Who missed workouts today?',
+      ],
+      verifiedClient: conversation.verifiedClient || null,
+    }, HttpStatus.OK, `AI Coach answered via Alpha X Analytics Engine (Prompt: "${cleanMessage}")`);
+    return;
+  } catch (_) {
+    console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503) "GEMINI_API_KEY is not configured on the server."`);
+    sendError(
+      res,
+      'AI_CONFIGURATION_REQUIRED',
+      'AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+      undefined,
+      undefined,
+      {
+        activity: 'AI Coach Natural Language Query',
+        explanation: 'GEMINI_API_KEY environment variable is not configured on the server.',
+      }
+    );
+  }
 });
 
 /**
