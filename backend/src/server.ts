@@ -22,6 +22,8 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 import { aiNotificationEngine } from './modules/notifications/ai_notifications.service';
 import { telemetryRoutes } from './modules/telemetry/telemetry.routes';
 import { telemetryService } from './modules/telemetry/telemetry.service';
+import { workoutRepository } from './modules/workout/workout.repository';
+import { prisma } from './config/prisma';
 import cron from 'node-cron';
 
 const app = express();
@@ -249,8 +251,22 @@ if (!isTestRun && !isVercel && isDirectRun) {
     console.log(`🤖 Android Emulator URL: http://10.0.2.2:${env.PORT}/api/v1`);
     console.log(`=========================================`);
     try {
+      // Warm up connection to cloud PostgreSQL if it was idle/sleeping
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await prisma.$queryRaw`SELECT 1`;
+          break;
+        } catch {
+          if (attempt < 3) {
+            console.log(`[Database] Warming up cloud database (attempt ${attempt}/3)...`);
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+        }
+      }
+
       const exRes = await exerciseService.seedDatabase();
       const foodRes = await foodService.seedDatabase();
+      await workoutRepository.ensureDatabaseSeeded();
       console.log(`✔ PostgreSQL Database ready (Exercises: ${exRes.total}, Foods: ${foodRes.total})`);
     } catch (e) {
       console.warn('Startup database auto-seed notice:', e);

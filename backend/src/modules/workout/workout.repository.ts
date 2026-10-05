@@ -207,9 +207,6 @@ export class WorkoutRepository {
 
   constructor() {
     this.seedDefaultSessions();
-    this.ensureDatabaseSeeded().catch((err) => {
-      console.warn('[WorkoutRepository] Initial DB seed deferred:', err?.message);
-    });
   }
 
   private seedDefaultSessions() {
