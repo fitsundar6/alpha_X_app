@@ -865,7 +865,7 @@ export class WorkoutRepository {
   }
 
   async deleteSession(id: string): Promise<boolean> {
-    this.sessions.delete(id);
+    const memoryDeleted = this.sessions.delete(id);
     for (const [key, assign] of this.assignments.entries()) {
       if (assign.sessionId === id) {
         this.assignments.delete(key);
@@ -873,10 +873,23 @@ export class WorkoutRepository {
     }
 
     try {
-      await prisma.workoutSession.delete({ where: { id } });
-      return true;
-    } catch (_) {
-      return false;
+      const existingInDb = await prisma.workoutSession.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+
+      if (existingInDb) {
+        // Clean up related assignments and exercises first to prevent foreign key errors
+        await prisma.workoutAssignment.deleteMany({ where: { sessionId: id } });
+        await prisma.workoutSessionExercise.deleteMany({ where: { sessionId: id } });
+        await prisma.workoutSession.delete({ where: { id } });
+        return true;
+      }
+
+      return memoryDeleted;
+    } catch (err) {
+      console.warn(`[WorkoutRepository] Error deleting session ${id}:`, err);
+      return memoryDeleted;
     }
   }
 
