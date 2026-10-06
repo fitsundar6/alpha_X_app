@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -250,192 +251,171 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Full-bleed athletic background image
+          // 1. Full-bleed athletic background image (z-index: 0 / bottom of Stack)
+          // Aligned to top center and scaled (BoxFit.contain) so subject & glowing "ALPHA-X" text are fully visible without zoom or crop
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/alpha_x_login_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
-            ),
-          ),
-
-          // 2. Cinematic dark gradient overlay
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.background.withOpacity(0.40),
-                    AppColors.background.withOpacity(0.75),
-                    AppColors.background.withOpacity(0.94),
-                  ],
-                  stops: const [0.0, 0.45, 0.85],
+            child: ColoredBox(
+              color: Colors.black,
+              child: Image.asset(
+                'assets/images/alpha_x_login_bg.png',
+                fit: BoxFit.contain,
+                alignment: Alignment.topCenter,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  'assets/images/alpha_x_login_bg.jpg',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (context, error, stackTrace) => const ColoredBox(color: Colors.black),
                 ),
               ),
             ),
           ),
 
-          // 3. Foreground content
+          // 2. Foreground content pushed to bottom third
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Upper section kept completely open for the spotlight, "ALPHA-X", and subject
                   const Spacer(),
 
-              // Official Alpha X Gym Brand Logo with smooth entrance and subtle pulse animation
-              FadeTransition(
-                opacity: _entranceFade,
-                child: ScaleTransition(
-                  scale: _entranceScale,
-                  child: ScaleTransition(
-                    scale: _pulseAnimation,
-                    child: const AlphaXLogo.splash(
-                      size: 140,
-                    ),
-                  ),
-                ),
-              ),
+                  // Bottom third: Frosted glass container with brand & action buttons
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.18),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Official Alpha X Gym Brand Logo with smooth entrance and subtle pulse animation
+                            FadeTransition(
+                              opacity: _entranceFade,
+                              child: ScaleTransition(
+                                scale: _entranceScale,
+                                child: ScaleTransition(
+                                  scale: _pulseAnimation,
+                                  child: const AlphaXLogo.splash(
+                                    size: 64,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
 
-              const SizedBox(height: 16),
+                            // Accessible semantic branding title
+                            const SizedBox(
+                              height: 0,
+                              width: 0,
+                              child: Text(
+                                'ALPHA X GYM',
+                                style: TextStyle(fontSize: 0, color: Colors.transparent),
+                              ),
+                            ),
 
-              // Accessible semantic branding title (0-height to avoid duplicate visual text)
-              const SizedBox(
-                height: 0,
-                width: 0,
-                child: Text(
-                  'ALPHA X GYM',
-                  style: TextStyle(fontSize: 0, color: Colors.transparent),
-                ),
-              ),
+                            // Brand Tagline
+                            const Text(
+                              AppConstants.appTagline,
+                              style: AppTypography.bodySmall,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
 
-              const SizedBox(height: 8),
+                            // Motto Pill
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.28),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withOpacity(0.14)),
+                              ),
+                              child: const Text(
+                                AppConstants.appMotto,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryRed,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
 
-              // Brand Tagline
-              const Text(
-                AppConstants.appTagline,
-                style: AppTypography.bodySmall,
-                textAlign: TextAlign.center,
-              ),
+                            // Enter Gym Action Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 42,
+                              child: ElevatedButton.icon(
+                                onPressed: _enterApp,
+                                icon: const Icon(Icons.fitness_center, size: 18),
+                                label: const Text(
+                                  'ENTER ALPHA X GYM',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primaryRed,
+                                  foregroundColor: Colors.white,
+                                  shape: const StadiumBorder(),
+                                  elevation: 4,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
 
-              const SizedBox(height: 16),
-
-              // Motto Pill
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  AppConstants.appMotto,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primaryRed,
-                  ),
-                ),
-              ),
-
-              const Spacer(),
-
-              // Enter Gym Action Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _enterApp,
-                  icon: const Icon(Icons.fitness_center, size: 20),
-                  label: const Text(
-                    'ENTER ALPHA X GYM',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryRed,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    shadowColor: AppColors.primaryRed,
-                    elevation: 8,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Member Portal / Sign-In Button
-              TextButton.icon(
-                onPressed: () {
-                  _autoTransitionTimer?.cancel();
-                  Navigator.of(context).pushReplacementNamed('/login');
-                },
-                icon: const Icon(Icons.login, size: 16, color: AppColors.textSecondary),
-                label: const Text(
-                  'Member Sign In',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Foundation status pill
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.borderSubtle),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
-                      Icons.check_circle_outline,
-                      color: AppColors.success,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'All Feature Modules Online',
-                        style: AppTypography.titleSmall,
-                        overflow: TextOverflow.ellipsis,
+                            // Member Portal / Sign-In Button
+                            TextButton.icon(
+                              onPressed: () {
+                                _autoTransitionTimer?.cancel();
+                                Navigator.of(context).pushReplacementNamed('/login');
+                              },
+                              icon: const Icon(Icons.login, size: 14, color: AppColors.textSecondary),
+                              label: const Text(
+                                'Member Sign In',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
-    ],
-  ),
-);
+    );
   }
 }
 

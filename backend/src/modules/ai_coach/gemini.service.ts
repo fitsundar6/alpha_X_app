@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { env } from '../../config/environment';
 import {
@@ -55,10 +58,11 @@ export class GeminiService {
   // Fallbacks: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.5-flash, gemini-3.6-flash, gemini-3.8-flash
   private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
   private static readonly FALLBACK_MODELS = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-pro',
+    'gemini-flash-latest',
+    'gemini-3.8-flash',
+    'gemini-3.7-flash',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash-lite',
   ];
   private static readonly MAX_RETRIES = 3;
   private static readonly DEFAULT_TIMEOUT_MS = 45000;
@@ -96,8 +100,20 @@ export class GeminiService {
       throw new Error('Message prompt cannot be empty');
     }
 
-    // 2. Validate API Key & Sanitize Quotes/Whitespace
-    const rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+    // 2. Validate API Key & Sanitize Quotes/Whitespace (dynamically re-read .env to avoid stale in-memory state)
+    let rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+    try {
+      const envPath = path.resolve(__dirname, '../../../.env');
+      if (fs.existsSync(envPath)) {
+        const fileContent = fs.readFileSync(envPath, 'utf8');
+        const parsed = dotenv.parse(fileContent);
+        if (parsed.GEMINI_API_KEY) {
+          rawApiKey = parsed.GEMINI_API_KEY;
+          process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
+        }
+      }
+    } catch (_) {}
+
     const apiKey = (rawApiKey || '')
       .trim()
       .replace(/^["']|["']$/g, '')
@@ -115,6 +131,7 @@ export class GeminiService {
       });
       throw new Error('AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.');
     }
+
 
     // 3. Knowledge Retrieval Layer (Phase 3 RAG) & Active Client Context (Phase 7)
     const effectiveSlots: PromptContextSlots = contextSlots ? { ...contextSlots } : {};

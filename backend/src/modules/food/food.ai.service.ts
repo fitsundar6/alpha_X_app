@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 import https from 'https';
 import { env } from '../../config/environment';
 import { prisma } from '../../config/prisma';
@@ -260,7 +263,19 @@ Example format:
       },
     });
 
-    const apiKey = (env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim();
+    let rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    try {
+      const envPath = path.resolve(__dirname, '../../../.env');
+      if (fs.existsSync(envPath)) {
+        const fileContent = fs.readFileSync(envPath, 'utf8');
+        const parsed = dotenv.parse(fileContent);
+        if (parsed.GEMINI_API_KEY) {
+          rawApiKey = parsed.GEMINI_API_KEY;
+        }
+      }
+    } catch (_) {}
+
+    const apiKey = (rawApiKey || '').trim().replace(/^["']|["']$/g, '').trim();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`;
 
     return new Promise((resolve, reject) => {

@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:alpha_x_gym/config/admin_config.dart';
+
 import '../constants/app_constants.dart';
 import '../theme/app_colors.dart';
 import '../widgets/alpha_x_logo.dart';
@@ -45,15 +48,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
       parent: _entranceController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _entranceController.forward();
   }
 
@@ -82,19 +83,23 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     // The backend bcrypt-verifies the password against the secure hash.
     // This is the canonical login path — always tried first.
     try {
-      final res = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': enteredEmail,
-          'password': enteredPassword,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final res = await http
+          .post(
+            Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': enteredEmail,
+              'password': enteredPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('[AUTH DEBUG] AdminPortal backend status: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        debugPrint('[AUTH DEBUG] AdminPortal backend authentication successful');
+        debugPrint(
+          '[AUTH DEBUG] AdminPortal backend authentication successful',
+        );
         final auth = AuthService();
         await auth.setAdminSession(
           email: enteredEmail,
@@ -127,14 +132,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
     final configuredPassword = AdminConfig.adminPassword;
 
-    final isEmailMatch = (enteredEmail == configuredEmail) ||
+    final isEmailMatch =
+        (enteredEmail == configuredEmail) ||
         (enteredEmail == 'fitsundar6@gmail.com');
     // configuredPassword may be empty if not compiled with --dart-define
-    final isPasswordMatch = configuredPassword.isNotEmpty &&
-        enteredPassword == configuredPassword;
+    final isPasswordMatch =
+        configuredPassword.isNotEmpty && enteredPassword == configuredPassword;
 
     if (isEmailMatch && isPasswordMatch) {
-      debugPrint('[AUTH DEBUG] AdminPortal local fallback auth successful (backend offline)');
+      debugPrint(
+        '[AUTH DEBUG] AdminPortal local fallback auth successful (backend offline)',
+      );
       final auth = AuthService();
       await auth.setAdminSession(
         email: enteredEmail,
@@ -148,7 +156,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     }
 
     // All authentication methods failed
-    debugPrint('[AUTH DEBUG] AdminPortal authentication failed — all methods exhausted');
+    debugPrint(
+      '[AUTH DEBUG] AdminPortal authentication failed — all methods exhausted',
+    );
     if (mounted) {
       setState(() {
         _errorMessage = 'Invalid admin email or password.';
@@ -160,269 +170,571 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_ethernet, color: AppColors.textSecondary, size: 20),
-            tooltip: 'Server Configuration',
-            onPressed: () => ServerConfigDialog.show(context),
-          ),
-        ],
-      ),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Full-bleed athletic background image
+          // 1. Full-bleed athletic background image (z-index: 0 / bottom of Stack)
+          // Aligned to the top edge (BoxFit.contain) so subject & glowing "ALPHA-X" text are fully visible in upper section without zoom or crop
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/alpha_x_login_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
-            ),
-          ),
-
-          // 2. Cinematic dark gradient overlay
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.background.withOpacity(0.50),
-                    AppColors.background.withOpacity(0.80),
-                    AppColors.background.withOpacity(0.95),
-                  ],
-                  stops: const [0.0, 0.40, 0.85],
+            child: ColoredBox(
+              color: Colors.black,
+              child: FractionalTranslation(
+                // Positioned -15% of screen height (adjusted downward by 5% from previous -20%):
+                translation: const Offset(0.0, -0.15),
+                child: Image.asset(
+                  'assets/images/alpha_x_login_bg.jpg',
+                  fit: BoxFit.contain,
+                  alignment: const Alignment(0.0, -1.0),
+                  errorBuilder: (context, error, stackTrace) => Image.asset(
+                    'assets/images/alpha_x_login_bg.png',
+                    fit: BoxFit.contain,
+                    alignment: const Alignment(0.0, -1.0),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const ColoredBox(color: Colors.black),
+                  ),
                 ),
               ),
             ),
           ),
 
-          // 3. Foreground Form
+          // 2. Foreground UI: Top bar + login form pushed to the bottom
           SafeArea(
-            child: Center(
-              child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1. Security Header & Brand Logo
-                  Center(
-                    child: const AlphaXLogo.auth(
-                      size: 96,
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top Bar: Back navigation & Server configuration (unobtrusive, safe from notches)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 4.0,
                   ),
-                  const SizedBox(height: 16),
-
-                  const Text(
-                    'ADMINISTRATOR ACCESS',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Authorized Personnel Only • Hardware Security Enforced',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // 2. Error Message Banner
-                  if (_errorMessage != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.primaryRed.withOpacity(0.4)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.12),
+                          ),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new,
+                            color: AppColors.textPrimary,
+                            size: 18,
+                          ),
+                          tooltip: 'Return to Member Portal',
+                          onPressed: () =>
+                              Navigator.of(context)
+                                  .pushReplacementNamed('/login'),
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shield_outlined, color: AppColors.primaryRed, size: 22),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.12),
+                          ),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.settings_ethernet,
+                            color: AppColors.textTertiary,
+                            size: 20,
+                          ),
+                          tooltip: 'Server Settings',
+                          onPressed: () => ServerConfigDialog.show(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Expanded space keeping upper section completely open for the spotlight, "ALPHA-X", and subject
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 380),
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: SlideTransition(
+                              position: _slideAnimation,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Error Banner if present
+                                  if (_errorMessage != null) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryRed.withOpacity(
+                                          0.18,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: AppColors.primaryRed
+                                              .withOpacity(0.6),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(
+                                            Icons.shield_outlined,
+                                            color: AppColors.primaryRed,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _errorMessage!,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+
+                                  // Frosted Glass Card pinned to the bottom
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: BackdropFilter(
+                                      filter: ui.ImageFilter.blur(
+                                        sigmaX: 16,
+                                        sigmaY: 16,
+                                      ),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.24),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white.withOpacity(
+                                              0.18,
+                                            ),
+                                            width: 1.0,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.22,
+                                              ),
+                                              blurRadius: 18,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        child: Form(
+                                          key: _formKey,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              // Compact Header: Logo + Title + Security Badge
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    const AlphaXLogo.badge(
+                                                      size: 16,
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    const Text(
+                                                      'ALPHA X GYM',
+                                                      style: TextStyle(
+                                                        color: AppColors
+                                                            .textPrimary,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                        letterSpacing: 1.1,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 6,
+                                                            vertical: 2,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors
+                                                            .primaryRed
+                                                            .withOpacity(0.18),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              10,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: AppColors
+                                                              .primaryRed
+                                                              .withOpacity(0.4),
+                                                          width: 0.8,
+                                                        ),
+                                                      ),
+                                                      child: const Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons
+                                                                .shield_outlined,
+                                                            color: AppColors
+                                                                .primaryRed,
+                                                            size: 10,
+                                                          ),
+                                                          SizedBox(width: 4),
+                                                          Text(
+                                                            'ADMIN PORTAL',
+                                                            style: TextStyle(
+                                                              color: AppColors
+                                                                  .primaryRed,
+                                                              fontSize: 8.5,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              letterSpacing:
+                                                                  0.6,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              const Center(
+                                                child: Text(
+                                                  'Authorized Personnel Only • Hardware Security Enforced',
+                                                  style: TextStyle(
+                                                    color:
+                                                        AppColors.textTertiary,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+
+                                              // Admin Gmail Field
+                                              TextFormField(
+                                                controller: _emailController,
+                                                keyboardType:
+                                                    TextInputType.emailAddress,
+                                                textCapitalization:
+                                                    TextCapitalization.none,
+                                                style: const TextStyle(
+                                                  color: AppColors.textPrimary,
+                                                  fontSize: 13.5,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  labelText: 'Admin Gmail',
+                                                  labelStyle: const TextStyle(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                    fontSize: 13,
+                                                  ),
+                                                  hintText:
+                                                      AdminConfig.adminEmail,
+                                                  hintStyle: TextStyle(
+                                                    color: AppColors
+                                                        .textTertiary
+                                                        .withOpacity(0.5),
+                                                    fontSize: 12,
+                                                  ),
+                                                  prefixIcon: const Icon(
+                                                    Icons
+                                                        .mark_email_read_outlined,
+                                                    color: AppColors.primaryRed,
+                                                    size: 20,
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 12,
+                                                      ),
+                                                  filled: true,
+                                                  fillColor: Colors.black
+                                                      .withOpacity(0.45),
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    borderSide: BorderSide(
+                                                      color: Colors.white
+                                                          .withOpacity(0.12),
+                                                    ),
+                                                  ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide: BorderSide(
+                                                          color: Colors.white
+                                                              .withOpacity(
+                                                                0.12,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide:
+                                                            const BorderSide(
+                                                              color: AppColors
+                                                                  .primaryRed,
+                                                              width: 1.5,
+                                                            ),
+                                                      ),
+                                                ),
+                                                validator: (val) {
+                                                  if (val == null ||
+                                                      val.trim().isEmpty) {
+                                                    return 'Admin email address is required';
+                                                  }
+                                                  if (!val.contains('@')) {
+                                                    return 'Enter a valid email address';
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                              const SizedBox(height: 10),
+
+                                              // Password Field
+                                              TextFormField(
+                                                controller: _passwordController,
+                                                obscureText: _obscurePassword,
+                                                style: const TextStyle(
+                                                  color: AppColors.textPrimary,
+                                                  fontSize: 13.5,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  labelText: 'Password',
+                                                  labelStyle: const TextStyle(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                    fontSize: 13,
+                                                  ),
+                                                  hintText: '••••••••••••',
+                                                  hintStyle: TextStyle(
+                                                    color: AppColors
+                                                        .textTertiary
+                                                        .withOpacity(0.5),
+                                                    fontSize: 12,
+                                                  ),
+                                                  prefixIcon: const Icon(
+                                                    Icons.lock_outline,
+                                                    color: AppColors.primaryRed,
+                                                    size: 20,
+                                                  ),
+                                                  suffixIcon: IconButton(
+                                                    icon: Icon(
+                                                      _obscurePassword
+                                                          ? Icons.visibility_off
+                                                          : Icons.visibility,
+                                                      color: AppColors
+                                                          .textSecondary,
+                                                      size: 18,
+                                                    ),
+                                                    onPressed: () => setState(
+                                                      () => _obscurePassword =
+                                                          !_obscurePassword,
+                                                    ),
+                                                  ),
+                                                  contentPadding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 12,
+                                                      ),
+                                                  filled: true,
+                                                  fillColor: Colors.black
+                                                      .withOpacity(0.45),
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    borderSide: BorderSide(
+                                                      color: Colors.white
+                                                          .withOpacity(0.12),
+                                                    ),
+                                                  ),
+                                                  enabledBorder:
+                                                      OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide: BorderSide(
+                                                          color: Colors.white
+                                                              .withOpacity(
+                                                                0.12,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        borderSide:
+                                                            const BorderSide(
+                                                              color: AppColors
+                                                                  .primaryRed,
+                                                              width: 1.5,
+                                                            ),
+                                                      ),
+                                                ),
+                                                validator: (val) {
+                                                  if (val == null ||
+                                                      val.isEmpty) {
+                                                    return 'Admin password is required';
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                              const SizedBox(height: 14),
+
+                                              // Authenticate Admin Button
+                                              SizedBox(
+                                                height: 46,
+                                                child: ElevatedButton(
+                                                  onPressed: _isLoading
+                                                      ? null
+                                                      : _handleAdminLogin,
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        AppColors.primaryRed,
+                                                    disabledBackgroundColor:
+                                                        AppColors.primaryRed
+                                                            .withOpacity(0.4),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    elevation: 3,
+                                                  ),
+                                                  child: _isLoading
+                                                      ? const SizedBox(
+                                                          width: 20,
+                                                          height: 20,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth:
+                                                                    2.2,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                        )
+                                                      : const Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .center,
+                                                          children: [
+                                                            Icon(
+                                                              Icons
+                                                                  .lock_open_rounded,
+                                                              color:
+                                                                  Colors.white,
+                                                              size: 18,
+                                                            ),
+                                                            SizedBox(width: 8),
+                                                            Text(
+                                                              'AUTHENTICATE ADMINISTRATOR',
+                                                              style: TextStyle(
+                                                                color: Colors
+                                                                    .white,
+                                                                fontSize: 12.5,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w800,
+                                                                letterSpacing:
+                                                                    0.8,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+
+                                  // Navigation Link back to Member Login
+                                  Center(
+                                    child: TextButton.icon(
+                                      onPressed: () =>
+                                          Navigator.of(context)
+                                              .pushReplacementNamed('/login'),
+                                      icon: const Icon(
+                                        Icons.arrow_back,
+                                        color: AppColors.textSecondary,
+                                        size: 14,
+                                      ),
+                                      label: const Text(
+                                        'Return to Member Portal',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-
-                  // 3. Admin Gmail Field
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    textCapitalization: TextCapitalization.none,
-                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
-                    decoration: InputDecoration(
-                      labelText: 'Admin Gmail',
-                      hintText: AdminConfig.adminEmail,
-                      prefixIcon: const Icon(Icons.mark_email_read_outlined, color: AppColors.primaryRed),
-                      filled: true,
-                      fillColor: AppColors.surfaceCard,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primaryRed, width: 2),
-                      ),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Admin email address is required';
-                      }
-                      if (!val.contains('@')) {
-                        return 'Enter a valid email address';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 4. Password Field with Show/Hide Toggle
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: '••••••••••••',
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primaryRed),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          color: AppColors.textSecondary,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                      filled: true,
-                      fillColor: AppColors.surfaceCard,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primaryRed, width: 2),
-                      ),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.isEmpty) {
-                        return 'Admin password is required';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 28),
-
-                  // 5. Authenticate Admin Button & Loading Indicator
-                  SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleAdminLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryRed,
-                        disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 4,
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.lock_open_rounded, color: Colors.white, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'AUTHENTICATE ADMINISTRATOR',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // 6. Navigation Link back to Member Login
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                      icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 16),
-                      label: const Text(
-                        'Return to Member Portal',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ),
+        ],
       ),
-    ),
-  ),
-],
-),
-);
+    );
   }
 }

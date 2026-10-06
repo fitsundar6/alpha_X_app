@@ -345,28 +345,38 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // 1. Full-bleed athletic background image
+          // 1. Full-bleed athletic background image (z-index: 0 / bottom of Stack)
+          // Aligned to top center and scaled (BoxFit.contain) so subject & glowing "ALPHA-X" text are fully visible without zoom or crop
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/alpha_x_login_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
+            child: ColoredBox(
+              color: Colors.black,
+              child: Image.asset(
+                'assets/images/alpha_x_login_bg.png',
+                fit: BoxFit.contain,
+                alignment: Alignment.topCenter,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  'assets/images/alpha_x_login_bg.jpg',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (context, error, stackTrace) => const ColoredBox(color: Colors.black),
+                ),
+              ),
             ),
           ),
 
-          // 2. Cinematic dark gradient overlay
+          // 2. Subtle ambient bottom feather
           Positioned.fill(
-            child: Container(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    AppColors.background.withOpacity(0.50),
-                    AppColors.background.withOpacity(0.80),
-                    AppColors.background.withOpacity(0.95),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.3),
                   ],
-                  stops: const [0.0, 0.40, 0.85],
+                  stops: const [0.0, 0.7, 1.0],
                 ),
               ),
             ),

@@ -162,9 +162,8 @@ class AppAutoRefreshService with WidgetsBindingObserver {
           futures.add(_workoutRepository!.fetchClientsList(forceRefresh: true));
         }
 
-        if (_notificationRepository != null) {
-          futures.add(_notificationRepository!.fetchNotifications(silent: !force));
-        }
+        // Note: Admin accounts do not have athlete client profiles.
+        // Client notifications are not polled in the admin sync loop.
 
         await Future.wait(futures);
       }

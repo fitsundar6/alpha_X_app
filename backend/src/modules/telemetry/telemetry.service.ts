@@ -24,7 +24,7 @@ import {
 
 export class TelemetryService {
   private readonly defaultModel = 'gemini-flash-lite-latest';
-  private readonly fallbackModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash'];
 
   /**
    * Calculate a memorable real-world physical comparison for iron volume moved.

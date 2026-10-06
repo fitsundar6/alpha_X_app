@@ -17,6 +17,9 @@
 
 import { prisma } from '../../config/prisma';
 import { oneSignalService } from './onesignal.service';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 import { env } from '../../config/environment';
 import { GoogleGenAI } from '@google/genai';
 
@@ -64,13 +67,24 @@ export interface EveningCheckInContext {
 
 export class AiNotificationEngine {
   private readonly defaultModel = 'gemini-flash-lite-latest';
-  private readonly fallbackModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash'];
 
   /**
    * Helper to execute Gemini generation with robust model fallback and timeout.
    */
   private async callGemini(prompt: string, fallbackText: string): Promise<string> {
-    const rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    let rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    try {
+      const envPath = path.resolve(__dirname, '../../../.env');
+      if (fs.existsSync(envPath)) {
+        const fileContent = fs.readFileSync(envPath, 'utf8');
+        const parsed = dotenv.parse(fileContent);
+        if (parsed.GEMINI_API_KEY) {
+          rawApiKey = parsed.GEMINI_API_KEY;
+        }
+      }
+    } catch (_) {}
+
     const apiKey = (rawApiKey || '')
       .trim()
       .replace(/^["']|["']$/g, '')

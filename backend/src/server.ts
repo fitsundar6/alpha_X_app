@@ -202,6 +202,7 @@ app.get('/api', healthHandler);
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/v1/health', healthHandler);
+app.get('/favicon.ico', (_req: Request, res: Response) => res.status(204).end());
 
 // Activity Tracking & Daily Step Routes
 app.use('/api/v1/activity', activityRoutes);

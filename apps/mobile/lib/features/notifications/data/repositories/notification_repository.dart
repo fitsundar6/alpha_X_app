@@ -41,6 +41,17 @@ class NotificationRepository extends ChangeNotifier {
 
   /// Fetches latest notifications for client
   Future<void> fetchNotifications({bool silent = false}) async {
+    // Admin users do not have a client profile or athlete notification feed
+    if (AuthService().isAdmin) {
+      _notifications = [];
+      _unreadCount = 0;
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
+      return;
+    }
+
     if (!silent) {
       _isLoading = true;
       _error = null;

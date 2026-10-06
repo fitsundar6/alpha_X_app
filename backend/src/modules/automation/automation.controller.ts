@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { automationService } from './automation.service';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
+import { UserRole } from '../../constants/roles';
 
 export class AutomationController {
   /**
@@ -26,6 +27,10 @@ export class AutomationController {
    */
   public async pingActivity(req: Request, res: Response): Promise<void> {
     try {
+      if (req.user?.role === UserRole.ADMIN) {
+        sendSuccess(res, { success: true, lastAppOpenAt: new Date() });
+        return;
+      }
       const userId = req.user!.id;
       const updated = await prisma.clientProfile.update({
         where: { userId },
@@ -44,6 +49,15 @@ export class AutomationController {
    */
   public async getClientNotifications(req: Request, res: Response): Promise<void> {
     try {
+      if (req.user?.role === UserRole.ADMIN) {
+        sendSuccess(res, {
+          notifications: [],
+          unreadCount: 0,
+          total: 0,
+        });
+        return;
+      }
+
       const userId = req.user!.id;
       const profile = await prisma.clientProfile.findUnique({
         where: { userId },
@@ -79,6 +93,11 @@ export class AutomationController {
    */
   public async markNotificationRead(req: Request, res: Response): Promise<void> {
     try {
+      if (req.user?.role === UserRole.ADMIN) {
+        sendSuccess(res, { success: true });
+        return;
+      }
+
       const userId = req.user!.id;
       const notifId = String(req.params.id);
 
@@ -118,6 +137,11 @@ export class AutomationController {
    */
   public async markAllNotificationsRead(req: Request, res: Response): Promise<void> {
     try {
+      if (req.user?.role === UserRole.ADMIN) {
+        sendSuccess(res, { markedAllRead: true });
+        return;
+      }
+
       const userId = req.user!.id;
       const profile = await prisma.clientProfile.findUnique({
         where: { userId },
@@ -146,6 +170,18 @@ export class AutomationController {
    */
   public async getNotificationPreferences(req: Request, res: Response): Promise<void> {
     try {
+      if (req.user?.role === UserRole.ADMIN) {
+        sendSuccess(res, {
+          workoutReminders: false,
+          nutritionReminders: false,
+          weeklyCheckInReminders: false,
+          activityReminders: false,
+          membershipAlerts: false,
+          aiEngagementEnabled: false,
+        });
+        return;
+      }
+
       const userId = req.user!.id;
       const profile = await prisma.clientProfile.findUnique({
         where: { userId },
