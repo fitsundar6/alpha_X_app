@@ -343,9 +343,39 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: FadeTransition(
+      body: Stack(
+        children: [
+          // 1. Full-bleed athletic background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/alpha_x_login_bg.jpg',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
+            ),
+          ),
+
+          // 2. Cinematic dark gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.background.withOpacity(0.50),
+                    AppColors.background.withOpacity(0.80),
+                    AppColors.background.withOpacity(0.95),
+                  ],
+                  stops: const [0.0, 0.40, 0.85],
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Foreground Form
+          SafeArea(
+            child: Center(
+              child: FadeTransition(
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
@@ -637,6 +667,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
       ),
     ),
   ),
+],
+),
 );
-}
+  }
 }

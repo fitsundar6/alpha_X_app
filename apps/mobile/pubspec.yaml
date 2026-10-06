@@ -98,6 +98,8 @@ flutter:
   assets:
     - assets/images/
     - assets/images/alpha_x_logo.png
+    - assets/images/alpha_x_login_bg.jpg
+    - assets/images/alpha_x_login_bg.png
     - assets/fonts/
 
   # Bundled font declarations.

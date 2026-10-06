@@ -250,14 +250,45 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Spacer(),
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          // 1. Full-bleed athletic background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/alpha_x_login_bg.jpg',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(color: AppColors.background),
+            ),
+          ),
+
+          // 2. Cinematic dark gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.background.withOpacity(0.40),
+                    AppColors.background.withOpacity(0.75),
+                    AppColors.background.withOpacity(0.94),
+                  ],
+                  stops: const [0.0, 0.45, 0.85],
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Foreground content
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Spacer(),
 
               // Official Alpha X Gym Brand Logo with smooth entrance and subtle pulse animation
               FadeTransition(
@@ -402,7 +433,9 @@ class _FoundationSplashScreenState extends State<FoundationSplashScreen>
           ),
         ),
       ),
-    );
+    ],
+  ),
+);
   }
 }
 

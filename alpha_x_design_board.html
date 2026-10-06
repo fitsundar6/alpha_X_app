@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALPHA X GYM — Ultra-Premium Mobile UI/UX Design Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       ALPHA X GYM — LUXURY HIGH-PERFORMANCE DESIGN SYSTEM TOKENS
+       ========================================================================== */
+    :root {
+      --bg-deep-black: #0A0A0A;
+      --surface-charcoal: #151515;
+      --surface-slate: #1E1E1E;
+      --surface-elevated: #242424;
+      --border-thin: rgba(255, 255, 255, 0.08);
+      --border-gold: rgba(212, 175, 55, 0.35);
+
+      /* Metallic Gold Accents */
+      --gold-light: #F5E6B3;
+      --gold-primary: #D4AF37;
+      --gold-dark: #AA820A;
+      --gold-gradient: linear-gradient(135deg, #F5E6B3 0%, #D4AF37 52%, #AA820A 100%);
+      --gold-glow: 0 4px 24px rgba(212, 175, 55, 0.28);
+      --gold-glow-subtle: 0 2px 12px rgba(212, 175, 55, 0.16);
+
+      /* Typography & Texts */
+      --text-primary: #FFFFFF;
+      --text-secondary: #C4C4CC;
+      --text-muted: #7E7E8A;
+
+      /* Status Feedback */
+      --color-success: #22C55E;
+      --color-success-bg: rgba(34, 197, 94, 0.15);
+      --color-warning: #F59E0B;
+      --color-warning-bg: rgba(245, 158, 11, 0.15);
+      --color-danger: #EF4444;
+      --color-danger-bg: rgba(239, 68, 68, 0.15);
+
+      /* Metrics & Geometry */
+      --phone-w: 380px;
+      --phone-h: 790px;
+      --radius-phone: 46px;
+      --radius-card: 18px;
+      --radius-pill: 999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      background-color: var(--bg-deep-black);
+      color: var(--text-primary);
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      font-variant-numeric: tabular-nums;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 10% 40%, rgba(212, 175, 55, 0.04) 0%, transparent 45%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px;
+      background-position: 0 0, 0 0, -1px -1px, -1px -1px;
+    }
+
+    /* ==========================================================================
+       PRESENTATION BOARD HEADER & CONTROLS
+       ========================================================================== */
+    header.board-header {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-thin);
+      padding: 16px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand-identity {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-logo-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--gold-glow-subtle);
+    }
+
+    .brand-logo-mark svg {
+      width: 26px;
+      height: 26px;
+      fill: url(#goldGradHeader);
+    }
+
+    .brand-meta h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+    }
+
+    .brand-meta p {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .nav-pill {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-pill:hover, .nav-pill.active {
+      background: var(--surface-slate);
+      border-color: var(--gold-primary);
+      color: var(--text-primary);
+      box-shadow: var(--gold-glow-subtle);
+    }
+
+    .btn-gold {
+      background: var(--gold-gradient);
+      color: #0A0A0A;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 9px 20px;
+      border-radius: var(--radius-pill);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--gold-glow);
+      transition: all 0.25s ease;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-gold:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(212, 175, 55, 0.42);
+    }
+
+    /* Presentation Banner */
+    .hero-manifesto {
+      padding: 44px 36px 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .manifesto-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(212, 175, 55, 0.1);
+      border: 1px solid var(--border-gold);
+      color: var(--gold-primary);
+      padding: 4px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    .manifesto-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.15;
+    }
+
+    .manifesto-title span {
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .manifesto-desc {
+      color: var(--text-secondary);
+      font-size: 14px;
+      max-width: 780px;
+      line-height: 1.6;
+    }
+
+    /* ==========================================================================
+       BOARD CANVAS & SCREEN CONTAINERS
+       ========================================================================== */
+    .board-container {
+      padding: 24px 36px 60px;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .screens-grid {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+      padding-bottom: 30px;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .screen-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: var(--phone-w);
+      flex-shrink: 0;
+    }
+
+    .screen-header-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px;
+    }
+
+    .screen-number {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--gold-primary);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    .screen-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .screen-tag {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      padding: 3px 8px;
+      border-radius: var(--radius-pill);
+      letter-spacing: 0.5px;
+    }
+
+    /* ==========================================================================
+       MOBILE DEVICE FRAME (TITANIUM OLED CONTAINER)
+       ========================================================================== */
+    .phone-mockup {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      background: var(--bg-deep-black);
+      border-radius: var(--radius-phone);
+      border: 3px solid #282828;
+      box-shadow: 
+        0 25px 60px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 0 0 2px rgba(0, 0, 0, 0.9);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .phone-mockup:hover {
+      box-shadow: 
+        0 30px 80px rgba(0, 0, 0, 0.9),
+        0 0 35px rgba(212, 175, 55, 0.15),
+        0 0 0 1px var(--border-gold);
+    }
+
+    /* Phone Status Bar */
+    .status-bar {
+      height: 44px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .dynamic-island {
+      width: 90px;
+      height: 22px;
+      background: #000000;
+      border-radius: 20px;
+      margin: 0 auto;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .phone-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px 18px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      scrollbar-width: none;
+    }
+
+    .phone-content::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Common Card Styling */
+    .ax-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .ax-card:hover {
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .ax-card.highlight {
+      border-color: var(--border-gold);
+      background: linear-gradient(180deg, rgba(21, 21, 21, 0.95) 0%, rgba(30, 30, 30, 0.9) 100%);
+    }
+
+    /* Micro-labels */
+    .micro-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* Status Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .badge-active, .badge-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .badge-gold {
+      background: rgba(212, 175, 55, 0.15);
+      color: var(--gold-light);
+      border: 1px solid var(--border-gold);
+    }
+
+    .live-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 8px var(--color-success);
+      animation: pulseDot 2s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Floating Glassmorphic Dock */
+    .floating-dock {
+      position: absolute;
+      bottom: 14px;
+      left: 18px;
+      right: 18px;
+      height: 60px;
+      background: rgba(21, 21, 21, 0.78);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 10px;
+      z-index: 40;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .dock-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      color: var(--text-muted);
+      font-size: 9px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dock-item.active {
+      color: var(--gold-primary);
+    }
+
+    .dock-item svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    /* ==========================================================================
+       SCREEN 1: SPLASH & BRANDING
+       ========================================================================== */
+    .splash-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 50px 16px 36px;
+      text-align: center;
+      position: relative;
+      background-image: 
+        radial-gradient(circle at 50% 30%, rgba(212, 175, 55, 0.18) 0%, transparent 65%),
+        radial-gradient(circle at 50% 80%, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+    }
+
+    .splash-emblem {
+      width: 110px;
+      height: 110px;
+      margin: 0 auto 24px;
+      background: radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, rgba(21, 21, 21, 0.4) 70%);
+      border: 1.5px solid var(--border-gold);
+      border-radius: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 
+        0 0 40px rgba(212, 175, 55, 0.35),
+        inset 0 0 20px rgba(212, 175, 55, 0.15);
+      animation: floatLogo 4s ease-in-out infinite alternate;
+    }
+
+    @keyframes floatLogo {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-8px); }
+    }
+
+    .splash-emblem svg {
+      width: 64px;
+      height: 64px;
+    }
+
+    .splash-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .splash-tagline {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      max-width: 240px;
+      line-height: 1.6;
+    }
+
+    .splash-loader-wrap {
+      width: 100%;
+      max-width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .splash-progress-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .splash-progress-bar {
+      width: 72%;
+      height: 100%;
+      background: var(--gold-gradient);
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(212, 175, 55, 0.8);
+      animation: progressPulse 2s ease infinite;
+    }
+
+    @keyframes progressPulse {
+      0% { width: 25%; }
+      50% { width: 85%; }
+      100% { width: 72%; }
+    }
+
+    /* ==========================================================================
+       SCREEN 2: CLIENT HOME DASHBOARD
+       ========================================================================== */
+    .home-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .user-profile-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar-ring {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1.5px solid var(--gold-primary);
+      padding: 2px;
+      box-shadow: var(--gold-glow-subtle);
+    }
+
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #2a2a2a;
+    }
+
+    .greeting-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .user-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .bell-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .bell-btn::after {
+      content: '';
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-success);
+    }
+
+    .hero-athlete-card {
+      background: linear-gradient(180deg, rgba(30, 30, 30, 0.9) 0%, rgba(15, 15, 15, 0.95) 100%), url('alpha_x_login_bg_preview.jpg');
+      background-size: cover;
+      background-position: center;
+      border-radius: 22px;
+      border: 1px solid var(--border-gold);
+      padding: 20px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .hero-athlete-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.75) 0%, rgba(10, 10, 10, 0.92) 100%);
+      z-index: 1;
+    }
+
+    .hero-card-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-tag {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: var(--gold-light);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .hero-headline {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.3;
+      margin-bottom: 16px;
+      max-width: 200px;
+    }
+
+    .btn-gold-pill {
+      background: var(--gold-gradient);
+      color: #0A0A0A;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 9px 18px;
+      border-radius: var(--radius-pill);
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: var(--gold-glow);
+    }
+
+    .quick-pills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .action-pill {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 12px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .action-pill:hover {
+      border-color: var(--gold-primary);
+      transform: translateY(-2px);
+    }
+
+    .action-pill-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface-slate);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gold-primary);
+    }
+
+    .action-pill-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .action-pill-sub {
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    /* Today's Routine Card */
+    .routine-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 18px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 80px;
+    }
+
+    .routine-meta h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .routine-meta p {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .routine-chevron {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface-slate);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gold-primary);
+    }
+
+    /* ==========================================================================
+       SCREEN 3: ACTIVE WORKOUT CHECKLIST
+       ========================================================================== */
+    .segmented-switch {
+      background: var(--surface-slate);
+      border-radius: var(--radius-pill);
+      padding: 4px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+
+    .segmented-btn {
+      padding: 7px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .segmented-btn.active {
+      background: var(--surface-charcoal);
+      color: var(--text-primary);
+      border: 1px solid var(--border-thin);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .workout-top-banner {
+      margin-bottom: 14px;
+    }
+
+    .workout-top-banner h2 {
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .workout-top-banner span {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .exercise-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .exercise-item {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .exercise-item:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .exercise-item.checked {
+      border-color: rgba(34, 197, 94, 0.35);
+      background: rgba(21, 21, 21, 0.95);
+    }
+
+    .exercise-thumb {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: var(--surface-slate);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gold-light);
+      flex-shrink: 0;
+    }
+
+    .exercise-info {
+      flex: 1;
+    }
+
+    .exercise-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+    }
+
+    .exercise-sets-badge {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .check-toggle {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1.5px solid #333333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .check-toggle.checked {
+      background: var(--color-success);
+      border-color: var(--color-success);
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+    }
+
+    .check-toggle.checked svg {
+      stroke: #0A0A0A;
+      display: block;
+    }
+
+    .check-toggle svg {
+      display: none;
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ==========================================================================
+       SCREEN 4: PERFORMANCE & EXERCISE ANALYTICS
+       ========================================================================== */
+    .chart-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .weight-stat-num {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .delta-pill {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 3px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .spline-svg {
+      width: 100%;
+      height: 120px;
+      overflow: visible;
+    }
+
+    .body-comp-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .comp-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: var(--radius-card);
+      padding: 14px;
+    }
+
+    .comp-val {
+      font-size: 18px;
+      font-weight: 800;
+      margin: 4px 0 2px;
+    }
+
+    .strength-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .strength-row {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ==========================================================================
+       SCREEN 5: DAILY NUTRITION & MACROS
+       ========================================================================== */
+    .gauge-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0 20px;
+      position: relative;
+    }
+
+    .gauge-svg {
+      width: 170px;
+      height: 170px;
+      transform: rotate(-90deg);
+    }
+
+    .gauge-center-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .gauge-cals {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .gauge-target {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .macro-split-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .macro-box {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .macro-bar-track {
+      width: 100%;
+      height: 5px;
+      background: var(--surface-slate);
+      border-radius: 3px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .macro-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .fill-protein { width: 58%; background: var(--gold-gradient); }
+    .fill-carbs { width: 29%; background: #3B82F6; }
+    .fill-fats { width: 13%; background: #F59E0B; }
+
+    .meal-feed-item {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    /* ==========================================================================
+       SCREEN 6: MEAL DETAIL & RECIPE
+       ========================================================================== */
+    .meal-hero-photo {
+      width: 100%;
+      height: 170px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(20, 20, 20, 0.4) 0%, rgba(10, 10, 10, 0.95) 100%),
+                  radial-gradient(circle at center, #2e2615 0%, #111 80%);
+      border: 1px solid var(--border-gold);
+      display: flex;
+      align-items: flex-end;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .meal-hero-info h3 {
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .meal-hero-info p {
+      font-size: 11px;
+      color: var(--gold-light);
+      font-weight: 600;
+    }
+
+    .ingredient-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-thin);
+      font-size: 12px;
+    }
+
+    .ingredient-row:last-child {
+      border-bottom: none;
+    }
+
+    /* ==========================================================================
+       SCREEN 7: DAILY PROGRESS & HABITS
+       ========================================================================== */
+    .habit-check-row {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .habit-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .habit-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface-slate);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gold-primary);
+    }
+
+    .quote-box {
+      background: linear-gradient(135deg, rgba(30, 30, 30, 0.8) 0%, rgba(20, 20, 20, 0.95) 100%);
+      border: 1px solid var(--border-gold);
+      border-radius: 18px;
+      padding: 18px;
+      margin-top: 14px;
+      position: relative;
+    }
+
+    .quote-mark {
+      font-size: 32px;
+      line-height: 1;
+      font-family: Georgia, serif;
+      background: var(--gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+
+    .quote-text {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ==========================================================================
+       SCREEN 8: ADMIN / COACH DASHBOARD
+       ========================================================================== */
+    .admin-stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .admin-stat-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .admin-stat-num {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .search-input-box {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: var(--radius-pill);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .search-input-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 12px;
+      width: 100%;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .client-roster-item {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .client-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #2a2a2a;
+      border: 1px solid var(--border-thin);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+
+    /* ==========================================================================
+       SCREEN 9: PROFILE & SETTINGS
+       ========================================================================== */
+    .profile-hero {
+      text-align: center;
+      padding: 10px 0 20px;
+    }
+
+    .profile-avatar-lg {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-primary);
+      box-shadow: var(--gold-glow);
+      margin: 0 auto 10px;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--gold-light);
+    }
+
+    .settings-menu-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .settings-menu-item {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .settings-menu-item:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: var(--text-primary);
+    }
+
+    .watermark-ax {
+      margin-top: 30px;
+      text-align: center;
+      opacity: 0.15;
+    }
+
+    /* ==========================================================================
+       SECTION 10: DESIGN SYSTEM SPECIMEN FOOTER
+       ========================================================================== */
+    .design-system-footer {
+      max-width: 1400px;
+      margin: 40px auto 80px;
+      padding: 36px;
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-thin);
+      border-radius: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    }
+
+    .ds-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 36px;
+      margin-top: 24px;
+    }
+
+    .swatches-flex {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .color-swatch-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .swatch-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .swatch-hex {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* Interactive Component Demos */
+    .comp-showcase {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .button-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-secondary-outlined {
+      background: transparent;
+      border: 1px solid var(--border-thin);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 9px 18px;
+      border-radius: var(--radius-pill);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary-outlined:hover {
+      border-color: var(--text-primary);
+      color: var(--text-primary);
+    }
+
+    /* Presentation Board Overview Modal / Section */
+    .board-overview-banner {
+      max-width: 1400px;
+      margin: 0 auto 30px;
+      padding: 0 36px;
+    }
+
+    .preview-board-img-card {
+      background: var(--surface-charcoal);
+      border: 1px solid var(--border-gold);
+      border-radius: 24px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.8), var(--gold-glow-subtle);
+      overflow: hidden;
+    }
+
+    .preview-board-img-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 14px;
+      display: block;
+    }
+
+    /* Tooltip Toast */
+    #tokenToast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--gold-primary);
+      color: var(--text-primary);
+      padding: 12px 20px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: var(--gold-glow);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform: translateY(10px);
+      z-index: 1000;
+    }
+
+    #tokenToast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SVG DEFS FOR METALLIC GOLD GRADIENTS -->
+  <svg width="0" height="0" style="position: absolute;">
+    <defs>
+      <linearGradient id="goldGradHeader" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#F5E6B3" />
+        <stop offset="52%" stop-color="#D4AF37" />
+        <stop offset="100%" stop-color="#AA820A" />
+      </linearGradient>
+      <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="rgba(212, 175, 55, 0.45)" />
+        <stop offset="100%" stop-color="rgba(212, 175, 55, 0.0)" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- STICKY TOP PRESENTATION BAR -->
+  <header class="board-header">
+    <div class="brand-identity">
+      <div class="brand-logo-mark">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 22h4.5l2-4.5h7l2 4.5H22L12 2zm0 6l2.5 5.5h-5L12 8z" />
+        </svg>
+      </div>
+      <div class="brand-meta">
+        <h1>Alpha X Gym</h1>
+        <p>Ultra-Premium Mobile UI/UX Design Board • 10-Screen Suite</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <a href="#boardContainer" class="nav-pill active">All 10 Screens</a>
+      <a href="#designSystem" class="nav-pill">Design System & UI Kit</a>
+      <a href="#overviewMockup" class="nav-pill">Presentation Specimen</a>
+      <button class="btn-gold" onclick="copyTokens()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        Copy Color Tokens
+      </button>
+    </div>
+  </header>
+
+  <!-- MANIFESTO & AESTHETIC HIGHLIGHTS -->
+  <section class="hero-manifesto">
+    <div class="manifesto-badge">OLED Optimized • Luxury Athletic Dark Mode</div>
+    <h2 class="manifesto-title">Precision High-Performance Coaching <span>Refined in Metallic Gold.</span></h2>
+    <p class="manifesto-desc">
+      Engineered for elite athlete focus. Deep black background (#0A0A0A) eliminates eye fatigue, charcoal glassmorphic surfaces (#151515) separate information layers with 1px razor-thin borders, and metallic gold accents (#D4AF37) celebrate physical milestones and daily wins.
+    </p>
+  </section>
+
+  <!-- PRESENTATION ARTBOARD (SCREENS 1 TO 9 SIDE-BY-SIDE) -->
+  <main class="board-container" id="boardContainer">
+    <div class="screens-grid">
+
+      <!-- ===================================================================
+           SCREEN 1: SPLASH & BRANDING
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 01</span>
+          <span class="screen-tag">Entry & Brand</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content" style="padding: 0;">
+            <div class="splash-container">
+              <div></div>
+              <div style="display: flex; flex-direction: column; align-items: center;">
+                <div class="splash-emblem">
+                  <svg viewBox="0 0 24 24" fill="url(#goldGradHeader)">
+                    <path d="M12 2L2 22h4.5l2-4.5h7l2 4.5H22L12 2zm0 6l2.5 5.5h-5L12 8z" />
+                  </svg>
+                </div>
+                <h2 class="splash-title">ALPHA-X</h2>
+                <p class="splash-tagline">Train Strong. Move Better. Become Better.</p>
+              </div>
+
+              <div class="splash-loader-wrap">
+                <div class="splash-progress-track">
+                  <div class="splash-progress-bar"></div>
+                </div>
+                <span style="font-size: 10px; color: var(--gold-light); font-weight: 600; letter-spacing: 1px;">INITIALIZING ATHLETE HUB...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 2: CLIENT HOME DASHBOARD
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 02</span>
+          <span class="screen-tag">Client Dashboard</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Top Bar -->
+            <div class="home-header">
+              <div class="user-profile-badge">
+                <div class="avatar-ring">
+                  <div class="avatar-img" style="display:flex;align-items:center;justify-content:center;background:var(--gold-gradient);color:#0A0A0A;font-weight:800;font-size:14px;">S</div>
+                </div>
+                <div>
+                  <div class="greeting-text">Good Morning,</div>
+                  <div class="user-name">Sundar</div>
+                </div>
+              </div>
+              <div class="bell-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              </div>
+            </div>
+
+            <!-- Hero Card -->
+            <div class="hero-athlete-card">
+              <div class="hero-card-content">
+                <div class="hero-tag">Active Phase • Hypertrophy</div>
+                <div class="hero-headline">Your Journey Stronger Every Day</div>
+                <button class="btn-gold-pill" onclick="alert('Launching Today\'s Push Session!')">
+                  Start Workout →
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Action Pills -->
+            <div class="quick-pills">
+              <div class="action-pill">
+                <div class="action-pill-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg>
+                </div>
+                <div class="action-pill-label">Workout</div>
+                <div class="action-pill-sub">Strength</div>
+              </div>
+              <div class="action-pill">
+                <div class="action-pill-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z"/></svg>
+                </div>
+                <div class="action-pill-label">Nutrition</div>
+                <div class="action-pill-sub">Fuel</div>
+              </div>
+              <div class="action-pill">
+                <div class="action-pill-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                </div>
+                <div class="action-pill-label">Progress</div>
+                <div class="action-pill-sub">Growth</div>
+              </div>
+            </div>
+
+            <!-- Today's Routine Card -->
+            <div class="routine-card">
+              <div class="routine-meta">
+                <div class="micro-label" style="margin-bottom: 2px;">TODAY'S ROUTINE</div>
+                <h3>Upper Body (Push)</h3>
+                <p>45 min • 6 exercises</p>
+              </div>
+              <div class="routine-chevron">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </div>
+
+            <!-- Floating Nav Dock -->
+            <div class="floating-dock">
+              <div class="dock-item active">
+                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <span>Home</span>
+              </div>
+              <div class="dock-item">
+                <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg>
+                <span>Workout</span>
+              </div>
+              <div class="dock-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+                <span>Nutrition</span>
+              </div>
+              <div class="dock-item">
+                <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                <span>Progress</span>
+              </div>
+              <div class="dock-item">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                <span>Profile</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 3: ACTIVE WORKOUT CHECKLIST
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 03</span>
+          <span class="screen-tag">Workout Checklist</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Top Segmented Switch -->
+            <div class="segmented-switch">
+              <div class="segmented-btn active">Today</div>
+              <div class="segmented-btn">Week</div>
+              <div class="segmented-btn">Library</div>
+            </div>
+
+            <!-- Routine Header -->
+            <div class="workout-top-banner">
+              <h2>Upper Body (Push)</h2>
+              <span>6 exercises • 45 min scheduled</span>
+            </div>
+
+            <!-- Interactive Exercise List -->
+            <div class="exercise-list">
+              <div class="exercise-item checked" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">🏋️</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Bench Press</div>
+                  <div class="exercise-sets-badge">4 sets • 8-10 reps • 80 kg</div>
+                </div>
+                <div class="check-toggle checked">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="exercise-item checked" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">💪</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Incline Dumbbell Press</div>
+                  <div class="exercise-sets-badge">3 sets • 10-12 reps • 28 kg</div>
+                </div>
+                <div class="check-toggle checked">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="exercise-item" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">⚡</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Shoulder Press</div>
+                  <div class="exercise-sets-badge">3 sets • 10-12 reps • 22 kg</div>
+                </div>
+                <div class="check-toggle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="exercise-item" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">🔥</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Lateral Raise</div>
+                  <div class="exercise-sets-badge">4 sets • 12-15 reps • 12 kg</div>
+                </div>
+                <div class="check-toggle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="exercise-item" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">🎯</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Tricep Pushdown</div>
+                  <div class="exercise-sets-badge">3 sets • 12-15 reps • 35 kg</div>
+                </div>
+                <div class="check-toggle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+
+              <div class="exercise-item" onclick="toggleCheck(this)">
+                <div class="exercise-thumb">🏆</div>
+                <div class="exercise-info">
+                  <div class="exercise-title">Overhead Extension</div>
+                  <div class="exercise-sets-badge">3 sets • 12 reps • 26 kg</div>
+                </div>
+                <div class="check-toggle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Action Button -->
+            <button class="btn-gold" style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
+              Complete Workout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 4: PERFORMANCE & EXERCISE ANALYTICS
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 04</span>
+          <span class="screen-tag">Analytics</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Timeframe Filter -->
+            <div class="segmented-switch">
+              <div class="segmented-btn active">Weekly</div>
+              <div class="segmented-btn">Monthly</div>
+              <div class="segmented-btn">Yearly</div>
+            </div>
+
+            <!-- Weight Progress Card with Spline Chart -->
+            <div class="chart-card">
+              <div class="chart-header">
+                <div>
+                  <div class="micro-label">CURRENT WEIGHT</div>
+                  <div class="weight-stat-num">82.0 kg</div>
+                </div>
+                <div class="delta-pill">-1.5 kg</div>
+              </div>
+
+              <!-- Smooth Gold Spline SVG Curve -->
+              <svg class="spline-svg" viewBox="0 0 300 120">
+                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22 L 290,120 L 10,120 Z" fill="url(#chartGrad)"/>
+                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22" fill="none" stroke="url(#goldGradHeader)" stroke-width="3" stroke-linecap="round"/>
+                <!-- Anchor Points -->
+                <circle cx="10" cy="95" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
+                <circle cx="100" cy="75" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
+                <circle cx="180" cy="50" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
+                <circle cx="250" cy="38" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
+                <circle cx="290" cy="22" r="5" fill="#D4AF37" stroke="#FFFFFF" stroke-width="2" style="filter: drop-shadow(0 0 6px #D4AF37);"/>
+              </svg>
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px;">
+                <span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span><span>Today</span>
+              </div>
+            </div>
+
+            <!-- Body Composition Matrix -->
+            <div class="body-comp-grid">
+              <div class="comp-card">
+                <div class="micro-label">BODY FAT</div>
+                <div class="comp-val">16.8%</div>
+                <div class="delta-pill" style="display:inline-block; font-size:10px;">-1.2%</div>
+              </div>
+              <div class="comp-card">
+                <div class="micro-label">MUSCLE MASS</div>
+                <div class="comp-val">61.4 kg</div>
+                <div class="delta-pill" style="display:inline-block; font-size:10px;">+0.8 kg</div>
+              </div>
+            </div>
+
+            <!-- Strength Progress Cards -->
+            <div class="micro-label" style="margin-bottom: 8px;">STRENGTH BENCHMARKS</div>
+            <div class="strength-list">
+              <div class="strength-row">
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Bench Press</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Personal Record</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:14px; font-weight:800; color:var(--gold-light);">100 kg</div>
+                  <div style="font-size:10px; color:var(--color-success); font-weight:700;">↑ 5 kg</div>
+                </div>
+              </div>
+
+              <div class="strength-row">
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Barbell Squat</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Personal Record</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:14px; font-weight:800; color:var(--gold-light);">100 kg</div>
+                  <div style="font-size:10px; color:var(--color-success); font-weight:700;">↑ 5 kg</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 5: DAILY NUTRITION & MACROS
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 05</span>
+          <span class="screen-tag">Nutrition & Macros</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Filter Tabs -->
+            <div class="segmented-switch">
+              <div class="segmented-btn active">Today</div>
+              <div class="segmented-btn">Plan</div>
+              <div class="segmented-btn">Food Library</div>
+            </div>
+
+            <!-- Calorie Gauge Ring -->
+            <div class="gauge-wrapper">
+              <svg class="gauge-svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#1E1E1E" stroke-width="8"/>
+                <circle cx="50" cy="50" r="42" fill="none" stroke="url(#goldGradHeader)" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="68" stroke-linecap="round" style="filter: drop-shadow(0 0 8px rgba(212,175,55,0.4));"/>
+              </svg>
+              <div class="gauge-center-text">
+                <div class="gauge-cals">1,850</div>
+                <div class="gauge-target">Target 2,500 kcal</div>
+              </div>
+            </div>
+
+            <!-- Macro Split Cards -->
+            <div class="macro-split-grid">
+              <div class="macro-box">
+                <div class="micro-label">PROTEIN</div>
+                <div style="font-size:13px; font-weight:800; margin:2px 0;">145g</div>
+                <div style="font-size:9px; color:var(--text-muted);">58%</div>
+                <div class="macro-bar-track">
+                  <div class="macro-bar-fill fill-protein"></div>
+                </div>
+              </div>
+              <div class="macro-box">
+                <div class="micro-label">CARBS</div>
+                <div style="font-size:13px; font-weight:800; margin:2px 0;">180g</div>
+                <div style="font-size:9px; color:var(--text-muted);">29%</div>
+                <div class="macro-bar-track">
+                  <div class="macro-bar-fill fill-carbs"></div>
+                </div>
+              </div>
+              <div class="macro-box">
+                <div class="micro-label">FATS</div>
+                <div style="font-size:13px; font-weight:800; margin:2px 0;">55g</div>
+                <div style="font-size:9px; color:var(--text-muted);">13%</div>
+                <div class="macro-bar-track">
+                  <div class="macro-bar-fill fill-fats"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Meal Plan Feed -->
+            <div class="micro-label" style="margin-bottom: 8px;">MEAL PLAN BREAKDOWN</div>
+            <div class="meal-feed-item">
+              <div>
+                <div style="font-size:11px; color:var(--gold-light); font-weight:700;">8:00 AM • BREAKFAST</div>
+                <div style="font-size:13px; font-weight:700;">Oats + Milk + Eggs</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:13px; font-weight:800;">520 kcal</div>
+                <div style="font-size:10px; color:var(--color-success); font-weight:600;">Logged ✓</div>
+              </div>
+            </div>
+
+            <div class="meal-feed-item">
+              <div>
+                <div style="font-size:11px; color:var(--text-muted); font-weight:700;">1:30 PM • LUNCH</div>
+                <div style="font-size:13px; font-weight:700;">Grilled Chicken + Rice</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:13px; font-weight:800;">680 kcal</div>
+                <div style="font-size:10px; color:var(--gold-primary); font-weight:600;">Upcoming</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 6: MEAL DETAIL & RECIPE
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 06</span>
+          <span class="screen-tag">Meal Recipe</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Top High-Res Visual Meal Photo Card -->
+            <div class="meal-hero-photo">
+              <div class="meal-hero-info">
+                <span class="badge badge-gold" style="margin-bottom:6px;">High Protein Fuel</span>
+                <h3>Oats + Milk + Eggs</h3>
+                <p>520 kcal • Balanced Breakfast</p>
+              </div>
+            </div>
+
+            <!-- Macro Overview Badges -->
+            <div style="display:flex; gap:8px; margin-bottom:16px;">
+              <div class="badge" style="background:#1E1E1E; color:var(--gold-light); border:1px solid var(--border-gold); flex:1; justify-content:center; padding:8px 4px;">
+                Protein 45g
+              </div>
+              <div class="badge" style="background:#1E1E1E; color:#60A5FA; border:1px solid rgba(96,165,250,0.3); flex:1; justify-content:center; padding:8px 4px;">
+                Carbs 60g
+              </div>
+              <div class="badge" style="background:#1E1E1E; color:#FBBF24; border:1px solid rgba(251,191,36,0.3); flex:1; justify-content:center; padding:8px 4px;">
+                Fats 15g
+              </div>
+            </div>
+
+            <!-- Granular Ingredients Card -->
+            <div class="ax-card" style="margin-bottom: 20px;">
+              <div class="micro-label" style="margin-bottom: 8px;">GRANULAR INGREDIENTS</div>
+              <div class="ingredient-row">
+                <span style="font-weight:600; color:var(--text-primary);">Rolled Oats</span>
+                <span style="color:var(--text-muted);">60g (230 kcal)</span>
+              </div>
+              <div class="ingredient-row">
+                <span style="font-weight:600; color:var(--text-primary);">Low Fat Milk</span>
+                <span style="color:var(--text-muted);">250ml (115 kcal)</span>
+              </div>
+              <div class="ingredient-row">
+                <span style="font-weight:600; color:var(--text-primary);">Whole Eggs</span>
+                <span style="color:var(--text-muted);">3 pcs / 150g (175 kcal)</span>
+              </div>
+            </div>
+
+            <!-- Bottom Action -->
+            <button class="btn-gold" style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
+              Add to Meal Log
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 7: DAILY PROGRESS & HABITS CHECK-IN
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 07</span>
+          <span class="screen-tag">Habits & Check-In</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Tabs -->
+            <div class="segmented-switch">
+              <div class="segmented-btn active">Weight</div>
+              <div class="segmented-btn">Body Fat</div>
+              <div class="segmented-btn">Photos</div>
+            </div>
+
+            <!-- Mini Weight Progression -->
+            <div class="ax-card" style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div class="micro-label">CURRENT WEIGHT</div>
+                <div style="font-size:20px; font-weight:800;">82.0 kg</div>
+              </div>
+              <div class="badge badge-success">On Target ✓</div>
+            </div>
+
+            <!-- Weekly Check-in Rows -->
+            <div class="micro-label" style="margin-bottom: 8px;">WEEKLY RECOVERY & METRICS</div>
+            <div class="habit-check-row">
+              <div class="habit-left">
+                <div class="habit-icon">💤</div>
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Sleep Duration</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Target: 7-8 hrs</div>
+                </div>
+              </div>
+              <span style="font-weight:700; color:var(--gold-light);">7h 20m</span>
+            </div>
+
+            <div class="habit-check-row">
+              <div class="habit-left">
+                <div class="habit-icon">💧</div>
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Hydration</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Target: 3.5 L</div>
+                </div>
+              </div>
+              <span style="font-weight:700; color:var(--color-success);">3.5 L ✓</span>
+            </div>
+
+            <div class="habit-check-row">
+              <div class="habit-left">
+                <div class="habit-icon">👟</div>
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Daily Steps</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Baseline Goal</div>
+                </div>
+              </div>
+              <span style="font-weight:700; color:var(--text-primary);">5,200</span>
+            </div>
+
+            <div class="habit-check-row">
+              <div class="habit-left">
+                <div class="habit-icon">🔥</div>
+                <div>
+                  <div style="font-size:13px; font-weight:700;">Workout Frequency</div>
+                  <div style="font-size:10px; color:var(--text-muted);">Week 4 Streak</div>
+                </div>
+              </div>
+              <span class="badge badge-gold">6 / 6 Days</span>
+            </div>
+
+            <!-- Motivational Card -->
+            <div class="quote-box">
+              <div class="quote-mark">“</div>
+              <p class="quote-text">Discipline today builds the body you want tomorrow.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 8: ADMIN / COACH DASHBOARD
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 08</span>
+          <span class="screen-tag">Admin / Coach Portal</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Header & Tabs -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <div class="micro-label">PORTAL OVERVIEW</div>
+                <h3 style="font-size:16px; font-weight:800;">Admin Dashboard</h3>
+              </div>
+              <span class="badge badge-gold">Master Coach</span>
+            </div>
+
+            <div class="segmented-switch" style="grid-template-columns: repeat(4, 1fr); margin-bottom:12px;">
+              <div class="segmented-btn active" style="font-size:10px;">Clients</div>
+              <div class="segmented-btn" style="font-size:10px;">Workouts</div>
+              <div class="segmented-btn" style="font-size:10px;">Diets</div>
+              <div class="segmented-btn" style="font-size:10px;">Reports</div>
+            </div>
+
+            <!-- Metric Stats Row -->
+            <div class="admin-stats-row">
+              <div class="admin-stat-card">
+                <div class="micro-label">TOTAL</div>
+                <div class="admin-stat-num">28</div>
+              </div>
+              <div class="admin-stat-card">
+                <div class="micro-label">ACTIVE</div>
+                <div class="admin-stat-num" style="color:var(--color-success);">26</div>
+              </div>
+              <div class="admin-stat-card">
+                <div class="micro-label">PENDING</div>
+                <div class="admin-stat-num" style="color:var(--color-warning);">2</div>
+              </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="search-input-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" placeholder="Search clients..." readonly value="Search clients...">
+            </div>
+
+            <!-- Client Roster List -->
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom: 70px;">
+              <div class="client-roster-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="client-avatar">AK</div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700;">Arun Kumar</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Last Active: 2h ago</div>
+                  </div>
+                </div>
+                <div class="badge badge-active"><span class="live-dot"></span> Active</div>
+              </div>
+
+              <div class="client-roster-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="client-avatar">VJ</div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700;">Vijay</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Last Active: 4h ago</div>
+                  </div>
+                </div>
+                <div class="badge badge-active"><span class="live-dot"></span> Active</div>
+              </div>
+
+              <div class="client-roster-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="client-avatar">KT</div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700;">Karthik</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Last Active: 1d ago</div>
+                  </div>
+                </div>
+                <div class="badge badge-active"><span class="live-dot"></span> Active</div>
+              </div>
+
+              <div class="client-roster-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="client-avatar">RM</div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700;">Romesh</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Last Active: Today</div>
+                  </div>
+                </div>
+                <div class="badge badge-active"><span class="live-dot"></span> Active</div>
+              </div>
+
+              <div class="client-roster-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div class="client-avatar">ST</div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700;">Sathish</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Last Active: Just now</div>
+                  </div>
+                </div>
+                <div class="badge badge-active"><span class="live-dot"></span> Active</div>
+              </div>
+            </div>
+
+            <!-- Floating Admin Dock -->
+            <div class="floating-dock">
+              <div class="dock-item active"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg><span>Admin</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 3s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span>Clients</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg><span>Plans</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg><span>Messages</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg><span>Settings</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================================================================
+           SCREEN 9: PROFILE & SETTINGS
+           =================================================================== -->
+      <div class="screen-column">
+        <div class="screen-header-label">
+          <span class="screen-number">Screen 09</span>
+          <span class="screen-tag">Athlete Account</span>
+        </div>
+        <div class="phone-mockup">
+          <div class="status-bar">
+            <span>9:41</span>
+            <div class="dynamic-island"></div>
+            <div class="status-icons">
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+            </div>
+          </div>
+          <div class="phone-content">
+            <!-- Profile Hero -->
+            <div class="profile-hero">
+              <div class="profile-avatar-lg">S</div>
+              <h2 style="font-size:18px; font-weight:800;">Sundar</h2>
+              <p style="font-size:11px; color:var(--gold-light); font-weight:600;">Client ID • AXG-1042</p>
+            </div>
+
+            <!-- Settings Menu List -->
+            <div class="settings-menu-list">
+              <div class="settings-menu-item">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Profile Information</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+
+              <div class="settings-menu-item">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                  <span>My Progress & Logs</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+
+              <div class="settings-menu-item">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span>My Assigned Plan</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+
+              <div class="settings-menu-item">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <span>App Settings</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+
+              <div class="settings-menu-item">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span>Help & Support</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </div>
+
+            <!-- Watermarked Logo -->
+            <div class="watermark-ax">
+              <svg width="70" height="70" viewBox="0 0 24 24" fill="#D4AF37">
+                <path d="M12 2L2 22h4.5l2-4.5h7l2 4.5H22L12 2zm0 6l2.5 5.5h-5L12 8z" />
+              </svg>
+              <div style="font-size:10px; font-weight:800; letter-spacing:2px; color:var(--text-muted); margin-top:6px;">ALPHA-X ATHLETIC SYSTEMS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ===================================================================
+       PRESENTATION SPECIMEN OVERVIEW MOCKUP
+       =================================================================== -->
+  <section class="board-overview-banner" id="overviewMockup">
+    <div class="preview-board-img-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding:0 4px;">
+        <div>
+          <span class="manifesto-badge" style="margin-bottom:4px;">RENDERED PRESENTATION BOARD SPECIMEN</span>
+          <h3 style="font-size:18px; font-weight:800;">Ultra-High Definition Overview</h3>
+        </div>
+        <span style="font-size:12px; color:var(--gold-primary); font-weight:600;">Figma / Dribbble Showcase Master</span>
+      </div>
+      <img src="alpha_x_design_board_preview.jpg" alt="ALPHA X GYM Ultra-Premium Design Board" onerror="this.style.display='none'">
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SECTION 10: DESIGN SYSTEM & UI ELEMENTS SPECIMEN
+       =================================================================== -->
+  <footer class="design-system-footer" id="designSystem">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      <div>
+        <span class="manifesto-badge">FOUNDATION ARCHITECTURE</span>
+        <h2 style="font-size:22px; font-weight:800; margin-top:4px;">10. Design System & UI Elements Specification</h2>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted);">
+        Typeface: <strong style="color:#FFF;">Poppins</strong> • Figures: <strong style="color:var(--gold-light);">Tabular Numeric</strong>
+      </div>
+    </div>
+
+    <div class="ds-grid">
+      <!-- 1. Color Palette Swatches -->
+      <div>
+        <h4 class="micro-label" style="font-size:11px; margin-bottom:12px;">COLOR SYSTEM TOKENS</h4>
+        <div class="swatches-flex">
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#0A0A0A;"></div>
+            <span class="swatch-label">Deep Black</span>
+            <span class="swatch-hex">#0A0A0A</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#151515;"></div>
+            <span class="swatch-label">Charcoal</span>
+            <span class="swatch-hex">#151515</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#1E1E1E;"></div>
+            <span class="swatch-label">Slate</span>
+            <span class="swatch-hex">#1E1E1E</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:linear-gradient(135deg, #F5E6B3, #D4AF37, #AA820A); box-shadow:0 0 14px rgba(212,175,55,0.4);"></div>
+            <span class="swatch-label">Gold Grad</span>
+            <span class="swatch-hex">#D4AF37</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#F5E6B3;"></div>
+            <span class="swatch-label">Light Gold</span>
+            <span class="swatch-hex">#F5E6B3</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#FFFFFF;"></div>
+            <span class="swatch-label">Pure White</span>
+            <span class="swatch-hex">#FFFFFF</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#C4C4CC;"></div>
+            <span class="swatch-label">Muted Slate</span>
+            <span class="swatch-hex">#C4C4CC</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#22C55E; box-shadow:0 0 10px rgba(34,197,94,0.4);"></div>
+            <span class="swatch-label">Emerald</span>
+            <span class="swatch-hex">#22C55E</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#F59E0B;"></div>
+            <span class="swatch-label">Amber</span>
+            <span class="swatch-hex">#F59E0B</span>
+          </div>
+          <div class="color-swatch-item">
+            <div class="swatch-circle" style="background:#EF4444;"></div>
+            <span class="swatch-label">Crimson</span>
+            <span class="swatch-hex">#EF4444</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Typography Specimen -->
+      <div>
+        <h4 class="micro-label" style="font-size:11px; margin-bottom:12px;">TYPOGRAPHY SPECIMEN (POPPINS)</h4>
+        <div style="background:var(--surface-slate); border-radius:16px; padding:18px; border:1px solid var(--border-thin);">
+          <div style="font-size:28px; font-weight:800; line-height:1.2; margin-bottom:4px;">
+            Aa Bb Cc 123
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); font-family:monospace; margin-bottom:12px;">
+            ABCDEFGHIJKLMNOPQRSTUVWXYZ • 0123456789
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+            <div><strong style="color:var(--gold-light);">Headline Bold (800):</strong> Train Strong. Move Better.</div>
+            <div><strong style="color:var(--text-primary);">Subhead SemiBold (600):</strong> Upper Body (Push) • 45 min</div>
+            <div><strong style="color:var(--text-secondary);">Body Regular (400):</strong> High performance athletic tracking.</div>
+            <div style="letter-spacing:0.8px; font-size:10px; color:var(--gold-primary); text-transform:uppercase; font-weight:700;">
+              MICRO-LABEL (+8% TRACKING): DISCIPLINE BUILDS RESULTS
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. UI Component Kit Demonstration -->
+      <div>
+        <h4 class="micro-label" style="font-size:11px; margin-bottom:12px;">REUSABLE UI COMPONENTS</h4>
+        <div class="comp-showcase">
+          <div class="button-row">
+            <button class="btn-gold">Primary Gold CTA</button>
+            <button class="btn-secondary-outlined">Outlined Secondary</button>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span class="badge badge-active"><span class="live-dot"></span> Active Client</span>
+            <span class="badge badge-gold">Coach Prescribed</span>
+            <span class="badge" style="background:var(--color-warning-bg); color:var(--color-warning); border:1px solid rgba(245,158,11,0.3);">Check-In Due</span>
+          </div>
+          <div class="segmented-switch" style="max-width:240px;">
+            <div class="segmented-btn active">Option A</div>
+            <div class="segmented-btn">Option B</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="tokenToast">Design tokens copied to clipboard!</div>
+
+  <!-- INTERACTIVE LOGIC SCRIPT -->
+  <script>
+    function toggleCheck(item) {
+      item.classList.toggle('checked');
+      const toggle = item.querySelector('.check-toggle');
+      if (toggle) {
+        toggle.classList.toggle('checked');
+      }
+    }
+
+    function copyTokens() {
+      const tokens = `/* ALPHA X GYM DESIGN SYSTEM TOKENS */
+--bg-deep-black: #0A0A0A;
+--surface-charcoal: #151515;
+--surface-slate: #1E1E1E;
+--gold-gradient: linear-gradient(135deg, #F5E6B3 0%, #D4AF37 52%, #AA820A 100%);
+--gold-primary: #D4AF37;
+--text-primary: #FFFFFF;
+--text-secondary: #C4C4CC;
+--color-success: #22C55E;
+--color-warning: #F59E0B;
+--color-danger: #EF4444;
+font-family: 'Poppins', sans-serif;`;
+
+      navigator.clipboard.writeText(tokens).then(() => {
+        const toast = document.getElementById('tokenToast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      });
+    }
+  </script>
+</body>
+</html>
