@@ -9,6 +9,10 @@ import 'package:alpha_x_gym/features/food_photo_tracking/data/services/food_phot
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/live_food_camera_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/admin_food_photos_monitoring_screen.dart';
+import 'package:alpha_x_gym/features/dashboard/admin_main_dashboard_screen.dart';
+import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
+import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -166,6 +170,52 @@ void main() {
       expect(find.text('VERIFIED'), findsOneWidget);
       expect(find.text('ATTENTION'), findsOneWidget);
       expect(find.text('Search client by name or ID...'), findsOneWidget);
+    });
+
+    testWidgets('TEST 6: AdminMainDashboardScreen navigates to tab 9 (Client Food Photos) without RangeError', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      auth.setAuthenticatedSessionForTesting(
+        role: UserRole.admin,
+        email: 'fitsundar6@gmail.com',
+        userId: 'admin_alex_stone',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AdminMainDashboardScreen(
+            workoutRepository: WorkoutRepository(),
+            activityRepository: ActivityRepository(),
+            macroRepository: MacroRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open Admin drawer
+      final scaffoldState = tester.state<ScaffoldState>(find.byType(Scaffold).first);
+      scaffoldState.openDrawer();
+      await tester.pumpAndSettle();
+
+      // Find and ensure visible "Client Food Photos" in drawer
+      final drawerFoodPhotosItem = find.descendant(
+        of: find.byType(Drawer),
+        matching: find.text('Client Food Photos'),
+      );
+      await tester.ensureVisible(drawerFoodPhotosItem);
+      await tester.pumpAndSettle();
+      expect(drawerFoodPhotosItem, findsOneWidget);
+      await tester.tap(drawerFoodPhotosItem);
+      await tester.pumpAndSettle();
+
+      // Verify no RangeError occurred, AppBar displays tab title, and photo monitoring screen is rendered
+      expect(find.text('📸 CLIENT FOOD PHOTOS'), findsOneWidget);
+      expect(find.byType(AdminFoodPhotosMonitoringScreen), findsOneWidget);
     });
   });
 }

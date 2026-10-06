@@ -159,7 +159,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                   child: Text(
                                     mode.toUpperCase(),
                                     style: TextStyle(
-                                      fontFamily: 'Plus Jakarta Sans',
+                                      fontFamily: 'Poppins',
                                       color: isSel
                                           ? AppColors.onPrimary
                                           : colors.textSecondary,
@@ -197,7 +197,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                             Text(
                               'CYCLE PROGRESSION',
                               style: TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
+                                fontFamily: 'Poppins',
                                 color: colors.textSecondary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -215,7 +215,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                     Text(
                                       _selectedCheckIn != null ? _selectedCheckIn!.weightDisplay : '78.5 kg',
                                       style: TextStyle(
-                                        fontFamily: 'Sora',
+                                        fontFamily: 'Poppins',
                                         fontSize: 40,
                                         fontWeight: FontWeight.w900,
                                         color: colors.isDark ? AppColors.primary : AppColors.lightPrimary,
@@ -225,7 +225,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                     Text(
                                       'Current Check-in Weight',
                                       style: TextStyle(
-                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontFamily: 'Poppins',
                                         color: colors.textTertiary,
                                         fontSize: 12,
                                       ),
@@ -253,7 +253,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                       Text(
                                         _selectedCheckIn?.weightChangeDisplay ?? '-0.6 kg',
                                         style: TextStyle(
-                                          fontFamily: 'Sora',
+                                          fontFamily: 'Poppins',
                                           color: colors.isDark ? AppColors.primary : AppColors.lightPrimary,
                                           fontWeight: FontWeight.w800,
                                           fontSize: 13,
@@ -289,7 +289,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                       Text(
                                         'STREAK',
                                         style: TextStyle(
-                                          fontFamily: 'Plus Jakarta Sans',
+                                          fontFamily: 'Poppins',
                                           color: colors.textSecondary,
                                           fontSize: 10,
                                           fontWeight: FontWeight.w800,
@@ -303,7 +303,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                   Text(
                                     '12 DAYS',
                                     style: TextStyle(
-                                      fontFamily: 'Sora',
+                                      fontFamily: 'Poppins',
                                       color: colors.textPrimary,
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800,
@@ -351,7 +351,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                         Text(
                                           'PR RECORDS',
                                           style: TextStyle(
-                                            fontFamily: 'Plus Jakarta Sans',
+                                            fontFamily: 'Poppins',
                                             color: colors.textSecondary,
                                             fontSize: 10,
                                             fontWeight: FontWeight.w800,
@@ -365,7 +365,7 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
                                     Text(
                                       '3 ACHIEVED',
                                       style: TextStyle(
-                                        fontFamily: 'Sora',
+                                        fontFamily: 'Poppins',
                                         color: colors.textPrimary,
                                         fontSize: 20,
                                         fontWeight: FontWeight.w800,

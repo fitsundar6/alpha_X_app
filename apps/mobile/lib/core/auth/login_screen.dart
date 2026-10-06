@@ -200,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen>
                         Center(
                           child: Text(
                             'ALPHA X GYM',
-                            style: GoogleFonts.sora(
+                            style: GoogleFonts.poppins(
                               color: AppColors.textPrimary,
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
@@ -221,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             child: Text(
                               'MEMBER & ATHLETE PORTAL',
-                              style: GoogleFonts.plusJakartaSans(
+                              style: GoogleFonts.poppins(
                                 color: AppColors.primary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
@@ -249,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: GoogleFonts.plusJakartaSans(
+                                    style: GoogleFonts.poppins(
                                       color: Colors.white,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
@@ -281,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 const SizedBox(width: 12),
                                 Text(
                                   _statusMessage!,
-                                  style: GoogleFonts.plusJakartaSans(
+                                  style: GoogleFonts.poppins(
                                     color: AppColors.textSecondary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
@@ -315,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen>
                               children: [
                                 Text(
                                   'LOG IN TO YOUR ACCOUNT',
-                                  style: GoogleFonts.sora(
+                                  style: GoogleFonts.poppins(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 15,
@@ -325,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 const SizedBox(height: 4),
                                 Text(
                                   'Enter your email or Client ID (e.g. AXG-0001) and password.',
-                                  style: GoogleFonts.plusJakartaSans(
+                                  style: GoogleFonts.poppins(
                                     color: AppColors.textSecondary,
                                     fontSize: 12,
                                   ),
@@ -338,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   keyboardType: TextInputType.emailAddress,
                                   textCapitalization: TextCapitalization.none,
                                   autocorrect: false,
-                                  style: GoogleFonts.plusJakartaSans(
+                                  style: GoogleFonts.poppins(
                                     color: AppColors.textPrimary,
                                     fontSize: 14,
                                   ),
@@ -361,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   controller: _loginPasswordController,
                                   obscureText: _loginObscurePassword,
                                   keyboardType: TextInputType.visiblePassword,
-                                  style: GoogleFonts.plusJakartaSans(
+                                  style: GoogleFonts.poppins(
                                     color: AppColors.textPrimary,
                                     fontSize: 14,
                                   ),
@@ -422,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             children: [
                                               Text(
                                                 'CLIENT LOGIN',
-                                                style: GoogleFonts.plusJakartaSans(
+                                                style: GoogleFonts.poppins(
                                                   color: AppColors.onPrimary,
                                                   fontWeight: FontWeight.w800,
                                                   fontSize: 14,
@@ -448,7 +448,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       padding: const EdgeInsets.symmetric(horizontal: 14.0),
                                       child: Text(
                                         'OR',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: GoogleFonts.poppins(
                                           color: AppColors.textTertiary,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
@@ -474,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       children: [
                                         Text(
                                           'CREATE ACCOUNT',
-                                          style: GoogleFonts.plusJakartaSans(
+                                          style: GoogleFonts.poppins(
                                             color: AppColors.primary,
                                             fontWeight: FontWeight.w800,
                                             fontSize: 13,
@@ -485,7 +485,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           opacity: 0.0,
                                           child: Text(
                                             'CREATE NEW ACCOUNT',
-                                            style: GoogleFonts.plusJakartaSans(
+                                            style: GoogleFonts.poppins(
                                               color: AppColors.primary,
                                               fontWeight: FontWeight.w800,
                                               fontSize: 13,
@@ -510,7 +510,7 @@ class _LoginScreenState extends State<LoginScreen>
                             icon: const Icon(Icons.shield_outlined, size: 16, color: AppColors.primary),
                             label: Text(
                               'ADMIN LOGIN',
-                              style: GoogleFonts.plusJakartaSans(
+                              style: GoogleFonts.poppins(
                                 color: AppColors.primary,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,

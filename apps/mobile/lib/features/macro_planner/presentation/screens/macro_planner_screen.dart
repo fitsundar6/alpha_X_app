@@ -628,7 +628,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   const Icon(Icons.chevron_left, size: 16, color: AppColors.textPrimary),
                   Text(
                     DateFormat('d MMM').format(prevDate),
-                    style: const TextStyle(fontFamily: 'Plus Jakarta Sans', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -667,7 +667,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   Text(
                     dateDisplay,
                     style: TextStyle(
-                      fontFamily: 'Sora',
+                      fontFamily: 'Poppins',
                       color: _isToday ? AppColors.onPrimary : Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -698,7 +698,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 child: const Text(
                   'TODAY',
                   style: TextStyle(
-                    fontFamily: 'Sora',
+                    fontFamily: 'Poppins',
                     color: AppColors.onPrimary,
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
@@ -721,7 +721,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   children: [
                     Text(
                       DateFormat('d MMM').format(nextDate),
-                      style: const TextStyle(fontFamily: 'Plus Jakarta Sans', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
                     ),
                     const Icon(Icons.chevron_right, size: 16, color: AppColors.textPrimary),
                   ],
@@ -1026,7 +1026,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               Text(
                 meal.displayName.toUpperCase(),
                 style: const TextStyle(
-                  fontFamily: 'Sora',
+                  fontFamily: 'Poppins',
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
@@ -1045,7 +1045,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                 child: Text(
                   '$cal kcal • P:${prot}g C:${carbs}g F:${fat}g',
                   style: const TextStyle(
-                    fontFamily: 'Plus Jakarta Sans',
+                    fontFamily: 'Poppins',
                     color: AppColors.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -1080,7 +1080,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                 child: Text(
                                   entry.foodName,
                                   style: const TextStyle(
-                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontFamily: 'Poppins',
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 13,
@@ -1098,7 +1098,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                 child: Text(
                                   '× ${entry.quantityDisplay}',
                                   style: const TextStyle(
-                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontFamily: 'Poppins',
                                     color: AppColors.textPrimary,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
@@ -1113,7 +1113,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                           Text(
                             '${entry.totalCalories.round()} kcal  •  P: ${FoodLogEntry.formatMacro(entry.totalProtein)}g  C: ${FoodLogEntry.formatMacro(entry.totalCarbs)}g  F: ${FoodLogEntry.formatMacro(entry.totalFat)}g',
                             style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
+                              fontFamily: 'Poppins',
                               color: AppColors.textSecondary,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -1155,7 +1155,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   Text(
                     '${meal.displayName.toUpperCase()} TOTAL',
                     style: const TextStyle(
-                      fontFamily: 'Plus Jakarta Sans',
+                      fontFamily: 'Poppins',
                       color: AppColors.textSecondary,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -1165,7 +1165,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                   Text(
                     '$cal kcal  •  P: ${prot}g  C: ${carbs}g  Fat: ${fat}g',
                     style: const TextStyle(
-                      fontFamily: 'Sora',
+                      fontFamily: 'Poppins',
                       color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -1180,7 +1180,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               child: Text(
                 'No foods logged yet for ${meal.displayName}.',
                 style: const TextStyle(
-                  fontFamily: 'Plus Jakarta Sans',
+                  fontFamily: 'Poppins',
                   color: AppColors.textTertiary,
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
@@ -1217,7 +1217,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                         Text(
                           'ADD FOOD',
                           style: TextStyle(
-                            fontFamily: 'Sora',
+                            fontFamily: 'Poppins',
                             color: AppColors.onPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
@@ -1249,7 +1249,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                         Text(
                           '📷 SCAN FOOD',
                           style: TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
+                            fontFamily: 'Poppins',
                             color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,

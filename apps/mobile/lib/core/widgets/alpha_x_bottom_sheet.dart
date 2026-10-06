@@ -70,7 +70,7 @@ class AlphaXBottomSheet {
                           Text(
                             title.toUpperCase(),
                             style: TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               color: primaryTextColor,
                               fontSize: 18,
                               fontWeight: FontWeight.w700,

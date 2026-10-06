@@ -27,7 +27,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
             const Text(
               'TODAY\'S NUTRITION',
               style: TextStyle(
-                fontFamily: 'Sora',
+                fontFamily: 'Poppins',
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
@@ -48,7 +48,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
               child: Text(
                 summary.remainingCaloriesStatus,
                 style: TextStyle(
-                  fontFamily: 'Plus Jakarta Sans',
+                  fontFamily: 'Poppins',
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   color: summary.isCaloriesOver ? AppColors.danger : AppColors.primary,
@@ -88,7 +88,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
                       const Text(
                         'CALORIE TARGET',
                         style: TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
+                          fontFamily: 'Poppins',
                           color: AppColors.textSecondary,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -103,7 +103,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
                           Text(
                             '${summary.consumedCalories.round()}',
                             style: const TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
@@ -113,7 +113,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
                           Text(
                             '/ ${summary.targetCalories.round()} kcal',
                             style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
+                              fontFamily: 'Poppins',
                               color: AppColors.textSecondary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -137,7 +137,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
                     child: Text(
                       '${summary.caloriePercentage}% COMPLETE',
                       style: TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
+                        fontFamily: 'Poppins',
                         color: summary.isCaloriesOver ? AppColors.danger : AppColors.primary,
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
@@ -346,7 +346,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
           centerChild: Text(
             '$percentage%',
             style: const TextStyle(
-              fontFamily: 'Sora',
+              fontFamily: 'Poppins',
               color: Colors.white,
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -357,7 +357,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
+            fontFamily: 'Poppins',
             color: color,
             fontSize: 10,
             fontWeight: FontWeight.w900,
@@ -368,7 +368,7 @@ class DailyMacroProgressDashboard extends StatelessWidget {
         Text(
           '${consumed.round()} / ${target.round()}$unit',
           style: const TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
+            fontFamily: 'Poppins',
             color: AppColors.textSecondary,
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -443,7 +443,7 @@ class MacroProgressCard extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontFamily: 'Sora',
+                      fontFamily: 'Poppins',
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,
@@ -466,7 +466,7 @@ class MacroProgressCard extends StatelessWidget {
                 child: Text(
                   isOver ? '$percentage% • EXCEEDED' : '$percentage% complete',
                   style: TextStyle(
-                    fontFamily: 'Plus Jakarta Sans',
+                    fontFamily: 'Poppins',
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     color: isOver ? AppColors.danger : accentColor,
@@ -487,7 +487,7 @@ class MacroProgressCard extends StatelessWidget {
                 value: consumed,
                 decimals: decimals,
                 style: const TextStyle(
-                  fontFamily: 'Sora',
+                  fontFamily: 'Poppins',
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -498,7 +498,7 @@ class MacroProgressCard extends StatelessWidget {
               Text(
                 '/ ${target.round()} $unit',
                 style: const TextStyle(
-                  fontFamily: 'Plus Jakarta Sans',
+                  fontFamily: 'Poppins',
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary,
@@ -512,7 +512,7 @@ class MacroProgressCard extends StatelessWidget {
                       ? '${FoodLogEntry.formatMacro(over)} $unit over target'
                       : '${FoodLogEntry.formatMacro(remaining)} $unit remaining',
                   style: TextStyle(
-                    fontFamily: 'Plus Jakarta Sans',
+                    fontFamily: 'Poppins',
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: isOver ? AppColors.danger : AppColors.textPrimary,
@@ -553,11 +553,11 @@ class MacroProgressCard extends StatelessWidget {
             children: [
               Text(
                 'Target: ${target.round()} $unit',
-                style: const TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
               ),
               Text(
                 'Consumed: ${consumed.round()} $unit',
-                style: const TextStyle(fontFamily: 'Plus Jakarta Sans', fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
               ),
             ],
           ),

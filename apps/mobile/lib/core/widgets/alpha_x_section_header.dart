@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/alpha_x_design_system.dart';
+import '../theme/app_colors.dart';
 
 class AlphaXSectionHeader extends StatelessWidget {
   final String title;
@@ -17,6 +18,10 @@ class AlphaXSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.primary : AppColors.lightPrimary;
+    final textColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+
     return Padding(
       padding: padding,
       child: Row(
@@ -26,9 +31,7 @@ class AlphaXSectionHeader extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: TextStyle(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? AlphaXColors.textSecondary
-                  : const Color(0xFF6B7280),
+              color: textColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
@@ -39,8 +42,8 @@ class AlphaXSectionHeader extends StatelessWidget {
               onTap: onActionTap,
               child: Text(
                 actionLabel!,
-                style: const TextStyle(
-                  color: AlphaXColors.redAccent,
+                style: TextStyle(
+                  color: primaryColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
@@ -52,3 +55,5 @@ class AlphaXSectionHeader extends StatelessWidget {
     );
   }
 }
+
+typedef AlphaXSection = AlphaXSectionHeader;

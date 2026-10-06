@@ -151,7 +151,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       ),
                       child: Text(
                         cat,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.poppins(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: isSelected
@@ -169,7 +169,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
 
           Text(
             'Prescribed workouts tailored to your training phase. Only active authorized sessions are displayed.',
-            style: GoogleFonts.plusJakartaSans(color: colors.textTertiary, fontSize: 12),
+            style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
           ),
           const SizedBox(height: 14),
 
@@ -186,7 +186,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   available.isEmpty
                       ? 'No workout sessions currently assigned. Contact gym admin.'
                       : 'No workouts matching "$_selectedCategory". Tap "All" to view all assigned sessions.',
-                  style: GoogleFonts.plusJakartaSans(color: colors.textSecondary, fontSize: 13),
+                  style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -214,7 +214,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             const SizedBox(width: 8),
             Text(
               'WORKOUT',
-              style: GoogleFonts.sora(
+              style: GoogleFonts.poppins(
                 color: colors.textPrimary,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
@@ -229,7 +229,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             icon: Icon(Icons.history, color: isDark ? AppColors.primary : AppColors.lightPrimary, size: 18),
             label: Text(
               'History',
-              style: GoogleFonts.plusJakartaSans(
+              style: GoogleFonts.poppins(
                 color: isDark ? AppColors.primary : AppColors.lightPrimary,
                 fontWeight: FontWeight.w800,
               ),
@@ -244,7 +244,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
   Widget _sectionTitle(String title, ClientThemeColors colors) {
     return Text(
       title,
-      style: GoogleFonts.sora(
+      style: GoogleFonts.poppins(
         fontSize: 12,
         fontWeight: FontWeight.w800,
         letterSpacing: 1.1,
@@ -313,7 +313,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       const SizedBox(width: 4),
                       Text(
                         'RECOMMENDED',
-                        style: GoogleFonts.sora(
+                        style: GoogleFonts.poppins(
                           color: AppColors.gold,
                           fontWeight: FontWeight.w800,
                           fontSize: 10,
@@ -335,7 +335,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                   child: Text(
                     '~${session.estimatedDurationMinutes} MIN',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
@@ -353,7 +353,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               children: [
                 Text(
                   session.title,
-                  style: GoogleFonts.sora(
+                  style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: colors.textPrimary,
@@ -363,7 +363,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 const SizedBox(height: 4),
                 Text(
                   session.targetMuscleGroup.toUpperCase(),
-                  style: GoogleFonts.plusJakartaSans(
+                  style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: accentLime,
                     fontWeight: FontWeight.w800,
@@ -384,7 +384,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   const SizedBox(height: 10),
                   Text(
                     session.description!,
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.poppins(
                       fontSize: 13,
                       color: colors.textSecondary,
                       height: 1.4,
@@ -427,7 +427,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                         const SizedBox(width: 8),
                         Text(
                           'START WORKOUT',
-                          style: GoogleFonts.plusJakartaSans(
+                          style: GoogleFonts.poppins(
                             color: AppColors.onPrimary,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
@@ -477,7 +477,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     children: [
                       Text(
                         session.title,
-                        style: GoogleFonts.sora(
+                        style: GoogleFonts.poppins(
                           color: colors.textPrimary,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
@@ -486,7 +486,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       const SizedBox(height: 4),
                       Text(
                         session.targetMuscleGroup,
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.poppins(
                           color: colors.textSecondary,
                           fontSize: 13,
                         ),
@@ -503,7 +503,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                   child: Text(
                     session.difficulty.toUpperCase(),
-                    style: GoogleFonts.plusJakartaSans(
+                    style: GoogleFonts.poppins(
                       color: accentLime,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -518,17 +518,17 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               children: [
                 Text(
                   '${session.exercises.length} Exercises',
-                  style: GoogleFonts.plusJakartaSans(color: colors.textSecondary, fontSize: 12),
+                  style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 12),
                 ),
                 Text(' • ', style: TextStyle(color: colors.textTertiary)),
                 Text(
                   '~${session.estimatedDurationMinutes} min',
-                  style: GoogleFonts.plusJakartaSans(color: colors.textSecondary, fontSize: 12),
+                  style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 12),
                 ),
                 Text(' • ', style: TextStyle(color: colors.textTertiary)),
                 Text(
                   session.workoutType,
-                  style: GoogleFonts.plusJakartaSans(color: accentLime, fontSize: 12, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.poppins(color: accentLime, fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -565,7 +565,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       const SizedBox(width: 4),
                       Text(
                         'Start',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
                           color: AppColors.onPrimary,
@@ -597,7 +597,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.plusJakartaSans(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+            style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),

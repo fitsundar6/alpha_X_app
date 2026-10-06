@@ -1,13 +1,12 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import '../theme/alpha_x_design_system.dart';
 import '../theme/app_colors.dart';
 import 'alpha_x_button.dart';
 import 'alpha_x_logo.dart';
 import 'alpha_x_pressable.dart';
 
-/// Premium dark empty-state widget for Alpha X Gym.
+/// Theme-aware empty-state widget for Alpha X Gym.
 class AlphaXEmptyState extends StatelessWidget {
   final IconData? icon;
   final Widget? customIcon;
@@ -30,6 +29,12 @@ class AlphaXEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppColors.surfaceCard : AppColors.lightSurfaceCard;
+    final borderColor = isDark ? AppColors.border : AppColors.lightBorder;
+    final primaryTextColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final secondaryTextColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+
     return Center(
       child: Padding(
         padding: padding,
@@ -42,15 +47,15 @@ class AlphaXEmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: AlphaXColors.surfaceCard,
+                color: surfaceColor,
                 shape: BoxShape.circle,
-                border: Border.all(color: AlphaXColors.border, width: 1.0),
+                border: Border.all(color: borderColor, width: 1.0),
               ),
               child: Center(
                 child: customIcon ??
                     Icon(
                       icon ?? Icons.fitness_center_outlined,
-                      color: AlphaXColors.textSecondary,
+                      color: secondaryTextColor,
                       size: 28,
                     ),
               ),
@@ -58,8 +63,8 @@ class AlphaXEmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: primaryTextColor,
                 fontWeight: FontWeight.w800,
                 fontSize: 16,
                 letterSpacing: 0.2,
@@ -71,8 +76,8 @@ class AlphaXEmptyState extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 320),
               child: Text(
                 description,
-                style: const TextStyle(
-                  color: AlphaXColors.textSecondary,
+                style: TextStyle(
+                  color: secondaryTextColor,
                   fontSize: 13,
                   height: 1.4,
                 ),
@@ -96,7 +101,7 @@ class AlphaXEmptyState extends StatelessWidget {
   }
 }
 
-/// Premium dark error card for non-distracting user-friendly error recovery.
+/// Theme-aware error card for non-distracting user-friendly error recovery.
 class AlphaXErrorCard extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
@@ -111,14 +116,20 @@ class AlphaXErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? AppColors.surfaceCard : AppColors.lightSurfaceCard;
+    final errColor = isDark ? AppColors.error : AppColors.lightError;
+    final primaryTextColor = isDark ? AppColors.textPrimary : AppColors.lightTextPrimary;
+    final secondaryTextColor = isDark ? AppColors.textSecondary : AppColors.lightTextSecondary;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AlphaXColors.surfaceCard,
-        borderRadius: AlphaXRadius.roundedMd,
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: AppColors.primaryRed.withValues(alpha: 0.4),
+          color: errColor.withOpacity(0.4),
           width: 1.0,
         ),
       ),
@@ -127,12 +138,12 @@ class AlphaXErrorCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primaryRed.withValues(alpha: 0.15),
+              color: errColor.withOpacity(0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.info_outline_rounded,
-              color: AppColors.primaryRed,
+              color: errColor,
               size: 20,
             ),
           ),
@@ -142,10 +153,10 @@ class AlphaXErrorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Connection Notice',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: primaryTextColor,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -153,8 +164,8 @@ class AlphaXErrorCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   message,
-                  style: const TextStyle(
-                    color: AlphaXColors.textSecondary,
+                  style: TextStyle(
+                    color: secondaryTextColor,
                     fontSize: 12,
                   ),
                 ),
@@ -168,14 +179,14 @@ class AlphaXErrorCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AlphaXColors.surfaceElevated,
+                  color: isDark ? AppColors.surfaceElevated : AppColors.lightSecondaryCard,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AlphaXColors.border),
+                  border: Border.all(color: isDark ? AppColors.border : AppColors.lightBorder),
                 ),
                 child: Text(
                   retryLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: primaryTextColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
@@ -233,6 +244,7 @@ class _AlphaXSkeletonState extends State<AlphaXSkeleton>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnimatedBuilder(
       animation: _shimmerController,
       builder: (context, child) {
@@ -241,10 +253,14 @@ class _AlphaXSkeletonState extends State<AlphaXSkeleton>
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
-            color: Color.fromRGBO(30, 30, 32, opacity),
+            color: isDark
+                ? Color.fromRGBO(30, 30, 32, opacity)
+                : Color.fromRGBO(235, 235, 238, opacity),
             borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
             border: Border.all(
-              color: Color.fromRGBO(40, 40, 44, opacity * 0.6),
+              color: isDark
+                  ? Color.fromRGBO(40, 40, 44, opacity * 0.6)
+                  : Color.fromRGBO(220, 220, 224, opacity * 0.6),
               width: 1.0,
             ),
           ),
@@ -262,6 +278,10 @@ class AlphaXLoadingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.primary : AppColors.lightPrimary;
+    final bgColor = isDark ? AppColors.surfaceElevated : AppColors.lightBorder;
+
     return Center(
       child: SizedBox(
         width: size,
@@ -272,10 +292,10 @@ class AlphaXLoadingIndicator extends StatelessWidget {
             SizedBox(
               width: size,
               height: size,
-              child: const CircularProgressIndicator(
+              child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(AlphaXColors.redAccent),
-                backgroundColor: AlphaXColors.surfaceElevated,
+                valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                backgroundColor: bgColor,
               ),
             ),
             AlphaXLogo(size: size * 0.45),
@@ -285,3 +305,7 @@ class AlphaXLoadingIndicator extends StatelessWidget {
     );
   }
 }
+
+// Aliases for requested reusable component naming
+typedef AlphaXLoading = AlphaXLoadingIndicator;
+typedef AlphaXErrorState = AlphaXErrorCard;

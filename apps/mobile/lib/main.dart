@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_colors.dart';
-import 'core/theme/app_theme.dart';
 import 'core/theme/client_theme_service.dart';
 import 'core/theme/app_typography.dart';
 import 'core/auth/auth_service.dart';
@@ -123,11 +122,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Admin application must strictly remain unchanged and dark:
-    final bool isAdmin = _authService.isAuthenticated && _authService.isAdmin;
-    final ThemeData effectiveTheme = isAdmin
-        ? AppTheme.darkTheme
-        : _clientThemeService.resolveTheme(context);
+    final ThemeData effectiveTheme = _clientThemeService.resolveTheme(context);
 
     return AnimatedTheme(
       data: effectiveTheme,
@@ -484,42 +479,30 @@ Route<dynamic>? buildAppRoute(
       case '/admin/clients':
       case '/admin/assignments':
         return MaterialPageRoute(
-          builder: (_) => Theme(
-            data: AppTheme.darkTheme,
-            child: AdminMainDashboardScreen(
-              workoutRepository: workoutRepo,
-              activityRepository: activityRepo,
-              macroRepository: macroRepo,
-              weeklyProgressRepository: weeklyProgressRepo,
-            ),
+          builder: (_) => AdminMainDashboardScreen(
+            workoutRepository: workoutRepo,
+            activityRepository: activityRepo,
+            macroRepository: macroRepo,
+            weeklyProgressRepository: weeklyProgressRepo,
           ),
         );
       case '/admin/weekly-progress':
         return MaterialPageRoute(
-          builder: (_) => Theme(
-            data: AppTheme.darkTheme,
-            child: AdminWeeklyProgressScreen(
-              repository: weeklyProgressRepo,
-            ),
+          builder: (_) => AdminWeeklyProgressScreen(
+            repository: weeklyProgressRepo,
           ),
         );
       case '/admin/workout-sessions':
         return MaterialPageRoute(
-          builder: (_) => Theme(
-            data: AppTheme.darkTheme,
-            child: AdminWorkoutSessionsScreen(
-              workoutRepository: workoutRepo,
-            ),
+          builder: (_) => AdminWorkoutSessionsScreen(
+            workoutRepository: workoutRepo,
           ),
         );
       case '/admin/workout-sessions/create':
       case '/admin/workout-sessions/edit':
         return MaterialPageRoute(
-          builder: (_) => Theme(
-            data: AppTheme.darkTheme,
-            child: AdminCreateEditSessionScreen(
-              workoutRepository: workoutRepo,
-            ),
+          builder: (_) => AdminCreateEditSessionScreen(
+            workoutRepository: workoutRepo,
           ),
         );
     }

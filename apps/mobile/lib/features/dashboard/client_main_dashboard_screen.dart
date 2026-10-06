@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
+import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_session_overview_screen.dart';
@@ -291,44 +293,42 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               child: AlphaXGlassBar(
                 blur: 20.0,
                 borderRadius: BorderRadius.circular(24),
-                color: colors.surfaceElevated.withOpacity(colors.isDark ? 0.85 : 0.90),
+                color: colors.isDark ? const Color(0xF2151515) : colors.surfaceElevated.withOpacity(0.92),
                 border: Border.all(
-                  color: colors.isDark ? Colors.white.withOpacity(0.08) : colors.border,
+                  color: colors.isDark ? const Color(0xFF262626) : colors.border,
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(colors.isDark ? 0.45 : 0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
+                    color: Colors.black.withOpacity(colors.isDark ? 0.6 : 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
                 ],
                 child: NavigationBarTheme(
                   data: NavigationBarThemeData(
                     backgroundColor: Colors.transparent,
-                    indicatorColor: colors.primaryRed.withOpacity(0.18),
+                    indicatorColor: AppColors.primary.withOpacity(0.18),
                     labelTextStyle: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.selected)) {
-                        return TextStyle(
-                          fontFamily: 'Plus Jakarta Sans',
-                          color: colors.primaryRed,
+                        return GoogleFonts.poppins(
+                          color: AppColors.primary,
                           fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
                         );
                       }
-                      return TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        color: colors.textTertiary,
+                      return GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       );
                     }),
                     iconTheme: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.selected)) {
-                        return IconThemeData(color: colors.primaryRed, size: 22);
+                        return const IconThemeData(color: AppColors.primary, size: 22);
                       }
-                      return IconThemeData(color: colors.textTertiary, size: 20);
+                      return const IconThemeData(color: AppColors.textSecondary, size: 20);
                     }),
                   ),
                   child: NavigationBar(
@@ -340,27 +340,27 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     destinations: const [
                       NavigationDestination(
                         icon: Icon(Icons.home_outlined),
-                        selectedIcon: Icon(Icons.home, color: AppColors.primaryRed),
+                        selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
                         label: 'Home',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.fitness_center_outlined),
-                        selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
+                        selectedIcon: Icon(Icons.fitness_center_rounded, color: AppColors.primary),
                         label: 'Workout',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.format_list_bulleted_rounded),
-                        selectedIcon: Icon(Icons.format_list_bulleted, color: AppColors.primaryRed),
+                        selectedIcon: Icon(Icons.format_list_bulleted_rounded, color: AppColors.primary),
                         label: 'Exercises',
                       ),
                       NavigationDestination(
-                        icon: Icon(Icons.pie_chart_outline_rounded),
-                        selectedIcon: Icon(Icons.pie_chart, color: AppColors.primaryRed),
+                        icon: Icon(Icons.restaurant_outlined),
+                        selectedIcon: Icon(Icons.restaurant_rounded, color: AppColors.primary),
                         label: 'Nutrition',
                       ),
                       NavigationDestination(
                         icon: Icon(Icons.directions_walk_outlined),
-                        selectedIcon: Icon(Icons.directions_walk, color: AppColors.primaryRed),
+                        selectedIcon: Icon(Icons.directions_walk_rounded, color: AppColors.primary),
                         label: 'Steps',
                       ),
                     ],
@@ -677,6 +677,196 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     );
   }
 
+  Widget _buildMockupQuickActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ClientThemeColors colors,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: colors.isDark ? const Color(0xFF151515) : colors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(colors.isDark ? 0.3 : 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: GoogleFonts.poppins(
+                color: colors.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMockupTodaysPlanCard(ClientThemeColors colors, WorkoutSession? recommended) {
+    final title = recommended != null ? recommended.title : 'Upper Body (Push)';
+    final count = recommended != null ? recommended.exercises.length : 6;
+    final duration = recommended != null ? recommended.estimatedDurationMinutes : 45;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.isDark ? const Color(0xFF151515) : colors.surfaceCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Today's Plan",
+                style: GoogleFonts.poppins(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              InkWell(
+                onTap: () => _selectTab(1),
+                child: Row(
+                  children: [
+                    Text(
+                      '1 More',
+                      style: GoogleFonts.poppins(
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios_rounded, color: colors.textTertiary, size: 11),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () {
+              if (widget.workoutRepository.hasActiveSavedSession) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => ClientWorkoutExecutionScreen(
+                      workoutRepository: widget.workoutRepository,
+                    ),
+                  ),
+                );
+              } else if (recommended != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => ClientSessionOverviewScreen(
+                      session: recommended,
+                      workoutRepository: widget.workoutRepository,
+                    ),
+                  ),
+                );
+              } else {
+                _selectTab(1);
+              }
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colors.borderSubtle),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: colors.isDark ? const Color(0xFF262626) : colors.border,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.fitness_center_rounded, color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: GoogleFonts.poppins(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$duration min • $count exercises',
+                          style: GoogleFonts.poppins(
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 14),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- TAB 0: 🏠 HOME DASHBOARD COMMAND CENTER ---
   Widget _buildClientHomeScreen() {
     final clientId = AuthService().currentUserId;
@@ -740,7 +930,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                             child: Text(
                               firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
                               style: TextStyle(
-                                fontFamily: 'Sora',
+                                fontFamily: 'Poppins',
                                 color: colors.primaryRed,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 16,
@@ -769,46 +959,24 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$greetingText, $firstName',
+                            '$greetingText,',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            firstName,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               color: colors.textPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                               letterSpacing: -0.3,
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: colors.primaryRed,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: colors.primaryRed.withOpacity(0.6),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '$greetingText • Train Strong',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'Plus Jakarta Sans',
-                                    color: colors.textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
@@ -841,7 +1009,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                         Text(
                           '12 DAYS',
                           style: TextStyle(
-                            fontFamily: 'Sora',
+                            fontFamily: 'Poppins',
                             color: colors.textPrimary,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -857,6 +1025,94 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           ),
         ),
         const SizedBox(height: 14),
+
+        // --- 1. HERO WORKOUT CARD (Official Mockup Screen 2) ---
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 30),
+          child: AlphaXHero(
+            imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1200&q=80',
+            tag: 'Your Journey',
+            title: 'Stronger Every Day',
+            subtitle: widget.workoutRepository.hasActiveSavedSession
+                ? '${widget.workoutRepository.activeSession.title} (In Progress)'
+                : (recommended != null ? '${recommended.title} • ${recommended.targetMuscleGroup}' : 'Strength • Conditioning • Transformation'),
+            height: 230,
+            action: AlphaXButton(
+              label: widget.workoutRepository.hasActiveSavedSession ? 'Resume Workout' : 'Start Workout',
+              trailingIcon: Icons.arrow_forward_rounded,
+              height: 46,
+              onPressed: () {
+                if (widget.workoutRepository.hasActiveSavedSession) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => ClientWorkoutExecutionScreen(
+                        workoutRepository: widget.workoutRepository,
+                      ),
+                    ),
+                  );
+                } else if (recommended != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => ClientSessionOverviewScreen(
+                        session: recommended,
+                        workoutRepository: widget.workoutRepository,
+                      ),
+                    ),
+                  );
+                } else {
+                  _selectTab(1);
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // --- 2. QUICK ACTION GRID (Workout, Nutrition, Progress - Official Mockup Screen 2) ---
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 60),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildMockupQuickActionCard(
+                  icon: Icons.fitness_center_rounded,
+                  title: 'Workout',
+                  subtitle: 'Build Strength',
+                  colors: colors,
+                  onTap: () => _selectTab(1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMockupQuickActionCard(
+                  icon: Icons.restaurant_rounded,
+                  title: 'Nutrition',
+                  subtitle: 'Fuel Your Goals',
+                  colors: colors,
+                  onTap: () => _selectTab(3),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMockupQuickActionCard(
+                  icon: Icons.trending_up_rounded,
+                  title: 'Progress',
+                  subtitle: 'Track Growth',
+                  colors: colors,
+                  onTap: () => _openProgressSubPage(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // --- 3. TODAY'S PLAN CARD (Official Mockup Screen 2) ---
+        AlphaXSubtleEntrance(
+          delay: const Duration(milliseconds: 80),
+          child: _buildMockupTodaysPlanCard(colors, recommended),
+        ),
+        const SizedBox(height: 18),
 
         // Prominent Client Profile Card (Prompt Requirement 21)
         AlphaXSubtleEntrance(
@@ -888,7 +1144,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           Text(
                             'Welcome, ${AuthService().currentUserName}',
                             style: TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               color: colors.textPrimary,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
@@ -902,7 +1158,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                               Text(
                                 'Client ID: ',
                                 style: TextStyle(
-                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontFamily: 'Poppins',
                                   color: colors.textSecondary,
                                   fontSize: 12,
                                 ),
@@ -941,11 +1197,11 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('GOAL', style: TextStyle(fontFamily: 'Plus Jakarta Sans', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          Text('GOAL', style: TextStyle(fontFamily: 'Poppins', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
                           const SizedBox(height: 2),
                           Text(
                             (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString(),
-                            style: TextStyle(fontFamily: 'Sora', color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
+                            style: TextStyle(fontFamily: 'Poppins', color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -957,11 +1213,11 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('FITNESS LEVEL', style: TextStyle(fontFamily: 'Plus Jakarta Sans', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                          Text('FITNESS LEVEL', style: TextStyle(fontFamily: 'Poppins', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
                           const SizedBox(height: 2),
                           Text(
                             (AuthService().clientProfile['fitnessLevel'] ?? 'Intermediate').toString().toUpperCase(),
-                            style: TextStyle(fontFamily: 'Sora', color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 13),
+                            style: TextStyle(fontFamily: 'Poppins', color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -1075,7 +1331,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                               Text(
                                 'DAILY READINESS & ENERGY',
                                 style: TextStyle(
-                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontFamily: 'Poppins',
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.0,
@@ -1088,7 +1344,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           Text(
                             'Peak Condition',
                             style: TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                               color: colors.textPrimary,
@@ -1099,7 +1355,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           Text(
                             'Hydration, macros, and recovery are aligned for today\'s session.',
                             style: TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
+                              fontFamily: 'Poppins',
                               fontSize: 12,
                               color: colors.textSecondary,
                               height: 1.35,
@@ -1123,7 +1379,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                                     Text(
                                       '92% READY',
                                       style: TextStyle(
-                                        fontFamily: 'Plus Jakarta Sans',
+                                        fontFamily: 'Poppins',
                                         fontSize: 10,
                                         fontWeight: FontWeight.w900,
                                         color: colors.primaryRed,
@@ -1143,7 +1399,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                                 child: Text(
                                   '12-DAY STREAK',
                                   style: TextStyle(
-                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontFamily: 'Poppins',
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     color: colors.textSecondary,
@@ -1167,7 +1423,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           AlphaXCountUpText(
                             text: '92',
                             style: TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
                               color: colors.textPrimary,
@@ -1176,7 +1432,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                           Text(
                             'SCORE',
                             style: TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
+                              fontFamily: 'Poppins',
                               fontSize: 9,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
@@ -1193,46 +1449,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           ),
         ),
 
-        // 2. Large Hero Section (Cinematic gym photography blending into black background)
-        AlphaXHero(
-          imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1200&q=80',
-          tag: "TODAY'S WORKOUT",
-          title: widget.workoutRepository.hasActiveSavedSession ? 'WORKOUT IN PROGRESS' : 'READY TO TRAIN?',
-          subtitle: widget.workoutRepository.hasActiveSavedSession
-              ? '${widget.workoutRepository.activeSession.title} • ${widget.workoutRepository.activeSession.totalCompletedSets}/${widget.workoutRepository.activeSession.totalSets} sets logged'
-              : (recommended != null
-                  ? 'Today\'s workout: ${recommended.title} • ${recommended.targetMuscleGroup}'
-                  : 'Push • Chest • Shoulders • Triceps'),
-          height: 280,
-          action: AlphaXButton(
-            label: widget.workoutRepository.hasActiveSavedSession ? 'RESUME WORKOUT' : 'START WORKOUT',
-            icon: widget.workoutRepository.hasActiveSavedSession ? Icons.restore_rounded : Icons.play_arrow_rounded,
-            height: 48,
-            onPressed: () {
-              if (widget.workoutRepository.hasActiveSavedSession) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => ClientWorkoutExecutionScreen(
-                      workoutRepository: widget.workoutRepository,
-                    ),
-                  ),
-                );
-              } else if (recommended != null) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => ClientSessionOverviewScreen(
-                      session: recommended,
-                      workoutRepository: widget.workoutRepository,
-                    ),
-                  ),
-                );
-              } else {
-                _selectTab(1);
-              }
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
 
         // 3. Today's Metrics (Clean 2x2 Grid of real tracked metrics with mini rings)
         const AlphaXSectionHeader(title: 'TODAY'),
@@ -1851,7 +2068,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             Text(
               label,
               style: TextStyle(
-                fontFamily: 'Plus Jakarta Sans',
+                fontFamily: 'Poppins',
                 color: isSelected ? AppColors.onPrimary : colors.textPrimary,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -2790,7 +3007,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                           child: Text(
                             'ATHLETE MEMBER',
                             style: TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
+                              fontFamily: 'Poppins',
                               color: colors.primaryRed,
                               fontWeight: FontWeight.w800,
                               fontSize: 10,
@@ -2820,7 +3037,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                         child: Text(
                           userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
                           style: const TextStyle(
-                            fontFamily: 'Sora',
+                            fontFamily: 'Poppins',
                             color: AppColors.onPrimary,
                             fontWeight: FontWeight.w900,
                             fontSize: 26,
@@ -2832,7 +3049,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                     Text(
                       userName.isNotEmpty ? userName : 'Alpha X Athlete',
                       style: TextStyle(
-                        fontFamily: 'Sora',
+                        fontFamily: 'Poppins',
                         color: colors.textPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 20,
@@ -2842,7 +3059,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                     Text(
                       userEmail,
                       style: TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
+                        fontFamily: 'Poppins',
                         color: colors.textSecondary,
                         fontSize: 13,
                       ),
@@ -2969,7 +3186,7 @@ class ClientProfileSubScreen extends StatelessWidget {
                         Text(
                           'Theme Mode',
                           style: TextStyle(
-                            fontFamily: 'Sora',
+                            fontFamily: 'Poppins',
                             color: colors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -3186,7 +3403,7 @@ class ClientProfileSubScreen extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                fontFamily: 'Sora',
+                fontFamily: 'Poppins',
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
                 color: isUnlocked ? colors.textPrimary : colors.textTertiary,
@@ -3199,7 +3416,7 @@ class ClientProfileSubScreen extends StatelessWidget {
             Text(
               subtitle,
               style: TextStyle(
-                fontFamily: 'Plus Jakarta Sans',
+                fontFamily: 'Poppins',
                 fontSize: 8,
                 fontWeight: FontWeight.w700,
                 color: isUnlocked ? limeColor : colors.textTertiary,
@@ -3237,7 +3454,7 @@ class ClientProfileSubScreen extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            fontFamily: 'Sora',
+            fontFamily: 'Poppins',
             color: colors.textPrimary,
             fontWeight: FontWeight.w800,
             fontSize: 20,

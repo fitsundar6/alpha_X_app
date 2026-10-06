@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Alpha X Gym - Athletic Premium Core Color System
-/// Deep near-black backgrounds + electric-lime neon accent + energetic gradients.
+/// Alpha X Gym - Core Color System
+/// Deep black surfaces + gold brand accent + crisp typography
 class AlphaXColors {
   // Dark Background & Surfaces
   static const Color background = AppColors.background;
+  static const Color secondaryBackground = AppColors.secondaryBackground;
   static const Color surface = AppColors.surface;
+  static const Color card = AppColors.card;
   static const Color surfaceCard = AppColors.surfaceCard;
+  static const Color secondaryCard = AppColors.secondaryCard;
   static const Color surfaceElevated = AppColors.surfaceElevated;
   static const Color surfaceGlass = AppColors.surfaceGlass;
 
-  // Primary Lime Accent (CTA, highlights, active states)
+  // Primary Gold Accent (CTA, highlights, active states)
   static const Color primary = AppColors.primary;
+  static const Color primaryGold = AppColors.primaryGold;
+  static const Color brightGold = AppColors.brightGold;
+  static const Color lightGold = AppColors.lightGold;
   static const Color primaryPressed = AppColors.primaryPressed;
   static const Color onPrimary = AppColors.onPrimary;
   static const Color glow = AppColors.glow;
@@ -21,7 +27,7 @@ class AlphaXColors {
   static const Color redAccent = AppColors.primary;
   static const Color redAccentHover = AppColors.primaryPressed;
   static const Color redGlow = AppColors.glow;
-  static const Color redSubtle = Color(0x26C6FF3A);
+  static const Color redSubtle = Color(0x26D4AF37);
 
   // High-Contrast Borders
   static const Color border = AppColors.border;
@@ -33,12 +39,14 @@ class AlphaXColors {
   static const Color textSecondary = AppColors.textSecondary;
   static const Color textTertiary = AppColors.textTertiary;
   static const Color textMuted = AppColors.textMuted;
+  static const Color textDisabled = AppColors.textDisabled;
 
   // Functional Status
   static const Color success = AppColors.success;
   static const Color warning = AppColors.warning;
-  static const Color error = AppColors.danger;
-  static const Color info = AppColors.secondary;
+  static const Color error = AppColors.error;
+  static const Color danger = AppColors.danger;
+  static const Color info = AppColors.info;
 
   // Metal Badges
   static const Color gold = AppColors.gold;
@@ -46,6 +54,7 @@ class AlphaXColors {
   static const Color bronze = AppColors.bronze;
 
   // Gradients
+  static const LinearGradient gradientGold = AppColors.gradientGold;
   static const LinearGradient gradientEnergy = AppColors.gradientEnergy;
   static const LinearGradient gradientViolet = AppColors.gradientViolet;
 }
@@ -66,13 +75,14 @@ class AlphaXSpacing {
 }
 
 /// Alpha X Gym - Shape & Corner Radius Tokens
-/// Card radius: 20-24, Buttons: 16/pill, Chips: pill
+/// Card radius: 14-18, Buttons: 14-16, Dialogs: 18-20
 class AlphaXRadius {
   static const double xs = 8.0;
   static const double sm = 12.0;
-  static const double md = 16.0;
-  static const double lg = 20.0;
-  static const double xl = 24.0;
+  static const double md = 14.0;
+  static const double lg = 16.0;
+  static const double xl = 18.0;
+  static const double xxl = 24.0;
   static const double full = 999.0;
 
   static BorderRadius get roundedXs => BorderRadius.circular(xs);
@@ -80,15 +90,59 @@ class AlphaXRadius {
   static BorderRadius get roundedMd => BorderRadius.circular(md);
   static BorderRadius get roundedLg => BorderRadius.circular(lg);
   static BorderRadius get roundedXl => BorderRadius.circular(xl);
+  static BorderRadius get roundedXxl => BorderRadius.circular(xxl);
   static BorderRadius get roundedFull => BorderRadius.circular(full);
 }
 
-/// Alpha X Gym - Athletic Premium Typography System
-/// Headings: Sora (weights 700-800)
-/// Body/UI: Plus Jakarta Sans (400/500/600)
+/// Alpha X Gym - Controlled Shadows System
+class AlphaXShadows {
+  static List<BoxShadow> darkCard = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.35),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> darkCardElevated = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.45),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
+
+  static List<BoxShadow> lightCard = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.04),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> lightCardElevated = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.08),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
+
+  static List<BoxShadow> goldGlow = [
+    const BoxShadow(
+      color: Color(0x33D4AF37),
+      blurRadius: 18,
+      spreadRadius: 1,
+      offset: Offset(0, 4),
+    ),
+  ];
+}
+
+/// Alpha X Gym - Athletic Premium Typography System - Poppins (Design Specification)
+/// Headings & Body: Poppins (Aa)
 class AlphaXTypography {
-  static const String headingFont = 'Sora';
-  static const String bodyFont = 'Plus Jakarta Sans';
+  static const String headingFont = 'Poppins';
+  static const String bodyFont = 'Poppins';
 
   static const TextStyle displayLarge = TextStyle(
     fontFamily: headingFont,
@@ -196,3 +250,9 @@ class AlphaXTypography {
     color: AppColors.primary,
   );
 }
+
+// Global Aliases requested in theme architecture
+typedef AppTextStyles = AlphaXTypography;
+typedef AppSpacing = AlphaXSpacing;
+typedef AppRadius = AlphaXRadius;
+typedef AppShadows = AlphaXShadows;

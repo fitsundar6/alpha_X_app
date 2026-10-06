@@ -529,7 +529,7 @@ class _CelebrationBurstWidgetState extends State<_CelebrationBurstWidget>
                           Text(
                             widget.message,
                             style: const TextStyle(
-                              fontFamily: 'Sora',
+                              fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w800,

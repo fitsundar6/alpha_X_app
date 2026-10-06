@@ -10,10 +10,12 @@ import '../../data/services/food_photo_tracking_service.dart';
 /// what clients eat throughout the day and verify meal photos.
 class AdminFoodPhotosMonitoringScreen extends StatefulWidget {
   final String? initialClientId;
+  final bool showAppBar;
 
   const AdminFoodPhotosMonitoringScreen({
     super.key,
     this.initialClientId,
+    this.showAppBar = true,
   });
 
   @override
@@ -380,31 +382,33 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'CLIENT FOOD PHOTOS',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.0,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_today, color: AppColors.primaryRed, size: 20),
-            tooltip: 'Filter Date',
-            onPressed: _selectDate,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh',
-            onPressed: _loadPhotos,
-          ),
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: const Text(
+                'CLIENT FOOD PHOTOS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.calendar_today, color: AppColors.primaryRed, size: 20),
+                  tooltip: 'Filter Date',
+                  onPressed: _selectDate,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  tooltip: 'Refresh',
+                  onPressed: _loadPhotos,
+                ),
+              ],
+            )
+          : null,
       body: Column(
         children: [
           // 1. Search Bar & Date Indicator
@@ -464,6 +468,22 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                     ),
                   ),
                 ),
+                if (!widget.showAppBar) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _loadPhotos,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Icon(Icons.refresh, color: Colors.white, size: 16),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -613,6 +633,13 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
     );
   }
 
+  String _getClientInitial(FoodPhotoModel photo) {
+    final name = (photo.clientName?.trim().isNotEmpty ?? false)
+        ? photo.clientName!.trim()
+        : photo.clientId.trim();
+    return name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+  }
+
   Widget _buildAdminPhotoCard(FoodPhotoModel photo) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -640,7 +667,7 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                       radius: 14,
                       backgroundColor: AppColors.primaryRed.withOpacity(0.15),
                       child: Text(
-                        (photo.clientName ?? photo.clientId).substring(0, 1).toUpperCase(),
+                        _getClientInitial(photo),
                         style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 11),
                       ),
                     ),

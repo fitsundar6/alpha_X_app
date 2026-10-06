@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
@@ -24,6 +25,7 @@ import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_vi
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -54,6 +56,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   late final AiCoachRepository _aiCoachRepo;
   late final Future<AiDailySummary> _aiSummaryFuture;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController _clientSearchController = TextEditingController();
+  String _clientSearchQuery = '';
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -65,6 +69,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     '⚙️ SETTINGS',
     '📈 WEEKLY PROGRESS',
     '⚠️ CLIENT ATTENTION',
+    '📸 CLIENT FOOD PHOTOS',
   ];
 
   @override
@@ -77,6 +82,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     // request on every setState(), causing repeated AI_SERVICE_UNAVAILABLE logs.
     _aiSummaryFuture = _aiCoachRepo.getDailySummary();
     _loadClients();
+  }
+
+  @override
+  void dispose() {
+    _clientSearchController.dispose();
+    super.dispose();
   }
 
   /// Select an admin tab and record it in history for back-gesture support.
@@ -163,6 +174,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClientThemeColors.of(context);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -210,9 +222,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         },
         child: Scaffold(
       key: _scaffoldKey,
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
         titleSpacing: 16,
+        backgroundColor: colors.background,
+        elevation: 0,
+        iconTheme: IconThemeData(color: colors.textPrimary),
         title: Row(
           children: [
             const AlphaXLogo.appBar(size: 28),
@@ -220,19 +235,31 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.primaryRed,
+                color: colors.primary,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
+              child: Text(
                 'ADMIN',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.0),
+                style: TextStyle(
+                  color: colors.onPrimary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                  letterSpacing: 1.0,
+                ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _tabTitles[_selectedIndex],
-                style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.1, fontSize: 15),
+                _selectedIndex < _tabTitles.length
+                    ? _tabTitles[_selectedIndex]
+                    : 'ALPHA X ADMIN',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                  fontSize: 15,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -241,17 +268,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         actions: [
           IconButton(
             icon: _isLoadingClients
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
                   )
-                : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+                : Icon(Icons.refresh, size: 20, color: colors.textSecondary),
             tooltip: 'Refresh Clients',
             onPressed: _isLoadingClients ? null : () => _loadClients(forceRefresh: true),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, size: 20, color: AppColors.textSecondary),
+            icon: Icon(Icons.logout, size: 20, color: colors.textSecondary),
             tooltip: 'Logout',
             onPressed: () {
               AuthService().logout();
@@ -260,43 +287,43 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           ),
         ],
       ),
-      drawer: _buildAdminDrawer(),
+      drawer: _buildAdminDrawer(colors),
       body: _buildCurrentTab(),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-          color: AppColors.surface,
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: colors.border, width: 1)),
+          color: colors.surfaceCard,
         ),
         child: NavigationBar(
           selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
           onDestinationSelected: _selectAdminTab,
-          backgroundColor: AppColors.surface,
-          indicatorColor: AppColors.glowRed,
+          backgroundColor: colors.surfaceCard,
+          indicatorColor: colors.glow,
           elevation: 0,
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard, color: AppColors.primaryRed),
+              icon: Icon(Icons.dashboard_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.dashboard, color: colors.primary),
               label: 'Dashboard',
             ),
             NavigationDestination(
-              icon: Icon(Icons.groups_outlined),
-              selectedIcon: Icon(Icons.groups, color: AppColors.primaryRed),
+              icon: Icon(Icons.groups_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.groups, color: colors.primary),
               label: 'Clients',
             ),
             NavigationDestination(
-              icon: Icon(Icons.fitness_center_outlined),
-              selectedIcon: Icon(Icons.fitness_center, color: AppColors.primaryRed),
+              icon: Icon(Icons.fitness_center_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.fitness_center, color: colors.primary),
               label: 'Sessions',
             ),
             NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
-              selectedIcon: Icon(Icons.calendar_month, color: AppColors.primaryRed),
+              icon: Icon(Icons.calendar_month_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.calendar_month, color: colors.primary),
               label: 'Assign',
             ),
             NavigationDestination(
-              icon: Icon(Icons.local_fire_department_outlined),
-              selectedIcon: Icon(Icons.local_fire_department, color: AppColors.primaryRed),
+              icon: Icon(Icons.local_fire_department_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.local_fire_department, color: colors.primary),
               label: 'Challenges',
             ),
           ],
@@ -331,20 +358,20 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       case 8:
         return const AdminAttentionCenterView();
       case 9:
-        return const AdminFoodPhotosMonitoringScreen();
+        return const AdminFoodPhotosMonitoringScreen(showAppBar: false);
       default:
         return _buildAdminHomeTab();
     }
   }
 
-  Widget _buildAdminDrawer() {
+  Widget _buildAdminDrawer(ClientThemeColors colors) {
     return Drawer(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(color: AppColors.surfaceCard),
+            decoration: BoxDecoration(color: colors.surfaceCard),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -353,11 +380,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   children: [
                     const AlphaXLogo(size: 38),
                     const SizedBox(width: 12),
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ALPHA X GYM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-                        Text('ADMIN CONTROL PANEL', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.w800)),
+                        Text('ALPHA X GYM', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16)),
+                        Text('ADMIN CONTROL PANEL', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
                       ],
                     ),
                   ],
@@ -365,16 +392,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 const SizedBox(height: 12),
                 Text(
                   'Logged in: ${AuthService().currentUserName}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
           ),
-          _drawerItem(0, 'Dashboard', Icons.dashboard_outlined),
+          _drawerItem(0, 'Dashboard', Icons.dashboard_outlined, colors),
           ListTile(
             leading: const Text('🤖', style: TextStyle(fontSize: 20)),
-            title: const Text('Alpha X AI Coach', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-            subtitle: const Text('Master Intelligence Controller', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
+            title: Text('Alpha X AI Coach', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
+            subtitle: Text('Master Intelligence Controller', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
@@ -387,11 +414,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               );
             },
           ),
-          _drawerItem(1, 'Clients', Icons.groups_outlined),
-          _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined),
+          _drawerItem(1, 'Clients', Icons.groups_outlined, colors),
+          _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined, colors),
           ListTile(
-            leading: const Icon(Icons.storage_outlined, color: AppColors.textSecondary),
-            title: const Text('Exercise Database', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+            leading: Icon(Icons.storage_outlined, color: colors.textSecondary),
+            title: Text('Exercise Database', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500)),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
@@ -400,18 +427,23 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.swap_calls_outlined, color: AppColors.textSecondary),
+            leading: Icon(Icons.swap_calls_outlined, color: colors.textSecondary),
             title: Row(
               children: [
-                const Text('Change Requests', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-                const Spacer(),
+                Expanded(
+                  child: Text(
+                    'Change Requests',
+                    style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 if (widget.workoutRepository.changeRequests.where((r) => r.isPending).isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: AppColors.primaryRed, borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(10)),
                     child: Text(
                       '${widget.workoutRepository.changeRequests.where((r) => r.isPending).length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: colors.onPrimary, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
@@ -426,8 +458,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.analytics_outlined, color: AppColors.textSecondary),
-            title: const Text('Athlete Performance', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+            leading: Icon(Icons.analytics_outlined, color: colors.textSecondary),
+            title: Text('Athlete Performance', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500)),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
@@ -437,17 +469,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               );
             },
           ),
-          _drawerItem(3, 'Assignments', Icons.calendar_month_outlined),
-          _drawerItem(4, 'Challenges', Icons.local_fire_department_outlined),
-          _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined),
-          _drawerItem(6, 'Settings', Icons.settings_outlined),
-          _drawerItem(7, 'Weekly Progress', Icons.insights_rounded),
-          _drawerItem(8, 'Client Attention', Icons.warning_amber_rounded),
-          _drawerItem(9, 'Client Food Photos', Icons.camera_alt_outlined),
-          const Divider(color: AppColors.border),
+          _drawerItem(3, 'Assignments', Icons.calendar_month_outlined, colors),
+          _drawerItem(4, 'Challenges', Icons.local_fire_department_outlined, colors),
+          _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined, colors),
+          _drawerItem(6, 'Settings', Icons.settings_outlined, colors),
+          _drawerItem(7, 'Weekly Progress', Icons.insights_rounded, colors),
+          _drawerItem(8, 'Client Attention', Icons.warning_amber_rounded, colors),
+          _drawerItem(9, 'Client Food Photos', Icons.camera_alt_outlined, colors),
+          Divider(color: colors.border),
           ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.primaryRed),
-            title: const Text('Sign Out', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700)),
+            leading: Icon(Icons.logout, color: colors.primary),
+            title: Text('Sign Out', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
             onTap: () {
               Navigator.of(context).pop();
               AuthService().logout();
@@ -459,14 +491,14 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  Widget _drawerItem(int index, String title, IconData icon) {
+  Widget _drawerItem(int index, String title, IconData icon, ClientThemeColors colors) {
     final isSelected = _selectedIndex == index;
     return ListTile(
-      leading: Icon(icon, color: isSelected ? AppColors.primaryRed : AppColors.textSecondary),
+      leading: Icon(icon, color: isSelected ? colors.primary : colors.textSecondary),
       title: Text(
         title,
         style: TextStyle(
-          color: isSelected ? AppColors.primaryRed : AppColors.textPrimary,
+          color: isSelected ? colors.primary : colors.textPrimary,
           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
         ),
       ),
@@ -519,28 +551,30 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'FACILITY COMMAND CENTER',
-                          style: TextStyle(
-                            color: AlphaXColors.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.1,
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'FACILITY COMMAND CENTER',
+                            style: TextStyle(
+                              color: AlphaXColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.1,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'ALPHA X PERFORMANCE ARCHITECTURE',
-                          style: TextStyle(
-                            color: AlphaXColors.redAccent,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
+                          Text(
+                            'ALPHA X PERFORMANCE ARCHITECTURE',
+                            style: TextStyle(
+                              color: AlphaXColors.redAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -999,6 +1033,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   // --- TAB 1: 👥 CLIENTS TAB ---
   Widget _buildClientsTab() {
     final clients = widget.workoutRepository.clientsList;
+    final activeCount = clients.where((c) => c['onboardingCompleted'] == 'true').length;
+    final pendingCount = clients.length - activeCount;
+
+    final filteredClients = _clientSearchQuery.trim().isEmpty
+        ? clients
+        : clients.where((c) {
+            final query = _clientSearchQuery.trim().toLowerCase();
+            final name = (c['name'] ?? '').toString().toLowerCase();
+            final email = (c['email'] ?? '').toString().toLowerCase();
+            final cid = (c['clientId'] ?? c['id'] ?? '').toString().toLowerCase();
+            return name.contains(query) || email.contains(query) || cid.contains(query);
+          }).toList();
 
     return RefreshIndicator(
       color: AppColors.primaryRed,
@@ -1008,6 +1054,119 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
+          // 1. Category Filter Pills (Mockup Screen 8)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildAdminCategoryPill(
+                  title: 'Clients',
+                  isSelected: true,
+                  onTap: () {},
+                ),
+                const SizedBox(width: 8),
+                _buildAdminCategoryPill(
+                  title: 'Workouts',
+                  isSelected: false,
+                  onTap: () => _selectAdminTab(2),
+                ),
+                const SizedBox(width: 8),
+                _buildAdminCategoryPill(
+                  title: 'Diet Plans',
+                  isSelected: false,
+                  onTap: () => _selectAdminTab(9),
+                ),
+                const SizedBox(width: 8),
+                _buildAdminCategoryPill(
+                  title: 'Reports',
+                  isSelected: false,
+                  onTap: () => _selectAdminTab(7),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 2. Summary Metrics Cards (Mockup Screen 8: Total Clients, Active, Pending)
+          Row(
+            children: [
+              Expanded(
+                child: _buildAdminSummaryMetricCard(
+                  label: 'Total Clients',
+                  value: '${clients.length}',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildAdminSummaryMetricCard(
+                  label: 'Active',
+                  value: '$activeCount',
+                  indicatorColor: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildAdminSummaryMetricCard(
+                  label: 'Pending',
+                  value: '$pendingCount',
+                  indicatorColor: Colors.orangeAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 3. Search Bar (Mockup Screen 8)
+          Container(
+            height: 46,
+            decoration: BoxDecoration(
+              color: const Color(0xFF151515),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF242424)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _clientSearchController,
+                    style: GoogleFonts.poppins(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search clients...',
+                      hintStyle: GoogleFonts.poppins(
+                        color: AppColors.textTertiary,
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _clientSearchQuery = val;
+                      });
+                    },
+                  ),
+                ),
+                if (_clientSearchQuery.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      _clientSearchController.clear();
+                      setState(() {
+                        _clientSearchQuery = '';
+                      });
+                    },
+                    child: const Icon(Icons.close, color: AppColors.textSecondary, size: 18),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1016,8 +1175,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'REGISTERED ATHLETES & CLIENTS (${clients.length})',
-                      style: const TextStyle(
+                      'REGISTERED ATHLETES & CLIENTS (${filteredClients.length})',
+                      style: GoogleFonts.poppins(
                         color: AppColors.textTertiary,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -1025,9 +1184,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Live roster synchronized with Alpha X Neon Cloud Database.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1095,15 +1254,15 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   children: [
                     const Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'No Clients Yet',
-                      style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                      style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'New clients will appear here after registration.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
@@ -1119,9 +1278,45 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ),
               ),
             ),
+          ] else if (filteredClients.isEmpty) ...[
+            const SizedBox(height: 40),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.search_off_rounded, size: 44, color: AppColors.textTertiary),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No Matching Clients',
+                      style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'No athletes match "$_clientSearchQuery"',
+                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                    const SizedBox(height: 14),
+                    TextButton(
+                      onPressed: () {
+                        _clientSearchController.clear();
+                        setState(() => _clientSearchQuery = '');
+                      },
+                      child: const Text('Clear Search', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ] else ...[
             const SizedBox(height: 14),
-            ...clients.map((client) {
+            ...filteredClients.map((client) {
               final clientId = client['id'] ?? '';
               final joinDate = _formatJoinDate(client['createdAt']);
 
@@ -1157,7 +1352,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         child: (photoUrl == null || photoUrl.isEmpty)
                             ? Text(
                                 (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                                style: GoogleFonts.poppins(color: Colors.black, fontWeight: FontWeight.w900),
                               )
                             : null,
                       ),
@@ -1166,27 +1361,40 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                           Flexible(
                             child: Text(
                               client['name'] ?? 'Athlete',
-                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
+                              style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           // Onboarding Status Pill
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(999),
                               border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
                             ),
-                            child: Text(
-                              isOnboarded ? 'ONBOARDED' : 'INCOMPLETE',
-                              style: TextStyle(
-                                color: isOnboarded ? AppColors.success : Colors.orangeAccent,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isOnboarded ? 'Active' : 'Pending',
+                                  style: GoogleFonts.poppins(
+                                    color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -1494,6 +1702,93 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
+  Widget _buildAdminCategoryPill({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : const Color(0xFF282828),
+          ),
+        ),
+        child: Text(
+          title,
+          style: GoogleFonts.poppins(
+            color: isSelected ? const Color(0xFF0A0A0A) : Colors.white,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdminSummaryMetricCard({
+    required String label,
+    required String value,
+    Color? indicatorColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151515),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF242424)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (indicatorColor != null) ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Displays the Complete Client Onboarding Assessment Profile Modal for Master Admin.
   void _showClientProfileModal(BuildContext context, Map<String, dynamic> client) {
     showModalBottomSheet(
@@ -1749,43 +2044,219 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
 
   // --- TAB 8: ⚙️ SETTINGS TAB ---
   Widget _buildSettingsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'ADMINISTRATIVE PREFERENCES',
-          style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+    final themeService = ClientThemeService();
+    final colors = ClientThemeColors.of(context);
+    final isDark = colors.isDark;
+
+    return ListenableBuilder(
+      listenable: themeService,
+      builder: (context, _) {
+        final currentMode = themeService.themeMode;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'APPEARANCE',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: colors.surfaceCard,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.04),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.palette_outlined, size: 20, color: colors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Theme Mode',
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildAdminThemeRadioRow(
+                    title: 'Light Mode',
+                    subtitle: 'Clean, bright interface with crisp contrast',
+                    icon: Icons.wb_sunny_rounded,
+                    selected: currentMode == ClientThemeMode.light,
+                    onTap: () => themeService.setThemeMode(ClientThemeMode.light),
+                    colors: colors,
+                  ),
+                  Divider(color: colors.border, height: 16),
+                  _buildAdminThemeRadioRow(
+                    title: 'Dark Mode',
+                    subtitle: 'Classic Alpha X sleek dark appearance',
+                    icon: Icons.nightlight_round,
+                    selected: currentMode == ClientThemeMode.dark,
+                    onTap: () => themeService.setThemeMode(ClientThemeMode.dark),
+                    colors: colors,
+                  ),
+                  Divider(color: colors.border, height: 16),
+                  _buildAdminThemeRadioRow(
+                    title: 'System Default',
+                    subtitle: 'Automatically follow device appearance setting',
+                    icon: Icons.settings_brightness_rounded,
+                    selected: currentMode == ClientThemeMode.system,
+                    onTap: () => themeService.setThemeMode(ClientThemeMode.system),
+                    colors: colors,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'ADMINISTRATIVE PREFERENCES',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: colors.surfaceCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.border),
+              ),
+              leading: Icon(Icons.verified_user_outlined, color: colors.primary),
+              title: Text(
+                'Single Master Admin Authorized',
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                'Backend verified email: ${AuthService().currentUserEmail}',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: colors.surfaceCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.border),
+              ),
+              leading: Icon(Icons.security, color: colors.textSecondary),
+              title: Text(
+                'Security & RBAC Enforcement',
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                'Admin Only • Strict Client Data Isolation Enforced',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: colors.surfaceCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.border),
+              ),
+              leading: Icon(Icons.cloud_sync_outlined, color: colors.primary),
+              title: Text(
+                'Backend API Server Endpoint',
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                AppConstants.apiBaseUrl,
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.edit_outlined, size: 18, color: colors.textSecondary),
+              onTap: () async {
+                await ServerConfigDialog.show(context);
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminThemeRadioRow({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    required ClientThemeColors colors,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected
+                    ? colors.primary.withOpacity(0.15)
+                    : (colors.isDark ? AppColors.secondaryCard : AppColors.lightSecondaryCard),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: selected ? colors.primary : colors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: selected ? colors.primary : colors.textPrimary,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Radio<bool>(
+              value: true,
+              groupValue: selected,
+              onChanged: (_) => onTap(),
+              activeColor: colors.primary,
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        ListTile(
-          tileColor: AppColors.surfaceCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          leading: const Icon(Icons.verified_user_outlined, color: AppColors.primaryRed),
-          title: const Text('Single Master Admin Authorized', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-          subtitle: Text('Backend verified email: ${AuthService().currentUserEmail}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          tileColor: AppColors.surfaceCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          leading: const Icon(Icons.security, color: AppColors.textSecondary),
-          title: const Text('Security & RBAC Enforcement', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-          subtitle: const Text('Admin Only • Strict Client Data Isolation Enforced', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          tileColor: AppColors.surfaceCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          leading: const Icon(Icons.cloud_sync_outlined, color: AppColors.primaryRed),
-          title: const Text('Backend API Server Endpoint', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-          subtitle: Text(AppConstants.apiBaseUrl, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          trailing: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
-          onTap: () async {
-            await ServerConfigDialog.show(context);
-            if (mounted) setState(() {});
-          },
-        ),
-      ],
+      ),
     );
   }
 }

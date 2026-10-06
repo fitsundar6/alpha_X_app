@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 /// The official Alpha X Gym brand logo widget.
 ///
 /// Strictly preserves original proportions, transparency, and design.
-/// Supports responsive sizing, subtle optional glow effects, and standard app bar sizing.
+/// Supports responsive sizing, subtle optional gold glow effects, and standard app bar sizing.
 class AlphaXLogo extends StatelessWidget {
   final double? size;
   final double? width;
@@ -13,7 +13,7 @@ class AlphaXLogo extends StatelessWidget {
   final BoxFit fit;
   final Color? color;
   final bool withGlow;
-  final Color glowColor;
+  final Color? glowColor;
   final double glowRadius;
   final EdgeInsetsGeometry padding;
 
@@ -25,7 +25,7 @@ class AlphaXLogo extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.color,
     this.withGlow = false,
-    this.glowColor = AppColors.glowRed,
+    this.glowColor,
     this.glowRadius = 24.0,
     this.padding = EdgeInsets.zero,
   });
@@ -37,7 +37,7 @@ class AlphaXLogo extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.color,
     this.withGlow = false,
-    this.glowColor = AppColors.glowRed,
+    this.glowColor,
     this.glowRadius = 12.0,
     this.padding = EdgeInsets.zero,
   })  : width = size,
@@ -50,7 +50,7 @@ class AlphaXLogo extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.color,
     this.withGlow = false,
-    this.glowColor = AppColors.glowRed,
+    this.glowColor,
     this.glowRadius = 32.0,
     this.padding = EdgeInsets.zero,
   })  : width = size,
@@ -63,7 +63,7 @@ class AlphaXLogo extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.color,
     this.withGlow = false,
-    this.glowColor = AppColors.glowRed,
+    this.glowColor,
     this.glowRadius = 20.0,
     this.padding = EdgeInsets.zero,
   })  : width = size,
@@ -76,7 +76,7 @@ class AlphaXLogo extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.color,
     this.withGlow = false,
-    this.glowColor = AppColors.glowRed,
+    this.glowColor,
     this.glowRadius = 8.0,
     this.padding = EdgeInsets.zero,
   })  : width = size,
@@ -86,25 +86,27 @@ class AlphaXLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveWidth = width ?? size;
     final effectiveHeight = height ?? size;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveColor = color ?? (isDark ? null : AppColors.lightTextPrimary);
+    final effectiveGlowColor = glowColor ?? (isDark ? AppColors.glow : AppColors.lightGlow);
 
     Widget imageWidget = Image.asset(
       AppConstants.logoPath,
       width: effectiveWidth,
       height: effectiveHeight,
       fit: fit,
-      color: color,
+      color: effectiveColor,
       filterQuality: FilterQuality.high,
       isAntiAlias: true,
       semanticLabel: AppConstants.appName,
       errorBuilder: (context, error, stackTrace) {
-        // Fallback gracefully if asset is loading or missing
         return SizedBox(
           width: effectiveWidth,
           height: effectiveHeight,
-          child: const Center(
+          child: Center(
             child: Icon(
               Icons.fitness_center_rounded,
-              color: AppColors.primaryRed,
+              color: isDark ? AppColors.primary : AppColors.lightPrimary,
             ),
           ),
         );
@@ -122,8 +124,8 @@ class AlphaXLogo extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  glowColor.withOpacity(0.36),
-                  glowColor.withOpacity(0.12),
+                  effectiveGlowColor.withOpacity(0.36),
+                  effectiveGlowColor.withOpacity(0.12),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 0.55, 1.0],
@@ -166,6 +168,7 @@ class AlphaXBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       crossAxisAlignment: crossAxisAlignment,
       children: [
@@ -181,8 +184,8 @@ class AlphaXBrandHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? AppColors.textPrimary : AppColors.lightTextPrimary,
                   fontWeight: FontWeight.w900,
                   fontSize: 16,
                   letterSpacing: 1.2,
@@ -194,8 +197,8 @@ class AlphaXBrandHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subtitle!,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary,
                     fontSize: 11,
                     letterSpacing: 0.5,
                   ),

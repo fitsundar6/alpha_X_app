@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
-import 'package:alpha_x_gym/core/theme/app_theme.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
@@ -72,14 +71,11 @@ class _RoleRouterState extends State<RoleRouter> {
     // If Client -> Client Dashboard (Limited access)
     // If unknown / invalid -> Fallback safely to client dashboard, never grant admin
     if (role == UserRole.admin) {
-      return Theme(
-        data: AppTheme.darkTheme,
-        child: AdminMainDashboardScreen(
-          workoutRepository: widget.workoutRepository,
-          activityRepository: widget.activityRepository,
-          macroRepository: widget.macroRepository,
-          weeklyProgressRepository: _weeklyProgressRepository,
-        ),
+      return AdminMainDashboardScreen(
+        workoutRepository: widget.workoutRepository,
+        activityRepository: widget.activityRepository,
+        macroRepository: widget.macroRepository,
+        weeklyProgressRepository: _weeklyProgressRepository,
       );
     } else {
       return ClientMainDashboardScreen(

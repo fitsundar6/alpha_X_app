@@ -77,7 +77,7 @@ class AlphaXStatCard extends StatelessWidget {
                   child: Text(
                     label.toUpperCase(),
                     style: TextStyle(
-                      fontFamily: 'Plus Jakarta Sans',
+                      fontFamily: 'Poppins',
                       color: secondaryTextColor,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -124,7 +124,7 @@ class AlphaXStatCard extends StatelessWidget {
             AlphaXCountUpText(
               text: value,
               style: TextStyle(
-                fontFamily: 'Sora',
+                fontFamily: 'Poppins',
                 color: primaryTextColor,
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
@@ -136,7 +136,7 @@ class AlphaXStatCard extends StatelessWidget {
               Text(
                 subtext!,
                 style: TextStyle(
-                  fontFamily: 'Plus Jakarta Sans',
+                  fontFamily: 'Poppins',
                   color: tertiaryTextColor,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,

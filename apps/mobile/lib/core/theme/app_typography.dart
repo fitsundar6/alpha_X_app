@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Athletic Premium Typography System
-/// Headings: Sora (700-800 for bold confidence)
-/// Body/UI: Plus Jakarta Sans (400/500/600 for crisp readability)
+/// Athletic Premium Typography System - Poppins (Design System Specification)
+/// Headings & Body: Poppins (Aa)
 /// Implemented as compile-time constants for optimal 60fps performance and const widget tree compatibility.
 class AppTypography {
-  static const String headingFont = 'Sora';
-  static const String bodyFont = 'Plus Jakarta Sans';
+  static const String headingFont = 'Poppins';
+  static const String bodyFont = 'Poppins';
 
   // Display styles
   static const TextStyle displayLarge = TextStyle(
