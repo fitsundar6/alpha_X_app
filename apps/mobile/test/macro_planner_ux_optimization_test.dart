@@ -5,7 +5,6 @@ import 'package:alpha_x_gym/features/macro_planner/presentation/screens/macro_pl
 import 'package:alpha_x_gym/features/macro_planner/presentation/widgets/daily_macro_progress_dashboard.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/meal_type.dart';
-import 'package:alpha_x_gym/features/macro_planner/domain/models/food_item.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/food_log_entry.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/macro_input.dart';

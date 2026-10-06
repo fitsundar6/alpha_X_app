@@ -28,6 +28,8 @@ import 'features/onboarding/client_onboarding_screen.dart';
 import 'features/progress/data/repositories/weekly_progress_repository.dart';
 import 'features/progress/presentation/screens/client_weekly_progress_screen.dart';
 import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart';
+import 'features/notifications/data/repositories/notification_repository.dart';
+import 'core/services/app_auto_refresh_service.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -48,6 +50,11 @@ void main() async {
     OneSignal.initialize('56c1791b-aa5e-4042-8fba-e370433b8055');
     // Request permission (shows iOS/Android system permission dialog)
     OneSignal.Notifications.requestPermission(true);
+
+    // Auto-refresh immediately when an admin push notification is received
+    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+      AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
+    });
   }
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
@@ -85,6 +92,14 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
     _macroRepository = MacroRepository();
     _weeklyProgressRepository = WeeklyProgressRepository();
 
+    // Initialize global auto-refresh engine so all assignments reflect immediately
+    AppAutoRefreshService.instance.initialize(
+      workoutRepository: _workoutRepository,
+      macroRepository: _macroRepository,
+      weeklyProgressRepository: _weeklyProgressRepository,
+      notificationRepository: NotificationRepository(),
+    );
+
     // Automatically update daily activity tracking & sync with backend when workout is completed
     _workoutRepository.onWorkoutCompleted = (record) {
       final minutes = (record.durationSeconds / 60).round().clamp(1, 300);
@@ -102,6 +117,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
   void dispose() {
     _authService.removeListener(_onStateChange);
     _clientThemeService.removeListener(_onStateChange);
+    AppAutoRefreshService.instance.dispose();
     super.dispose();
   }
 

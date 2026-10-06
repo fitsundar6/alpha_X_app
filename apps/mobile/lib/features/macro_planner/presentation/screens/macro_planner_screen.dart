@@ -16,6 +16,7 @@ import 'macro_history_screen.dart';
 import '../../../food_photo_tracking/presentation/screens/live_food_camera_screen.dart';
 import '../../../food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import '../../domain/models/assigned_diet_plan.dart';
+import '../../../../core/services/app_auto_refresh_service.dart';
 
 /// Main client hub for Alpha X Macro Planner & Daily Food Tracking
 class MacroPlannerScreen extends StatefulWidget {
@@ -240,12 +241,22 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               ],
             )
           : null,
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-        children: [
-          // If showAppBar is false, show a clean header row
-          if (!widget.showAppBar) ...[
-            Row(
+      body: RefreshIndicator(
+        color: colors.primary,
+        backgroundColor: colors.surfaceCard,
+        onRefresh: () async {
+          await AppAutoRefreshService.instance.triggerImmediateSync(
+            reason: 'Macro screen pull-to-refresh',
+            force: true,
+          );
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          children: [
+            // If showAppBar is false, show a clean header row
+            if (!widget.showAppBar) ...[
+              Row(
               children: [
                 const AlphaXLogo.badge(size: 28),
                 const SizedBox(width: 10),
@@ -394,8 +405,9 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
           const SizedBox(height: 24),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // --- WIDGET BUILDER: DATE NAVIGATION BAR ---
   Widget _buildDateSelector(ClientThemeColors colors) {

@@ -20,6 +20,7 @@ import 'package:alpha_x_gym/features/macro_planner/domain/models/confirmed_meal_
 import 'package:alpha_x_gym/features/macro_planner/domain/models/scanned_food_detection.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/food_database.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/services/macro_calculator.dart';
+import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 
 /// Client progress check-in snapshot
 class MacroProgressReview {
@@ -85,6 +86,11 @@ class MacroRepository extends ChangeNotifier {
   List<MacroProgressReview> get reviews => List.unmodifiable(_reviews);
 
   bool get hasActiveTarget => _currentResult != null;
+  double? get customCalories => _customTargetCalories;
+  double? get customProtein => _customTargetProtein;
+  double? get customCarbs => _customTargetCarbs;
+  double? get customFat => _customTargetFat;
+  double? get customFiber => _customTargetFiber;
 
   /// Set explicit daily targets (e.g. 2200 kcal, 160g P, 250g C, 70g F)
   void setCustomDailyTargets({
@@ -587,6 +593,11 @@ class MacroRepository extends ChangeNotifier {
         final data = decoded['data'] ?? decoded;
         if (data != null && data is Map<String, dynamic> && data['planName'] != null) {
           final plan = AssignedDietPlan.fromJson(data);
+          final bool changed = _assignedDietPlan == null ||
+              _assignedDietPlan!.id != plan.id ||
+              _assignedDietPlan!.version != plan.version ||
+              _assignedDietPlan!.dailyCalories != plan.dailyCalories;
+
           _assignedDietPlan = plan;
 
           // Cache to local preferences to ensure availability on cold start/offline
@@ -603,6 +614,15 @@ class MacroRepository extends ChangeNotifier {
             fat: plan.fat,
             fiber: plan.fiber,
           );
+          if (changed) {
+            notifyListeners();
+          }
+        } else if (data == null && _assignedDietPlan != null) {
+          _assignedDietPlan = null;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove(_prefAssignedDietPlanKey);
+          } catch (_) {}
           notifyListeners();
         }
       }
@@ -918,7 +938,14 @@ class MacroRepository extends ChangeNotifier {
         }
       }
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (clientId == resolveClientId(null) || clientId == AuthService().currentUserId) {
+          fetchAssignedDietPlan();
+        }
+        AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin saved diet plan');
+        return true;
+      }
+      return false;
     } catch (_) {
       return false;
     }

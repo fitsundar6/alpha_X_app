@@ -40,10 +40,12 @@ class NotificationRepository extends ChangeNotifier {
   }
 
   /// Fetches latest notifications for client
-  Future<void> fetchNotifications() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> fetchNotifications({bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+    }
 
     try {
       final url = Uri.parse('$_baseUrl/client/me/notifications');
@@ -61,7 +63,9 @@ class NotificationRepository extends ChangeNotifier {
     } catch (e) {
       _error = 'Network error fetching notifications: $e';
     } finally {
-      _isLoading = false;
+      if (!silent) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }

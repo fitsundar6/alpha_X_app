@@ -91,14 +91,18 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
     } catch (e) {
       stopwatch.stop();
       final err = NetworkExceptions.handle(e, requestUrl: normalized);
-      setState(() {
-        _testSuccess = false;
-        _testResult = err.userMessage;
-      });
+      if (mounted) {
+        setState(() {
+          _testSuccess = false;
+          _testResult = err.userMessage;
+        });
+      }
     } finally {
-      setState(() {
-        _isTesting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isTesting = false;
+        });
+      }
     }
   }
 

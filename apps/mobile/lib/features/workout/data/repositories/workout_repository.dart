@@ -8,6 +8,7 @@ import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'package:alpha_x_gym/features/exercise/domain/models/exercise_model.dart';
 import 'package:alpha_x_gym/features/exercise/data/repositories/exercise_repository.dart';
+import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 
 class WorkoutAssignmentData {
   final String id;
@@ -381,7 +382,11 @@ class WorkoutRepository extends ChangeNotifier {
         },
         body: jsonEncode(dietData),
       ).timeout(const Duration(seconds: 5));
-      return resp.statusCode == 200;
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin assigned diet plan to client');
+        return true;
+      }
+      return false;
     } catch (_) {
       return false;
     }
@@ -400,7 +405,11 @@ class WorkoutRepository extends ChangeNotifier {
         },
         body: jsonEncode(macroData),
       ).timeout(const Duration(seconds: 5));
-      return resp.statusCode == 200;
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin assigned macro plan to client');
+        return true;
+      }
+      return false;
     } catch (_) {
       return false;
     }
@@ -1234,7 +1243,10 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      if (response.statusCode == 200 || response.statusCode == 201) return true;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin assigned workout session');
+        return true;
+      }
       debugPrint('[WorkoutRepository] assignSession error: ${response.statusCode} -> ${response.body}');
       return false;
     } catch (e) {
@@ -1247,6 +1259,7 @@ class WorkoutRepository extends ChangeNotifier {
     _assignments.removeWhere((a) => a.sessionId == sessionId && a.clientId == clientId);
     _saveToLocalStorage();
     notifyListeners();
+    AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin unassigned workout session');
 
     try {
       final token = await AuthService().getValidToken();

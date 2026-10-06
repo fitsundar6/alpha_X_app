@@ -28,6 +28,7 @@ import 'package:alpha_x_gym/features/progress/presentation/screens/client_transf
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
+import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 
 
 class ClientMainDashboardScreen extends StatefulWidget {
@@ -104,12 +105,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       });
 
       // Synchronize latest plans from database whenever the client switches tabs
-      if (idx == 0 || idx == 1) {
-        widget.workoutRepository.fetchClientWorkouts();
-      }
-      if (idx == 0 || idx == 3) {
-        widget.macroRepository.fetchAssignedDietPlan();
-      }
+      AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Client tab switch to $idx');
     }
   }
 
@@ -891,12 +887,10 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       color: colors.primaryRed,
       backgroundColor: colors.surfaceElevated,
       onRefresh: () async {
-        await Future.wait([
-          widget.workoutRepository.fetchClientWorkouts(forceRefresh: true),
-          widget.macroRepository.fetchAssignedDietPlan(),
-          _weeklyProgressRepository.fetchCheckInStatus(),
-          _notificationRepository.fetchNotifications(),
-        ]);
+        await AppAutoRefreshService.instance.triggerImmediateSync(
+          reason: 'Client Dashboard pull-to-refresh',
+          force: true,
+        );
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

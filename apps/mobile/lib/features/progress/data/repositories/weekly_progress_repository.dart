@@ -36,10 +36,12 @@ class WeeklyProgressRepository extends ChangeNotifier {
   }
 
   /// 1. Fetch weekly check-in availability status for current authenticated client
-  Future<WeeklyCheckInStatus> fetchCheckInStatus({bool forceRefresh = false}) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  Future<WeeklyCheckInStatus> fetchCheckInStatus({bool forceRefresh = false, bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/weekly-check-ins/status');

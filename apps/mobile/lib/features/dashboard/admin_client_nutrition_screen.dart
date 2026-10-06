@@ -5,6 +5,7 @@ import '../macro_planner/data/repositories/macro_repository.dart';
 import '../macro_planner/domain/models/assigned_diet_plan.dart';
 import 'admin_create_edit_diet_plan_screen.dart';
 import 'widgets/admin_meal_photo_viewer_dialog.dart';
+import '../../core/services/app_auto_refresh_service.dart';
 
 /// Screen for Master Admin / Trainer to monitor client nutrition:
 /// - Assigned Diet vs Actual Food Log (Factual Comparison)
@@ -80,6 +81,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
 
     if (updated == true) {
       _loadData();
+      AppAutoRefreshService.instance.triggerImmediateSync(reason: 'Admin updated client diet plan');
     }
   }
 
