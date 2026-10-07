@@ -40,14 +40,17 @@ void main() {
       expect(imageWidget.semanticLabel, equals(AppConstants.appName));
     });
 
-    testWidgets('FoundationSplashScreen displays AlphaXLogo and brand identity', (tester) async {
+    testWidgets('AlphaXGymApp launches directly into authentication without landing splash screen', (tester) async {
       await tester.pumpWidget(const AlphaXGymApp());
 
-      // Splash screen displays AlphaXLogo
+      // Landing splash screen buttons no longer appear
+      expect(find.text('ENTER ALPHA X GYM'), findsNothing);
+      expect(find.text('Member Sign In'), findsNothing);
+
+      // Directly renders LoginScreen with official logo & brand title
+      expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(AlphaXLogo), findsOneWidget);
       expect(find.text('ALPHA X GYM'), findsOneWidget);
-      expect(find.text('ENTER ALPHA X GYM'), findsOneWidget);
-      expect(find.text('Member Sign In'), findsOneWidget);
     });
 
     testWidgets('LoginScreen renders official logo and single secure sign-in portal without role selector', (tester) async {

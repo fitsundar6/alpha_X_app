@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +6,7 @@ import 'package:flutter/material.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/client_theme_service.dart';
-import 'core/theme/app_typography.dart';
 import 'core/auth/auth_service.dart';
-import 'core/widgets/alpha_x_logo.dart';
 import 'core/auth/login_screen.dart';
 import 'core/auth/create_account_screen.dart';
 import 'core/auth/admin_login_screen.dart';
@@ -65,6 +61,49 @@ void main() async {
   debugPrint('====================================================');
 
   runApp(const AlphaXGymApp());
+}
+
+/// Resolves the existing appropriate starting screen based on the current authentication state:
+/// - If not authenticated: directly opens [LoginScreen]
+/// - If authenticated Admin: opens [AdminMainDashboardScreen]
+/// - If authenticated Client with pending onboarding: opens [ClientOnboardingScreen]
+/// - If authenticated Client with completed onboarding: opens [NavigationShell] (Dashboard)
+Widget getInitialScreen({
+  AuthService? authService,
+  WorkoutRepository? workoutRepository,
+  ActivityRepository? activityRepository,
+  MacroRepository? macroRepository,
+  WeeklyProgressRepository? weeklyProgressRepository,
+}) {
+  final auth = authService ?? AuthService();
+  final workoutRepo = workoutRepository ?? WorkoutRepository();
+  final activityRepo = activityRepository ?? ActivityRepository();
+  final macroRepo = macroRepository ?? MacroRepository();
+  final weeklyProgressRepo = weeklyProgressRepository ?? WeeklyProgressRepository();
+
+  if (auth.isAuthenticated) {
+    if (auth.isAdmin) {
+      return AdminMainDashboardScreen(
+        workoutRepository: workoutRepo,
+        activityRepository: activityRepo,
+        macroRepository: macroRepo,
+        weeklyProgressRepository: weeklyProgressRepo,
+      );
+    } else {
+      if (!auth.onboardingCompleted) {
+        return const ClientOnboardingScreen();
+      } else {
+        return NavigationShell(
+          workoutRepository: workoutRepo,
+          activityRepository: activityRepo,
+          macroRepository: macroRepo,
+          weeklyProgressRepository: weeklyProgressRepo,
+        );
+      }
+    }
+  } else {
+    return const LoginScreen();
+  }
 }
 
 class AlphaXGymApp extends StatefulWidget {
@@ -149,7 +188,14 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: effectiveTheme,
-        home: widget.home ?? const FoundationSplashScreen(),
+        home: widget.home ??
+            getInitialScreen(
+              authService: _authService,
+              workoutRepository: _workoutRepository,
+              activityRepository: _activityRepository,
+              macroRepository: _macroRepository,
+              weeklyProgressRepository: _weeklyProgressRepository,
+            ),
         onGenerateRoute: _onGenerateRoute,
         routes: {
           '/dashboard': (context) => NavigationShell(
@@ -163,257 +209,6 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
           '/admin/login': (context) => const AdminLoginScreen(),
           '/onboarding': (context) => const ClientOnboardingScreen(),
         },
-      ),
-    );
-  }
-}
-
-class FoundationSplashScreen extends StatefulWidget {
-  const FoundationSplashScreen({super.key});
-
-  @override
-  State<FoundationSplashScreen> createState() => _FoundationSplashScreenState();
-}
-
-class _FoundationSplashScreenState extends State<FoundationSplashScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _entranceController;
-  late Animation<double> _entranceFade;
-  late Animation<double> _entranceScale;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-  Timer? _autoTransitionTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // 1. Smooth Logo Entrance: Fade + slight scale
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _entranceFade = CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOut,
-    );
-    _entranceScale = Tween<double>(begin: 0.90, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
-    _entranceController.forward();
-
-    // 2. Subtle Brand Pulse
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    // Auto-transition to main app after 3 seconds if user doesn't press the button
-    _autoTransitionTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        _enterApp();
-      }
-    });
-  }
-
-  void _enterApp() {
-    _autoTransitionTimer?.cancel();
-    final auth = AuthService();
-    if (auth.isAuthenticated) {
-      if (auth.isAdmin) {
-        Navigator.of(context).pushReplacementNamed('/admin');
-      } else {
-        if (!auth.onboardingCompleted) {
-          Navigator.of(context).pushReplacementNamed('/onboarding');
-        } else {
-          Navigator.of(context).pushReplacementNamed('/dashboard');
-        }
-      }
-    } else {
-      Navigator.of(context).pushReplacementNamed('/login');
-    }
-  }
-
-  @override
-  void dispose() {
-    _entranceController.dispose();
-    _pulseController.dispose();
-    _autoTransitionTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 1. Full-bleed athletic background image (z-index: 0 / bottom of Stack)
-          // Aligned to top center and scaled (BoxFit.contain) so subject & glowing "ALPHA-X" text are fully visible without zoom or crop
-          Positioned.fill(
-            child: ColoredBox(
-              color: Colors.black,
-              child: Image.asset(
-                'assets/images/alpha_x_login_bg.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.topCenter,
-                errorBuilder: (context, error, stackTrace) => Image.asset(
-                  'assets/images/alpha_x_login_bg.jpg',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  errorBuilder: (context, error, stackTrace) => const ColoredBox(color: Colors.black),
-                ),
-              ),
-            ),
-          ),
-
-          // 2. Foreground content pushed to bottom third
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Upper section kept completely open for the spotlight, "ALPHA-X", and subject
-                  const Spacer(),
-
-                  // Bottom third: Frosted glass container with brand & action buttons
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.18),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.25),
-                              blurRadius: 18,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Official Alpha X Gym Brand Logo with smooth entrance and subtle pulse animation
-                            FadeTransition(
-                              opacity: _entranceFade,
-                              child: ScaleTransition(
-                                scale: _entranceScale,
-                                child: ScaleTransition(
-                                  scale: _pulseAnimation,
-                                  child: const AlphaXLogo.splash(
-                                    size: 64,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-
-                            // Accessible semantic branding title
-                            const SizedBox(
-                              height: 0,
-                              width: 0,
-                              child: Text(
-                                'ALPHA X GYM',
-                                style: TextStyle(fontSize: 0, color: Colors.transparent),
-                              ),
-                            ),
-
-                            // Brand Tagline
-                            const Text(
-                              AppConstants.appTagline,
-                              style: AppTypography.bodySmall,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 6),
-
-                            // Motto Pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.28),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.14)),
-                              ),
-                              child: const Text(
-                                AppConstants.appMotto,
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primaryRed,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-
-                            // Enter Gym Action Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 42,
-                              child: ElevatedButton.icon(
-                                onPressed: _enterApp,
-                                icon: const Icon(Icons.fitness_center, size: 18),
-                                label: const Text(
-                                  'ENTER ALPHA X GYM',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primaryRed,
-                                  foregroundColor: Colors.white,
-                                  shape: const StadiumBorder(),
-                                  elevation: 4,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-
-                            // Member Portal / Sign-In Button
-                            TextButton.icon(
-                              onPressed: () {
-                                _autoTransitionTimer?.cancel();
-                                Navigator.of(context).pushReplacementNamed('/login');
-                              },
-                              icon: const Icon(Icons.login, size: 14, color: AppColors.textSecondary),
-                              label: const Text(
-                                'Member Sign In',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -435,6 +230,19 @@ Route<dynamic>? buildAppRoute(
   final weeklyProgressRepo = weeklyProgressRepository ?? WeeklyProgressRepository();
   final uri = Uri.parse(settings.name ?? '/');
   final path = uri.path;
+
+  // Root route: direct entry into appropriate screen based on auth state
+  if (path == '/') {
+    return MaterialPageRoute(
+      builder: (_) => getInitialScreen(
+        authService: auth,
+        workoutRepository: workoutRepo,
+        activityRepository: activityRepo,
+        macroRepository: macroRepo,
+        weeklyProgressRepository: weeklyProgressRepo,
+      ),
+    );
+  }
 
   // Master Administrator Login route (Public portal)
   if (path == '/admin/login') {
