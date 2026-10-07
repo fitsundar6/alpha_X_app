@@ -179,7 +179,7 @@ export class ClientContextService {
     if (whatAboutMatch && whatAboutMatch[1]) {
       const candidate = whatAboutMatch[1].trim();
       // Only treat as client switch if candidate does not look like a metric/topic (e.g. "workouts", "diet", "sleep")
-      const nonClientTopics = ['workout', 'workouts', 'diet', 'nutrition', 'sleep', 'protein', 'weight', 'progress', 'checkin', 'attendance', 'steps'];
+      const nonClientTopics = ['workout', 'workouts', 'diet', 'nutrition', 'sleep', 'protein', 'weight', 'progress', 'checkin', 'steps'];
       if (!nonClientTopics.includes(candidate.toLowerCase())) {
         return {
           intent: 'SWITCH',
@@ -218,7 +218,7 @@ export class ClientContextService {
 
     // 6. Pronoun Queries without an Active Verified Client
     const pronounRegex = /\b(he|she|they|him|her|his|their|the\s+client|this\s+client|this\s+member)\b/i;
-    const clientMetricRegex = /\b(weight|workout|workouts|exercise|exercises|diet|food|nutrition|check-?in|checkins|steps|attendance|injur(y|ies)|progress|profile|personal\s+best(s)?|pb(s)?|pr(s)?|1rm|records?|bests?)\b/i;
+    const clientMetricRegex = /\b(weight|workout|workouts|exercise|exercises|diet|food|nutrition|check-?in|checkins|steps|injur(y|ies)|progress|profile|personal\s+best(s)?|pb(s)?|pr(s)?|1rm|records?|bests?)\b/i;
 
     if (pronounRegex.test(clean) && clientMetricRegex.test(clean)) {
       if (!currentClient) {

@@ -55,6 +55,7 @@ import { telemetryRoutes } from './modules/telemetry/telemetry.routes';
 import { telemetryService } from './modules/telemetry/telemetry.service';
 import { workoutRepository } from './modules/workout/workout.repository';
 import { prisma } from './config/prisma';
+import { foodPhotoCleanupService } from './modules/food/food_photo_cleanup.service';
 import cron from 'node-cron';
 
 const app = express();
@@ -215,7 +216,7 @@ app.use('/api/auth', authRoutes);
 // Client Self-Service Routes (Strictly scoped to authenticated user)
 app.use('/api/v1/client', authRoutes); // Supports /api/v1/client/register, /api/v1/client/login
 app.use('/api/client', authRoutes);
-app.use('/api/v1/client', clientRoutes); // Supports /api/v1/client/me/workout, diet-plan, macros, progress, attendance
+app.use('/api/v1/client', clientRoutes); // Supports /api/v1/client/me/workout, diet-plan, macros, progress
 app.use('/api/client', clientRoutes);
 
 // Workout Session Management & Execution Routes
@@ -377,6 +378,18 @@ if (!isTestRun && !isVercel && isDirectRun) {
       console.warn('🔔 Proactive AI Coach: ONESIGNAL credentials not set — push notifications skipped');
     }
     // ─────────────────────────────────────────────────────────────────────
+
+    // ── 15-Day Client Food Journal Photo Storage Auto-Cleanup Cron ────────
+    // Runs daily at 2:00 AM UTC
+    // Purges physical food photo files older than 15 days from storage
+    // strictly preserving food log records, nutrition, and macros.
+    cron.schedule('0 2 * * *', () => {
+      console.log('[CRON] 2:00 AM — Starting 15-day client food journal photo cleanup sweep...');
+      foodPhotoCleanupService.cleanupExpiredFoodPhotos(15).catch((err) =>
+        console.error('[CRON] Food photo cleanup sweep error:', err?.message)
+      );
+    });
+    console.log('🧹 Food Photo Storage: 15-day auto-cleanup cron active (daily at 2:00 AM UTC)');
   });
 }
 

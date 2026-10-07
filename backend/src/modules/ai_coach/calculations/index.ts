@@ -11,6 +11,5 @@ export * from './waist.calculator';
 export * from './nutrition.calculator';
 export * from './activity.calculator';
 export * from './workout.calculator';
-export * from './attendance.calculator';
 export * from './checkin.calculator';
 export * from './calculation.service';

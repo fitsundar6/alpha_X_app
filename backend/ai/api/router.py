@@ -64,7 +64,6 @@ def get_daily_summary(
             weeklyCheckInsPending=summary["weeklyCheckInsPending"],
             clientsNeedReview=summary["clientsNeedingReviewCount"],
             totalActiveClients=summary["totalActiveClients"],
-            attendancesVerifiedToday=summary["attendancesVerifiedToday"],
             attentionItems=summary["attentionItems"],
         )
     except Exception as e:

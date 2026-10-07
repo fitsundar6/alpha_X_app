@@ -716,28 +716,44 @@ class ExerciseSet {
   }
 
   factory ExerciseSet.fromJson(Map<String, dynamic> json) {
+    int repsMin = (json['targetRepsMin'] as num?)?.toInt() ?? 8;
+    int repsMax = (json['targetRepsMax'] as num?)?.toInt() ?? 12;
+    if (json['targetRepsMin'] == null && json['targetReps'] != null) {
+      final repsParts = (json['targetReps'] as String).split(RegExp(r'[-–]'));
+      if (repsParts.length == 2) {
+        repsMin = int.tryParse(repsParts[0].trim()) ?? 8;
+        repsMax = int.tryParse(repsParts[1].trim()) ?? 12;
+      } else if (repsParts.length == 1) {
+        final single = int.tryParse(repsParts[0].trim());
+        if (single != null) {
+          repsMin = single;
+          repsMax = single;
+        }
+      }
+    }
+
     return ExerciseSet(
-      id: json['id'] as String,
-      setNumber: json['setNumber'] as int,
+      id: json['id'] as String? ?? 'set_${json['setNumber'] ?? 1}',
+      setNumber: (json['setNumber'] as num?)?.toInt() ?? 1,
       setType: SetTypeExtension.fromString(json['setType'] as String?),
       previousWeight: (json['previousWeight'] as num?)?.toDouble(),
-      previousReps: json['previousReps'] as int?,
+      previousReps: (json['previousReps'] as num?)?.toInt(),
       previousRpe: (json['previousRpe'] as num?)?.toDouble(),
-      previousRir: json['previousRir'] as int?,
+      previousRir: (json['previousRir'] as num?)?.toInt(),
       targetWeight: (json['targetWeight'] as num?)?.toDouble() ?? 0.0,
       targetWeightMax: (json['targetWeightMax'] as num?)?.toDouble(),
-      targetRepsMin: json['targetRepsMin'] as int? ?? 8,
-      targetRepsMax: json['targetRepsMax'] as int? ?? 12,
+      targetRepsMin: repsMin,
+      targetRepsMax: repsMax,
       targetRpe: (json['targetRpe'] as num?)?.toDouble() ?? 8.0,
-      targetRir: json['targetRir'] as int? ?? 2,
+      targetRir: (json['targetRir'] as num?)?.toInt() ?? 2,
       tempo: json['tempo'] as String? ?? '3-1-1-0',
-      durationSeconds: json['durationSeconds'] as int?,
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
-      restSeconds: json['restSeconds'] as int?,
+      restSeconds: (json['restSeconds'] as num?)?.toInt(),
       actualWeight: (json['actualWeight'] as num?)?.toDouble(),
-      actualReps: json['actualReps'] as int?,
+      actualReps: (json['actualReps'] as num?)?.toInt(),
       actualRpe: (json['actualRpe'] as num?)?.toDouble(),
-      actualRir: json['actualRir'] as int?,
+      actualRir: (json['actualRir'] as num?)?.toInt(),
       isCompleted: json['isCompleted'] as bool? ?? false,
       completedAt: json['completedAt'] != null
           ? DateTime.tryParse(json['completedAt'] as String)
@@ -799,6 +815,12 @@ class WorkoutExercise {
   bool get isAllSetsCompleted => sets.isNotEmpty && sets.every((s) => s.isCompleted);
 
   int get completedSetsCount => sets.where((s) => s.isCompleted).length;
+
+  int get numberOfSets => sets.length;
+
+  int get setCount => sets.length;
+
+  int get setsCount => sets.length;
 
   double get totalExerciseVolume => sets.fold(0.0, (acc, s) => acc + s.volume);
 
@@ -875,6 +897,9 @@ class WorkoutExercise {
       'sectionId': sectionId,
       'sectionType': sectionType.name,
       'trainingMethod': trainingMethod.name,
+      'numberOfSets': sets.length,
+      'setCount': sets.length,
+      'setsCount': sets.length,
       'restSeconds': restSeconds,
       'trainerNote': trainerNote,
       'tempo': tempo,
@@ -891,10 +916,85 @@ class WorkoutExercise {
   }
 
   factory WorkoutExercise.fromJson(Map<String, dynamic> json) {
+    // 1. Parse sets if present as a List of maps
+    List<ExerciseSet> parsedSets = [];
+    final rawSets = json['sets'] ?? json['setTemplates'];
+    if (rawSets is List && rawSets.isNotEmpty) {
+      for (final s in rawSets) {
+        if (s is Map<String, dynamic>) {
+          parsedSets.add(ExerciseSet.fromJson(s));
+        } else if (s is Map) {
+          parsedSets.add(ExerciseSet.fromJson(Map<String, dynamic>.from(s)));
+        }
+      }
+    }
+
+    // 2. If parsedSets is empty, resolve set count from backend fields:
+    // numberOfSets, setCount, setsCount, totalSets, targetSets, or numeric sets
+    if (parsedSets.isEmpty) {
+      final dynamic rawCount = json['numberOfSets'] ??
+          json['setCount'] ??
+          json['setsCount'] ??
+          json['totalSets'] ??
+          json['targetSets'] ??
+          (json['sets'] is num
+              ? json['sets']
+              : (json['sets'] is String ? int.tryParse(json['sets'] as String) : null));
+
+      int count = 0;
+      if (rawCount is num) {
+        count = rawCount.toInt();
+      } else if (rawCount is String) {
+        count = int.tryParse(rawCount) ?? 0;
+      }
+
+      if (count > 0) {
+        final exerciseId = json['exerciseId'] as String? ?? 'ex';
+        final targetRepsStr = (json['targetReps'] as String?) ?? '8–12';
+        int repsMin = 8;
+        int repsMax = 12;
+        final repsParts = targetRepsStr.split(RegExp(r'[-–]'));
+        if (repsParts.length == 2) {
+          repsMin = int.tryParse(repsParts[0].trim()) ?? 8;
+          repsMax = int.tryParse(repsParts[1].trim()) ?? 12;
+        } else if (repsParts.length == 1) {
+          final single = int.tryParse(repsParts[0].trim());
+          if (single != null) {
+            repsMin = single;
+            repsMax = single;
+          }
+        }
+
+        final targetWeight = (json['targetWeight'] as num?)?.toDouble() ?? 0.0;
+        final targetRpe = (json['targetRpe'] as num?)?.toDouble() ?? 8.0;
+        final targetRir = (json['targetRir'] as num?)?.toInt() ?? 2;
+        final tempo = (json['tempo'] as String?) ?? '3-1-1-0';
+        final setTypeStr = json['setType'] as String?;
+        final setType = SetTypeExtension.fromString(setTypeStr);
+        final restSec = (json['restSeconds'] as num?)?.toInt() ?? 90;
+
+        parsedSets = List.generate(count, (idx) {
+          final setNum = idx + 1;
+          return ExerciseSet(
+            id: 'set_${json['id'] ?? exerciseId}_$setNum',
+            setNumber: setNum,
+            setType: setType,
+            targetWeight: targetWeight,
+            targetRepsMin: repsMin,
+            targetRepsMax: repsMax,
+            targetRpe: targetRpe,
+            targetRir: targetRir,
+            tempo: tempo,
+            restSeconds: restSec,
+          );
+        });
+      }
+    }
+
     return WorkoutExercise(
-      id: json['id'] as String,
-      exerciseId: json['exerciseId'] as String,
-      exerciseName: json['exerciseName'] as String,
+      id: json['id'] as String? ?? 'we_${DateTime.now().millisecondsSinceEpoch}',
+      exerciseId: json['exerciseId'] as String? ?? 'ex_custom',
+      exerciseName: json['exerciseName'] as String? ?? 'Exercise',
       category: json['category'] as String? ?? 'General',
       primaryMusclesDisplay: json['primaryMusclesDisplay'] as String? ?? '',
       secondaryMusclesDisplay: json['secondaryMusclesDisplay'] as String? ?? '',
@@ -902,25 +1002,24 @@ class WorkoutExercise {
       sectionId: json['sectionId'] as String?,
       sectionType: WorkoutSectionTypeExtension.fromString(json['sectionType'] as String?),
       trainingMethod: AdvancedTrainingMethodExtension.fromString(json['trainingMethod'] as String?),
-      restSeconds: json['restSeconds'] as int? ?? 90,
-      trainerNote: json['trainerNote'] as String? ?? '',
+      restSeconds: (json['restSeconds'] as num?)?.toInt() ?? 90,
+      trainerNote: json['trainerNote'] as String? ??
+          (json['exerciseNotes'] as String? ??
+              (json['adminInstruction'] as String? ?? '')),
       tempo: json['tempo'] as String? ?? '3-1-1-0',
       approvedAlternativeIds: (json['approvedAlternativeIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],
-      sets: (json['sets'] as List<dynamic>?)
-              ?.map((s) => ExerciseSet.fromJson(s as Map<String, dynamic>))
-              .toList() ??
-          [],
+      sets: parsedSets,
       isSkipped: json['isSkipped'] as bool? ?? false,
       skipReason: json['skipReason'] as String?,
       clientNote: json['clientNote'] as String?,
       isUnavailable: json['isUnavailable'] as bool? ?? false,
       swapRecord: json['swapRecord'] != null
-          ? ExerciseSwapRecord.fromJson(json['swapRecord'] as Map<String, dynamic>)
+          ? ExerciseSwapRecord.fromJson(Map<String, dynamic>.from(json['swapRecord'] as Map))
           : null,
-      durationSeconds: json['durationSeconds'] as int?,
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
     );
   }

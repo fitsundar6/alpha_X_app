@@ -35,7 +35,6 @@ class ClientIntelligenceAgent:
         progress = alpha_x_tools.get_weight_history(client_profile_id)
         checkins = alpha_x_tools.get_weekly_checkins(client_profile_id)
         steps = alpha_x_tools.get_steps_history(client_profile_id)
-        attendances = alpha_x_tools.get_attendance_history(client_profile_id)
         alerts = alpha_x_tools.get_client_alerts(client_profile_id)
 
         # Computations

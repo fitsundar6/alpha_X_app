@@ -799,69 +799,6 @@ export class ClientDataService {
   }
 
   /**
-   * Retrieves gym attendance records.
-   */
-  public async getClientAttendance(clientIdOrName: string, options: DateFilterOptions = {}): Promise<any> {
-    const resolution = await this.resolveClient(clientIdOrName);
-    if (resolution.status !== 'FOUND' || !resolution.client) {
-      return {
-        source: 'ALPHA_X_DATABASE',
-        status: resolution.status === 'AMBIGUOUS' ? 'MULTIPLE_CLIENTS_FOUND' : 'CLIENT_NOT_FOUND',
-        matches: resolution.matches,
-        message: resolution.message,
-      };
-    }
-
-    const dateFilter = this.validateAndBuildDateFilter(options.startDate, options.endDate);
-    if (dateFilter.error) {
-      return { source: 'ALPHA_X_DATABASE', status: 'INVALID_INPUT', error: dateFilter.error };
-    }
-
-    const limit = Math.min(Math.max(Number(options.limit) || 30, 1), 60);
-
-    const attendances = await prisma.clientAttendance.findMany({
-      where: {
-        clientProfileId: resolution.client.profileId,
-        ...(dateFilter.whereClause ? { date: dateFilter.whereClause } : {}),
-      },
-      select: {
-        date: true,
-        present: true,
-        method: true,
-        checkInTime: true,
-      },
-      orderBy: { date: 'desc' },
-      take: limit,
-    });
-
-    if (attendances.length === 0) {
-      return {
-        source: 'ALPHA_X_DATABASE',
-        status: 'NO_RECORDS_FOUND',
-        clientId: resolution.client.clientId || resolution.client.userId,
-        name: resolution.client.name,
-        recordCount: 0,
-        attendances: [],
-        message: 'No gym attendance records recorded for this client in the specified period.',
-      };
-    }
-
-    return {
-      source: 'ALPHA_X_DATABASE',
-      status: 'SUCCESS',
-      clientId: resolution.client.clientId || resolution.client.userId,
-      name: resolution.client.name,
-      recordCount: attendances.length,
-      attendances: attendances.map((att) => ({
-        date: att.date.toISOString().split('T')[0],
-        present: att.present,
-        method: att.method,
-        checkInTime: att.checkInTime.toISOString(),
-      })),
-    };
-  }
-
-  /**
    * Retrieves assigned active workout plan and exercise prescription.
    */
   public async getAssignedWorkout(clientIdOrName: string): Promise<any> {

@@ -8,7 +8,6 @@ export * from './calculate_client_waist_change';
 export * from './calculate_client_nutrition_summary';
 export * from './calculate_client_activity_summary';
 export * from './calculate_client_workout_summary';
-export * from './calculate_client_attendance_summary';
 export * from './calculate_client_checkin_summary';
 
 import { calculateClientWeightChangeTool } from './calculate_client_weight_change';
@@ -16,7 +15,6 @@ import { calculateClientWaistChangeTool } from './calculate_client_waist_change'
 import { calculateClientNutritionSummaryTool } from './calculate_client_nutrition_summary';
 import { calculateClientActivitySummaryTool } from './calculate_client_activity_summary';
 import { calculateClientWorkoutSummaryTool } from './calculate_client_workout_summary';
-import { calculateClientAttendanceSummaryTool } from './calculate_client_attendance_summary';
 import { calculateClientCheckInSummaryTool } from './calculate_client_checkin_summary';
 
 export const CALCULATION_TOOLS = [
@@ -25,6 +23,5 @@ export const CALCULATION_TOOLS = [
   calculateClientNutritionSummaryTool,
   calculateClientActivitySummaryTool,
   calculateClientWorkoutSummaryTool,
-  calculateClientAttendanceSummaryTool,
   calculateClientCheckInSummaryTool,
 ];

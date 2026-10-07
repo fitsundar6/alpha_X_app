@@ -529,27 +529,6 @@ router.delete('/me/food-logs/:id', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/client/me/attendance: Attendance history
-router.get('/me/attendance', async (req: Request, res: Response) => {
-  try {
-    const profile = await getAuthenticatedClientProfile(req.user!.id);
-    if (!profile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
-      return;
-    }
-
-    const records = await prisma.clientAttendance.findMany({
-      where: { clientProfileId: profile.id },
-      orderBy: { date: 'desc' },
-      take: 60,
-    });
-
-    sendSuccess(res, records);
-  } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch attendance history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
-  }
-});
-
 // GET /api/v1/client/me/progress: Weight & body progress history
 router.get('/me/progress', async (req: Request, res: Response) => {
   try {
@@ -607,44 +586,6 @@ router.post('/me/progress', async (req: Request, res: Response) => {
     sendSuccess(res, record, HttpStatus.CREATED);
   } catch (err: any) {
     sendError(res, 'INTERNAL_ERROR', 'Failed to log progress check-in', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
-  }
-});
-
-// GET /api/v1/client/me/challenge: Real challenge status for authenticated client
-router.get('/me/challenge', async (req: Request, res: Response) => {
-  try {
-    const profile = await getAuthenticatedClientProfile(req.user!.id);
-    if (!profile) {
-      sendError(res, 'NOT_FOUND', 'Client profile not found', HttpStatus.NOT_FOUND);
-      return;
-    }
-
-    if (!profile.onboardingCompleted) {
-      sendSuccess(res, {
-        active: false,
-        message: 'No active challenge assigned',
-      });
-      return;
-    }
-
-    const daysSinceJoin = Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const challengeDuration = 100;
-    const currentDay = Math.min(daysSinceJoin, challengeDuration);
-    const isCompleted = daysSinceJoin > challengeDuration;
-
-    sendSuccess(res, {
-      active: true,
-      challengeId: 'ch_100_day_transformation',
-      title: '100-Day Transformation Challenge',
-      description: 'Alpha X flagship transformation protocol: consistency in prescribed workouts, nutrition targets, and progressive overload.',
-      durationDays: challengeDuration,
-      currentDay: currentDay,
-      startDate: profile.createdAt,
-      progressPercent: Number((currentDay / challengeDuration).toFixed(2)),
-      status: isCompleted ? 'COMPLETED' : 'ACTIVE',
-    });
-  } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch challenge status', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 

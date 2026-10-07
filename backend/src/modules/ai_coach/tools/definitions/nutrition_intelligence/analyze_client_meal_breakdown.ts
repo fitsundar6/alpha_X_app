@@ -1,23 +1,23 @@
 /**
- * Alpha X AI — Tool: calculate_client_attendance_summary
- * Phase 8 — Deterministic Fitness Calculation Engine
+ * Alpha X AI — Tool: analyze_client_meal_breakdown
+ * Phase 10 — Nutrition Intelligence Engine
  */
 
 import { ToolDefinition, ToolPermission } from '../../tool.types';
-import { calculationService } from '../../../calculations/calculation.service';
+import { nutritionIntelligenceService } from '../../../nutrition_intelligence/nutrition_intelligence.service';
 
-export interface CalculateClientAttendanceSummaryInput {
+export interface AnalyzeClientMealBreakdownInput {
   clientId: string;
   startDate?: string;
   endDate?: string;
   limit?: number;
 }
 
-export const calculateClientAttendanceSummaryTool: ToolDefinition<CalculateClientAttendanceSummaryInput> = {
-  name: 'calculate_client_attendance_summary',
-  description: 'Calculates deterministic gym attendance metrics (total sessions, present count, absent count, attendance percentage) strictly over recorded attendance logs.',
+export const analyzeClientMealBreakdownTool: ToolDefinition<AnalyzeClientMealBreakdownInput> = {
+  name: 'analyze_client_meal_breakdown',
+  description: 'Analyzes client meal composition patterns, showing how calories and macronutrients are distributed across meal types (Breakfast, Lunch, Dinner, Snacks), average calories per meal, and top consumed food items in each meal.',
   category: 'ANALYZE',
-  permission: ToolPermission.CALCULATE_METRIC,
+  permission: ToolPermission.ANALYZE_DATA,
   inputSchema: {
     type: 'object',
     properties: {
@@ -39,16 +39,17 @@ export const calculateClientAttendanceSummaryTool: ToolDefinition<CalculateClien
       },
       limit: {
         type: 'integer',
-        description: 'Maximum number of attendance records to process (default: 60, max: 365)',
+        description: 'Maximum number of food log records to process (default: 300, max: 500)',
         minimum: 1,
-        maximum: 365,
+        maximum: 500,
       },
     },
     required: ['clientId'],
     additionalProperties: false,
   },
-  handler: async (args, _context) => {
-    return await calculationService.calculateAttendanceSummary(args.clientId, {
+  handler: async (args, context) => {
+    const targetClientId = context?.verifiedClient ? context.verifiedClient.clientId : args.clientId;
+    return await nutritionIntelligenceService.analyzeMealBreakdown(targetClientId, {
       startDate: args.startDate,
       endDate: args.endDate,
       limit: args.limit,

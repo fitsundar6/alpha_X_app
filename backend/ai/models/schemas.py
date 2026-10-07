@@ -65,7 +65,6 @@ class DailySummaryResponse(BaseModel):
     weeklyCheckInsPending: int
     clientsNeedReview: int
     totalActiveClients: int
-    attendancesVerifiedToday: int
     attentionItems: List[Dict[str, Any]]
 
 class ProposalActionRequest(BaseModel):

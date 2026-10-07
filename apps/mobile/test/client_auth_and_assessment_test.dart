@@ -197,6 +197,11 @@ void main() {
     });
 
     testWidgets('8. ClientMainDashboardScreen renders Client ID, Goal, and 7 core sections', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       auth.setAuthenticatedSessionForTesting(
         role: UserRole.client,
         email: 'alex.athlete@alphax.com',
@@ -219,6 +224,10 @@ void main() {
       // Verify Header and Badges
       expect(find.text('ALPHA X GYM'), findsOneWidget);
       expect(find.text('AXG-0001'), findsOneWidget);
+
+      // Scroll down to reveal quick access sections
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
       expect(find.text('MY ATHLETE PORTAL'), findsOneWidget);
 
       // Verify core sections
@@ -227,8 +236,8 @@ void main() {
       expect(find.text('NUTRITION & MACROS'), findsOneWidget);
       expect(find.text('DAILY STEPS'), findsOneWidget);
       expect(find.text('MY PROGRESS'), findsOneWidget);
-      expect(find.text('MY ATTENDANCE'), findsOneWidget);
-      expect(find.text('MY CHALLENGE'), findsOneWidget);
+      expect(find.text('MY ATTENDANCE'), findsNothing);
+      expect(find.text('MY CHALLENGE'), findsNothing);
       expect(find.text('MY PROFILE'), findsOneWidget);
     });
   });

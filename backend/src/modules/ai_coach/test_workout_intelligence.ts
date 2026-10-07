@@ -842,7 +842,16 @@ async function runPhase9WorkoutIntelligenceTests(): Promise<void> {
 
     // WRITE protection: verify no tools allow write operations
     const allTools = toolRegistry.listTools(true);
-    const phase9Tools = allTools.filter((t: any) => t.name.startsWith('analyze_client_') || t.name.startsWith('compare_client_') || t.name === 'get_client_personal_bests');
+    const phase9ToolNames = [
+      'analyze_client_workout_progress',
+      'analyze_client_exercise_progress',
+      'analyze_client_training_frequency',
+      'analyze_client_training_volume',
+      'analyze_client_workout_intensity',
+      'compare_client_workout_periods',
+      'get_client_personal_bests',
+    ];
+    const phase9Tools = allTools.filter((t: any) => phase9ToolNames.includes(t.name));
     const allReadOnly = phase9Tools.every((t: any) => t.permission === ToolPermission.ANALYZE_DATA || t.category === 'ANALYZE');
     assert(allReadOnly && phase9Tools.length === 7, 'TEST 108: All 7 Phase 9 tools are strictly ANALYZE/read-only with no WRITE capability');
 

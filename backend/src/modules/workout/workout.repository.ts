@@ -9,6 +9,10 @@ export interface StoredSessionExercise {
   orderIndex: number;
   supersetTag?: string | null; // e.g. "A1", "A2"
   numberOfSets: number;
+  setCount?: number;
+  setsCount?: number;
+  totalSets?: number;
+  targetSets?: number;
   targetReps: string;
   targetWeight?: number | null;
   restSeconds: number;
@@ -18,6 +22,7 @@ export interface StoredSessionExercise {
   setType: string; // 'Warm-up', 'Working', 'Failure', 'Drop set', 'Rest-pause'
   exerciseNotes?: string | null;
   adminInstruction?: string | null;
+  sets?: any[];
 }
 
 export interface StoredWorkoutSession {
@@ -115,25 +120,81 @@ function mapPrismaSessionToStored(s: any): StoredWorkoutSession {
     createdById: s.createdById,
     createdAt: s.createdAt ? s.createdAt.toISOString() : new Date().toISOString(),
     updatedAt: s.updatedAt ? s.updatedAt.toISOString() : new Date().toISOString(),
-    exercises: (s.exercises || []).map((ex: any) => ({
-      id: ex.id,
-      sessionId: ex.sessionId,
-      exerciseId: ex.exerciseId,
-      exerciseName: ex.exerciseName,
-      category: ex.category || 'General',
-      orderIndex: ex.orderIndex,
-      supersetTag: ex.supersetTag,
-      numberOfSets: ex.numberOfSets || (ex.setTemplates ? ex.setTemplates.length : 3),
-      targetReps: ex.targetReps || '8–12',
-      targetWeight: ex.targetWeight,
-      restSeconds: ex.restSeconds || 90,
-      targetRir: ex.targetRir ?? 2,
-      targetRpe: ex.targetRpe ?? 8.0,
-      tempo: ex.tempo || '3-1-1-0',
-      setType: ex.setType || 'Working',
-      exerciseNotes: ex.exerciseNotes,
-      adminInstruction: ex.adminInstruction,
-    })),
+    exercises: (s.exercises || []).map((ex: any) => {
+      const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.setTemplates) && ex.setTemplates.length > 0 ? ex.setTemplates.length : (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3)));
+      let setsList: any[] = [];
+      if (Array.isArray(ex.setTemplates) && ex.setTemplates.length > 0) {
+        setsList = ex.setTemplates.map((st: any, sIdx: number) => ({
+          id: st.id || `set_${ex.id || 'ex'}_${sIdx + 1}`,
+          setNumber: st.setNumber ?? (sIdx + 1),
+          setType: st.setType || ex.setType || 'Working',
+          targetRepsMin: st.targetRepsMin ?? 8,
+          targetRepsMax: st.targetRepsMax ?? 12,
+          targetReps: st.targetRepsMin ? (st.targetRepsMax ? `${st.targetRepsMin}–${st.targetRepsMax}` : `${st.targetRepsMin}`) : (ex.targetReps || '8–12'),
+          targetWeight: st.targetWeight !== undefined && st.targetWeight !== null ? Number(st.targetWeight) : (ex.targetWeight !== undefined && ex.targetWeight !== null ? Number(ex.targetWeight) : null),
+          targetRir: st.targetRir !== undefined && st.targetRir !== null ? Number(st.targetRir) : (ex.targetRir ?? 2),
+          targetRpe: st.targetRpe !== undefined && st.targetRpe !== null ? Number(st.targetRpe) : (ex.targetRpe ?? 8.0),
+          restSeconds: ex.restSeconds || 90,
+          tempo: st.tempo || ex.tempo || '3-1-1-0',
+          isCompleted: false,
+        }));
+      } else if (Array.isArray(ex.sets) && ex.sets.length > 0) {
+        setsList = ex.sets.map((st: any, sIdx: number) => ({
+          id: st.id || `set_${ex.id || 'ex'}_${sIdx + 1}`,
+          setNumber: st.setNumber ?? (sIdx + 1),
+          setType: st.setType || ex.setType || 'Working',
+          targetRepsMin: st.targetRepsMin ?? 8,
+          targetRepsMax: st.targetRepsMax ?? 12,
+          targetReps: st.targetReps || ex.targetReps || '8–12',
+          targetWeight: st.targetWeight !== undefined && st.targetWeight !== null ? Number(st.targetWeight) : (ex.targetWeight !== undefined && ex.targetWeight !== null ? Number(ex.targetWeight) : null),
+          targetRir: st.targetRir !== undefined && st.targetRir !== null ? Number(st.targetRir) : (ex.targetRir ?? 2),
+          targetRpe: st.targetRpe !== undefined && st.targetRpe !== null ? Number(st.targetRpe) : (ex.targetRpe ?? 8.0),
+          restSeconds: st.restSeconds || ex.restSeconds || 90,
+          tempo: st.tempo || ex.tempo || '3-1-1-0',
+          isCompleted: false,
+        }));
+      } else {
+        setsList = Array.from({ length: numSets }, (_, sIdx) => ({
+          id: `set_${ex.id || 'ex'}_${sIdx + 1}`,
+          setNumber: sIdx + 1,
+          setType: ex.setType || 'Working',
+          targetRepsMin: 8,
+          targetRepsMax: 12,
+          targetReps: ex.targetReps || '8–12',
+          targetWeight: ex.targetWeight !== undefined && ex.targetWeight !== null ? Number(ex.targetWeight) : null,
+          targetRir: ex.targetRir !== undefined && ex.targetRir !== null ? Number(ex.targetRir) : 2,
+          targetRpe: ex.targetRpe !== undefined && ex.targetRpe !== null ? Number(ex.targetRpe) : 8.0,
+          restSeconds: ex.restSeconds || 90,
+          tempo: ex.tempo || '3-1-1-0',
+          isCompleted: false,
+        }));
+      }
+
+      return {
+        id: ex.id,
+        sessionId: ex.sessionId,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        category: ex.category || 'General',
+        orderIndex: ex.orderIndex,
+        supersetTag: ex.supersetTag,
+        numberOfSets: numSets,
+        setCount: numSets,
+        setsCount: numSets,
+        totalSets: numSets,
+        targetSets: numSets,
+        targetReps: ex.targetReps || '8–12',
+        targetWeight: ex.targetWeight !== undefined && ex.targetWeight !== null ? Number(ex.targetWeight) : null,
+        restSeconds: ex.restSeconds || 90,
+        targetRir: ex.targetRir ?? 2,
+        targetRpe: ex.targetRpe ?? 8.0,
+        tempo: ex.tempo || '3-1-1-0',
+        setType: ex.setType || 'Working',
+        exerciseNotes: ex.exerciseNotes,
+        adminInstruction: ex.adminInstruction,
+        sets: setsList,
+      };
+    }),
   };
 }
 
@@ -500,6 +561,36 @@ export class WorkoutRepository {
     };
     this.assignments.set(legsAAssignment.id, legsAAssignment);
 
+    // Normalize seeded exercises so setCount and sets array are fully populated
+    for (const [sId, s] of this.sessions.entries()) {
+      s.exercises = s.exercises.map((ex) => {
+        const numSets = Number(ex.numberOfSets) || 3;
+        const setsList = Array.isArray(ex.sets) && ex.sets.length > 0
+          ? ex.sets
+          : Array.from({ length: numSets }, (_, sIdx) => ({
+              id: `set_${ex.id || 'ex'}_${sIdx + 1}`,
+              setNumber: sIdx + 1,
+              setType: ex.setType || 'Working',
+              targetWeight: ex.targetWeight ?? null,
+              targetReps: ex.targetReps || '8–12',
+              targetRir: ex.targetRir ?? 2,
+              targetRpe: ex.targetRpe ?? 8.0,
+              tempo: ex.tempo || '3-1-1-0',
+              restSeconds: ex.restSeconds || 90,
+            }));
+        return {
+          ...ex,
+          numberOfSets: numSets,
+          setCount: numSets,
+          setsCount: numSets,
+          totalSets: numSets,
+          targetSets: numSets,
+          sets: setsList,
+        };
+      });
+      this.sessions.set(sId, s);
+    }
+
     // Initial past records for performance history
     const pastRecordId = 'rec_seed_push_a_01';
     const pastRecord: StoredWorkoutRecord = {
@@ -739,18 +830,44 @@ export class WorkoutRepository {
     const id = data.id || `ws_${Date.now()}`;
     const now = new Date().toISOString();
 
+    const mappedExercises: StoredSessionExercise[] = (data.exercises || []).map((ex: any, idx: number) => {
+      const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3));
+      const exId = ex.id || `ex_${id}_${idx + 1}`;
+      const setsList = Array.isArray(ex.sets) && ex.sets.length > 0
+        ? ex.sets
+        : Array.from({ length: numSets }, (_, sIdx) => ({
+            id: `set_${exId}_${sIdx + 1}`,
+            setNumber: sIdx + 1,
+            setType: ex.setType || 'Working',
+            targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+            targetReps: ex.targetReps || '8–12',
+            targetRir: ex.targetRir ?? 2,
+            targetRpe: ex.targetRpe ?? 8.0,
+            tempo: ex.tempo || '3-1-1-0',
+            restSeconds: Number(ex.restSeconds) || 90,
+          }));
+
+      return {
+        ...ex,
+        id: exId,
+        sessionId: id,
+        orderIndex: ex.orderIndex ?? idx,
+        numberOfSets: numSets,
+        setCount: numSets,
+        setsCount: numSets,
+        totalSets: numSets,
+        targetSets: numSets,
+        sets: setsList,
+      };
+    });
+
     // In-memory update
     const session: StoredWorkoutSession = {
       ...data,
       id,
       createdAt: now,
       updatedAt: now,
-      exercises: (data.exercises || []).map((ex: any, idx: number) => ({
-        ...ex,
-        id: ex.id || `ex_${id}_${idx + 1}`,
-        sessionId: id,
-        orderIndex: ex.orderIndex ?? idx,
-      })),
+      exercises: mappedExercises,
     };
     this.sessions.set(id, session);
 
@@ -772,35 +889,38 @@ export class WorkoutRepository {
           availabilityType: data.availabilityType || 'ALL',
           createdById: data.createdById || null,
           exercises: {
-            create: (data.exercises || []).map((ex: any, idx: number) => ({
-              exerciseId: ex.exerciseId,
-              exerciseName: ex.exerciseName,
-              category: ex.category || 'General',
-              orderIndex: ex.orderIndex ?? idx,
-              supersetTag: ex.supersetTag || null,
-              numberOfSets: Number(ex.numberOfSets) || 3,
-              targetReps: ex.targetReps ? String(ex.targetReps) : '8–12',
-              targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
-              restSeconds: Number(ex.restSeconds) || 90,
-              targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
-              targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
-              tempo: ex.tempo || '3-1-1-0',
-              setType: ex.setType || 'Working',
-              exerciseNotes: ex.exerciseNotes || null,
-              adminInstruction: ex.adminInstruction || null,
-              setTemplates: {
-                create: Array.from({ length: Number(ex.numberOfSets) || 3 }, (_, setIdx) => ({
-                  setNumber: setIdx + 1,
-                  setType: ex.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
-                  targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
-                  targetRepsMin: 8,
-                  targetRepsMax: 12,
-                  targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
-                  targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
-                  tempo: ex.tempo || '3-1-1-0',
-                })),
-              },
-            })),
+            create: (data.exercises || []).map((ex: any, idx: number) => {
+              const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3));
+              return {
+                exerciseId: ex.exerciseId,
+                exerciseName: ex.exerciseName,
+                category: ex.category || 'General',
+                orderIndex: ex.orderIndex ?? idx,
+                supersetTag: ex.supersetTag || null,
+                numberOfSets: numSets,
+                targetReps: ex.targetReps ? String(ex.targetReps) : '8–12',
+                targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+                restSeconds: Number(ex.restSeconds) || 90,
+                targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+                targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+                tempo: ex.tempo || '3-1-1-0',
+                setType: ex.setType || 'Working',
+                exerciseNotes: ex.exerciseNotes || null,
+                adminInstruction: ex.adminInstruction || null,
+                setTemplates: {
+                  create: Array.from({ length: numSets }, (_, setIdx) => ({
+                    setNumber: setIdx + 1,
+                    setType: ex.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
+                    targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+                    targetRepsMin: 8,
+                    targetRepsMax: 12,
+                    targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+                    targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+                    tempo: ex.tempo || '3-1-1-0',
+                  })),
+                },
+              };
+            }),
           },
         },
         include: {
@@ -819,10 +939,45 @@ export class WorkoutRepository {
 
   async updateSession(id: string, data: Partial<StoredWorkoutSession>): Promise<StoredWorkoutSession | null> {
     const existing = this.sessions.get(id);
+    let mappedExercises: StoredSessionExercise[] | undefined;
+    if (data.exercises && Array.isArray(data.exercises)) {
+      mappedExercises = data.exercises.map((ex: any, idx: number) => {
+        const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3));
+        const exId = ex.id || `ex_${id}_${idx + 1}`;
+        const setsList = Array.isArray(ex.sets) && ex.sets.length > 0
+          ? ex.sets
+          : Array.from({ length: numSets }, (_, sIdx) => ({
+              id: `set_${exId}_${sIdx + 1}`,
+              setNumber: sIdx + 1,
+              setType: ex.setType || 'Working',
+              targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+              targetReps: ex.targetReps || '8–12',
+              targetRir: ex.targetRir ?? 2,
+              targetRpe: ex.targetRpe ?? 8.0,
+              tempo: ex.tempo || '3-1-1-0',
+              restSeconds: Number(ex.restSeconds) || 90,
+            }));
+
+        return {
+          ...ex,
+          id: exId,
+          sessionId: id,
+          orderIndex: ex.orderIndex ?? idx,
+          numberOfSets: numSets,
+          setCount: numSets,
+          setsCount: numSets,
+          totalSets: numSets,
+          targetSets: numSets,
+          sets: setsList,
+        };
+      });
+    }
+
     if (existing) {
       const updated: StoredWorkoutSession = {
         ...existing,
         ...data,
+        exercises: mappedExercises || existing.exercises,
         updatedAt: new Date().toISOString(),
       };
       this.sessions.set(id, updated);
@@ -839,6 +994,45 @@ export class WorkoutRepository {
       if (data.isActive !== undefined) updateData.isActive = data.isActive;
       if (data.recurringSchedule !== undefined) updateData.recurringSchedule = data.recurringSchedule;
       if (data.availabilityType !== undefined) updateData.availabilityType = data.availabilityType;
+
+      if (data.exercises && Array.isArray(data.exercises)) {
+        await prisma.workoutSessionExercise.deleteMany({ where: { sessionId: id } });
+        for (const [idx, ex] of data.exercises.entries()) {
+          const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3));
+          await prisma.workoutSessionExercise.create({
+            data: {
+              sessionId: id,
+              exerciseId: ex.exerciseId || `ex_${idx + 1}`,
+              exerciseName: ex.exerciseName || 'Exercise',
+              category: ex.category || 'General',
+              orderIndex: ex.orderIndex ?? idx,
+              supersetTag: ex.supersetTag || null,
+              numberOfSets: numSets,
+              targetReps: ex.targetReps ? String(ex.targetReps) : '8–12',
+              targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+              restSeconds: Number(ex.restSeconds) || 90,
+              targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+              targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+              tempo: ex.tempo || '3-1-1-0',
+              setType: ex.setType || 'Working',
+              exerciseNotes: ex.exerciseNotes || null,
+              adminInstruction: ex.adminInstruction || null,
+              setTemplates: {
+                create: Array.from({ length: numSets }, (_, setIdx) => ({
+                  setNumber: setIdx + 1,
+                  setType: ex.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
+                  targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+                  targetRepsMin: 8,
+                  targetRepsMax: 12,
+                  targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+                  targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+                  tempo: ex.tempo || '3-1-1-0',
+                })),
+              },
+            },
+          });
+        }
+      }
 
       const updated = await prisma.workoutSession.update({
         where: { id },

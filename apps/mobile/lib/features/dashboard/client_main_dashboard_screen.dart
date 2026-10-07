@@ -459,14 +459,6 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
             );
           }),
-          _drawerSubPageItem('Attendance Pass', Icons.qr_code_scanner_outlined, () {
-            Navigator.of(context).pop();
-            _openAttendanceSubPage(context);
-          }),
-          _drawerSubPageItem('100-Day Challenge', Icons.local_fire_department_outlined, () {
-            Navigator.of(context).pop();
-            _openChallengeSubPage(context);
-          }),
           _drawerSubPageItem('Weekly Progress & Check-In', Icons.event_available_outlined, () {
             Navigator.of(context).pop();
             _openProgressSubPage(context);
@@ -673,73 +665,44 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     );
   }
 
-  Widget _buildMockupQuickActionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required ClientThemeColors colors,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: colors.isDark ? const Color(0xFF151515) : colors.surfaceCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(colors.isDark ? 0.3 : 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 24),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: GoogleFonts.poppins(
-                color: colors.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildBeginnerWorkoutCard(ClientThemeColors colors, WorkoutSession? recommended) {
+    final hasActive = widget.workoutRepository.hasActiveSavedSession;
+    final active = widget.workoutRepository.activeSession;
 
-  Widget _buildMockupTodaysPlanCard(ClientThemeColors colors, WorkoutSession? recommended) {
-    final title = recommended != null ? recommended.title : 'Upper Body (Push)';
-    final count = recommended != null ? recommended.exercises.length : 6;
-    final duration = recommended != null ? recommended.estimatedDurationMinutes : 45;
+    final String sessionTitle;
+    final String sessionSubtitle;
+    final String statusLabel;
+    final Color statusColor;
+    final String buttonLabel;
+    final IconData buttonIcon;
+
+    if (hasActive) {
+      sessionTitle = active.title;
+      sessionSubtitle = '${active.exercises.length} exercises • In progress';
+      statusLabel = 'IN PROGRESS';
+      statusColor = AppColors.warning;
+      buttonLabel = 'RESUME WORKOUT';
+      buttonIcon = Icons.play_arrow_rounded;
+    } else if (recommended != null) {
+      sessionTitle = recommended.title;
+      sessionSubtitle = '${recommended.estimatedDurationMinutes} min • ${recommended.exercises.length} exercises • ${recommended.targetMuscleGroup}';
+      statusLabel = "TODAY'S TARGET";
+      statusColor = colors.primaryRed;
+      buttonLabel = 'START WORKOUT';
+      buttonIcon = Icons.play_arrow_rounded;
+    } else {
+      sessionTitle = 'Active Recovery & Mobility';
+      sessionSubtitle = 'No scheduled workout today • Rest or browse library';
+      statusLabel = 'REST DAY';
+      statusColor = colors.textSecondary;
+      buttonLabel = 'EXPLORE WORKOUTS';
+      buttonIcon = Icons.fitness_center_rounded;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.isDark ? const Color(0xFF151515) : colors.surfaceCard,
+        color: colors.surfaceCard,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: colors.border),
         boxShadow: [
@@ -756,287 +719,104 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Today's Plan",
-                style: GoogleFonts.poppins(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              InkWell(
-                onTap: () => _selectTab(1),
-                child: Row(
-                  children: [
-                    Text(
-                      '1 More',
-                      style: GoogleFonts.poppins(
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios_rounded, color: colors.textTertiary, size: 11),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: () {
-              if (widget.workoutRepository.hasActiveSavedSession) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => ClientWorkoutExecutionScreen(
-                      workoutRepository: widget.workoutRepository,
-                    ),
-                  ),
-                );
-              } else if (recommended != null) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => ClientSessionOverviewScreen(
-                      session: recommended,
-                      workoutRepository: widget.workoutRepository,
-                    ),
-                  ),
-                );
-              } else {
-                _selectTab(1);
-              }
-            },
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: colors.borderSubtle),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: colors.isDark ? const Color(0xFF262626) : colors.border,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.fitness_center_rounded, color: AppColors.primary, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: GoogleFonts.poppins(
-                            color: colors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$duration min • $count exercises',
-                          style: GoogleFonts.poppins(
-                            color: colors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 14),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- TAB 0: 🏠 HOME DASHBOARD COMMAND CENTER ---
-  Widget _buildClientHomeScreen() {
-    final clientId = AuthService().currentUserId;
-    final recommended = widget.workoutRepository.getTodaySessionForClient(clientId) ??
-        widget.workoutRepository.getRecommendedSessionForClient(clientId);
-    final history = widget.workoutRepository.clientHistory;
-    final userFullName = AuthService().currentUserName;
-    final firstName = userFullName.isNotEmpty ? userFullName.split(' ').first : 'Athlete';
-
-    // Synchronize daily nutrition data directly from the single source of truth
-    final todayStr = widget.macroRepository.getTodayDateString();
-    final dailySummary = widget.macroRepository.getDailyMacroSummary(todayStr);
-
-    final currentHour = DateTime.now().hour;
-    final greetingText = currentHour < 12
-        ? 'Good morning'
-        : (currentHour < 17 ? 'Good afternoon' : 'Good evening');
-
-    final colors = ClientThemeColors(context);
-
-    return RefreshIndicator(
-      color: colors.primaryRed,
-      backgroundColor: colors.surfaceElevated,
-      onRefresh: () async {
-        await AppAutoRefreshService.instance.triggerImmediateSync(
-          reason: 'Client Dashboard pull-to-refresh',
-          force: true,
-        );
-      },
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-        // 1. User Header & Profile Avatar
-        AlphaXSubtleEntrance(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
               Expanded(
                 child: Row(
                   children: [
-                    Stack(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(2.5),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: colors.primaryRed, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colors.primaryRed.withOpacity(0.35),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: colors.surfaceElevated,
-                            child: Text(
-                              firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: colors.primaryRed,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 1,
-                          bottom: 1,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: colors.background, width: 2),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: colors.primaryRed.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.fitness_center_rounded, color: colors.primaryRed, size: 18),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$greetingText,',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: colors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            firstName,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: colors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "TODAY'S WORKOUT",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: colors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Row(
-                children: [
-                  const AlphaXLogo.badge(size: 20),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: colors.primaryRed.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: colors.primaryRed.withOpacity(0.5), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors.primaryRed.withOpacity(0.18),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const AlphaXStreakFlame(streakDays: 12, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          '12 DAYS',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: colors.textPrimary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: statusColor.withOpacity(0.4), width: 1),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: statusColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.6,
                   ),
-                ],
+                ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 14),
-
-        // --- 1. HERO WORKOUT CARD (Official Mockup Screen 2) ---
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 30),
-          child: AlphaXHero(
-            imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=1200&q=80',
-            tag: 'Your Journey',
-            title: 'Stronger Every Day',
-            subtitle: widget.workoutRepository.hasActiveSavedSession
-                ? '${widget.workoutRepository.activeSession.title} (In Progress)'
-                : (recommended != null ? '${recommended.title} • ${recommended.targetMuscleGroup}' : 'Strength • Conditioning • Transformation'),
-            height: 230,
-            action: AlphaXButton(
-              label: widget.workoutRepository.hasActiveSavedSession ? 'Resume Workout' : 'Start Workout',
-              trailingIcon: Icons.arrow_forward_rounded,
-              height: 46,
+          const SizedBox(height: 12),
+          Text(
+            sessionTitle,
+            style: GoogleFonts.poppins(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              letterSpacing: -0.3,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            sessionSubtitle,
+            style: GoogleFonts.poppins(
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primaryRed,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: Icon(buttonIcon, size: 20),
+              label: Text(
+                buttonLabel,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                ),
+              ),
               onPressed: () {
-                if (widget.workoutRepository.hasActiveSavedSession) {
+                AlphaXHaptics.tap();
+                if (hasActive) {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (ctx) => ClientWorkoutExecutionScreen(
@@ -1059,605 +839,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               },
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-
-        // --- 2. QUICK ACTION GRID (Workout, Nutrition, Progress - Official Mockup Screen 2) ---
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 60),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildMockupQuickActionCard(
-                  icon: Icons.fitness_center_rounded,
-                  title: 'Workout',
-                  subtitle: 'Build Strength',
-                  colors: colors,
-                  onTap: () => _selectTab(1),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildMockupQuickActionCard(
-                  icon: Icons.restaurant_rounded,
-                  title: 'Nutrition',
-                  subtitle: 'Fuel Your Goals',
-                  colors: colors,
-                  onTap: () => _selectTab(3),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildMockupQuickActionCard(
-                  icon: Icons.trending_up_rounded,
-                  title: 'Progress',
-                  subtitle: 'Track Growth',
-                  colors: colors,
-                  onTap: () => _openProgressSubPage(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // --- 3. TODAY'S PLAN CARD (Official Mockup Screen 2) ---
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 80),
-          child: _buildMockupTodaysPlanCard(colors, recommended),
-        ),
-        const SizedBox(height: 18),
-
-        // Prominent Client Profile Card (Prompt Requirement 21)
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 50),
-          child: Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: colors.surfaceCard,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colors.border, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: colors.isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome, ${AuthService().currentUserName}',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: colors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                              letterSpacing: 0.2,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                'Client ID: ',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: colors.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: colors.primaryRed.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: colors.primaryRed, width: 0.8),
-                                ),
-                                child: Text(
-                                  AuthService().currentClientId,
-                                  style: TextStyle(
-                                    color: colors.primaryRed,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 11,
-                                    fontFamily: 'monospace',
-                                    letterSpacing: 1.0,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Divider(color: colors.border, height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('GOAL', style: TextStyle(fontFamily: 'Poppins', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                          const SizedBox(height: 2),
-                          Text(
-                            (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString(),
-                            style: TextStyle(fontFamily: 'Poppins', color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(width: 1, height: 26, color: colors.border),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('FITNESS LEVEL', style: TextStyle(fontFamily: 'Poppins', color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                          const SizedBox(height: 2),
-                          Text(
-                            (AuthService().clientProfile['fitnessLevel'] ?? 'Intermediate').toString().toUpperCase(),
-                            style: TextStyle(fontFamily: 'Poppins', color: colors.primaryRed, fontWeight: FontWeight.w800, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Section: WEEKLY PROGRESS & CHECK-IN
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 90),
-          child: _buildWeeklyCheckInHomeCard(),
-        ),
-        const SizedBox(height: 16),
-
-        // Quick Navigation to Core Sections
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 130),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const AlphaXSectionHeader(title: 'MY ATHLETE PORTAL'),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => _selectTab(1)),
-                  _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => _selectTab(2)),
-                  _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => _selectTab(3)),
-                  _clientSectionChip('FOOD PHOTOS', Icons.camera_alt, () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
-                    );
-                  }),
-                  _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => _selectTab(4)),
-                  _clientSectionChip('MY ATTENDANCE', Icons.qr_code_scanner, () => _openAttendanceSubPage(context)),
-                  _clientSectionChip('MY CHALLENGE', Icons.local_fire_department, () => _openChallengeSubPage(context)),
-                  _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
-                  _clientSectionChip('MY PROFILE', Icons.person, () => _openProfileSubPage(context)),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Hero Gradient Card with Animated Ring
-        AlphaXSubtleEntrance(
-          delay: const Duration(milliseconds: 140),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: colors.primaryRed.withOpacity(0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: AlphaXAuroraBackground(
-              borderRadius: BorderRadius.circular(24),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      colors.surfaceElevated.withOpacity(0.9),
-                      colors.primaryRed.withOpacity(0.06),
-                      colors.surfaceCard.withOpacity(0.9),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: colors.primaryRed.withOpacity(0.35),
-                    width: 1.2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: colors.primaryRed,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: colors.primaryRed.withOpacity(0.6),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'DAILY READINESS & ENERGY',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.0,
-                                  color: colors.primaryRed,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Peak Condition',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: colors.textPrimary,
-                              letterSpacing: -0.4,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Hydration, macros, and recovery are aligned for today\'s session.',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              color: colors.textSecondary,
-                              height: 1.35,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: colors.primaryRed.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: colors.primaryRed.withOpacity(0.3)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.bolt_rounded, size: 12, color: colors.primaryRed),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      '92% READY',
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900,
-                                        color: colors.primaryRed,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: colors.surfaceCard,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: colors.border),
-                                ),
-                                child: Text(
-                                  '12-DAY STREAK',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: colors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    AlphaXArcProgress(
-                      progress: 0.92,
-                      size: 96,
-                      strokeWidth: 8,
-                      progressColor: colors.primaryRed,
-                      centerChild: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AlphaXCountUpText(
-                            text: '92',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: colors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'SCORE',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.8,
-                              color: colors.primaryRed,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // 3. Today's Metrics (Clean 2x2 Grid of real tracked metrics with mini rings)
-        const AlphaXSectionHeader(title: 'TODAY'),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 1.55,
-          children: [
-            AlphaXStatCard(
-              icon: Icons.directions_walk_rounded,
-              label: 'Steps',
-              value: widget.activityRepository.todayRecord.formattedSteps,
-              subtext: '/ ${widget.activityRepository.todayRecord.formattedGoal} goal',
-              accentColor: colors.primaryRed,
-              progress: widget.activityRepository.todayRecord.visualProgressClamped,
-              onTap: () => _selectTab(4),
-            ),
-            AlphaXStatCard(
-              icon: Icons.fitness_center_rounded,
-              label: 'Workout',
-              value: history.isNotEmpty ? 'Logged' : 'Ready',
-              subtext: recommended != null ? recommended.title : (history.isNotEmpty ? '${history.length} completed' : 'Tap to start'),
-              accentColor: history.isNotEmpty ? AppColors.success : colors.primaryRed,
-              progress: history.isNotEmpty ? 1.0 : 0.4,
-              onTap: () => _selectTab(1),
-            ),
-            AlphaXStatCard(
-              icon: Icons.local_fire_department_rounded,
-              label: 'Calories',
-              value: dailySummary.consumedCalories.round().toString().replaceAllMapped(
-                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                (Match m) => '${m[1]},',
-              ),
-              subtext: '/ ${dailySummary.targetCalories.round().toString().replaceAllMapped(
-                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                (Match m) => '${m[1]},',
-              )} kcal',
-              accentColor: colors.primaryRed,
-              progress: dailySummary.calorieProgress,
-              onTap: () => _selectTab(3),
-            ),
-            AlphaXStatCard(
-              icon: Icons.bolt_rounded,
-              label: 'Protein',
-              value: '${FoodLogEntry.formatMacro(dailySummary.consumedProtein)} g',
-              subtext: '/ ${dailySummary.targetProtein.round()} g target',
-              accentColor: colors.primaryRed,
-              progress: dailySummary.proteinProgress,
-              onTap: () => _selectTab(3),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Section 11 & 12 & 23: DEDICATED TODAY'S NUTRITION SUMMARY CARD
-        _buildTodayNutritionCard(dailySummary),
-        const SizedBox(height: 20),
-
-        // 4. Transformation Consistency Snapshot
-        const AlphaXSectionHeader(title: 'YOUR TRANSFORMATION'),
-        AlphaXCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _transformationMiniStat(
-                    'PROFILE WEIGHT',
-                    AuthService().clientProfile['weightKg'] != null && (AuthService().clientProfile['weightKg'] as num) > 0
-                        ? '${AuthService().clientProfile['weightKg']} KG'
-                        : '-- KG',
-                  ),
-                  Container(height: 36, width: 1, color: AlphaXColors.border),
-                  _transformationMiniStat(
-                    'GOAL',
-                    (AuthService().clientProfile['primaryGoal'] ?? 'General Fitness').toString().toUpperCase(),
-                    isAccent: true,
-                  ),
-                  Container(height: 36, width: 1, color: AlphaXColors.border),
-                  _transformationMiniStat('SESSIONS', '${history.length} Done'),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Divider(color: AlphaXColors.border, height: 1),
-              const SizedBox(height: 10),
-              Row(
-                children: const [
-                  Icon(Icons.trending_down_rounded, size: 16, color: AlphaXColors.redAccent),
-                  SizedBox(width: 8),
-                  Text(
-                    'Consistency > daily fluctuations',
-                    style: TextStyle(
-                      color: AlphaXColors.textSecondary,
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // 5. Recent Workouts Preview
-        AlphaXSectionHeader(
-          title: 'RECENT SESSIONS',
-          actionLabel: 'View All',
-          onActionTap: () => _selectTab(1),
-        ),
-        if (history.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              'No workout sessions recorded yet. Start your first session above.',
-              style: TextStyle(color: AlphaXColors.textTertiary, fontSize: 13),
-            ),
-          )
-        else
-          ...history.take(2).map((r) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AlphaXColors.surfaceCard,
-                borderRadius: AlphaXRadius.roundedSm,
-                border: Border.all(color: AlphaXColors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AlphaXColors.redAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check, color: AlphaXColors.redAccent, size: 16),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      r.sessionTitle,
-                      style: const TextStyle(
-                        color: AlphaXColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${r.durationDisplay} • ${r.totalVolume.toInt()} kg',
-                    style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            );
-          }),
-        const SizedBox(height: 16),
-      ],
-    ),
-  );
-}
-
-  Widget _transformationMiniStat(String label, String value, {bool isAccent = false, String? delta}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AlphaXColors.textTertiary,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            color: isAccent ? AlphaXColors.redAccent : AlphaXColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-          ),
-        ),
-        if (delta != null) ...[
-          const SizedBox(height: 3),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: AlphaXColors.success.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AlphaXColors.success.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              delta,
-              style: const TextStyle(
-                color: AlphaXColors.success,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
         ],
-      ],
+      ),
     );
   }
 
-  /// Section 11, 12, 23: Dedicated compact Today's Nutrition card for the client dashboard
-  Widget _buildTodayNutritionCard(DailyMacroSummary dailySummary) {
+  Widget _buildBeginnerNutritionCard(ClientThemeColors colors, DailyMacroSummary dailySummary) {
     final calConsumed = dailySummary.consumedCalories.round().toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]},',
@@ -1672,208 +859,393 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     final carbsTarget = dailySummary.targetCarbs.round().toString();
     final fatConsumed = FoodLogEntry.formatMacro(dailySummary.consumedFat);
     final fatTarget = dailySummary.targetFat.round().toString();
-
     final isCalOver = dailySummary.isCaloriesOver;
 
-    return AlphaXCard(
+    return Container(
       padding: const EdgeInsets.all(16),
-      child: InkWell(
-        onTap: () => _selectTab(3),
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row with title and "Open Macros >"
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.pie_chart_rounded, size: 16, color: AlphaXColors.redAccent),
-                    SizedBox(width: 8),
-                    Text(
-                      "TODAY'S NUTRITION",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.1,
-                        color: AlphaXColors.textPrimary,
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: colors.primaryRed.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.restaurant_rounded, color: colors.primaryRed, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "TODAY'S NUTRITION",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: colors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                Row(
-                  children: const [
-                    Text(
-                      'MACROS',
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$calConsumed / $calTarget kcal',
+                style: GoogleFonts.poppins(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: dailySummary.calorieProgress.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: colors.isDark ? const Color(0xFF262626) : colors.border,
+              valueColor: AlwaysStoppedAnimation<Color>(colors.primaryRed),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMacroMiniTile(
+                  label: 'PROTEIN',
+                  current: protConsumed,
+                  target: protTarget,
+                  unit: 'g',
+                  colors: colors,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMacroMiniTile(
+                  label: 'CARBS',
+                  current: carbsConsumed,
+                  target: carbsTarget,
+                  unit: 'g',
+                  colors: colors,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildMacroMiniTile(
+                  label: 'FATS',
+                  current: fatConsumed,
+                  target: fatTarget,
+                  unit: 'g',
+                  colors: colors,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isCalOver
+                ? '+${dailySummary.overCalories.round()} kcal over daily target'
+                : '${dailySummary.safeRemainingCalories.round()} kcal remaining today',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isCalOver ? colors.primaryRed : colors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primaryRed,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                    label: const Text(
+                      'LOG FOOD',
                       style: TextStyle(
-                        color: AlphaXColors.redAccent,
-                        fontSize: 11,
+                        fontFamily: 'Poppins',
                         fontWeight: FontWeight.w800,
+                        fontSize: 12,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    SizedBox(width: 2),
-                    Icon(Icons.chevron_right, size: 16, color: AlphaXColors.redAccent),
-                  ],
+                    onPressed: () {
+                      AlphaXHaptics.tap();
+                      AddFoodBottomSheet.show(
+                        context,
+                        repository: widget.macroRepository,
+                        mealType: MealType.snack,
+                        dateString: widget.macroRepository.getTodayDateString(),
+                      );
+                    },
+                  ),
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // Calorie Completion Progress Bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: dailySummary.calorieProgress,
-                minHeight: 3.5,
-                backgroundColor: AlphaXColors.surfaceElevated,
-                valueColor: const AlwaysStoppedAnimation<Color>(AlphaXColors.redAccent),
               ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // 4 Macro Rows with Clean Icons (Section 12)
-            Row(
-              children: [
-                Expanded(
-                  child: _nutritionSummaryItem(
-                    emoji: '🔥',
-                    label: 'Calories',
-                    value: '$calConsumed / $calTarget',
-                    unit: 'kcal',
-                    color: AlphaXColors.redAccent,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _nutritionSummaryItem(
-                    emoji: '💪',
-                    label: 'Protein',
-                    value: '$protConsumed / $protTarget',
-                    unit: 'g',
-                    color: AlphaXColors.redAccent,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _nutritionSummaryItem(
-                    emoji: '🍚',
-                    label: 'Carbs',
-                    value: '$carbsConsumed / $carbsTarget',
-                    unit: 'g',
-                    color: AlphaXColors.info,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _nutritionSummaryItem(
-                    emoji: '🥑',
-                    label: 'Fat',
-                    value: '$fatConsumed / $fatTarget',
-                    unit: 'g',
-                    color: AlphaXColors.gold,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-            const Divider(color: AlphaXColors.borderSubtle, height: 1),
-            const SizedBox(height: 10),
-
-            // REMAINING Summary (Section 11)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isCalOver ? AlphaXColors.redSubtle : AlphaXColors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: isCalOver ? AlphaXColors.redAccent : AlphaXColors.border),
-                  ),
-                  child: Text(
-                    isCalOver ? 'OVER' : 'REMAINING',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                      color: isCalOver ? AlphaXColors.redAccent : AlphaXColors.textSecondary,
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
+                      foregroundColor: colors.textPrimary,
+                      side: BorderSide(color: colors.border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isCalOver
-                        ? '+${dailySummary.overCalories.round()} kcal • ${FoodLogEntry.formatMacro(dailySummary.overProtein)}g P • ${FoodLogEntry.formatMacro(dailySummary.overCarbs)}g C • ${FoodLogEntry.formatMacro(dailySummary.overFat)}g F over'
-                        : '${dailySummary.safeRemainingCalories.round()} kcal • ${FoodLogEntry.formatMacro(dailySummary.safeRemainingProtein)}g Protein • ${FoodLogEntry.formatMacro(dailySummary.safeRemainingCarbs)}g Carbs • ${FoodLogEntry.formatMacro(dailySummary.safeRemainingFat)}g Fat',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: isCalOver ? AlphaXColors.redAccent : AlphaXColors.textSecondary,
+                    icon: Icon(Icons.pie_chart_outline_rounded, size: 16, color: colors.primaryRed),
+                    label: const Text(
+                      'VIEW MACROS',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    onPressed: () {
+                      AlphaXHaptics.selection();
+                      _selectTab(3);
+                    },
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _nutritionSummaryItem({
-    required String emoji,
+  Widget _buildMacroMiniTile({
     required String label,
-    required String value,
+    required String current,
+    required String target,
     required String unit,
-    required Color color,
+    required ClientThemeColors colors,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
-        color: AlphaXColors.surfaceElevated,
+        color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AlphaXColors.borderSubtle),
+        border: Border.all(color: colors.borderSubtle),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AlphaXColors.textSecondary,
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: colors.textTertiary,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$current/$target$unit',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBeginnerProgressCard(ClientThemeColors colors, List<WorkoutRecord> history) {
+    final status = _weeklyProgressRepository.currentStatus;
+    final isAvailable = status?.isAvailable ?? true;
+    final weekNum = status?.currentWeekNumber ?? 1;
+    final weightVal = AuthService().clientProfile['weightKg'];
+    final weightStr = weightVal != null && (weightVal as num) > 0 ? '$weightVal kg' : '-- kg';
+    final stepsStr = widget.activityRepository.todayRecord.formattedSteps;
+    final stepsGoal = widget.activityRepository.todayRecord.formattedGoal;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: colors.primaryRed.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.trending_up_rounded, color: colors.primaryRed, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "PROGRESS & CHECK-IN",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: colors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isAvailable ? AppColors.success : colors.textSecondary).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: (isAvailable ? AppColors.success : colors.textSecondary).withOpacity(0.4),
+                    width: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '$value $unit',
-                  style: const TextStyle(
-                    fontSize: 12,
+                child: Text(
+                  isAvailable ? 'WEEK $weekNum READY' : 'WEEK $weekNum LOGGED',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: isAvailable ? AppColors.success : colors.textSecondary,
+                    fontSize: 9,
                     fontWeight: FontWeight.w900,
-                    color: Colors.white,
+                    letterSpacing: 0.6,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildProgressStatItem(
+                  label: 'BODY WEIGHT',
+                  value: weightStr,
+                  icon: Icons.monitor_weight_outlined,
+                  colors: colors,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildProgressStatItem(
+                  label: 'TODAY STEPS',
+                  value: '$stepsStr / $stepsGoal',
+                  icon: Icons.directions_walk_rounded,
+                  colors: colors,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildProgressStatItem(
+                  label: 'SESSIONS',
+                  value: '${history.length} Done',
+                  icon: Icons.check_circle_outline_rounded,
+                  colors: colors,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isAvailable
+                ? 'Your Week $weekNum progress review is open. Complete check-in for your coach review.'
+                : 'Next check-in unlocks next week. Keep logging workouts and meals consistently!',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              color: colors.textSecondary,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isAvailable ? colors.primaryRed : (colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated),
+                foregroundColor: isAvailable ? Colors.white : colors.textPrimary,
+                elevation: 0,
+                side: isAvailable ? BorderSide.none : BorderSide(color: colors.border),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: Icon(
+                isAvailable ? Icons.event_available_rounded : Icons.insights_rounded,
+                size: 18,
+                color: isAvailable ? Colors.white : colors.primaryRed,
+              ),
+              label: Text(
+                isAvailable ? 'START WEEK $weekNum CHECK-IN' : 'VIEW PROGRESS SUMMARY',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              onPressed: () => _openProgressSubPage(context),
             ),
           ),
         ],
@@ -1881,25 +1253,335 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     );
   }
 
-  // ==========================================
-  // NAVIGATION OPENERS FOR DRAWER SUB-PAGES
-  // ==========================================
-
-  void _openAttendanceSubPage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ClientAttendanceSubScreen(workoutRepository: widget.workoutRepository),
+  Widget _buildProgressStatItem({
+    required String label,
+    required String value,
+    required IconData icon,
+    required ClientThemeColors colors,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      decoration: BoxDecoration(
+        color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: colors.primaryRed),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: colors.textTertiary,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
 
-  void _openChallengeSubPage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ClientChallengeSubScreen(
-          workoutRepository: widget.workoutRepository,
-          onNavigateToWorkout: () => _selectTab(1),
-        ),
+  // --- TAB 0: 🏠 HOME DASHBOARD COMMAND CENTER ---
+  Widget _buildClientHomeScreen() {
+    final clientId = AuthService().currentUserId;
+    final recommended = widget.workoutRepository.getTodaySessionForClient(clientId) ??
+        widget.workoutRepository.getRecommendedSessionForClient(clientId);
+    final history = widget.workoutRepository.clientHistory;
+    final userFullName = AuthService().currentUserName;
+    final firstName = userFullName.isNotEmpty ? userFullName.split(' ').first : 'Athlete';
+
+    // Synchronize daily nutrition data directly from the single source of truth
+    final todayStr = widget.macroRepository.getTodayDateString();
+    final dailySummary = widget.macroRepository.getDailyMacroSummary(todayStr);
+
+    final currentHour = DateTime.now().hour;
+    final greetingPrefix = currentHour < 12
+        ? 'GOOD MORNING'
+        : (currentHour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING');
+
+    final colors = ClientThemeColors(context);
+
+    return RefreshIndicator(
+      color: colors.primaryRed,
+      backgroundColor: colors.surfaceElevated,
+      onRefresh: () async {
+        await AppAutoRefreshService.instance.triggerImmediateSync(
+          reason: 'Client Dashboard pull-to-refresh',
+          force: true,
+        );
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
+          // 1. User Header & Membership ID
+          AlphaXSubtleEntrance(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colors.primaryRed, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primaryRed.withOpacity(0.3),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: colors.surfaceElevated,
+                        child: Text(
+                          firstName.isNotEmpty ? firstName[0].toUpperCase() : 'A',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: colors.primaryRed,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: colors.background, width: 1.5),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$greetingPrefix, ${firstName.toUpperCase()}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'What do you want to accomplish today?',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colors.primaryRed.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colors.primaryRed.withOpacity(0.4), width: 1),
+                  ),
+                  child: Text(
+                    AuthService().currentClientId,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      color: colors.primaryRed,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 2. Clear Section Header: TODAY'S PLAN
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 30),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "TODAY'S PLAN",
+                  style: GoogleFonts.poppins(
+                    color: colors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Text(
+                  '3 Daily Focus Areas',
+                  style: GoogleFonts.poppins(
+                    color: colors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 3. 🏋️ Section 1: Workout Card
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 50),
+            child: _buildBeginnerWorkoutCard(colors, recommended),
+          ),
+          const SizedBox(height: 14),
+
+          // 4. 🍽️ Section 2: Nutrition Card
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 70),
+            child: _buildBeginnerNutritionCard(colors, dailySummary),
+          ),
+          const SizedBox(height: 14),
+
+          // 5. 📈 Section 3: Progress Card
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 90),
+            child: _buildBeginnerProgressCard(colors, history),
+          ),
+          const SizedBox(height: 20),
+
+          // 6. Secondary Navigation: MY ATHLETE PORTAL
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 110),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AlphaXSectionHeader(title: 'MY ATHLETE PORTAL'),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => _selectTab(1)),
+                    _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => _selectTab(2)),
+                    _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => _selectTab(3)),
+                    _clientSectionChip('FOOD PHOTOS', Icons.camera_alt, () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
+                      );
+                    }),
+                    _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => _selectTab(4)),
+                    _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
+                    _clientSectionChip('MY PROFILE', Icons.person, () => _openProfileSubPage(context)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 7. Recent Sessions (only when history is available)
+          if (history.isNotEmpty) ...[
+            AlphaXSubtleEntrance(
+              delay: const Duration(milliseconds: 130),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AlphaXSectionHeader(
+                    title: 'RECENT SESSIONS',
+                    actionLabel: 'View All',
+                    onActionTap: () => _selectTab(1),
+                  ),
+                  const SizedBox(height: 8),
+                  ...history.take(2).map((r) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceCard,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: colors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: colors.primaryRed.withOpacity(0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.check_rounded, color: colors.primaryRed, size: 16),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              r.sessionTitle,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: colors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${r.durationDisplay} • ${r.totalVolume.toInt()} kg',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ],
       ),
     );
   }
@@ -1908,108 +1590,6 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ClientWeeklyProgressScreen(repository: _weeklyProgressRepository),
-      ),
-    );
-  }
-
-  Widget _buildWeeklyCheckInHomeCard() {
-    final status = _weeklyProgressRepository.currentStatus;
-    final isAvailable = status?.isAvailable ?? true;
-    final weekNum = status?.currentWeekNumber ?? 1;
-    final nextDate = status?.nextCheckInDate;
-    final nextDateStr = nextDate != null ? nextDate.toIso8601String().substring(0, 10) : 'Next Week';
-    final daysLeft = status?.daysUntilNext ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AlphaXColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isAvailable
-              ? AlphaXColors.success.withValues(alpha: 0.45)
-              : AlphaXColors.redAccent.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    isAvailable ? Icons.check_circle_outline_rounded : Icons.lock_clock_rounded,
-                    color: isAvailable ? AlphaXColors.success : AlphaXColors.redAccent,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isAvailable ? 'WEEK $weekNum CHECK-IN READY' : 'WEEKLY CHECK-IN COMPLETED ✓',
-                    style: TextStyle(
-                      color: isAvailable ? AlphaXColors.success : AlphaXColors.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isAvailable
-                      ? AlphaXColors.success.withValues(alpha: 0.15)
-                      : AlphaXColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  isAvailable ? 'OPEN NOW' : 'LOCKED',
-                  style: TextStyle(
-                    color: isAvailable ? AlphaXColors.success : AlphaXColors.textTertiary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isAvailable
-                ? 'Your Week $weekNum progress review is available. Submit your weight, nutrition, workout & recovery metrics.'
-                : 'Next Check-In: $nextDateStr (in $daysLeft ${daysLeft == 1 ? "day" : "days"}). Automatically unlocks when week starts.',
-            style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12, height: 1.3),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAvailable ? AlphaXColors.redAccent : AlphaXColors.surfaceElevated,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              icon: Icon(
-                isAvailable ? Icons.play_arrow_rounded : Icons.insights_rounded,
-                size: 16,
-                color: isAvailable ? Colors.white : AlphaXColors.redAccent,
-              ),
-              label: Text(
-                isAvailable ? 'START WEEK $weekNum CHECK-IN' : 'VIEW WEEKLY PROGRESS SUMMARY',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  color: isAvailable ? Colors.white : AlphaXColors.textPrimary,
-                ),
-              ),
-              onPressed: () => _openProgressSubPage(context),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2076,488 +1656,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   }
 }
 
-// ==========================================
-// 1. ATTENDANCE SUB-SCREEN (REAL DATA & QR)
-// ==========================================
 
-class _ClientAttendanceSubScreen extends StatefulWidget {
-  final WorkoutRepository workoutRepository;
-
-  const _ClientAttendanceSubScreen({required this.workoutRepository});
-
-  @override
-  State<_ClientAttendanceSubScreen> createState() => _ClientAttendanceSubScreenState();
-}
-
-class _ClientAttendanceSubScreenState extends State<_ClientAttendanceSubScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _attendanceRecords = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAttendance();
-  }
-
-  Future<void> _loadAttendance() async {
-    setState(() => _isLoading = true);
-    final records = await widget.workoutRepository.fetchClientAttendance();
-    if (mounted) {
-      setState(() {
-        _attendanceRecords = records;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final thisMonthRecords = _attendanceRecords.where((r) {
-      final raw = r['checkInTime'] ?? r['date'] ?? r['createdAt'];
-      if (raw == null) return false;
-      final dt = DateTime.tryParse(raw.toString());
-      return dt != null && dt.month == now.month && dt.year == now.year;
-    }).length;
-
-    String lastVisitStr = 'None';
-    if (_attendanceRecords.isNotEmpty) {
-      final raw = _attendanceRecords.first['checkInTime'] ?? _attendanceRecords.first['date'] ?? _attendanceRecords.first['createdAt'];
-      if (raw != null) {
-        final dt = DateTime.tryParse(raw.toString());
-        if (dt != null) {
-          lastVisitStr = '${dt.day}/${dt.month}/${dt.year}';
-        }
-      }
-    }
-
-    return Scaffold(
-      backgroundColor: AlphaXColors.background,
-      appBar: AppBar(
-        backgroundColor: AlphaXColors.background,
-        elevation: 0,
-        title: const Text(
-          'ATTENDANCE PASS',
-          style: TextStyle(
-            color: AlphaXColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-            letterSpacing: 1.1,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AlphaXColors.textSecondary),
-            onPressed: _loadAttendance,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadAttendance,
-        color: AlphaXColors.redAccent,
-        backgroundColor: AlphaXColors.surfaceCard,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Check-in QR pass
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AlphaXColors.surfaceCard,
-                borderRadius: AlphaXRadius.roundedXl,
-                border: Border.all(color: AlphaXColors.redAccent.withOpacity(0.5), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: AlphaXColors.redAccent.withOpacity(0.12),
-                    blurRadius: 24,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const AlphaXLogo(size: 38),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AlphaXColors.redAccent.withOpacity(0.4), width: 2),
-                    ),
-                    child: const Icon(Icons.qr_code_2_rounded, size: 130, color: Colors.black),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'ALPHA X ACCESS PASS',
-                    style: TextStyle(
-                      color: AlphaXColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Client ID: ${AuthService().currentUserId}',
-                    style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AlphaXColors.surfaceElevated,
-                      borderRadius: AlphaXRadius.roundedXs,
-                    ),
-                    child: const Text(
-                      'Present this QR at turnstiles & terminal scanners for verification',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Real Attendance Metrics
-            AlphaXCard(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _statColumn('TOTAL VISITS', '${_attendanceRecords.length}', isHighlight: true),
-                  Container(height: 36, width: 1, color: AlphaXColors.border),
-                  _statColumn('THIS MONTH', '$thisMonthRecords'),
-                  Container(height: 36, width: 1, color: AlphaXColors.border),
-                  _statColumn('LAST VISIT', lastVisitStr),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Attendance Logs Header
-            const AlphaXSectionHeader(title: 'VERIFIED ATTENDANCE HISTORY'),
-            const SizedBox(height: 10),
-
-            if (_isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: AlphaXColors.redAccent),
-                ),
-              )
-            else if (_attendanceRecords.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: AlphaXColors.surfaceCard,
-                  borderRadius: AlphaXRadius.roundedMd,
-                  border: Border.all(color: AlphaXColors.border),
-                ),
-                child: Column(
-                  children: const [
-                    Icon(Icons.event_busy_rounded, size: 44, color: AlphaXColors.textTertiary),
-                    SizedBox(height: 12),
-                    Text(
-                      'No attendance records yet.',
-                      style: TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Your gym visits will automatically appear here once scanned at the gym terminal.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              )
-            else
-              ..._attendanceRecords.map((entry) {
-                final rawTime = entry['checkInTime'] ?? entry['date'] ?? entry['createdAt'] ?? '';
-                final parsed = DateTime.tryParse(rawTime.toString());
-                final formatted = parsed != null
-                    ? '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year} at ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}'
-                    : rawTime.toString();
-                final terminal = entry['terminalId'] ?? entry['location'] ?? 'Alpha X Main Gym';
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AlphaXColors.surfaceCard,
-                    borderRadius: AlphaXRadius.roundedSm,
-                    border: Border.all(color: AlphaXColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              formatted,
-                              style: const TextStyle(
-                                color: AlphaXColors.textPrimary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '$terminal • Verified Check-In',
-                              style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statColumn(String label, String value, {bool isHighlight = false}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AlphaXColors.textTertiary,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            color: isHighlight ? AlphaXColors.redAccent : AlphaXColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 15,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ==========================================
-// 2. CHALLENGE SUB-SCREEN (REAL 100-DAY DATA)
-// ==========================================
-
-class _ClientChallengeSubScreen extends StatefulWidget {
-  final WorkoutRepository workoutRepository;
-  final VoidCallback onNavigateToWorkout;
-
-  const _ClientChallengeSubScreen({
-    required this.workoutRepository,
-    required this.onNavigateToWorkout,
-  });
-
-  @override
-  State<_ClientChallengeSubScreen> createState() => _ClientChallengeSubScreenState();
-}
-
-class _ClientChallengeSubScreenState extends State<_ClientChallengeSubScreen> {
-  bool _isLoading = true;
-  Map<String, dynamic>? _challengeData;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadChallenge();
-  }
-
-  Future<void> _loadChallenge() async {
-    setState(() => _isLoading = true);
-    final data = await widget.workoutRepository.fetchClientChallenge();
-    if (mounted) {
-      setState(() {
-        _challengeData = data;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AlphaXColors.background,
-      appBar: AppBar(
-        backgroundColor: AlphaXColors.background,
-        elevation: 0,
-        title: const Text(
-          '100-DAY CHALLENGE',
-          style: TextStyle(
-            color: AlphaXColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-            letterSpacing: 1.1,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AlphaXColors.textSecondary),
-            onPressed: _loadChallenge,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadChallenge,
-        color: AlphaXColors.redAccent,
-        backgroundColor: AlphaXColors.surfaceCard,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AlphaXColors.redAccent))
-            : _buildContent(),
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    final hasChallenge = _challengeData != null && _challengeData!['enrolled'] == true;
-
-    if (!hasChallenge) {
-      return ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        children: [
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AlphaXColors.surfaceCard,
-                shape: BoxShape.circle,
-                border: Border.all(color: AlphaXColors.border),
-              ),
-              child: const Icon(Icons.local_fire_department_outlined, size: 54, color: AlphaXColors.textTertiary),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Text(
-              'No active challenge',
-              style: TextStyle(
-                color: AlphaXColors.textPrimary,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'You are not currently enrolled in an active 100-Day Challenge sprint. Speak to your coach or gym administration to start your official transformation journey.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.5),
-          ),
-          const SizedBox(height: 32),
-          AlphaXButton(
-            label: 'VIEW TODAY\'S WORKOUT',
-            icon: Icons.fitness_center_rounded,
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onNavigateToWorkout();
-            },
-          ),
-        ],
-      );
-    }
-
-    final challengeTitle = _challengeData!['challengeTitle'] ?? '100-Day Alpha X Challenge';
-    final currentDay = _challengeData!['currentDay'] ?? 1;
-    final targetDays = _challengeData!['targetDays'] ?? 100;
-    final progressFraction = (currentDay / targetDays).clamp(0.0, 1.0);
-    final percentInt = (progressFraction * 100).toInt();
-    final startDateStr = _challengeData!['startDate']?.toString().split('T').first ?? 'Active';
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        AlphaXHero(
-          imageUrl: 'https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?w=1200&q=80',
-          tag: 'OFFICIAL CHALLENGE',
-          title: challengeTitle.toString().toUpperCase(),
-          subtitle: 'Day $currentDay / $targetDays • $percentInt% Complete\nStarted: $startDateStr',
-          height: 280,
-          action: AlphaXButton(
-            label: 'START TODAY\'S WORKOUT',
-            icon: Icons.play_arrow_rounded,
-            height: 46,
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onNavigateToWorkout();
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
-        const AlphaXSectionHeader(title: 'CHALLENGE PROGRESS'),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AlphaXColors.surfaceCard,
-            borderRadius: AlphaXRadius.roundedMd,
-            border: Border.all(color: AlphaXColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.local_fire_department_rounded, color: AlphaXColors.redAccent, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        '100-Day Transformation Goal',
-                        style: TextStyle(
-                          color: AlphaXColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '$percentInt%',
-                    style: const TextStyle(
-                      color: AlphaXColors.redAccent,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              AlphaXLinearProgress(progress: progressFraction, progressColor: AlphaXColors.redAccent),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Day $currentDay of $targetDays', style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12)),
-                  Text('${targetDays - currentDay} days remaining', style: const TextStyle(color: AlphaXColors.textTertiary, fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 // ==========================================
 // 3. PROGRESS SUB-SCREEN (REAL DATA & CHECK-INS)

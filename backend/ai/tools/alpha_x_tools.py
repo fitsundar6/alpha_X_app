@@ -350,7 +350,7 @@ class AlphaXTools:
             return cur.fetchall()
 
     # ==========================================
-    # BIOMETRICS, CHECK-INS & ATTENDANCE TOOLS
+    # BIOMETRICS & CHECK-INS TOOLS
     # ==========================================
 
     def get_weekly_checkins(self, client_profile_id: str, limit: int = 12) -> List[Dict[str, Any]]:
@@ -400,19 +400,6 @@ class AlphaXTools:
             cur.execute(query, {"cp_id": client_profile_id, "limit": limit})
             return cur.fetchall()
 
-    def get_attendance_history(self, client_profile_id: str, limit: int = 30) -> List[Dict[str, Any]]:
-        """Retrieves gym check-in attendance records."""
-        query = """
-        SELECT date, present, method, "checkInTime", notes
-        FROM client_attendances
-        WHERE "clientProfileId" = %(cp_id)s
-        ORDER BY date DESC
-        LIMIT %(limit)s;
-        """
-        with get_db_cursor() as cur:
-            cur.execute(query, {"cp_id": client_profile_id, "limit": limit})
-            return cur.fetchall()
-
     def get_client_alerts(self, client_profile_id: str) -> List[Dict[str, Any]]:
         """Retrieves attention items flagged for the client."""
         query = """
@@ -442,12 +429,6 @@ class AlphaXTools:
                 WHERE "isCompleted" = TRUE AND DATE("startedAt") = %(target)s;
             """, {"target": today_str})
             today_workouts = cur.fetchone()["count"]
-
-            cur.execute("""
-                SELECT COUNT(*) as count FROM client_attendances 
-                WHERE present = TRUE AND date = %(target)s;
-            """, {"target": today_str})
-            today_attendances = cur.fetchone()["count"]
 
             cur.execute("""
                 SELECT COUNT(*) as count FROM client_food_logs 
@@ -482,7 +463,6 @@ class AlphaXTools:
                 "date": today_str,
                 "totalActiveClients": total_clients,
                 "workoutsCompletedToday": today_workouts,
-                "attendancesVerifiedToday": today_attendances,
                 "foodLogsRecordedToday": today_food_logs,
                 "clientsTrackingFoodToday": tracking_clients,
                 "weeklyCheckInsPending": pending_checkins,

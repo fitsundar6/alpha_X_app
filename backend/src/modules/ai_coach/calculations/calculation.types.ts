@@ -20,7 +20,6 @@ export type CalculationMetricType =
   | 'NUTRITION_TARGET_COMPARISON'
   | 'ACTIVITY_SUMMARY'
   | 'WORKOUT_SUMMARY'
-  | 'ATTENDANCE_SUMMARY'
   | 'CHECKIN_SUMMARY';
 
 export interface CalculationResult<T = any> {
@@ -173,15 +172,6 @@ export interface WorkoutSummaryValue {
     rpe: 'RPE';
     rir: 'RIR';
   };
-}
-
-export interface AttendanceSummaryValue {
-  totalRecords: number;
-  presentCount: number;
-  absentCount: number;
-  attendancePercentage: number;
-  unit: 'percentage';
-  note: string;
 }
 
 export interface CheckInSummaryValue {

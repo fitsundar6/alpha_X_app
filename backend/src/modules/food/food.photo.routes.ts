@@ -19,14 +19,18 @@ router.get('/monitoring', (req, res) => foodPhotoController.getAdminFoodPhotosMo
 router.patch('/:id/verify', (req, res) => foodPhotoController.adminVerifyFoodPhoto(req, res));
 router.post('/:id/verify', (req, res) => foodPhotoController.adminVerifyFoodPhoto(req, res));
 
-// 5. Endpoint for retrieving photo metadata (Auth required)
+// 5. Automatic 15-Day Storage Cleanup (Admin-triggered or health check)
+router.post('/cleanup', (req, res) => foodPhotoController.triggerCleanup(req, res));
+router.get('/cleanup/stats', (req, res) => foodPhotoController.getCleanupStats(req, res));
+
+// 6. Endpoint for retrieving photo metadata (Auth required)
 router.get('/:id', (req, res) => foodPhotoController.getMealPhotoMetadata(req, res));
 
-// 6. Endpoint for streaming photo binary securely (Auth via header or ?token=)
+// 7. Endpoint for streaming photo binary securely (Auth via header or ?token=)
 router.get('/:id/image', (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
 router.get('/:id/file', (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
 
-// 7. Delete photo
+// 8. Delete photo
 router.delete('/:id', (req, res) => foodPhotoController.deleteMealPhoto(req, res));
 
 export const foodPhotoRoutes = router;

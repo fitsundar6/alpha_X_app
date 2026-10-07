@@ -89,7 +89,6 @@ model ClientProfile {
   dietPlanHistories        DietPlanHistory[]
   foodLogs                 ClientFoodLog[]
   macroPlans               MacroPlan[]
-  attendanceRecords        ClientAttendance[]
   progressRecords          ClientProgress[]
   weeklyCheckIns           WeeklyCheckIn[]
   mealPhotos               MealPhoto[]
@@ -216,24 +215,6 @@ model MacroPlan {
   @@index([clientProfileId])
   @@index([clientId])
   @@map("macro_plans")
-}
-
-model ClientAttendance {
-  id              String        @id @default(uuid())
-  clientProfileId String
-  clientProfile   ClientProfile @relation(fields: [clientProfileId], references: [id], onDelete: Cascade)
-  clientId        String? // AXG-XXXX
-  date            DateTime      @db.Date
-  present         Boolean       @default(true)
-  method          String        @default("MANUAL") // QR_SCAN, MANUAL
-  checkInTime     DateTime      @default(now())
-  notes           String?
-  createdAt       DateTime      @default(now())
-
-  @@index([clientProfileId])
-  @@index([clientId])
-  @@index([date])
-  @@map("client_attendances")
 }
 
 model ClientProgress {

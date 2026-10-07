@@ -12,7 +12,7 @@ date_added: 2026-10-02
 When evaluating athlete status, formulating suggestions, or resolving data conflicts, the AI Coach MUST adhere to this strict hierarchy:
 
 1. **Actual Alpha X Client Data** (Live PostgreSQL Database):
-   - Actual logged weights, logged food items, recorded reps/weights, check-in answers, attendance dates.
+   - Actual logged weights, logged food items, recorded reps/weights, check-in answers.
    - Always treated as factual truth over general theory.
 2. **Admin-Assigned Plans**:
    - The workout sessions and diet plans assigned by the coach.

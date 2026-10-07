@@ -6,6 +6,7 @@ import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
 import { UserRole } from '../../constants/roles';
 import { mealPhotoStorageService } from './meal_photo_storage.service';
+import { foodPhotoCleanupService } from './food_photo_cleanup.service';
 
 export class FoodPhotoController {
   /**
@@ -186,6 +187,7 @@ export class FoodPhotoController {
           fileSizeBytes: storageResult.fileSizeBytes,
           capturedAt: new Date(),
           confirmedAt: new Date(),
+          retentionUntil: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15-day storage retention policy
           itemsJson: JSON.stringify(items),
           weightSource: weightSource, // AI_ESTIMATE, SMART_SCALE_BLE, CLIENT_ENTERED
           totalCalories: Math.round(totalCal * 10) / 10,
@@ -485,6 +487,7 @@ export class FoodPhotoController {
           fileSizeBytes: storageResult.fileSizeBytes,
           capturedAt: captureDate,
           confirmedAt: new Date(),
+          retentionUntil: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15-day storage retention policy
           status: 'PENDING',
           clientNote: clientNote && typeof clientNote === 'string' ? clientNote.trim().slice(0, 500) : null,
           timezone: typeof timezone === 'string' ? timezone.trim() : 'UTC',
@@ -801,6 +804,45 @@ export class FoodPhotoController {
       sendSuccess(res, { deleted: true, photoId });
     } catch (err: any) {
       sendError(res, 'DELETE_ERROR', err.message || 'Failed to delete photo', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * POST /api/v1/food-photos/cleanup
+   * Execute 15-day automatic food photo storage cleanup
+   */
+  public async triggerCleanup(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser || authUser.role !== UserRole.ADMIN) {
+        sendError(res, 'FORBIDDEN', 'Administrator access required to trigger food photo cleanup', HttpStatus.FORBIDDEN);
+        return;
+      }
+
+      const retentionDays = req.body?.retentionDays !== undefined ? Number(req.body.retentionDays) : 15;
+      const result = await foodPhotoCleanupService.cleanupExpiredFoodPhotos(retentionDays);
+      sendSuccess(res, result, HttpStatus.OK);
+    } catch (err: any) {
+      sendError(res, 'CLEANUP_ERROR', err.message || 'Failed to execute food photo cleanup', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * GET /api/v1/food-photos/cleanup/stats
+   * Get storage and retention metrics
+   */
+  public async getCleanupStats(req: Request, res: Response): Promise<void> {
+    try {
+      const authUser = this.resolveUserFromRequest(req);
+      if (!authUser || authUser.role !== UserRole.ADMIN) {
+        sendError(res, 'FORBIDDEN', 'Administrator access required to view cleanup stats', HttpStatus.FORBIDDEN);
+        return;
+      }
+
+      const stats = await foodPhotoCleanupService.getStorageStatistics();
+      sendSuccess(res, stats, HttpStatus.OK);
+    } catch (err: any) {
+      sendError(res, 'STATS_ERROR', err.message || 'Failed to fetch storage stats', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

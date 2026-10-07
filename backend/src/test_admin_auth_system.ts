@@ -159,39 +159,37 @@ async function runTests() {
     }
     console.log('✔ TEST 8 PASSED: Client denied access to /api/admin/clients (403 Forbidden).');
 
-    // TEST 9: Client calls /api/admin/attendance -> 403 Forbidden
-    const clientAttRes = await makeRequest(server, {
+    // TEST 9: Client calls /api/admin/metrics -> 403 Forbidden
+    const clientMetricsRes = await makeRequest(server, {
       method: 'GET',
-      path: '/api/admin/attendance',
+      path: '/api/admin/metrics',
       token: clientToken,
     });
-    if (clientAttRes.status !== 403) {
-      throw new Error(`TEST 9 FAILED: Client was not rejected from /api/admin/attendance (got ${clientAttRes.status})`);
+    if (clientMetricsRes.status !== 403) {
+      throw new Error(`TEST 9 FAILED: Client was not rejected from /api/admin/metrics (got ${clientMetricsRes.status})`);
     }
-    console.log('✔ TEST 9 PASSED: Client denied access to /api/admin/attendance (403 Forbidden).');
+    console.log('✔ TEST 9 PASSED: Client denied access to /api/admin/metrics (403 Forbidden).');
 
-    // TEST 10: Client calls /api/admin/challenges -> 403 Forbidden
-    const clientChalRes = await makeRequest(server, {
+    // TEST 10: Client calls /api/admin/exercises -> 403 Forbidden
+    const clientExRes = await makeRequest(server, {
       method: 'GET',
-      path: '/api/admin/challenges',
+      path: '/api/admin/exercises',
       token: clientToken,
     });
-    if (clientChalRes.status !== 403) {
-      throw new Error(`TEST 10 FAILED: Client was not rejected from /api/admin/challenges (got ${clientChalRes.status})`);
+    if (clientExRes.status !== 403) {
+      throw new Error(`TEST 10 FAILED: Client was not rejected from /api/admin/exercises (got ${clientExRes.status})`);
     }
-    console.log('✔ TEST 10 PASSED: Client denied access to /api/admin/challenges (403 Forbidden).');
+    console.log('✔ TEST 10 PASSED: Client denied access to /api/admin/exercises (403 Forbidden).');
 
     // TEST 11: Authorized admin calls all /api/admin/* endpoints -> 200 OK
-    const [wRes, eRes, cRes, aRes, chRes] = await Promise.all([
+    const [wRes, eRes, cRes] = await Promise.all([
       makeRequest(server, { method: 'GET', path: '/api/admin/workouts', token: adminToken }),
       makeRequest(server, { method: 'GET', path: '/api/admin/exercises', token: adminToken }),
       makeRequest(server, { method: 'GET', path: '/api/admin/clients', token: adminToken }),
-      makeRequest(server, { method: 'GET', path: '/api/admin/attendance', token: adminToken }),
-      makeRequest(server, { method: 'GET', path: '/api/admin/challenges', token: adminToken }),
     ]);
 
-    if (wRes.status !== 200 || eRes.status !== 200 || cRes.status !== 200 || aRes.status !== 200 || chRes.status !== 200) {
-      throw new Error(`TEST 11 FAILED: Admin failed to access admin endpoints: W:${wRes.status}, E:${eRes.status}, C:${cRes.status}, A:${aRes.status}, Ch:${chRes.status}`);
+    if (wRes.status !== 200 || eRes.status !== 200 || cRes.status !== 200) {
+      throw new Error(`TEST 11 FAILED: Admin failed to access admin endpoints: W:${wRes.status}, E:${eRes.status}, C:${cRes.status}`);
     }
     console.log('✔ TEST 11 PASSED: Authorized Admin successfully accessed all /api/admin/* endpoints (200 OK).');
 

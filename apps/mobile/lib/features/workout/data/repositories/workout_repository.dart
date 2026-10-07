@@ -917,6 +917,8 @@ class WorkoutRepository extends ChangeNotifier {
           'category': e.category,
           'orderIndex': session.exercises.indexOf(e),
           'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
+          'setCount': e.sets.isNotEmpty ? e.sets.length : 3,
+          'sets': e.sets.map((s) => s.toJson()).toList(),
           'targetReps': e.sets.isNotEmpty ? '${e.sets.first.targetRepsMin}–${e.sets.first.targetRepsMax}' : '8–12',
           'targetWeight': e.sets.isNotEmpty ? e.sets.first.targetWeight : null,
           'restSeconds': e.restSeconds,
@@ -1018,6 +1020,8 @@ class WorkoutRepository extends ChangeNotifier {
           'category': e.category,
           'orderIndex': session.exercises.indexOf(e),
           'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
+          'setCount': e.sets.isNotEmpty ? e.sets.length : 3,
+          'sets': e.sets.map((s) => s.toJson()).toList(),
           'targetReps': e.sets.isNotEmpty ? '${e.sets.first.targetRepsMin}–${e.sets.first.targetRepsMax}' : '8–12',
           'targetWeight': e.sets.isNotEmpty ? e.sets.first.targetWeight : null,
           'restSeconds': e.restSeconds,
@@ -1077,11 +1081,7 @@ class WorkoutRepository extends ChangeNotifier {
         );
       }).toList(),
     );
-    _sessions.insert(0, duplicated);
-    _saveToLocalStorage();
-    notifyListeners();
-
-    // Persist duplicated session to backend
+    // Persist duplicated session (inserts into _sessions and syncs to backend)
     createSession(duplicated);
   }
 
@@ -2463,54 +2463,9 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   // ==========================================
-  // REAL ATTENDANCE, CHALLENGE & PROGRESS APIS
+  // REAL PROGRESS APIS
   // ==========================================
 
-  Future<List<Map<String, dynamic>>> fetchClientAttendance() async {
-    try {
-      final token = await AuthService().getValidToken();
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/attendance');
-      final res = await _httpClient.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded['data'] is List) {
-          return List<Map<String, dynamic>>.from(decoded['data']);
-        }
-      }
-    } catch (e) {
-      debugPrint('[WorkoutRepository] Failed to fetch client attendance: $e');
-    }
-    return [];
-  }
-
-  Future<Map<String, dynamic>?> fetchClientChallenge() async {
-    try {
-      final token = await AuthService().getValidToken();
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/challenge');
-      final res = await _httpClient.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded['data'] is Map) {
-          return Map<String, dynamic>.from(decoded['data']);
-        }
-      }
-    } catch (e) {
-      debugPrint('[WorkoutRepository] Failed to fetch client challenge: $e');
-    }
-    return null;
-  }
 
   Future<List<Map<String, dynamic>>> fetchClientProgress() async {
     try {
@@ -2563,49 +2518,5 @@ class WorkoutRepository extends ChangeNotifier {
     return false;
   }
 
-  Future<List<Map<String, dynamic>>> fetchAdminAttendance() async {
-    try {
-      final token = await AuthService().getValidToken();
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/attendance');
-      final res = await _httpClient.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded['data'] is List) {
-          return List<Map<String, dynamic>>.from(decoded['data']);
-        }
-      }
-    } catch (e) {
-      debugPrint('[WorkoutRepository] Failed to fetch admin attendance: $e');
-    }
-    return [];
-  }
 
-  Future<List<Map<String, dynamic>>> fetchAdminChallenges() async {
-    try {
-      final token = await AuthService().getValidToken();
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/challenges');
-      final res = await _httpClient.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded['data'] is List) {
-          return List<Map<String, dynamic>>.from(decoded['data']);
-        }
-      }
-    } catch (e) {
-      debugPrint('[WorkoutRepository] Failed to fetch admin challenges: $e');
-    }
-    return [];
-  }
 }

@@ -3,19 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_logo_animation.dart';
 import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_button.dart';
 import 'auth_service.dart';
 import 'create_account_screen.dart';
 
 /// The official Alpha X Gym Welcome & Authentication Login Screen.
-/// Cinematic athletic hero background with clean upper lighting and "ALPHA-X" logo,
-/// and a frosted-glass dark theme authentication card positioned in the lower third.
+/// Features a cinematic 4.5-second logo reveal on app launch that transitions
+/// seamlessly into the frosted-glass authentication card in the lower third.
 class LoginScreen extends StatefulWidget {
   final bool initialIsJoinNow;
+  final bool? animateLogo;
+
+  /// Session tracking so the 4.5s intro animation only plays on initial launch
+  static bool hasPlayedIntro = false;
 
   const LoginScreen({
     super.key,
     this.initialIsJoinNow = false,
+    this.animateLogo,
   });
 
   @override
@@ -25,6 +32,10 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _authService = AuthService();
+
+  // Dark-themed card (#141414) and Gold accent (#D4A034)
+  static const Color _cardBackground = Color(0xFF141414);
+  static const Color _goldAccent = Color(0xFFD4A034);
 
   // Login Form Controllers
   final _loginIdController = TextEditingController();
@@ -36,36 +47,106 @@ class _LoginScreenState extends State<LoginScreen>
   String? _errorMessage;
   String? _statusMessage;
 
-  late AnimationController _entranceController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  late final AnimationController _animController;
+  late final Animation<double> _bgFadeAnimation;
+  late final Animation<double> _cardFadeAnimation;
+  late final Animation<Offset> _cardSlideAnimation;
+  late final Animation<double> _topBarFadeAnimation;
+  late final Animation<Alignment> _heroAlignmentAnimation;
+  late final Animation<double> _heroScaleAnimation;
+  late final Animation<double> _heroOpacityAnimation;
 
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(
+
+    final shouldAnimate = widget.animateLogo ?? (!LoginScreen.hasPlayedIntro);
+
+    _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 4600),
+      value: shouldAnimate ? 0.0 : 1.0,
     );
-    _fadeAnimation = CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOut,
+
+    // Phase 5 Transition Curves (3.8s - 4.6s -> 0.826 - 1.000)
+    _bgFadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: const Interval(0.826, 1.000, curve: Curves.easeIn),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
+
+    _cardFadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: const Interval(0.826, 1.000, curve: Curves.easeOutCubic),
+    );
+
+    _cardSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
-        parent: _entranceController,
-        curve: Curves.easeOutCubic,
+        parent: _animController,
+        curve: const Interval(0.826, 1.000, curve: Curves.easeOutCubic),
       ),
     );
-    _entranceController.forward();
+
+    _topBarFadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: const Interval(0.870, 1.000, curve: Curves.easeOut),
+    );
+
+    // Continuous Hero Logo Glide: moves from center (0.0, -0.18) to upper spotlight (0.0, -0.62)
+    _heroAlignmentAnimation = AlignmentTween(
+      begin: const Alignment(0.0, -0.18),
+      end: const Alignment(0.0, -0.62),
+    ).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.826, 1.000, curve: Curves.easeInOutCubic),
+      ),
+    );
+
+    _heroScaleAnimation = Tween<double>(begin: 1.0, end: 0.72).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.826, 1.000, curve: Curves.easeInOutCubic),
+      ),
+    );
+
+    _heroOpacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: const Interval(0.880, 1.000, curve: Curves.easeOut),
+      ),
+    );
+
+    _animController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        LoginScreen.hasPlayedIntro = true;
+      }
+    });
+
+    if (shouldAnimate) {
+      _animController.forward();
+    } else {
+      LoginScreen.hasPlayedIntro = true;
+    }
+  }
+
+  /// Fast-forwards gracefully to the settled login UI on user tap
+  void _skipIntro() {
+    if (_animController.value < 0.826) {
+      _animController.animateTo(
+        1.0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+      LoginScreen.hasPlayedIntro = true;
+    }
   }
 
   @override
   void dispose() {
-    _entranceController.dispose();
+    _animController.dispose();
     _loginIdController.dispose();
     _loginPasswordController.dispose();
     super.dispose();
@@ -138,74 +219,113 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 1. Background image set behind all UI components (z-index: 0 / bottom of Stack)
-          // Aligned to top center and scaled (BoxFit.contain) so subject & glowing "ALPHA-X" text are fully visible in the upper section without being zoomed in or cropped
-          Positioned.fill(
-            child: ColoredBox(
-              color: Colors.black,
-              child: FractionalTranslation(
-                // Positioned -15% of screen height (adjusted downward by 5% from previous -20%):
-                translation: const Offset(0.0, -0.15),
-                child: Image.asset(
-                  'assets/images/alpha_x_login_bg.jpg',
-                  fit: BoxFit.contain,
-                  alignment: const Alignment(0.0, -1.0),
-                  errorBuilder: (context, error, stackTrace) => Image.asset(
-                    'assets/images/alpha_x_login_bg.png',
-                    fit: BoxFit.contain,
-                    alignment: const Alignment(0.0, -1.0),
-                    errorBuilder: (context, error, stackTrace) => const ColoredBox(color: Colors.black),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // 2. Foreground UI: Top bar + all login inputs pushed all the way to the bottom third
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Top Bar: Server Settings (unobtrusive, safe from notches)
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 4, right: 16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.35),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.12)),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 20),
-                        tooltip: 'Server Settings',
-                        onPressed: () => ServerConfigDialog.show(context),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _skipIntro,
+        child: Stack(
+          children: [
+            // 1. Background image (cross-fades in during transition phase)
+            Positioned.fill(
+              child: FadeTransition(
+                opacity: _bgFadeAnimation,
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: FractionalTranslation(
+                    translation: const Offset(0.0, -0.15),
+                    child: Image.asset(
+                      'assets/images/alpha_x_login_bg.jpg',
+                      fit: BoxFit.contain,
+                      alignment: const Alignment(0.0, -1.0),
+                      errorBuilder: (context, error, stackTrace) => Image.asset(
+                        'assets/images/alpha_x_login_bg.png',
+                        fit: BoxFit.contain,
+                        alignment: const Alignment(0.0, -1.0),
+                        errorBuilder: (context, error, stackTrace) => const ColoredBox(color: Colors.black),
                       ),
                     ),
                   ),
                 ),
+              ),
+            ),
 
-                // Expanded space keeping upper section completely open for the spotlight, "ALPHA-X", and subject
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 380),
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: SlideTransition(
-                              position: _slideAnimation,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
+            // 2. Cinematic Hero Logo Animation (0.0s - 4.6s)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _animController,
+                  builder: (context, child) {
+                    if (_animController.value >= 1.0) {
+                      return const SizedBox.shrink();
+                    }
+                    return Align(
+                      alignment: _heroAlignmentAnimation.value,
+                      child: Transform.scale(
+                        scale: _heroScaleAnimation.value,
+                        child: Opacity(
+                          opacity: _heroOpacityAnimation.value.clamp(0.0, 1.0),
+                          child: AlphaXLogoAnimation(
+                            controller: _animController,
+                            size: 150,
+                            allowTapToSkip: false,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // 3. Foreground UI: Top bar + login inputs pushed to lower third
+            SafeArea(
+              top: true,
+              bottom: true,
+              maintainBottomViewPadding: true,
+              minimum: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Top Bar: Server Settings (unobtrusive, safe from notches)
+                  FadeTransition(
+                    opacity: _topBarFadeAnimation,
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 20),
+                            tooltip: 'Server Settings',
+                            onPressed: () => ServerConfigDialog.show(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Expanded space keeping upper section completely open for spotlight & logo
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 380),
+                            child: FadeTransition(
+                              opacity: _cardFadeAnimation,
+                              child: SlideTransition(
+                                position: _cardSlideAnimation,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
                                   // Error / Status Banners if active
                                   if (_errorMessage != null) ...[
                                     Container(
@@ -274,17 +394,17 @@ class _LoginScreenState extends State<LoginScreen>
                                       filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                                       child: Container(
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.24), // subtle transparent dark tint
+                                          color: _cardBackground, // #141414 dark-themed card
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
-                                            color: Colors.white.withOpacity(0.18),
+                                            color: Colors.white.withOpacity(0.12),
                                             width: 1.0,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.22),
-                                              blurRadius: 18,
-                                              offset: const Offset(0, 4),
+                                              color: Colors.black.withOpacity(0.50),
+                                              blurRadius: 24,
+                                              offset: const Offset(0, 8),
                                             ),
                                           ],
                                         ),
@@ -315,10 +435,10 @@ class _LoginScreenState extends State<LoginScreen>
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                       decoration: BoxDecoration(
-                                                        color: AppColors.primary.withOpacity(0.18),
+                                                        color: _goldAccent.withOpacity(0.18),
                                                         borderRadius: BorderRadius.circular(10),
                                                         border: Border.all(
-                                                          color: AppColors.primary.withOpacity(0.4),
+                                                          color: _goldAccent.withOpacity(0.4),
                                                           width: 0.8,
                                                         ),
                                                       ),
@@ -366,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   hintText: 'e.g. AXG-0001 or name@example.com',
                                                   labelStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 11),
                                                   hintStyle: GoogleFonts.poppins(color: AppColors.textMuted, fontSize: 10),
-                                                  prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.primary, size: 16),
+                                                  prefixIcon: const Icon(Icons.badge_outlined, color: _goldAccent, size: 16),
                                                   filled: true,
                                                   fillColor: Colors.black.withOpacity(0.25),
                                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -376,7 +496,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   ),
                                                   focusedBorder: OutlineInputBorder(
                                                     borderRadius: BorderRadius.circular(10),
-                                                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                                    borderSide: const BorderSide(color: _goldAccent, width: 1.5),
                                                   ),
                                                   errorBorder: OutlineInputBorder(
                                                     borderRadius: BorderRadius.circular(10),
@@ -407,7 +527,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   isDense: true,
                                                   labelText: 'Password',
                                                   labelStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 11),
-                                                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary, size: 16),
+                                                  prefixIcon: const Icon(Icons.lock_outline, color: _goldAccent, size: 16),
                                                   suffixIcon: IconButton(
                                                     padding: EdgeInsets.zero,
                                                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -427,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen>
                                                   ),
                                                   focusedBorder: OutlineInputBorder(
                                                     borderRadius: BorderRadius.circular(10),
-                                                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                                    borderSide: const BorderSide(color: _goldAccent, width: 1.5),
                                                   ),
                                                   errorBorder: OutlineInputBorder(
                                                     borderRadius: BorderRadius.circular(10),
@@ -445,119 +565,49 @@ class _LoginScreenState extends State<LoginScreen>
                                               ),
                                               const SizedBox(height: 10),
 
-                                              // Primary Login CTA Button
-                                              Container(
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(999),
-                                                  boxShadow: const [
-                                                    BoxShadow(
-                                                      color: AppColors.glow,
-                                                      blurRadius: 14,
-                                                      spreadRadius: 1,
-                                                      offset: Offset(0, 3),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: ElevatedButton(
-                                                  onPressed: _isLoading ? null : _handleClientLogin,
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: AppColors.primary,
-                                                    foregroundColor: AppColors.onPrimary,
-                                                    shape: const StadiumBorder(),
-                                                    elevation: 0,
-                                                  ),
-                                                  child: _isLoading
-                                                      ? const SizedBox(
-                                                          width: 18,
-                                                          height: 18,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 2.0,
-                                                            color: AppColors.onPrimary,
-                                                          ),
-                                                        )
-                                                      : Stack(
-                                                          alignment: Alignment.center,
-                                                          children: [
-                                                            Text(
-                                                              'CLIENT LOGIN',
-                                                              style: GoogleFonts.poppins(
-                                                                color: AppColors.onPrimary,
-                                                                fontWeight: FontWeight.w800,
-                                                                fontSize: 12.5,
-                                                                letterSpacing: 0.8,
-                                                              ),
-                                                            ),
-                                                            const SizedBox(
-                                                                width: 0,
-                                                                height: 0,
-                                                                child: Text('LOGIN', style: TextStyle(fontSize: 0, color: Colors.transparent)),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
+                                               // Reusable Solid Gold Action Button (#D4A034, Rounded Corners, Non-Clipping)
+                                               AlphaXActionButton.solid(
+                                                 label: 'CLIENT LOGIN',
+                                                 isLoading: _isLoading,
+                                                 onPressed: _handleClientLogin,
+                                                 height: 48,
+                                                 borderRadius: BorderRadius.circular(12),
+                                                 goldColor: _goldAccent,
+                                                 hiddenTestLabels: const ['LOGIN'],
+                                               ),
+                                               const SizedBox(height: 8),
 
-                                              // Divider
-                                              Row(
-                                                children: [
-                                                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12), height: 1)),
-                                                  Padding(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                                    child: Text(
-                                                      'OR',
-                                                      style: GoogleFonts.poppins(
-                                                        color: AppColors.textTertiary,
-                                                        fontSize: 9.5,
-                                                        fontWeight: FontWeight.w700,
-                                                        letterSpacing: 0.8,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12), height: 1)),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 6),
+                                               // Divider
+                                               Row(
+                                                 children: [
+                                                   Expanded(child: Divider(color: Colors.white.withOpacity(0.12), height: 1)),
+                                                   Padding(
+                                                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                                     child: Text(
+                                                       'OR',
+                                                       style: GoogleFonts.poppins(
+                                                         color: AppColors.textTertiary,
+                                                         fontSize: 9.5,
+                                                         fontWeight: FontWeight.w700,
+                                                         letterSpacing: 0.8,
+                                                       ),
+                                                     ),
+                                                   ),
+                                                   Expanded(child: Divider(color: Colors.white.withOpacity(0.12), height: 1)),
+                                                 ],
+                                               ),
+                                               const SizedBox(height: 8),
 
-                                              // Secondary Outlined Frosted Button for Create Account
-                                              SizedBox(
-                                                height: 38,
-                                                child: OutlinedButton(
-                                                  onPressed: _isLoading ? null : _openCreateAccountScreen,
-                                                  style: OutlinedButton.styleFrom(
-                                                    side: BorderSide(color: AppColors.primary.withOpacity(0.85), width: 1.2),
-                                                    shape: const StadiumBorder(),
-                                                    backgroundColor: Colors.white.withOpacity(0.04),
-                                                  ),
-                                                  child: Stack(
-                                                    alignment: Alignment.center,
-                                                    children: [
-                                                      Text(
-                                                        'CREATE ACCOUNT',
-                                                        style: GoogleFonts.poppins(
-                                                          color: AppColors.primary,
-                                                          fontWeight: FontWeight.w800,
-                                                          fontSize: 11.5,
-                                                          letterSpacing: 0.8,
-                                                        ),
-                                                      ),
-                                                      Opacity(
-                                                        opacity: 0.0,
-                                                        child: Text(
-                                                          'CREATE NEW ACCOUNT',
-                                                          style: GoogleFonts.poppins(
-                                                            color: AppColors.primary,
-                                                            fontWeight: FontWeight.w800,
-                                                            fontSize: 11.5,
-                                                            letterSpacing: 0.8,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
+                                               // Reusable Outlined Action Button (#D4A034, Rounded Corners, Non-Clipping)
+                                               AlphaXActionButton.outlined(
+                                                 label: 'CREATE ACCOUNT',
+                                                 isLoading: _isLoading,
+                                                 onPressed: _openCreateAccountScreen,
+                                                 height: 48,
+                                                 borderRadius: BorderRadius.circular(12),
+                                                 goldColor: _goldAccent,
+                                                 hiddenTestLabels: const ['CREATE NEW ACCOUNT'],
+                                               ),
                                             ],
                                           ),
                                         ),
@@ -566,15 +616,16 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                   const SizedBox(height: 6),
 
-                                  // Dedicated Admin Login Action Link
+                                  // Dedicated Admin Login Action Link (With SafeArea insets to prevent iOS home indicator collision)
+                                  const SizedBox(height: 4),
                                   Center(
                                     child: TextButton.icon(
                                       onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
-                                      icon: const Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
+                                      icon: const Icon(Icons.shield_outlined, size: 14, color: _goldAccent),
                                       label: Text(
                                         'ADMIN LOGIN',
                                         style: GoogleFonts.poppins(
-                                          color: AppColors.primary,
+                                          color: _goldAccent,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                           letterSpacing: 0.8,
@@ -582,6 +633,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 8),
                                 ],
                               ),
                             ),
@@ -596,6 +648,7 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

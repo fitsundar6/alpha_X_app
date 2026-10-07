@@ -12,7 +12,6 @@ export * from './get_client_nutrition_log';
 export * from './get_assigned_diet';
 export * from './get_client_checkins';
 export * from './get_client_steps_history';
-export * from './get_client_attendance';
 export * from './get_assigned_workout';
 export * from './propose_workout_plan';
 export * from './propose_diet_plan';
@@ -25,7 +24,6 @@ import { getClientNutritionLogTool } from './get_client_nutrition_log';
 import { getAssignedDietTool } from './get_assigned_diet';
 import { getClientCheckInsTool } from './get_client_checkins';
 import { getClientStepsHistoryTool } from './get_client_steps_history';
-import { getClientAttendanceTool } from './get_client_attendance';
 import { getAssignedWorkoutTool } from './get_assigned_workout';
 import { proposeWorkoutPlanTool } from './propose_workout_plan';
 import { proposeDietPlanTool } from './propose_diet_plan';
@@ -39,7 +37,6 @@ export const CLIENT_DATA_TOOLS = [
   getAssignedDietTool,
   getClientCheckInsTool,
   getClientStepsHistoryTool,
-  getClientAttendanceTool,
   getAssignedWorkoutTool,
   proposeWorkoutPlanTool,
   proposeDietPlanTool,

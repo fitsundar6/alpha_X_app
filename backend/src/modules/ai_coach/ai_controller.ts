@@ -645,7 +645,6 @@ ${ctx.completeness.missingItems.length > 0 ? `*Notice: ${ctx.completeness.missin
 
 ### 4. Progress & Activity Trends
 * **Recorded Weight Entries:** ${ctx.progressRecords.length} weigh-ins
-* **Recorded Attendance:** ${ctx.attendanceRecords.length} gym check-ins
 * **Step Activity Logged:** ${ctx.activityRecords.length} daily logs
 
 ### 5. Recovery & Weekly Check-Ins
@@ -730,7 +729,6 @@ ${ctx.completeness.missingItems.length > 0 ? `*Notice: ${ctx.completeness.missin
 
 ### 1. Training Operations
 * **Workouts Completed Today:** **${summary.workoutsCompletedToday}**
-* **Active Athletes In Facility:** ${summary.attendancesVerifiedToday} check-ins verified
 
 ### 2. Nutrition Tracking
 * **Total Food Logs Recorded:** **${summary.foodLogsRecordedToday}**
@@ -774,7 +772,6 @@ ${summary.attentionItems.length > 0 ? summary.attentionItems.slice(0, 5).map(a =
 
 * **Total Active Clients:** **${summary.totalActiveClients}**
 * **Workouts Completed:** **${summary.workoutsCompleted}** (Adherence: ~${summary.workoutAdherenceRate}%)
-* **Attendance Check-Ins:** **${summary.attendanceCheckIns}**
 * **Total Food Logs Recorded:** **${summary.totalFoodLogs}**
 * **Weekly Check-In Submissions:** **${summary.checkInsCompleted}** (${summary.checkInCompletionRate}% completion rate)
 * **Pending Attention Items:** **${summary.attentionItemsCount}**
@@ -805,7 +802,6 @@ ${summary.attentionItems.length > 0 ? `### Athletes Requiring Review:\n${summary
 
 * **Active Roster:** **${summary.totalActiveClients} athletes**
 * **Monthly Workouts Logged:** **${summary.monthlyWorkoutsCompleted}** (avg ${summary.avgWorkoutsPerClient} per client)
-* **Monthly Facility Attendances:** **${summary.monthlyAttendances}** (avg ${summary.avgAttendancesPerClient} per client)
 * **Total Food Logs:** **${summary.monthlyFoodLogs}**
 * **Total Weekly Check-Ins:** **${summary.monthlyCheckIns}**
 

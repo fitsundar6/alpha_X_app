@@ -219,13 +219,25 @@ export class MealPhotoStorageService {
   }
 
   /**
-   * Delete file from storage
+   * Resolve physical disk path without triggering cache materialization
    */
-  public async deleteFile(relativeStoragePath: string): Promise<void> {
-    const fullPath = this.getAbsoluteFilePath(relativeStoragePath);
+  public resolvePhysicalFilePath(relativeStoragePath: string): string {
+    const rel = this.extractRelativePath(relativeStoragePath);
+    const normalized = path.normalize(rel).replace(/^(\.\.[\/\\])+/, '');
+    return path.join(this.baseStorageDir, normalized);
+  }
+
+  /**
+   * Delete file from storage safely. Returns true if a physical file was removed.
+   */
+  public async deleteFile(relativeStoragePath: string): Promise<boolean> {
+    if (!relativeStoragePath || !relativeStoragePath.trim()) return false;
+    let deleted = false;
+    const fullPath = this.resolvePhysicalFilePath(relativeStoragePath);
     if (fs.existsSync(fullPath)) {
       try {
         await fs.promises.unlink(fullPath);
+        deleted = true;
       } catch (err) {
         console.warn(`[STORAGE SERVICE] Failed to delete file ${fullPath}:`, err);
       }
@@ -234,8 +246,10 @@ export class MealPhotoStorageService {
     if (fs.existsSync(tmpFallback)) {
       try {
         await fs.promises.unlink(tmpFallback);
+        deleted = true;
       } catch (_) {}
     }
+    return deleted;
   }
 }
 

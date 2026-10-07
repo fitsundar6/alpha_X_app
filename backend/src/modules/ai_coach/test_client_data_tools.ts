@@ -6,7 +6,7 @@
  * - Client search & ambiguity handling (MULTIPLE_CLIENTS_FOUND)
  * - Client profile & secret exclusion
  * - Weight history, workout history, nutrition logs, assigned diet separation
- * - Check-ins, step history, attendance, assigned workouts
+ * - Check-ins, step history, assigned workouts
  * - Input validation, date range bounds, pagination limits
  * - No generic database queries & WRITE operation protection
  * - Real Gemini live tool calling with Alpha X database context
@@ -330,18 +330,6 @@ async function runPhase6Tests(): Promise<void> {
       },
     });
 
-    // 6. Attendance
-    await prisma.clientAttendance.create({
-      data: {
-        clientProfileId: marcusProfile.id,
-        clientId: marcusAxId,
-        date: new Date('2026-09-23'),
-        present: true,
-        method: 'QR_SCAN',
-        checkInTime: new Date('2026-09-23T09:55:00Z'),
-      },
-    });
-
     // 7. Activity Record (Steps)
     await prisma.activityRecord.create({
       data: {
@@ -563,20 +551,6 @@ async function runPhase6Tests(): Promise<void> {
     );
     console.log();
 
-    // ============================================================================
-    // TEST 13 — ATTENDANCE RECORDS
-    // ============================================================================
-    console.log('--- TEST 13: Attendance Records ---');
-    const attendanceRes = await clientDataService.getClientAttendance(marcusAxId);
-    assert(
-      attendanceRes.status === 'SUCCESS' &&
-        attendanceRes.recordCount >= 1 &&
-        attendanceRes.attendances[0].present === true &&
-        attendanceRes.attendances[0].method === 'QR_SCAN',
-      'TEST 13: Retrieves client gym attendance without exposing QR secrets or internal tokens',
-      { attendance: attendanceRes.attendances }
-    );
-    console.log();
 
     // ============================================================================
     // TEST 14 — ASSIGNED WORKOUT PRESCRIPTION
@@ -1033,7 +1007,6 @@ async function runPhase6Tests(): Promise<void> {
       toolRegistry.hasTool('get_assigned_diet') &&
       toolRegistry.hasTool('get_client_checkins') &&
       toolRegistry.hasTool('get_client_steps_history') &&
-      toolRegistry.hasTool('get_client_attendance') &&
       toolRegistry.hasTool('get_assigned_workout');
 
     assert(

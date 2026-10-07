@@ -116,7 +116,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     }
 
     // If message is purely a select or switch declaration without further inquiry
-    const hasFitnessQuery = /(weight|workout|nutrition|diet|calories|protein|checkin|attendance|steps|history|goal|record|progress|injury|pain|sleep|adherence)/i.test(cleanMessage);
+    const hasFitnessQuery = /(weight|workout|nutrition|diet|calories|protein|checkin|steps|history|goal|record|progress|injury|pain|sleep|adherence)/i.test(cleanMessage);
     if (resolveRes.client && !hasFitnessQuery) {
       const isSwitch = clientIntent.type === 'SWITCH';
       const ack = isSwitch
@@ -433,7 +433,6 @@ router.get('/summary', async (req: Request, res: Response) => {
       weeklyCheckInsPending: summary.weeklyCheckInsPending,
       clientsNeedReview: summary.clientsNeedingReviewCount,
       totalActiveClients: summary.totalActiveClients,
-      attendancesVerifiedToday: summary.attendancesVerifiedToday,
       attentionItems: summary.attentionItems,
     });
   } catch (err: any) {

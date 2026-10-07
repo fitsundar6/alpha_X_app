@@ -64,8 +64,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     '👥 CLIENTS',
     '🏋️ WORKOUT SESSIONS',
     '📅 ASSIGNMENTS',
-    '🔥 CHALLENGES',
-    '📋 ATTENDANCE',
     '⚙️ SETTINGS',
     '📈 WEEKLY PROGRESS',
     '⚠️ CLIENT ATTENTION',
@@ -295,7 +293,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           color: colors.surfaceCard,
         ),
         child: NavigationBar(
-          selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
+          selectedIndex: _selectedIndex > 3 ? 0 : _selectedIndex,
           onDestinationSelected: _selectAdminTab,
           backgroundColor: colors.surfaceCard,
           indicatorColor: colors.glow,
@@ -321,11 +319,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               selectedIcon: Icon(Icons.calendar_month, color: colors.primary),
               label: 'Assign',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.local_fire_department_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.local_fire_department, color: colors.primary),
-              label: 'Challenges',
-            ),
           ],
         ),
       ),
@@ -348,16 +341,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       case 3:
         return _buildAssignmentsTab();
       case 4:
-        return _buildChallengesTab();
-      case 5:
-        return _buildAttendanceTab();
-      case 6:
         return _buildSettingsTab();
-      case 7:
+      case 5:
         return AdminWeeklyProgressScreen(repository: _weeklyProgressRepo);
-      case 8:
+      case 6:
         return const AdminAttentionCenterView();
-      case 9:
+      case 7:
         return const AdminFoodPhotosMonitoringScreen(showAppBar: false);
       default:
         return _buildAdminHomeTab();
@@ -470,12 +459,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             },
           ),
           _drawerItem(3, 'Assignments', Icons.calendar_month_outlined, colors),
-          _drawerItem(4, 'Challenges', Icons.local_fire_department_outlined, colors),
-          _drawerItem(5, 'Attendance', Icons.qr_code_scanner_outlined, colors),
-          _drawerItem(6, 'Settings', Icons.settings_outlined, colors),
-          _drawerItem(7, 'Weekly Progress', Icons.insights_rounded, colors),
-          _drawerItem(8, 'Client Attention', Icons.warning_amber_rounded, colors),
-          _drawerItem(9, 'Client Food Photos', Icons.camera_alt_outlined, colors),
+          _drawerItem(4, 'Settings', Icons.settings_outlined, colors),
+          _drawerItem(5, 'Weekly Progress', Icons.insights_rounded, colors),
+          _drawerItem(6, 'Client Attention', Icons.warning_amber_rounded, colors),
+          _drawerItem(7, 'Client Food Photos', Icons.camera_alt_outlined, colors),
           Divider(color: colors.border),
           ListTile(
             leading: Icon(Icons.logout, color: colors.primary),
@@ -634,10 +621,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 children: [
                   Expanded(
                     child: AlphaXStatCard(
-                      label: 'TODAY\'S ATTENDANCE',
-                      value: clients.isEmpty ? '0 / 0' : '${(clients.length * 0.7).round()} / ${clients.length}',
-                      subtext: 'Peak hour: 7:30 AM',
-                      icon: Icons.qr_code_scanner,
+                      label: 'ATHLETE ENGAGEMENT',
+                      value: clients.isEmpty ? '0%' : '92%',
+                      subtext: 'Active training roster',
+                      icon: Icons.trending_up,
                       accentColor: AlphaXColors.textPrimary,
                     ),
                   ),
@@ -666,12 +653,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: AlphaXStatCard(
-                      label: 'ACTIVE CHALLENGES',
-                      value: '3',
-                      subtext: '100 Day Sprint active',
-                      icon: Icons.local_fire_department_outlined,
+                      label: 'ASSIGNED PLANS',
+                      value: '${assignments.length}',
+                      subtext: assignments.isEmpty ? 'No active plans' : '${assignments.length} assigned routines',
+                      icon: Icons.calendar_month_outlined,
                       accentColor: AlphaXColors.redAccent,
                     ),
                   ),
@@ -730,7 +717,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               );
             }),
             _adminActionChip('Client Food Photos', Icons.camera_alt_outlined, () {
-              _selectAdminTab(9);
+              _selectAdminTab(7);
             }),
             _adminActionChip('Global Step Target', Icons.flag_outlined, () {
               _showSetStepGoalDialog();
@@ -1074,13 +1061,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 _buildAdminCategoryPill(
                   title: 'Diet Plans',
                   isSelected: false,
-                  onTap: () => _selectAdminTab(9),
+                  onTap: () => _selectAdminTab(7),
                 ),
                 const SizedBox(width: 8),
                 _buildAdminCategoryPill(
                   title: 'Reports',
                   isSelected: false,
-                  onTap: () => _selectAdminTab(7),
+                  onTap: () => _selectAdminTab(5),
                 ),
               ],
             ),
@@ -1924,15 +1911,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  // --- TAB 4: 🔥 CHALLENGES TAB ---
-  Widget _buildChallengesTab() {
-    return _AdminChallengesTabView(workoutRepository: widget.workoutRepository);
-  }
-
-  // --- TAB 5: 📋 ATTENDANCE TAB ---
-  Widget _buildAttendanceTab() {
-    return _AdminAttendanceTabView(workoutRepository: widget.workoutRepository);
-  }
 
   void _showMacroTargetsDialog(BuildContext context, Map<String, dynamic> client) {
     final clientId = client['clientId'] ?? client['id'] ?? '';
@@ -2261,307 +2239,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   }
 }
 
-// ==========================================
-// ADMIN CHALLENGES TAB VIEW (REAL BACKEND DATA)
-// ==========================================
 
-class _AdminChallengesTabView extends StatefulWidget {
-  final WorkoutRepository workoutRepository;
-
-  const _AdminChallengesTabView({required this.workoutRepository});
-
-  @override
-  State<_AdminChallengesTabView> createState() => _AdminChallengesTabViewState();
-}
-
-class _AdminChallengesTabViewState extends State<_AdminChallengesTabView> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _challenges = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadChallenges();
-  }
-
-  Future<void> _loadChallenges() async {
-    setState(() => _isLoading = true);
-    final list = await widget.workoutRepository.fetchAdminChallenges();
-    if (mounted) {
-      setState(() {
-        _challenges = list;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _loadChallenges,
-      color: AppColors.primaryRed,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'GYM TRANSFORMATION CHALLENGES',
-                style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
-                onPressed: _loadChallenges,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(color: AppColors.primaryRed),
-              ),
-            )
-          else if (_challenges.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                children: const [
-                  Icon(Icons.local_fire_department_outlined, size: 40, color: AppColors.textTertiary),
-                  SizedBox(height: 12),
-                  Text('No active transformation challenges.', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 14)),
-                  SizedBox(height: 4),
-                  Text('Create challenges to drive member engagement and community consistency.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ],
-              ),
-            )
-          else
-            ..._challenges.map((c) {
-              final title = c['title']?.toString() ?? 'Transformation Challenge';
-              final participants = c['activeParticipants'] ?? 0;
-              final duration = c['durationDays'] ?? 100;
-              final status = c['status']?.toString() ?? 'ACTIVE';
-              final reward = c['reward']?.toString() ?? 'Alpha X Trophy';
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: AppColors.primaryRed.withOpacity(0.15), shape: BoxShape.circle),
-                      child: const Icon(Icons.local_fire_department, color: AppColors.primaryRed, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15)),
-                          const SizedBox(height: 4),
-                          Text('$status • $participants Athletes • $duration Days • Reward: $reward', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(6)),
-                      child: Text(status, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// ADMIN ATTENDANCE TAB VIEW (REAL POSTGRES RECORDS)
-// ==========================================
-
-class _AdminAttendanceTabView extends StatefulWidget {
-  final WorkoutRepository workoutRepository;
-
-  const _AdminAttendanceTabView({required this.workoutRepository});
-
-  @override
-  State<_AdminAttendanceTabView> createState() => _AdminAttendanceTabViewState();
-}
-
-class _AdminAttendanceTabViewState extends State<_AdminAttendanceTabView> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _records = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAttendance();
-  }
-
-  Future<void> _loadAttendance() async {
-    setState(() => _isLoading = true);
-    final list = await widget.workoutRepository.fetchAdminAttendance();
-    if (mounted) {
-      setState(() {
-        _records = list;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final todayCount = _records.where((r) {
-      final raw = r['checkInTime'] ?? r['date'] ?? r['createdAt'];
-      if (raw == null) return false;
-      final dt = DateTime.tryParse(raw.toString());
-      return dt != null && dt.day == now.day && dt.month == now.month && dt.year == now.year;
-    }).length;
-
-    return RefreshIndicator(
-      onRefresh: _loadAttendance,
-      color: AppColors.primaryRed,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                const AlphaXLogo(size: 44),
-                const SizedBox(height: 12),
-                const Icon(Icons.qr_code_scanner, color: AppColors.primaryRed, size: 40),
-                const SizedBox(height: 12),
-                const Text(
-                  'DYNAMIC QR ATTENDANCE STATION',
-                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'HMAC-SHA256 rotating dynamic code active for client physical gym check-ins.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: AppColors.glowRed, borderRadius: BorderRadius.circular(8)),
-                  child: Text(
-                    'Today Check-Ins: $todayCount Athletes',
-                    style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'VERIFIED ATTENDANCE LOGS (DATABASE)',
-                style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh, size: 18, color: AppColors.textSecondary),
-                onPressed: _loadAttendance,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(color: AppColors.primaryRed),
-              ),
-            )
-          else if (_records.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                children: const [
-                  Icon(Icons.event_busy_rounded, size: 40, color: AppColors.textTertiary),
-                  SizedBox(height: 12),
-                  Text('No attendance records logged today.', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 14)),
-                  SizedBox(height: 4),
-                  Text('Real-time terminal scans from gym access gates will appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ],
-              ),
-            )
-          else
-            ..._records.map((r) {
-              final rawTime = r['checkInTime'] ?? r['date'] ?? r['createdAt'] ?? '';
-              final parsed = DateTime.tryParse(rawTime.toString());
-              final formattedTime = parsed != null
-                  ? '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year} at ${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}'
-                  : rawTime.toString();
-              final clientName = r['clientName'] ?? 'Athlete Member';
-              final clientId = r['clientId'] ?? '';
-              final method = r['method'] ?? 'QR';
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: AppColors.success.withOpacity(0.12), shape: BoxShape.circle),
-                      child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(clientName, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13)),
-                          const SizedBox(height: 2),
-                          Text('Client ID: $clientId • $formattedTime • Method: $method', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-}
 
 class _AdminNotesEditor extends StatefulWidget {
   final String clientId;

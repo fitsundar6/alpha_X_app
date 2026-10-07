@@ -19,10 +19,12 @@ import { getToolSystemInfoTool } from './definitions/get_tool_system_info';
 import { CLIENT_DATA_TOOLS } from './definitions/client';
 import { CALCULATION_TOOLS } from './definitions/calculations';
 import { WORKOUT_INTELLIGENCE_TOOLS } from './definitions/workout_intelligence';
+import { NUTRITION_INTELLIGENCE_TOOLS } from './definitions/nutrition_intelligence';
 
 export * from './definitions/client';
 export * from './definitions/calculations';
 export * from './definitions/workout_intelligence';
+export * from './definitions/nutrition_intelligence';
 
 export const DEMO_TOOLS = [
   getAiStatusTool,
@@ -36,6 +38,7 @@ export const ALL_DEFAULT_TOOLS = [
   ...CLIENT_DATA_TOOLS,
   ...CALCULATION_TOOLS,
   ...WORKOUT_INTELLIGENCE_TOOLS,
+  ...NUTRITION_INTELLIGENCE_TOOLS,
 ];
 
 /**

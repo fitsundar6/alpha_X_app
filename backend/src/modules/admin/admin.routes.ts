@@ -63,7 +63,7 @@ router.post('/exercises/sync', (req: Request, res: Response) => exerciseControll
 // ==========================================
 // 3. ADMIN CLIENT MANAGEMENT OPERATIONS
 // Admin selects individual client (by clientId AXG-XXXX or userId)
-// Manages: PROFILE, ASSESSMENT, WORKOUT, NUTRITION, MACROS, PROGRESS, ATTENDANCE, NOTES
+// Manages: PROFILE, ASSESSMENT, WORKOUT, NUTRITION, MACROS, PROGRESS, NOTES
 // ==========================================
 
 // Helper: resolves user & profile by clientId (AXG-XXXX), UUID, or email
@@ -83,7 +83,6 @@ async function findClientByIdOrClientId(idOrClientId: string) {
         include: {
           dietPlans: { orderBy: { createdAt: 'desc' } },
           macroPlans: { orderBy: { createdAt: 'desc' } },
-          attendanceRecords: { orderBy: { date: 'desc' }, take: 30 },
           progressRecords: { orderBy: { date: 'desc' }, take: 30 },
           activityRecords: { orderBy: { date: 'desc' }, take: 30 },
         },
@@ -170,7 +169,6 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
         macroPlans: cp.macroPlans || [],
         activeDietPlan: cp.dietPlans?.find((d: any) => d.isActive) || null,
         activeMacroPlan: cp.macroPlans?.find((m: any) => m.isActive) || null,
-        attendance: cp.attendanceRecords || [],
         progress: cp.progressRecords || [],
         assignedWorkouts: user.assignments || [],
         managedBy: adminAuthService.getAdminEmail(),
@@ -691,57 +689,6 @@ router.post('/clients/:id/macros', async (req: Request, res: Response) => {
   }
 });
 
-// GET /clients/:id/attendance: View Client Attendance
-router.get('/clients/:id/attendance', async (req: Request, res: Response) => {
-  const idOrClientId = String(req.params.id || '');
-  try {
-    const user = await findClientByIdOrClientId(idOrClientId);
-    if (!user || !user.clientProfile) {
-      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
-      return;
-    }
-
-    const records = await prisma.clientAttendance.findMany({
-      where: { clientProfileId: user.clientProfile.id },
-      orderBy: { date: 'desc' },
-      take: 60,
-    });
-
-    sendSuccess(res, records);
-  } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to fetch attendance records', HttpStatus.INTERNAL_SERVER_ERROR);
-  }
-});
-
-// POST /clients/:id/attendance: Record Client Attendance
-router.post('/clients/:id/attendance', async (req: Request, res: Response) => {
-  const idOrClientId = String(req.params.id || '');
-  const { date, present, method, notes } = req.body;
-
-  try {
-    const user = await findClientByIdOrClientId(idOrClientId);
-    if (!user || !user.clientProfile) {
-      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
-      return;
-    }
-
-    const cp = user.clientProfile;
-    const record = await prisma.clientAttendance.create({
-      data: {
-        clientProfileId: cp.id,
-        clientId: cp.clientId,
-        date: date ? new Date(date) : new Date(),
-        present: present !== false,
-        method: method || 'MANUAL',
-        notes: notes || null,
-      },
-    });
-
-    sendSuccess(res, record, HttpStatus.CREATED);
-  } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to record attendance', HttpStatus.INTERNAL_SERVER_ERROR);
-  }
-});
 
 // GET /clients/:id/progress: View Client Progress / Weight History
 router.get('/clients/:id/progress', async (req: Request, res: Response) => {
@@ -806,74 +753,6 @@ router.post('/clients/:id/progress', async (req: Request, res: Response) => {
   }
 });
 
-// --- Real Attendance Endpoints ---
-router.get('/attendance', async (_req: Request, res: Response) => {
-  try {
-    const attendances = await prisma.clientAttendance.findMany({
-      include: {
-        clientProfile: {
-          include: {
-            user: { select: { name: true, email: true } },
-          },
-        },
-      },
-      orderBy: { checkInTime: 'desc' },
-      take: 100,
-    });
-
-    const mapped = attendances.map((a) => ({
-      id: a.id,
-      clientId: a.clientProfile?.clientId || a.clientId || '',
-      clientName: a.clientProfile?.user?.name || 'Athlete Member',
-      checkInTime: a.checkInTime.toISOString(),
-      method: a.method,
-      verified: a.present,
-    }));
-
-    sendSuccess(res, mapped);
-  } catch (err: any) {
-    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve attendance records', HttpStatus.INTERNAL_SERVER_ERROR);
-  }
-});
-
-router.post('/attendance/verify', (req: Request, res: Response) => {
-  sendSuccess(res, {
-    verified: true,
-    verifiedByAdmin: adminAuthService.getAdminEmail(),
-    record: req.body,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// --- Admin Challenge Management Operations ---
-router.get('/challenges', (_req: Request, res: Response) => {
-  sendSuccess(res, [
-    {
-      id: 'ch_100_day_transformation',
-      title: '100-Day Transformation Challenge',
-      activeParticipants: 42,
-      durationDays: 100,
-      reward: 'Alpha X Elite Trophy',
-      status: 'ACTIVE',
-    },
-    {
-      id: 'ch_hypertrophy_march',
-      title: 'Spring Hypertrophy Gauntlet',
-      activeParticipants: 35,
-      durationDays: 30,
-      reward: 'Alpha X Gold Crest',
-      status: 'ACTIVE',
-    },
-  ]);
-});
-
-router.put('/challenges', (req: Request, res: Response) => {
-  sendSuccess(res, { updated: true, data: req.body, updatedAt: new Date().toISOString() });
-});
-
-router.put('/challenges/:id', (req: Request, res: Response) => {
-  sendSuccess(res, { id: req.params.id, updated: true, data: req.body, updatedAt: new Date().toISOString() });
-});
 
 // ==========================================
 // WEEKLY PROGRESS & CHECK-IN (ADMIN ENDPOINTS)

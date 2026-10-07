@@ -33,7 +33,7 @@ class ExerciseStats extends StatelessWidget {
     }
 
     // 2. Sets
-    if (setsCount != null && setsCount! > 0) {
+    if (setsCount != null) {
       statItems.add(
         _buildStatCard(
           label: 'SETS',

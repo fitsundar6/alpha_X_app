@@ -40,7 +40,6 @@ export interface ClientContextSummary {
   latestCheckIn: any | null;
   progressRecords: any[];
   activityRecords: any[];
-  attendanceRecords: any[];
   attentionItems: any[];
   completeness: DataCompletenessReport;
 }
@@ -209,17 +208,7 @@ export class AiTools {
       take: 30,
     });
 
-    // 9. Attendance
-    const attendanceRecords = await prisma.clientAttendance.findMany({
-      where: {
-        clientProfileId: cp.id,
-        date: { gte: startDate, lte: endDate },
-      },
-      orderBy: { date: 'desc' },
-      take: 30,
-    });
-
-    // 10. Attention items
+    // 9. Attention items
     const attentionItems = await prisma.adminAttentionItem.findMany({
       where: {
         clientProfileId: cp.id,
@@ -323,7 +312,6 @@ export class AiTools {
       latestCheckIn: weeklyCheckIns.length > 0 ? weeklyCheckIns[0] : null,
       progressRecords,
       activityRecords,
-      attendanceRecords,
       attentionItems,
       completeness: {
         scorePercentage,
@@ -519,19 +507,12 @@ export class AiTools {
 
     const [
       totalClients,
-      todayAttendances,
       todayFoodLogs,
       todayWorkouts,
       pendingAttention,
       recentCheckIns,
     ] = await Promise.all([
       prisma.user.count({ where: { role: 'CLIENT' } }),
-      prisma.clientAttendance.count({
-        where: {
-          date: targetDate,
-          present: true,
-        },
-      }),
       prisma.clientFoodLog.count({
         where: { dateString: todayStr },
       }),
@@ -570,7 +551,6 @@ export class AiTools {
       date: todayStr,
       totalActiveClients: totalClients,
       workoutsCompletedToday: todayWorkouts,
-      attendancesVerifiedToday: todayAttendances,
       foodLogsRecordedToday: todayFoodLogs,
       clientsTrackingFoodToday: distinctFoodClients.length,
       weeklyCheckInsPending: pendingCheckInsCount,
@@ -598,7 +578,6 @@ export class AiTools {
     const [
       totalClients,
       weeklyWorkouts,
-      weeklyAttendances,
       weeklyFoodLogs,
       weeklyCheckIns,
       unreviewedAttention,
@@ -613,12 +592,6 @@ export class AiTools {
           startedAt: { gte: start, lte: end },
         },
         select: { clientId: true, totalVolume: true },
-      }),
-      prisma.clientAttendance.count({
-        where: {
-          date: { gte: start, lte: end },
-          present: true,
-        },
       }),
       prisma.clientFoodLog.count({
         where: {
@@ -653,7 +626,6 @@ export class AiTools {
       totalActiveClients: activeClientsCount,
       workoutsCompleted: weeklyWorkouts.length,
       workoutAdherenceRate,
-      attendanceCheckIns: weeklyAttendances,
       totalFoodLogs: weeklyFoodLogs,
       checkInsCompleted: weeklyCheckIns.length,
       checkInCompletionRate,
@@ -672,7 +644,6 @@ export class AiTools {
     const [
       totalClients,
       monthlyWorkouts,
-      monthlyAttendances,
       monthlyFoodLogs,
       monthlyCheckIns,
     ] = await Promise.all([
@@ -681,12 +652,6 @@ export class AiTools {
         where: {
           isCompleted: true,
           startedAt: { gte: start, lte: end },
-        },
-      }),
-      prisma.clientAttendance.count({
-        where: {
-          date: { gte: start, lte: end },
-          present: true,
         },
       }),
       prisma.clientFoodLog.count({
@@ -708,11 +673,9 @@ export class AiTools {
       },
       totalActiveClients: totalClients,
       monthlyWorkoutsCompleted: monthlyWorkouts,
-      monthlyAttendances: monthlyAttendances,
       monthlyFoodLogs: monthlyFoodLogs,
       monthlyCheckIns: monthlyCheckIns,
       avgWorkoutsPerClient: totalClients > 0 ? Number((monthlyWorkouts / totalClients).toFixed(1)) : 0,
-      avgAttendancesPerClient: totalClients > 0 ? Number((monthlyAttendances / totalClients).toFixed(1)) : 0,
     };
   }
 

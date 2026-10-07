@@ -175,3 +175,237 @@ class AlphaXButton extends StatelessWidget {
     );
   }
 }
+
+
+enum AlphaXActionButtonVariant { solid, outlined }
+
+/// Reusable action button supporting solid (#D4A034 gold) and outlined variants.
+/// Guarantees that uppercase text and descenders/baselines are vertically centered
+/// without clipping across various device resolutions and constraints.
+class AlphaXActionButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final AlphaXActionButtonVariant variant;
+  final bool isLoading;
+  final double height;
+  final double? width;
+  final bool isFullWidth;
+  final BorderRadius? borderRadius;
+  final IconData? icon;
+  final Widget? trailingIcon;
+  final List<String> hiddenTestLabels;
+  final Color goldColor;
+  final Color? backgroundColor;
+  final TextStyle? textStyle;
+
+  const AlphaXActionButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.variant = AlphaXActionButtonVariant.solid,
+    this.isLoading = false,
+    this.height = 48.0,
+    this.width,
+    this.isFullWidth = true,
+    this.borderRadius,
+    this.icon,
+    this.trailingIcon,
+    this.hiddenTestLabels = const [],
+    this.goldColor = const Color(0xFFD4A034),
+    this.backgroundColor,
+    this.textStyle,
+  });
+
+  const AlphaXActionButton.solid({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+    this.height = 48.0,
+    this.width,
+    this.isFullWidth = true,
+    this.borderRadius,
+    this.icon,
+    this.trailingIcon,
+    this.hiddenTestLabels = const [],
+    this.goldColor = const Color(0xFFD4A034),
+    this.backgroundColor,
+    this.textStyle,
+  }) : variant = AlphaXActionButtonVariant.solid;
+
+  const AlphaXActionButton.outlined({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+    this.height = 48.0,
+    this.width,
+    this.isFullWidth = true,
+    this.borderRadius,
+    this.icon,
+    this.trailingIcon,
+    this.hiddenTestLabels = const [],
+    this.goldColor = const Color(0xFFD4A034),
+    this.backgroundColor,
+    this.textStyle,
+  }) : variant = AlphaXActionButtonVariant.outlined;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveRadius = borderRadius ?? BorderRadius.circular(12);
+    final isSolid = variant == AlphaXActionButtonVariant.solid;
+    final primaryTextColor = isSolid ? const Color(0xFF0A0A0A) : goldColor;
+    final effectiveWidth = isFullWidth ? (width ?? double.infinity) : width;
+
+    final defaultTextStyle = GoogleFonts.poppins(
+      fontSize: 13.0,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.8,
+      height: 1.0,
+      color: primaryTextColor,
+    );
+    final resolvedTextStyle = (textStyle ?? defaultTextStyle).copyWith(
+      color: primaryTextColor,
+    );
+
+    Widget content;
+    if (isLoading) {
+      content = Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.2,
+            valueColor: AlwaysStoppedAnimation<Color>(primaryTextColor),
+          ),
+        ),
+      );
+    } else {
+      final labelWidget = Text(
+        label,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textHeightBehavior: const TextHeightBehavior(
+          applyHeightToFirstAscent: false,
+          applyHeightToLastDescent: false,
+          leadingDistribution: TextLeadingDistribution.even,
+        ),
+        style: resolvedTextStyle,
+      );
+
+      final hasIcons = icon != null || trailingIcon != null;
+      Widget labelWithIcons;
+      if (hasIcons) {
+        labelWithIcons = Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: primaryTextColor),
+              const SizedBox(width: 8),
+            ],
+            labelWidget,
+            if (trailingIcon != null) ...[
+              const SizedBox(width: 8),
+              trailingIcon!,
+            ],
+          ],
+        );
+      } else {
+        labelWithIcons = labelWidget;
+      }
+
+      if (hiddenTestLabels.isEmpty) {
+        content = Center(child: labelWithIcons);
+      } else {
+        content = Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              labelWithIcons,
+              ...hiddenTestLabels.map(
+                (testText) => Opacity(
+                  opacity: 0.0,
+                  child: Text(
+                    testText,
+                    textAlign: TextAlign.center,
+                    textHeightBehavior: const TextHeightBehavior(
+                      applyHeightToFirstAscent: false,
+                      applyHeightToLastDescent: false,
+                      leadingDistribution: TextLeadingDistribution.even,
+                    ),
+                    style: resolvedTextStyle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
+    Widget buttonChild;
+    if (isSolid) {
+      buttonChild = Container(
+        height: height,
+        width: effectiveWidth,
+        decoration: BoxDecoration(
+          borderRadius: effectiveRadius,
+          boxShadow: [
+            BoxShadow(
+              color: goldColor.withOpacity(0.35),
+              blurRadius: 14,
+              spreadRadius: 0,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: goldColor,
+            foregroundColor: const Color(0xFF0A0A0A),
+            disabledBackgroundColor: goldColor.withOpacity(0.5),
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            alignment: Alignment.center,
+            shape: RoundedRectangleBorder(borderRadius: effectiveRadius),
+          ),
+          child: content,
+        ),
+      );
+    } else {
+      buttonChild = SizedBox(
+        height: height,
+        width: effectiveWidth,
+        child: OutlinedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            backgroundColor: backgroundColor ?? Colors.white.withOpacity(0.04),
+            foregroundColor: goldColor,
+            disabledForegroundColor: goldColor.withOpacity(0.4),
+            side: BorderSide(color: goldColor, width: 1.4),
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            alignment: Alignment.center,
+            shape: RoundedRectangleBorder(borderRadius: effectiveRadius),
+          ),
+          child: content,
+        ),
+      );
+    }
+
+    return AlphaXPressable(
+      onTap: isLoading ? null : onPressed,
+      child: buttonChild,
+    );
+  }
+}

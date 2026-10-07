@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpha X Gym — Animated Logo Concept Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #060607;
+      --bg-surface: #0E0E11;
+      --bg-card: #141418;
+      --bg-card-hover: #1A1A20;
+      --border-subtle: #1E1E24;
+      --border-active: #D4AF37;
+      --gold-primary: #D4AF37;
+      --gold-bright: #F2C94C;
+      --gold-light: #FFF5D6;
+      --text-primary: #FFFFFF;
+      --text-secondary: #A0A0AA;
+      --text-muted: #62626E;
+      --accent-glow: rgba(212, 175, 55, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* Ambient Background Glow */
+    .bg-ambient {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      background: 
+        radial-gradient(circle at 50% 20%, rgba(212, 175, 55, 0.07) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(242, 201, 76, 0.03) 0%, transparent 40%),
+        #060607;
+    }
+
+    /* Header */
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 24px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(10, 10, 12, 0.7);
+      backdrop-filter: blur(20px);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1C1C22 0%, #121215 100%);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 16px rgba(212, 175, 55, 0.15);
+    }
+
+    .brand-badge img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+
+    .brand-title {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #FFFFFF 60%, var(--gold-bright) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gold-bright);
+      letter-spacing: 0.6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold-bright);
+      box-shadow: 0 0 10px var(--gold-bright);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      max-width: 1480px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 32px 64px;
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    @media (max-width: 1080px) {
+      main {
+        grid-template-columns: 1fr;
+        justify-items: center;
+      }
+    }
+
+    /* Left Column: Phone Mockup */
+    .device-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .phone-container {
+      position: relative;
+      width: 380px;
+      height: 760px;
+      background: #000000;
+      border-radius: 52px;
+      padding: 12px;
+      box-shadow: 
+        0 0 0 2px #2A2A32,
+        0 0 0 5px #15151A,
+        0 30px 80px rgba(0, 0, 0, 0.9),
+        0 0 60px rgba(212, 175, 55, 0.12);
+      user-select: none;
+    }
+
+    .phone-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #0A0A0A;
+      border-radius: 42px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Dynamic Island */
+    .dynamic-island {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 50;
+      box-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
+    }
+
+    /* Screen Video Player */
+    .screen-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      z-index: 10;
+    }
+
+    /* Screen Overlay Canvas (for live interactive mode) */
+    .screen-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      z-index: 15;
+    }
+
+    /* Optional Mockup Login Overlay */
+    .mock-login-ui {
+      position: absolute;
+      bottom: 24px;
+      left: 20px;
+      right: 20px;
+      z-index: 30;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+
+    .mock-login-ui.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .mock-glass-card {
+      background: rgba(20, 20, 24, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 22px;
+      backdrop-filter: blur(24px);
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .mock-input {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .mock-btn {
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold-primary) 100%);
+      color: #0A0A0A;
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: 0.8px;
+      text-align: center;
+      padding: 12px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.35);
+    }
+
+    /* Video Control Dock */
+    .dock-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 380px;
+      padding: 12px 18px;
+      border-radius: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .dock-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .dock-btn:hover {
+      background: rgba(212, 175, 55, 0.2);
+      border-color: var(--gold-primary);
+      color: var(--gold-bright);
+      transform: translateY(-2px);
+    }
+
+    .dock-btn.active {
+      background: var(--gold-primary);
+      color: #0A0A0A;
+      border-color: var(--gold-bright);
+    }
+
+    .timeline-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .timeline-slider {
+      width: 100%;
+      accent-color: var(--gold-primary);
+      cursor: pointer;
+    }
+
+    .timeline-time {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+    }
+
+    /* Right Column: Spec Sheet & Choreography */
+    .info-column {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .hero-text h1 {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #FFFFFF 30%, #E2E2E8 60%, var(--gold-bright) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-text p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 680px;
+      line-height: 1.6;
+    }
+
+    /* Specs Grid */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 800px) {
+      .specs-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .spec-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .spec-card:hover {
+      border-color: rgba(212, 175, 55, 0.3);
+      background: var(--bg-card-hover);
+    }
+
+    .spec-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    .spec-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .spec-sub {
+      font-size: 11px;
+      color: var(--gold-bright);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Timeline Stepper */
+    .timeline-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .timeline-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .step-item {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      transition: all 0.2s;
+    }
+
+    .step-item:hover, .step-item.active {
+      background: rgba(212, 175, 55, 0.06);
+      border-color: rgba(212, 175, 55, 0.35);
+    }
+
+    .step-badge {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .step-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gold-bright);
+    }
+
+    .step-frames {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .step-content h4 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text-primary);
+    }
+
+    .step-content p {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Actions & Downloads */
+    .action-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold-primary) 100%);
+      color: #0A0A0A;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.8px;
+      padding: 14px 28px;
+      border-radius: 14px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(212, 175, 55, 0.35);
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(212, 175, 55, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 14px;
+      padding: 14px 24px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Code Blueprint Accordion */
+    .blueprint-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .blueprint-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .blueprint-title {
+      font-size: 15px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-primary);
+    }
+
+    pre code {
+      display: block;
+      padding: 18px;
+      background: #08080A;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #D8D8E0;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+
+    .code-comment { color: #626270; }
+    .code-kw { color: #FF7B72; font-weight: 700; }
+    .code-fn { color: #D2A8FF; }
+    .code-var { color: #79C0FF; }
+    .code-num { color: #FFA657; }
+  </style>
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <header>
+    <div class="brand-group">
+      <div class="brand-badge">
+        <img src="apps/mobile/assets/images/alpha_x_logo.png" alt="Alpha X Gym Logo">
+      </div>
+      <div>
+        <div class="brand-title">ALPHA X GYM</div>
+        <div class="brand-subtitle">Mobile Login / Landing Screen Logo Animation Concept</div>
+      </div>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      RENDER COMPLETE & READY FOR REVIEW
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Smartphone Device Simulation -->
+    <div class="device-column">
+      <div class="phone-container">
+        <div class="phone-screen">
+          <div class="dynamic-island"></div>
+          
+          <!-- Exact 60 FPS Rendered Video -->
+          <video id="logoVideo" class="screen-video" autoplay loop muted playsinline>
+            <source src="alpha_x_logo_animation.mp4" type="video/mp4">
+            <source src="alpha_x_logo_animation.webm" type="video/webm">
+            Your browser does not support HTML5 video.
+          </video>
+
+          <!-- Interactive Mobile Login Form Mockup (Appears after hold) -->
+          <div id="loginOverlay" class="mock-login-ui">
+            <div class="mock-glass-card">
+              <div style="font-size: 11px; font-weight: 700; color: #D4AF37; letter-spacing: 1px;">MEMBER PORTAL</div>
+              <div class="mock-input">Client ID (e.g. AXG-1001)</div>
+              <div class="mock-input">Password ••••••••••</div>
+              <div class="mock-btn">SIGN IN TO ALPHA X</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Playback Control Dock -->
+      <div class="dock-controls">
+        <button id="btnPlayPause" class="dock-btn" title="Play/Pause">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        </button>
+        <button id="btnRestart" class="dock-btn" title="Replay from start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 4v6h6M23 20v-6h-6"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+          </svg>
+        </button>
+        <button id="btnSpeed" class="dock-btn" title="Cycle playback speed" style="font-size: 11px; font-weight: 800; font-family: monospace;">
+          1.0x
+        </button>
+
+        <div class="timeline-wrap">
+          <input type="range" id="timeSlider" class="timeline-slider" min="0" max="4.5" step="0.01" value="0">
+          <div class="timeline-time">
+            <span id="curTimeText">0.00s</span>
+            <span>4.50s</span>
+          </div>
+        </div>
+
+        <button id="btnToggleUI" class="dock-btn" title="Toggle Login UI Overlay">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="4"/>
+            <path d="M3 15h18M9 15v6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Column: Concept Specs, Choreography & Flutter Blueprint -->
+    <div class="info-column">
+      <div class="hero-text">
+        <h1>Cinematic Brand Activation</h1>
+        <p>
+          A high-precision, 60 FPS mobile logo reveal engineered specifically for the <strong>Alpha X Gym</strong> Flutter authentication flow. Uses your original source PNG with zero deformation, powered by a progressive titanium ignition sweep and resonant atmospheric back-glow.
+        </p>
+      </div>
+
+      <!-- Specs Grid -->
+      <div class="specs-grid">
+        <div class="spec-card">
+          <div class="spec-label">Resolution</div>
+          <div class="spec-val">1080 × 1920</div>
+          <div class="spec-sub">9:16 Vertical Portrait</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">Frame Rate</div>
+          <div class="spec-val">60 FPS</div>
+          <div class="spec-sub">270 Pristine Frames</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">Total Duration</div>
+          <div class="spec-val">4.50s</div>
+          <div class="spec-sub">1.6s Hero Hold</div>
+        </div>
+        <div class="spec-card">
+          <div class="spec-label">Source Fidelity</div>
+          <div class="spec-val">100% Exact</div>
+          <div class="spec-sub">Original Logo PNG</div>
+        </div>
+      </div>
+
+      <!-- 4-Phase Choreography -->
+      <div class="timeline-steps">
+        <div class="timeline-header">
+          <div class="timeline-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-bright)" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            CHOREOGRAPHY TIMELINE & MOTION PHASES
+          </div>
+        </div>
+
+        <!-- Phase 1 -->
+        <div class="step-item" id="step-phase1">
+          <div class="step-badge">
+            <div class="step-time">0.0s – 0.4s</div>
+            <div class="step-frames">Frames 0–24</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 1: Cinematic Obsidian Void & Atmospheric Warmth</h4>
+            <p>
+              Starts in deep cinematic darkness (#0A0A0A). At 0.20s, a faint atmospheric warmth begins awakening deep behind where the emblem sits. The logo emerges subtly at 12% dormant standby opacity with an initial scale of 0.96.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 2 -->
+        <div class="step-item" id="step-phase2">
+          <div class="step-badge">
+            <div class="step-time">0.4s – 1.8s</div>
+            <div class="step-frames">Frames 24–108</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 2: Progressive Energy Ignition & Sheen Sweep</h4>
+            <p>
+              A 34° diagonal specular energy wave sweeps across the logo from top-left to bottom-right. As the wave passes over the geometric contours of the "AX" mark, each stroke flares into high-voltage brilliance before locking into crisp pure white. Scale glides smoothly to 1.00 via ease-out cubic.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 3 -->
+        <div class="step-item" id="step-phase3">
+          <div class="step-badge">
+            <div class="step-time">1.8s – 3.4s</div>
+            <div class="step-frames">Frames 108–204</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 3: Hero Solidification & Micro-Resonance Hold</h4>
+            <p>
+              Held with 100% clarity, zero jitter, and rock-solid authority for 1.6 seconds. The atmospheric back-glow performs a gentle, imperceptible athletic respiration micro-breathing (±2.5%), keeping the brand feeling alive and powerful.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 4 -->
+        <div class="step-item" id="step-phase4">
+          <div class="step-badge">
+            <div class="step-time">3.4s – 4.5s</div>
+            <div class="step-frames">Frames 204–270</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 4: Settling Glow & Mobile UI Transition</h4>
+            <p>
+              The power surge aura smoothly recedes to a clean, minimal 8% resting ambient glow. The logo remains 100% crisp and visible, perfectly primed for the frosted-glass login card and credentials form to slide smoothly into place.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Row -->
+      <div class="action-row">
+        <a href="alpha_x_logo_animation.mp4" download class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          DOWNLOAD MP4 (1080×1920 60 FPS)
+        </a>
+        <a href="alpha_x_logo_animation.webm" download class="btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          DOWNLOAD WEBM (VP9)
+        </a>
+      </div>
+
+      <!-- Flutter Integration Blueprint -->
+      <div class="blueprint-box">
+        <div class="blueprint-header">
+          <div class="blueprint-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold-bright)" stroke-width="2">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+            FLUTTER INTEGRATION BLUEPRINT (Ready for Step 2)
+          </div>
+        </div>
+        <p style="font-size: 13px; color: var(--text-secondary);">
+          Once approved, this exact animation concept can be integrated directly into your Flutter login screen with 0 video assets needed—using a hardware-accelerated <code>AnimationController</code> and <code>ShaderMask</code>:
+        </p>
+        <pre><code><span class="code-comment">// Alpha X Gym - Animated Logo Controller Concept</span>
+<span class="code-kw">class</span> <span class="code-fn">AlphaXAnimatedLogo</span> <span class="code-kw">extends</span> <span class="code-var">StatefulWidget</span> { ... }
+
+<span class="code-comment">// Staggered curves matching the video choreography</span>
+_fadeAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: <span class="code-num">0.0</span>, end: <span class="code-num">1.0</span>).animate(
+  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.05</span>, <span class="code-num">0.38</span>, curve: Curves.easeOutCubic)),
+);
+_scaleAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: <span class="code-num">0.96</span>, end: <span class="code-num">1.00</span>).animate(
+  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.05</span>, <span class="code-num">0.35</span>, curve: Curves.easeOutCubic)),
+);
+_sweepAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: -<span class="code-num">1.2</span>, end: <span class="code-num">1.2</span>).animate(
+  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.10</span>, <span class="code-num">0.42</span>, curve: Curves.easeInOutCubic)),
+);</code></pre>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const video = document.getElementById('logoVideo');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnSpeed = document.getElementById('btnSpeed');
+    const btnToggleUI = document.getElementById('btnToggleUI');
+    const timeSlider = document.getElementById('timeSlider');
+    const curTimeText = document.getElementById('curTimeText');
+    const loginOverlay = document.getElementById('loginOverlay');
+
+    const steps = [
+      { id: 'step-phase1', start: 0.0, end: 0.4 },
+      { id: 'step-phase2', start: 0.4, end: 1.8 },
+      { id: 'step-phase3', start: 1.8, end: 3.4 },
+      { id: 'step-phase4', start: 3.4, end: 4.5 }
+    ];
+
+    let speeds = [1.0, 0.5, 0.25];
+    let speedIdx = 0;
+
+    // Toggle Play/Pause
+    btnPlayPause.addEventListener('click', () => {
+      if (video.paused) {
+        video.play();
+        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      } else {
+        video.pause();
+        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      }
+    });
+
+    // Restart
+    btnRestart.addEventListener('click', () => {
+      video.currentTime = 0;
+      video.play();
+    });
+
+    // Speed Cycle
+    btnSpeed.addEventListener('click', () => {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      video.playbackRate = speeds[speedIdx];
+      btnSpeed.textContent = speeds[speedIdx] + 'x';
+    });
+
+    // Toggle UI Overlay
+    let showMockUI = false;
+    btnToggleUI.addEventListener('click', () => {
+      showMockUI = !showMockUI;
+      btnToggleUI.classList.toggle('active', showMockUI);
+      updateUIVisibility();
+    });
+
+    function updateUIVisibility() {
+      if (showMockUI && video.currentTime >= 2.0) {
+        loginOverlay.classList.add('visible');
+      } else {
+        loginOverlay.classList.remove('visible');
+      }
+    }
+
+    // Time update listener
+    video.addEventListener('timeupdate', () => {
+      const cur = video.currentTime;
+      timeSlider.value = cur;
+      curTimeText.textContent = cur.toFixed(2) + 's';
+
+      // Update active timeline step
+      steps.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (cur >= s.start && cur < s.end) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      });
+
+      updateUIVisibility();
+    });
+
+    // Slider scrub
+    timeSlider.addEventListener('input', () => {
+      video.currentTime = parseFloat(timeSlider.value);
+    });
+
+    // Step item click to seek
+    steps.forEach(s => {
+      document.getElementById(s.id).addEventListener('click', () => {
+        video.currentTime = s.start;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -22,7 +22,6 @@ class AIReportGenerator:
             "## Summary",
             f"* **Active Athletes**: {data['totalActiveClients']}",
             f"* **Workouts Completed Today**: {data['workoutsCompletedToday']}",
-            f"* **Attendances Verified**: {data['attendancesVerifiedToday']}",
             f"* **Food Logs Recorded**: {data['foodLogsRecordedToday']} (from {data['clientsTrackingFoodToday']} athletes)",
             f"* **Weekly Check-Ins Pending**: {data['weeklyCheckInsPending']}",
             f"* **Athletes Needing Review**: {data['clientsNeedingReviewCount']}",
@@ -90,7 +89,7 @@ class AIReportGenerator:
             "",
             "## Suggested Coach Actions",
             "1. Follow up with athletes with overdue check-ins.",
-            "2. Review workout progressions for athletes maintaining 100% attendance.",
+            "2. Review workout progressions for athletes maintaining consistent training.",
         ])
 
         report_card = {

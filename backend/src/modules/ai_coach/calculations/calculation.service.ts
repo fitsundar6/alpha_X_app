@@ -17,7 +17,6 @@ import {
   NutritionTargetComparisonValue,
   ActivitySummaryValue,
   WorkoutSummaryValue,
-  AttendanceSummaryValue,
   CheckInSummaryValue,
 } from './calculation.types';
 import { validateDateRange } from './calculation.validation';
@@ -26,7 +25,6 @@ import { waistCalculator } from './waist.calculator';
 import { nutritionCalculator } from './nutrition.calculator';
 import { activityCalculator } from './activity.calculator';
 import { workoutCalculator } from './workout.calculator';
-import { attendanceCalculator } from './attendance.calculator';
 import { checkInCalculator } from './checkin.calculator';
 
 export class CalculationService {
@@ -322,47 +320,6 @@ export class CalculationService {
     return workoutCalculator.calculateWorkoutSummary(workouts, startDateStr, endDateStr);
   }
 
-  /**
-   * Deterministically calculates gym attendance metrics over recorded attendance entries.
-   */
-  public async calculateAttendanceSummary(
-    clientIdOrName: string,
-    options: CalculationDateRangeOptions = {}
-  ): Promise<CalculationResult<AttendanceSummaryValue> | any> {
-    const resolution = await clientDataService.resolveClient(clientIdOrName);
-    if (resolution.status !== 'FOUND' || !resolution.client) {
-      return {
-        source: 'ALPHA_X_DATABASE',
-        status: resolution.status === 'AMBIGUOUS' ? 'MULTIPLE_CLIENTS_FOUND' : 'CLIENT_NOT_FOUND',
-        matches: resolution.matches,
-        message: resolution.message,
-      };
-    }
-
-    const { start, end, startDateStr, endDateStr } = validateDateRange(options.startDate, options.endDate);
-    const limit = Math.min(Math.max(Number(options.limit) || 60, 1), 365);
-
-    const where: any = { clientProfileId: resolution.client.profileId };
-    if (start || end) {
-      where.date = {};
-      if (start) where.date.gte = start;
-      if (end) where.date.lte = end;
-    }
-
-    const attendances = await prisma.clientAttendance.findMany({
-      where,
-      select: {
-        date: true,
-        present: true,
-        method: true,
-        checkInTime: true,
-      },
-      orderBy: { date: 'asc' },
-      take: limit,
-    });
-
-    return attendanceCalculator.calculateAttendanceSummary(attendances, startDateStr, endDateStr);
-  }
 
   /**
    * Deterministically calculates check-in summaries over recorded weekly check-in entries.

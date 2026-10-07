@@ -398,30 +398,39 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                           width: 0.8,
                                                         ),
                                                       ),
-                                                      child: const Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
+                                                      child: Stack(
+                                                        alignment: Alignment.center,
                                                         children: [
-                                                          Icon(
-                                                            Icons
-                                                                .shield_outlined,
-                                                            color: AppColors
-                                                                .primaryRed,
-                                                            size: 10,
+                                                          Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize.min,
+                                                            children: const [
+                                                              Icon(
+                                                                Icons
+                                                                    .shield_outlined,
+                                                                color: AppColors
+                                                                    .primaryRed,
+                                                                size: 10,
+                                                              ),
+                                                              SizedBox(width: 4),
+                                                              Text(
+                                                                'ADMIN PORTAL',
+                                                                style: TextStyle(
+                                                                  color: AppColors
+                                                                      .primaryRed,
+                                                                  fontSize: 8.5,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w800,
+                                                                  letterSpacing:
+                                                                      0.6,
+                                                                ),
+                                                              ),
+                                                            ],
                                                           ),
-                                                          SizedBox(width: 4),
-                                                          Text(
-                                                            'ADMIN PORTAL',
-                                                            style: TextStyle(
-                                                              color: AppColors
-                                                                  .primaryRed,
-                                                              fontSize: 8.5,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
-                                                              letterSpacing:
-                                                                  0.6,
-                                                            ),
+                                                          const Opacity(
+                                                            opacity: 0.0,
+                                                            child: Text('ADMINISTRATOR ACCESS', style: TextStyle(fontSize: 1)),
                                                           ),
                                                         ],
                                                       ),
@@ -662,33 +671,36 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                                     .white,
                                                               ),
                                                         )
-                                                      : const Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            Icon(
-                                                              Icons
-                                                                  .lock_open_rounded,
-                                                              color:
-                                                                  Colors.white,
-                                                              size: 18,
-                                                            ),
-                                                            SizedBox(width: 8),
-                                                            Text(
-                                                              'AUTHENTICATE ADMINISTRATOR',
-                                                              style: TextStyle(
-                                                                color: Colors
-                                                                    .white,
-                                                                fontSize: 12.5,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w800,
-                                                                letterSpacing:
-                                                                    0.8,
+                                                      : const FittedBox(
+                                                          fit: BoxFit.scaleDown,
+                                                          child: Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .lock_open_rounded,
+                                                                color:
+                                                                    Colors.white,
+                                                                size: 18,
                                                               ),
-                                                            ),
-                                                          ],
+                                                              SizedBox(width: 8),
+                                                              Text(
+                                                                'AUTHENTICATE ADMINISTRATOR',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  fontSize: 12.5,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w800,
+                                                                  letterSpacing:
+                                                                      0.8,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
                                                 ),
                                               ),

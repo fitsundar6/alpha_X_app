@@ -5,6 +5,8 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Role-Based Authentication & Permissions Tests', () {
     test('UserRole contains only admin and client; no coach role exists', () {
       expect(UserRole.values, containsAll([UserRole.admin, UserRole.client]));

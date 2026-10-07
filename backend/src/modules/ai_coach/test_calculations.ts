@@ -8,7 +8,6 @@
  * - Nutrition & Target Comparison (21-30)
  * - Steps & Activity (31-36)
  * - Workout Performance & Volume (37-44)
- * - Attendance (45-49)
  * - Weekly Check-ins (50-54)
  * - Date Range Engine (55-58)
  * - Data Integrity & Units (59-63)
@@ -38,7 +37,6 @@ import {
   nutritionCalculator,
   activityCalculator,
   workoutCalculator,
-  attendanceCalculator,
   checkInCalculator,
   validateDateRange,
   round2,
@@ -322,40 +320,6 @@ async function runPhase8CalculationTests(): Promise<void> {
       ],
     });
 
-    // Seed Marcus Attendance (4 records: 3 present, 1 absent)
-    await prisma.clientAttendance.createMany({
-      data: [
-        {
-          clientProfileId: marcusProfile.id,
-          clientId: marcusAxId,
-          date: new Date('2026-09-15'),
-          present: true,
-          method: 'QR_SCAN',
-        },
-        {
-          clientProfileId: marcusProfile.id,
-          clientId: marcusAxId,
-          date: new Date('2026-09-17'),
-          present: true,
-          method: 'MANUAL',
-        },
-        {
-          clientProfileId: marcusProfile.id,
-          clientId: marcusAxId,
-          date: new Date('2026-09-19'),
-          present: false,
-          method: 'MANUAL',
-        },
-        {
-          clientProfileId: marcusProfile.id,
-          clientId: marcusAxId,
-          date: new Date('2026-09-21'),
-          present: true,
-          method: 'QR_SCAN',
-        },
-      ],
-    });
-
     // Seed Marcus Weekly Check-ins (2 check-ins, one with pain)
     await prisma.weeklyCheckIn.createMany({
       data: [
@@ -425,11 +389,10 @@ async function runPhase8CalculationTests(): Promise<void> {
       'calculate_client_nutrition_summary',
       'calculate_client_activity_summary',
       'calculate_client_workout_summary',
-      'calculate_client_attendance_summary',
       'calculate_client_checkin_summary',
     ];
     const allRegistered = expectedToolNames.every((name) => toolRegistry.hasTool(name));
-    assert(allRegistered, 'TEST 2: Tool registration works: all 7 Phase 8 calculation tools present in registry');
+    assert(allRegistered, 'TEST 2: Tool registration works: all Phase 8 calculation tools present in registry');
 
     // 3. Admin authentication required
     const toolExec = await toolExecutor.executeTool(
@@ -694,31 +657,6 @@ async function runPhase8CalculationTests(): Promise<void> {
       `TEST 44: Completed sets total is 34, avg is 17 (got total ${wkv.totalCompletedSets}, avg ${wkv.averageCompletedSets})`
     );
 
-    // --------------------------------------------------------------------------
-    // ATTENDANCE CALCULATIONS (45–49)
-    // --------------------------------------------------------------------------
-    console.log('\n--- TESTS 45-49: Deterministic Attendance Calculations ---');
-
-    const attRes = await calculationService.calculateAttendanceSummary(marcusAxId);
-    const atv = attRes.value;
-
-    // 45. Attendance count (4 records total)
-    assert(atv.totalRecords === 4, `TEST 45: Total attendance records count is 4 (got ${atv.totalRecords})`);
-
-    // 46. Present count (3 present)
-    assert(atv.presentCount === 3, `TEST 46: Present count is 3 (got ${atv.presentCount})`);
-
-    // 47. Absent count (1 absent)
-    assert(atv.absentCount === 1, `TEST 47: Absent count is 1 (got ${atv.absentCount})`);
-
-    // 48. Attendance percentage (3 / 4 * 100 = 75%)
-    assert(atv.attendancePercentage === 75, `TEST 48: Attendance percentage is 75% (got ${atv.attendancePercentage}%)`);
-
-    // 49. Missing attendance does not become absence
-    assert(
-      atv.note.includes('Unrecorded dates are never treated as absences'),
-      'TEST 49: Unrecorded calendar dates are never fabricated as absences'
-    );
 
     // --------------------------------------------------------------------------
     // CHECK-IN CALCULATIONS (50–54)
@@ -808,8 +746,8 @@ async function runPhase8CalculationTests(): Promise<void> {
 
     // 61. Unit preservation
     assert(
-      weightRes.unit === 'kg' && waistRes.unit === 'cm' && attRes.unit === 'percentage',
-      'TEST 61: Explicit units (kg, cm, percentage) strictly preserved on calculation results'
+      weightRes.unit === 'kg' && waistRes.unit === 'cm' && actRes.unit === 'steps',
+      'TEST 61: Explicit units (kg, cm, steps) strictly preserved on calculation results'
     );
 
     // 62. Precision & Rounding (rounded to 2 decimal places)

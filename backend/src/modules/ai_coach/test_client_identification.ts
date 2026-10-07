@@ -773,9 +773,8 @@ async function runPhase7Tests(): Promise<void> {
       toolRegistry.hasTool('get_assigned_diet') &&
       toolRegistry.hasTool('get_client_checkins') &&
       toolRegistry.hasTool('get_client_steps_history') &&
-      toolRegistry.hasTool('get_client_attendance') &&
       toolRegistry.hasTool('get_assigned_workout');
-    assert(clientToolsPresent, 'TEST 30: Phase 6 Tool Registry retains all 10 client data retrieval tools');
+    assert(clientToolsPresent, 'TEST 30: Phase 6 Tool Registry retains all client data retrieval tools');
 
     // Test 31: Phase 4 Conversation System
     const testConv = conversationStore.create('admin_alex_stone');
