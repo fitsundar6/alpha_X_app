@@ -457,7 +457,7 @@ export class AiTools {
    * Queries existing Food database.
    */
   async queryFoodLibrary(query?: string, category?: string, limit: number = 20) {
-    const where: any = { isActive: true };
+    const where: any = { status: { in: ['PUBLISHED', 'APPROVED'] } };
     if (query && query.trim().length > 0) {
       where.OR = [
         { name: { contains: query.trim(), mode: 'insensitive' } },

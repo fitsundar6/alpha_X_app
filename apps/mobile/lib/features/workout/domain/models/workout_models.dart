@@ -918,7 +918,7 @@ class WorkoutExercise {
   factory WorkoutExercise.fromJson(Map<String, dynamic> json) {
     // 1. Parse sets if present as a List of maps
     List<ExerciseSet> parsedSets = [];
-    final rawSets = json['sets'] ?? json['setTemplates'];
+    final rawSets = json['sets'] ?? json['setTemplates'] ?? json['setRecords'];
     if (rawSets is List && rawSets.isNotEmpty) {
       for (final s in rawSets) {
         if (s is Map<String, dynamic>) {
@@ -1417,7 +1417,7 @@ class WorkoutRecord {
               .toList() ??
           [],
       notes: json['notes'] as String?,
-      exercises: (json['exercises'] as List<dynamic>?)
+      exercises: ((json['exercises'] ?? json['exerciseRecords']) as List<dynamic>?)
               ?.map((e) => WorkoutExercise.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],

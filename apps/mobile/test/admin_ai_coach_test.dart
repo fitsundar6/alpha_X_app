@@ -357,7 +357,7 @@ void main() {
       expect(find.text('EDITED BY ADMIN'), findsOneWidget);
     });
 
-    testWidgets('14. Admin Main Dashboard renders AI Coach card with summary metrics & Open AI Coach button', (tester) async {
+    testWidgets('14. Admin Main Dashboard renders AI Coach directly on primary intelligence tab', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.0;
       addTearDown(() {
@@ -381,21 +381,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify AI Coach Summary card on Admin Dashboard
-      expect(find.text('ALPHA X AI COACH'), findsOneWidget);
-      expect(find.text("Today's AI Summary"), findsOneWidget);
-      expect(find.textContaining('workouts completed today'), findsOneWidget);
-      expect(find.textContaining('food logs recorded'), findsOneWidget);
-      expect(find.textContaining('weekly check-ins pending'), findsOneWidget);
-      expect(find.textContaining('clients need review'), findsOneWidget);
-      expect(find.text('Open AI Coach'), findsOneWidget);
-
-      // Tapping "Open AI Coach" opens the AdminAiCoachScreen
-      await tester.tap(find.text('Open AI Coach'));
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.pump(const Duration(milliseconds: 300));
-
+      // Verify AI Coach is embedded directly on primary tab
       expect(find.byType(AdminAiCoachScreen), findsOneWidget);
+      expect(find.text('ALPHA X AI COACH'), findsOneWidget);
       expect(find.text('MASTER INTELLIGENCE CONTROLLER'), findsOneWidget);
     });
 

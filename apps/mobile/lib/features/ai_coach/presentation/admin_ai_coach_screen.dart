@@ -3,17 +3,27 @@ import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
+import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
+import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
+import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_screen.dart';
+import 'package:alpha_x_gym/features/ai_coach/presentation/widgets/admin_ai_proposal_review_dialog.dart';
 
 class AdminAiCoachScreen extends StatefulWidget {
   final AiCoachRepository? aiCoachRepository;
   final WorkoutRepository? workoutRepository;
+  final MacroRepository? macroRepository;
   final String? initialClientId;
+  final bool showAppBar;
 
   const AdminAiCoachScreen({
     super.key,
     this.aiCoachRepository,
     this.workoutRepository,
+    this.macroRepository,
     this.initialClientId,
+    this.showAppBar = true,
   });
 
   @override
@@ -194,7 +204,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✔ ${proposal.title} APPROVED and activated for athlete!'),
+          content: Text('✔ ${proposal.title} APPROVED and active!'),
           backgroundColor: AppColors.statusGreen,
           duration: const Duration(seconds: 3),
         ),
@@ -202,19 +212,272 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     }
   }
 
-  Future<void> _handleRejectProposal(AiProposal proposal) async {
-    final success = await _repo.rejectProposal(proposal.id, reason: 'Rejected by Admin in Coach Panel');
+  Future<void> _handleRejectProposal(AiProposal proposal, [String? explicitReason]) async {
+    final success = await _repo.rejectProposal(proposal.id, reason: explicitReason ?? 'Rejected by Admin');
     if (success && mounted) {
       setState(() {
         proposal.status = AiProposalStatus.rejected;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✖ ${proposal.title} rejected.'),
+          content: Text('✖ ${proposal.title} REJECTED. Athlete current plan remains untouched.'),
           backgroundColor: AppColors.primaryRed,
         ),
       );
     }
+  }
+
+  WorkoutSession _convertProposalToWorkoutSession(AiProposal proposal) {
+    final payload = proposal.payload;
+    final title = payload['title']?.toString() ?? proposal.title;
+    final workoutType = payload['workoutType']?.toString() ?? 'Strength';
+    final targetMuscleGroup = payload['targetMuscleGroup']?.toString() ?? 'Full Body';
+    final difficulty = payload['difficulty']?.toString() ?? 'Intermediate';
+    final estDuration = (payload['estimatedDurationMinutes'] as num?)?.toInt() ?? 45;
+    final description = payload['description']?.toString() ?? proposal.summary;
+
+    List<dynamic> rawExercises = [];
+    if (payload['exercises'] is List) {
+      rawExercises = payload['exercises'] as List;
+    } else if (payload['workoutPlan']?['sessions'] is List && (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
+      final firstSession = (payload['workoutPlan']['sessions'] as List).first;
+      if (firstSession['exercises'] is List) {
+        rawExercises = firstSession['exercises'] as List;
+      }
+    }
+
+    final exercises = <WorkoutExercise>[];
+    for (int i = 0; i < rawExercises.length; i++) {
+      final raw = rawExercises[i];
+      final exName = raw['exerciseName']?.toString() ?? raw['name']?.toString() ?? 'Exercise ${i + 1}';
+      final exId = raw['exerciseId']?.toString() ?? raw['id']?.toString() ?? 'ex_$i';
+      final category = raw['category']?.toString() ?? 'Strength';
+      final setsCount = (raw['sets'] as num?)?.toInt() ?? 3;
+      final targetWeight = (raw['targetWeight'] as num?)?.toDouble() ?? (raw['weight'] as num?)?.toDouble() ?? 50.0;
+      final rpe = (raw['targetRpe'] as num?)?.toDouble() ?? (raw['rpe'] as num?)?.toDouble() ?? 8.0;
+      final rir = (raw['targetRir'] as num?)?.toInt() ?? (raw['rir'] as num?)?.toInt() ?? 2;
+      final rest = (raw['restSeconds'] as num?)?.toInt() ?? (raw['rest'] as num?)?.toInt() ?? 90;
+      final tempo = raw['tempo']?.toString() ?? '3-1-1-0';
+      final notes = raw['notes']?.toString() ?? '';
+
+      int repsMin = 8;
+      int repsMax = 10;
+      final rawReps = raw['targetReps'] ?? raw['reps'];
+      if (rawReps != null) {
+        final parts = rawReps.toString().split(RegExp(r'[-–]'));
+        if (parts.length == 2) {
+          repsMin = int.tryParse(parts[0].trim()) ?? 8;
+          repsMax = int.tryParse(parts[1].trim()) ?? 10;
+        } else {
+          final single = int.tryParse(rawReps.toString().trim());
+          if (single != null) {
+            repsMin = single;
+            repsMax = single;
+          }
+        }
+      }
+
+      final setsList = List.generate(setsCount, (sIdx) {
+        return ExerciseSet(
+          id: 'set_${exId}_$sIdx',
+          setNumber: sIdx + 1,
+          setType: SetType.working,
+          targetWeight: targetWeight,
+          targetRepsMin: repsMin,
+          targetRepsMax: repsMax,
+          targetRpe: rpe,
+          targetRir: rir,
+          restSeconds: rest,
+          tempo: tempo,
+          notes: notes,
+        );
+      });
+
+      exercises.add(
+        WorkoutExercise(
+          id: 'we_$i',
+          exerciseId: exId,
+          exerciseName: exName,
+          category: category,
+          primaryMusclesDisplay: targetMuscleGroup,
+          secondaryMusclesDisplay: '',
+          restSeconds: rest,
+          tempo: tempo,
+          trainerNote: notes,
+          sets: setsList,
+        ),
+      );
+    }
+
+    return WorkoutSession(
+      id: 'ai_draft_${proposal.id}',
+      title: title,
+      workoutType: workoutType,
+      targetMuscleGroup: targetMuscleGroup,
+      difficulty: difficulty,
+      estimatedDurationMinutes: estDuration,
+      description: description,
+      exercises: exercises,
+    );
+  }
+
+  AssignedDietPlan _convertProposalToDietPlan(AiProposal proposal) {
+    final payload = proposal.payload;
+    final planName = payload['planName']?.toString() ?? proposal.title;
+    final calories = (payload['dailyCalories'] as num?)?.toDouble() ?? 2000.0;
+    final protein = (payload['protein'] as num?)?.toDouble() ?? 150.0;
+    final carbs = (payload['carbohydrates'] as num?)?.toDouble() ?? (payload['carbs'] as num?)?.toDouble() ?? 200.0;
+    final fat = (payload['fat'] as num?)?.toDouble() ?? 60.0;
+    final fiber = (payload['fiber'] as num?)?.toDouble() ?? 30.0;
+    final water = (payload['waterTargetLiters'] as num?)?.toDouble() ?? (payload['water'] as num?)?.toDouble() ?? 3.5;
+    final notes = payload['notes']?.toString() ?? proposal.summary;
+
+    final prescribedMeals = <PrescribedMeal>[];
+    if (payload['meals'] is List) {
+      for (final m in (payload['meals'] as List)) {
+        final mType = m['mealType']?.toString() ?? m['name']?.toString() ?? 'Meal';
+        final timing = m['timing']?.toString() ??
+            (mType.toLowerCase() == 'breakfast'
+                ? '8:00 AM'
+                : (mType.toLowerCase() == 'lunch'
+                    ? '1:00 PM'
+                    : (mType.toLowerCase() == 'snacks' ? '4:30 PM' : '8:00 PM')));
+        final mNotes = m['notes']?.toString();
+
+        final foods = <PrescribedFoodItem>[];
+        final items = (m['items'] ?? m['foods'] ?? []) as List;
+        for (final it in items) {
+          final fId = it['foodId']?.toString();
+          final fName = it['foodName']?.toString() ?? it['name']?.toString() ?? 'Food';
+          final qty = (it['quantity'] as num?)?.toDouble() ?? 1.0;
+          final unit = it['unit']?.toString() ?? 'g';
+          final cals = (it['calories'] as num?)?.toDouble() ?? 0.0;
+          final pro = (it['protein'] as num?)?.toDouble() ?? 0.0;
+          final crbs = ((it['carbs'] ?? it['carbohydrates']) as num?)?.toDouble() ?? 0.0;
+          final ft = (it['fat'] as num?)?.toDouble() ?? 0.0;
+          final fib = (it['fiber'] as num?)?.toDouble() ?? 0.0;
+
+          foods.add(PrescribedFoodItem(
+            foodId: fId,
+            name: fName,
+            quantity: qty,
+            unit: unit,
+            calories: cals,
+            protein: pro,
+            carbs: crbs,
+            fat: ft,
+            fiber: fib,
+          ));
+        }
+
+        prescribedMeals.add(PrescribedMeal(
+          mealType: mType,
+          timing: timing,
+          notes: mNotes,
+          foods: foods,
+        ));
+      }
+    }
+
+    return AssignedDietPlan(
+      id: 'ai_draft_diet_${proposal.id}',
+      clientId: proposal.clientId ?? _selectedClientId ?? '',
+      planName: planName,
+      dailyCalories: calories,
+      protein: protein,
+      carbohydrates: carbs,
+      fat: fat,
+      fiber: fiber,
+      waterTargetLiters: water,
+      notes: notes,
+      prescribedMeals: prescribedMeals,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  Future<void> _handleEditProposal(AiProposal proposal) async {
+    final clientId = proposal.clientId ?? _selectedClientId;
+
+    if (proposal.type == AiProposalType.workout) {
+      if (widget.workoutRepository == null) {
+        _showEditProposalDialog(proposal);
+        return;
+      }
+
+      final draftSession = _convertProposalToWorkoutSession(proposal);
+
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (ctx) => AdminCreateEditSessionScreen(
+            workoutRepository: widget.workoutRepository!,
+            sessionToEdit: draftSession,
+            clientIdToAssign: clientId,
+            onSaved: () async {
+              await _repo.approveProposal(proposal.id);
+              if (mounted) {
+                setState(() {
+                  proposal.status = AiProposalStatus.approved;
+                });
+              }
+            },
+          ),
+        ),
+      );
+
+      if (result == true && mounted) {
+        setState(() {
+          proposal.status = AiProposalStatus.approved;
+        });
+      }
+    } else if (proposal.type == AiProposalType.diet) {
+      if (widget.macroRepository == null) {
+        _showEditProposalDialog(proposal);
+        return;
+      }
+
+      final draftDietPlan = _convertProposalToDietPlan(proposal);
+      final clientMap = {
+        'id': clientId ?? 'client_marcus_vance',
+        'clientId': clientId ?? 'client_marcus_vance',
+        'name': proposal.clientName ?? _selectedClientName,
+      };
+
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (ctx) => AdminCreateEditDietPlanScreen(
+            client: clientMap,
+            macroRepository: widget.macroRepository!,
+            initialDietPlan: draftDietPlan,
+            onSaved: () async {
+              await _repo.approveProposal(proposal.id);
+              if (mounted) {
+                setState(() {
+                  proposal.status = AiProposalStatus.approved;
+                });
+              }
+            },
+          ),
+        ),
+      );
+
+      if (result == true && mounted) {
+        setState(() {
+          proposal.status = AiProposalStatus.approved;
+        });
+      }
+    } else {
+      _showEditProposalDialog(proposal);
+    }
+  }
+
+  void _showProposalReviewDialog(AiProposal proposal) {
+    AdminAiProposalReviewDialog.show(
+      context: context,
+      proposal: proposal,
+      onAccept: () => _handleApproveProposal(proposal),
+      onEdit: () => _handleEditProposal(proposal),
+      onReject: (reason) => _handleRejectProposal(proposal, reason),
+    );
   }
 
   void _showEditProposalDialog(AiProposal proposal) {
@@ -316,6 +579,113 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     );
   }
 
+  Future<void> _showPendingProposalsModal() async {
+    final proposals = await _repo.getProposals(status: 'PENDING');
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.75,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.fact_check, color: AppColors.primaryRed),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'PENDING AI PROPOSALS',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'AI proposals require admin acceptance or edit before client assignment.',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 10),
+              Expanded(
+                child: proposals.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No proposals currently pending review.',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: proposals.length,
+                        separatorBuilder: (_, index) => const SizedBox(height: 10),
+                        itemBuilder: (pCtx, idx) {
+                          final prop = proposals[idx];
+                          return InkWell(
+                            onTap: () {
+                              Navigator.of(ctx).pop();
+                              _showProposalReviewDialog(prop);
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceCard,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.warningYellow.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    prop.type == AiProposalType.workout
+                                        ? Icons.fitness_center
+                                        : (prop.type == AiProposalType.diet ? Icons.restaurant_menu : Icons.trending_up),
+                                    color: AppColors.primaryRed,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          prop.title,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${prop.clientName ?? 'Athlete'} • ${prop.type.name.toUpperCase()}',
+                                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right, color: Colors.white54),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showClientPicker() {
     final clients = widget.workoutRepository?.clientsList ?? [];
     showModalBottomSheet(
@@ -395,8 +765,9 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: AppColors.surface,
         elevation: 0,
         titleSpacing: 0,
         leading: IconButton(
@@ -463,9 +834,12 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
             ),
           ),
         ],
-      ),
+      )
+    : null,
       body: Column(
         children: [
+          _buildTopBanner(),
+
           // Control Bar: Client Context & Date Range Selector
           _buildControlHeader(),
 
@@ -490,6 +864,71 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
 
           // Message Input Bar
           _buildInputBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopBanner() {
+    if (widget.showAppBar) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: AppColors.primaryRed.withOpacity(0.18),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primaryRed, width: 1),
+            ),
+            child: const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
+          ),
+          const SizedBox(width: 8),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'ALPHA X AI COACH',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Text(
+                'MASTER INTELLIGENCE CONTROLLER',
+                style: TextStyle(
+                  color: AppColors.primaryRed,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          TextButton.icon(
+            key: const Key('admin_ai_new_chat_button_embedded'),
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.surfaceCard,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.border),
+              ),
+            ),
+            icon: const Icon(Icons.add_comment_outlined, size: 14, color: AppColors.primaryRed),
+            label: const Text('New Chat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            onPressed: _handleNewChat,
+          ),
         ],
       ),
     );
@@ -585,6 +1024,31 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
               PopupMenuItem(value: 'last_30_days', child: Text('Last 30 Days', style: TextStyle(color: Colors.white))),
               PopupMenuItem(value: 'last_90_days', child: Text('Last 90 Days', style: TextStyle(color: Colors.white))),
             ],
+          ),
+          const SizedBox(width: 8),
+
+          // Proposals Review Quick Button
+          InkWell(
+            onTap: _showPendingProposalsModal,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warningYellow.withOpacity(0.5), width: 1),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.fact_check, size: 14, color: AppColors.warningYellow),
+                  SizedBox(width: 5),
+                  Text(
+                    'Proposals',
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -925,114 +1389,135 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
         break;
     }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withOpacity(0.6), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w900),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                proposal.type.name.toUpperCase(),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            proposal.title,
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
-          ),
-          if (proposal.summary.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              proposal.summary,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ],
-          if (proposal.reason.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Reason: ${proposal.reason}',
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontStyle: FontStyle.italic),
-            ),
-          ],
-          const SizedBox(height: 12),
-
-          // Action Buttons: Edit, Approve, Reject
-          if (proposal.status == AiProposalStatus.pending || proposal.status == AiProposalStatus.edited) ...[
+    return InkWell(
+      onTap: () => _showProposalReviewDialog(proposal),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: statusColor.withOpacity(0.6), width: 1.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    onPressed: () => _showEditProposalDialog(proposal),
-                    child: const Text('Edit', style: TextStyle(color: Colors.white, fontSize: 12)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w900),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.statusGreen,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    onPressed: () => _handleApproveProposal(proposal),
-                    child: const Text('Approve', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.primaryRed),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    onPressed: () => _handleRejectProposal(proposal),
-                    child: const Text('Reject', style: TextStyle(color: AppColors.primaryRed, fontSize: 12)),
-                  ),
+                const Spacer(),
+                Text(
+                  proposal.type.name.toUpperCase(),
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800),
                 ),
               ],
             ),
-          ] else ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                proposal.status == AiProposalStatus.approved
-                    ? '✔ Active client plan updated in Alpha X database.'
-                    : '✖ Proposal closed without altering active plan.',
-                style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
+            const SizedBox(height: 8),
+            Text(
+              proposal.title,
+              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
             ),
+            if (proposal.summary.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                proposal.summary,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ],
+            if (proposal.reason.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Reason: ${proposal.reason}',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+            ],
+            const SizedBox(height: 10),
+
+            // Tap hint
+            Row(
+              children: [
+                const Icon(Icons.touch_app, size: 12, color: Colors.lightBlueAccent),
+                const SizedBox(width: 4),
+                const Expanded(
+                  child: Text(
+                    'Tap to inspect complete breakdown & analysis',
+                    style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 16, color: Colors.white54),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Action Buttons: Edit, Approve, Reject (Strict 3 actions)
+            if (proposal.status == AiProposalStatus.pending || proposal.status == AiProposalStatus.edited) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primaryRed),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: () => _handleRejectProposal(proposal),
+                      child: const Text('Reject', style: TextStyle(color: AppColors.primaryRed, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.border),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: () => _handleEditProposal(proposal),
+                      child: const Text('Edit', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusGreen,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onPressed: () => _handleApproveProposal(proposal),
+                      child: const Text('Approve', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  proposal.status == AiProposalStatus.approved
+                      ? '✔ Active client plan updated in Alpha X database.'
+                      : '✖ Proposal closed without altering active plan.',
+                  style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

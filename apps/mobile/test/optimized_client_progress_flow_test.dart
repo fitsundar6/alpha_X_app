@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in.dart';
-import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in_status.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/progress/presentation/widgets/weekly_progress_charts.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_progress_screen.dart';

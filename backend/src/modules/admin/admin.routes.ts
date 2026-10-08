@@ -642,6 +642,11 @@ router.get('/clients/:id/workouts', async (req: Request, res: Response) => {
   }
 });
 
+// GET /clients/:id/workout-history: Factual workout performance records & history for client
+router.get(['/clients/:id/workout-history', '/clients/:id/workouts/history'], (req: Request, res: Response) =>
+  workoutController.getClientWorkoutResults(req, res)
+);
+
 // POST /clients/:id/workouts: Assign workout session to this client
 router.post('/clients/:id/workouts', async (req: Request, res: Response) => {
   const idOrClientId = String(req.params.id || '');

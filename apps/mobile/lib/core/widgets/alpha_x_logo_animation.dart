@@ -279,7 +279,6 @@ class AlphaXNeonOutlinePainter extends CustomPainter {
   final Color glowColor;
 
   static const double _viewBoxW = 680.0;
-  static const double _viewBoxH = 260.0;
 
   // Cached paths
   static final List<Path> _glyphPaths = _buildGlyphPaths();

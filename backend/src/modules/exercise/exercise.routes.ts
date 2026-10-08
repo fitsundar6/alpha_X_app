@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { optionalAuth, requireAdmin } from '../../middlewares/auth';
+import { optionalAuth, requireAuth, requireAdmin } from '../../middlewares/auth';
 import { exerciseController } from './exercise.controller';
 
 const router = Router();
@@ -9,7 +9,7 @@ const router = Router();
 // (Only ADMIN role can sync, create, edit, archive)
 // ==========================================
 const adminRouter = Router();
-adminRouter.use(requireAdmin);
+adminRouter.use(requireAuth, requireAdmin);
 
 adminRouter.post('/', (req, res) => exerciseController.createCustomExercise(req, res));
 adminRouter.put('/:id', (req, res) => exerciseController.updateExercise(req, res));
@@ -24,7 +24,7 @@ router.use('/admin', adminRouter);
 // PUBLIC & ATHLETE EXERCISE ACCESS
 // (Exercises can be browsed publicly or personalized when authenticated)
 // ==========================================
-router.post('/seed', requireAdmin, (req, res) => exerciseController.seedDatabase(req, res));
+router.post('/seed', requireAuth, requireAdmin, (req, res) => exerciseController.seedDatabase(req, res));
 router.get('/', optionalAuth, (req, res) => exerciseController.searchExercises(req, res));
 router.get('/attribution', (req, res) => exerciseController.getAttributionInfo(req, res));
 router.get('/:id', optionalAuth, (req, res) => exerciseController.getExerciseById(req, res));

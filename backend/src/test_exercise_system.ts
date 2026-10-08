@@ -1,5 +1,7 @@
 import app from './server';
 import http from 'http';
+import jwt from 'jsonwebtoken';
+import { env } from './config/environment';
 
 async function runExerciseTests() {
   console.log('--- STARTING BACKEND EXERCISE SYSTEM VERIFICATION ---');
@@ -8,14 +10,24 @@ async function runExerciseTests() {
   await new Promise<void>((resolve) => server.listen(5098, '127.0.0.1', () => resolve()));
   const baseUrl = 'http://127.0.0.1:5098/api/v1';
 
+  const adminToken = jwt.sign(
+    { id: 'admin_alex_stone', email: env.ADMIN_EMAIL, role: 'ADMIN' },
+    env.JWT_ACCESS_SECRET
+  );
+
+  const clientToken = jwt.sign(
+    { id: 'client_marcus_vance', email: 'marcus@client.alphax.gym', role: 'CLIENT' },
+    env.JWT_ACCESS_SECRET
+  );
+
   const adminHeaders = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer alpha_x_mock_token_for_admin',
+    Authorization: `Bearer ${adminToken}`,
   };
 
   const clientHeaders = {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer alpha_x_mock_token_for_client',
+    Authorization: `Bearer ${clientToken}`,
   };
 
   try {

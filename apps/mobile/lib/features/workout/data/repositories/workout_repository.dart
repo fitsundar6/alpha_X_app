@@ -2099,6 +2099,64 @@ class WorkoutRepository extends ChangeNotifier {
     return _workoutHistory.where((r) => r.clientId == clientId).toList();
   }
 
+  /// Fetches real workout history for a specific client from the backend database.
+  Future<List<WorkoutRecord>> fetchClientWorkoutHistory(String clientId, {bool forceRefresh = false}) async {
+    try {
+      final token = await AuthService().getValidToken();
+      if (token.isEmpty) {
+        return getClientWorkoutHistory(clientId);
+      }
+
+      final endpoints = [
+        '${AppConstants.apiBaseUrl}/workout/admin/clients/$clientId/workout-history',
+        '${AppConstants.apiBaseUrl}/admin/clients/$clientId/workout-history',
+      ];
+
+      for (final endpoint in endpoints) {
+        try {
+          final res = await _httpClient.get(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          ).timeout(const Duration(seconds: 8));
+
+          if (res.statusCode == 200) {
+            final decoded = jsonDecode(res.body);
+            final data = decoded['data'] ?? decoded;
+            final historyList = (data is Map && data['history'] is List)
+                ? (data['history'] as List)
+                : (data is List ? data : null);
+
+            if (historyList != null) {
+              final List<WorkoutRecord> fetched = [];
+              for (final item in historyList) {
+                if (item is Map<String, dynamic>) {
+                  fetched.add(WorkoutRecord.fromJson(item));
+                } else if (item is Map) {
+                  fetched.add(WorkoutRecord.fromJson(Map<String, dynamic>.from(item)));
+                }
+              }
+
+              // Update in-memory cache
+              _workoutHistory.removeWhere((r) => r.clientId == clientId);
+              _workoutHistory.insertAll(0, fetched);
+              _saveToLocalStorage();
+              notifyListeners();
+              return fetched;
+            }
+          }
+        } catch (inner) {
+          debugPrint('[WorkoutRepository] Failed fetching history from $endpoint: $inner');
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Error fetching client workout history: $e');
+    }
+    return getClientWorkoutHistory(clientId);
+  }
+
   // --- Plate Calculator ---
   PlateCalculationResult calculatePlates({
     required double targetWeightKg,

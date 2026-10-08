@@ -8,11 +8,15 @@ import 'package:alpha_x_gym/features/exercise/presentation/widgets/exercise_pick
 class AdminCreateEditSessionScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final WorkoutSession? sessionToEdit;
+  final String? clientIdToAssign;
+  final VoidCallback? onSaved;
 
   const AdminCreateEditSessionScreen({
     super.key,
     required this.workoutRepository,
     this.sessionToEdit,
+    this.clientIdToAssign,
+    this.onSaved,
   });
 
   @override
@@ -419,14 +423,27 @@ class _AdminCreateEditSessionScreenState
       await widget.workoutRepository.createSession(session);
     }
 
+    if (widget.clientIdToAssign != null && widget.clientIdToAssign!.isNotEmpty) {
+      await widget.workoutRepository.assignSession(
+        sessionId: session.id,
+        assignmentType: 'INDIVIDUAL',
+        individualClientId: widget.clientIdToAssign,
+        isRecommended: true,
+      );
+    }
+
+    widget.onSaved?.call();
+
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          isEditing
-              ? 'Workout session and plan version updated.'
-              : 'Workout session created successfully.',
+          widget.clientIdToAssign != null
+              ? 'Workout plan saved and assigned to athlete!'
+              : isEditing
+                  ? 'Workout session and plan version updated.'
+                  : 'Workout session created successfully.',
         ),
         backgroundColor: AppColors.primaryRed,
       ),

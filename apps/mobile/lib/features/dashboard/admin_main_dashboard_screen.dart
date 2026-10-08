@@ -7,7 +7,6 @@ import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_sessions_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
-import 'package:alpha_x_gym/features/workout/presentation/admin/admin_client_results_screen.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
@@ -19,7 +18,6 @@ import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_client_nutrition_screen.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/admin_weekly_progress_screen.dart';
-import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/admin_food_photos_monitoring_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
@@ -29,6 +27,9 @@ import 'package:http/http.dart' as http;
 import 'package:alpha_x_gym/features/dashboard/admin_client_verification_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:alpha_x_gym/features/dashboard/admin_client_detail_screen.dart';
+import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_screen.dart';
+import 'package:alpha_x_gym/features/macro_planner/data/food_database.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -64,15 +65,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   int _pendingVerificationCount = 0;
 
   final List<String> _tabTitles = [
-    '🏠 DASHBOARD',
+    '🤖 AI COACH',
     '👥 CLIENTS',
-    '🏋️ WORKOUT SESSIONS',
-    '📅 ASSIGNMENTS',
+    '🏋️ WORKOUT COMMAND',
+    '🥗 MACRO & DIET',
     '⚙️ SETTINGS',
     '📈 WEEKLY PROGRESS',
     '⚠️ CLIENT ATTENTION',
     '📸 CLIENT FOOD PHOTOS',
     '🛡️ USERS & VERIFICATION',
+    '🏠 FACILITY OVERVIEW',
   ];
 
   @override
@@ -333,9 +335,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           elevation: 0,
           destinations: [
             NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.dashboard, color: colors.primary),
-              label: 'Dashboard',
+              icon: Icon(Icons.smart_toy_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.smart_toy, color: colors.primary),
+              label: 'AI Coach',
             ),
             NavigationDestination(
               icon: Icon(Icons.groups_outlined, color: colors.textSecondary),
@@ -345,12 +347,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             NavigationDestination(
               icon: Icon(Icons.fitness_center_outlined, color: colors.textSecondary),
               selectedIcon: Icon(Icons.fitness_center, color: colors.primary),
-              label: 'Sessions',
+              label: 'Workout',
             ),
             NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.calendar_month, color: colors.primary),
-              label: 'Assign',
+              icon: Icon(Icons.restaurant_menu_outlined, color: colors.textSecondary),
+              selectedIcon: Icon(Icons.restaurant_menu, color: colors.primary),
+              label: 'Macro / Diet',
             ),
           ],
         ),
@@ -363,16 +365,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   Widget _buildCurrentTab() {
     switch (_selectedIndex) {
       case 0:
-        return _buildAdminHomeTab();
+        return AdminAiCoachScreen(
+          aiCoachRepository: _aiCoachRepo,
+          workoutRepository: widget.workoutRepository,
+          macroRepository: widget.macroRepository,
+          showAppBar: false,
+        );
       case 1:
         return _buildClientsTab();
       case 2:
-        return AdminWorkoutSessionsScreen(
-          workoutRepository: widget.workoutRepository,
-          showAppBar: false,
-        );
+        return _buildWorkoutCommandTab();
       case 3:
-        return _buildAssignmentsTab();
+        return _buildMacroDietCommandTab();
       case 4:
         return _buildSettingsTab();
       case 5:
@@ -383,8 +387,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         return const AdminFoodPhotosMonitoringScreen(showAppBar: false);
       case 8:
         return const AdminClientVerificationScreen(showAppBar: false);
-      default:
+      case 9:
         return _buildAdminHomeTab();
+      default:
+        return _buildClientsTab();
     }
   }
 
@@ -433,6 +439,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   builder: (ctx) => AdminAiCoachScreen(
                     aiCoachRepository: _aiCoachRepo,
                     workoutRepository: widget.workoutRepository,
+                    macroRepository: widget.macroRepository,
                   ),
                 ),
               );
@@ -847,6 +854,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   builder: (ctx) => AdminAiCoachScreen(
                     aiCoachRepository: _aiCoachRepo,
                     workoutRepository: widget.workoutRepository,
+                    macroRepository: widget.macroRepository,
                   ),
                 ),
               );
@@ -1074,6 +1082,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         builder: (ctx) => AdminAiCoachScreen(
                           aiCoachRepository: _aiCoachRepo,
                           workoutRepository: widget.workoutRepository,
+                          macroRepository: widget.macroRepository,
                         ),
                       ),
                     );
@@ -1476,385 +1485,110 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             ...filteredClients.map((client) {
               final clientId = client['id'] ?? '';
               final joinDate = _formatJoinDate(client['createdAt']);
-
               final displayClientId = client['clientId'] ?? clientId;
               final isOnboarded = client['onboardingCompleted'] == 'true';
-              final fitnessLevel = (client['fitnessLevel'] ?? 'beginner').toUpperCase();
-              final primaryGoal = client['primaryGoal'] ?? 'General Fitness';
-              final weight = client['weightKg'] ?? '';
-              final height = client['heightCm'] ?? '';
-              final age = client['age'] ?? '';
-              final daysPerWeek = client['trainingDaysPerWeek'] ?? '4';
-              final hasInjury = client['hasCurrentInjury'] == 'true';
-              final hasSurgery = client['hasPreviousSurgery'] == 'true';
               final photoUrl = client['photoUrl'];
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 14),
+                margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. Client Header: Photo, Name, Email, Status & Client ID
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: CircleAvatar(
-                        radius: 22,
-                        backgroundColor: AppColors.primaryRed,
-                        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
-                        child: (photoUrl == null || photoUrl.isEmpty)
-                            ? Text(
-                                (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
-                                style: GoogleFonts.poppins(color: Colors.black, fontWeight: FontWeight.w900),
-                              )
-                            : null,
-                      ),
-                      title: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              client['name'] ?? 'Athlete',
-                              style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  leading: CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.primaryRed,
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? Text(
+                            (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
+                            style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w900),
+                          )
+                        : null,
+                  ),
+                  title: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          client['name'] ?? 'Athlete',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
                           ),
-                          const SizedBox(width: 8),
-                          // Onboarding Status Pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: isOnboarded ? AppColors.success : Colors.orangeAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isOnboarded ? 'Active' : 'Pending',
-                                  style: GoogleFonts.poppins(
-                                    color: isOnboarded ? AppColors.success : Colors.orangeAccent,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 2),
-                          Text(
-                            client['email'] ?? '',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryRed.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  displayClientId,
-                                  style: const TextStyle(
-                                    color: AppColors.primaryRed,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Joined: $joinDate',
-                                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      trailing: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.surfaceElevated,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (ctx) => AdminClientResultsScreen(
-                                client: client,
-                                workoutRepository: widget.workoutRepository,
-                              ),
-                            ),
-                          );
-                        },
-                        child: const Text('View Results', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 11)),
                       ),
-                    ),
-
-                    // 2. Onboarding Badges & Biometric Snapshot
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              // Fitness Level
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceElevated,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: Text(
-                                  fitnessLevel,
-                                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 10, fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              // Primary Goal
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryRed.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
-                                ),
-                                child: Text(
-                                  primaryGoal,
-                                  style: const TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              // Measurements
-                              if (weight.isNotEmpty)
-                                _buildMiniBadge('$weight kg'),
-                              if (height.isNotEmpty)
-                                _buildMiniBadge('$height cm'),
-                              if (age.isNotEmpty)
-                                _buildMiniBadge('$age yrs'),
-                              if (daysPerWeek.isNotEmpty)
-                                _buildMiniBadge('$daysPerWeek d/wk'),
-                            ],
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
+                        ),
+                        child: Text(
+                          isOnboarded ? 'Active' : 'Pending',
+                          style: GoogleFonts.poppins(
+                            color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
                           ),
-
-                          // Injury Notification Pill
-                          if (hasInjury) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.amber.withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Injury/Pain: ${client['injuryAreas'] ?? 'Reported'}',
-                                      style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w700),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-
-                          // Surgery Notification Pill
-                          if (hasSurgery) ...[
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.purpleAccent.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.purpleAccent.withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.medical_services_outlined, size: 14, color: Colors.purpleAccent),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Previous Surgery: ${client['surgeryDetails'] ?? 'Yes'}',
-                                      style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.w700),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 3. Client Nutrition & Action Bar
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: AppColors.border),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  icon: const Icon(Icons.assignment_ind_outlined, size: 14, color: AppColors.textSecondary),
-                                  label: const Text(
-                                    'PROFILE',
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  onPressed: () => _showClientProfileModal(context, client),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primaryRed,
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  icon: const Icon(Icons.restaurant_menu_rounded, size: 14, color: Colors.white),
-                                  label: const Text(
-                                    '🥗 NUTRITION',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AdminClientNutritionScreen(
-                                          client: client,
-                                          macroRepository: widget.macroRepository,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AlphaXColors.surfaceElevated,
-                                    side: const BorderSide(color: AlphaXColors.gold, width: 0.8),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  icon: const Icon(Icons.insights_rounded, size: 14, color: AlphaXColors.gold),
-                                  label: const Text(
-                                    '📈 PROGRESS',
-                                    style: TextStyle(
-                                      color: AlphaXColors.gold,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AdminWeeklyProgressScreen(
-                                          repository: _weeklyProgressRepo,
-                                          initialClientId: clientId,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
+                    ],
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryRed.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          const SizedBox(height: 6),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.border),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.timeline_rounded, size: 14, color: Colors.lightBlueAccent),
-                              label: const Text(
-                                'TRANSFORMATION TIMELINE (WEEKS 1-12)',
-                                style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ClientTransformationTimelineScreen(
-                                      adminTargetClientId: clientId,
-                                      athleteName: client['name']?.toString() ?? 'Athlete',
-                                    ),
-                                  ),
-                                );
-                              },
+                          child: Text(
+                            displayClientId,
+                            style: const TextStyle(
+                              color: AppColors.primaryRed,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'monospace',
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            client['email'] ?? '',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        joinDate,
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+                    ],
+                  ),
+                  onTap: () => _showClientProfileModal(context, client),
                 ),
               );
             }),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildMiniBadge(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.borderSubtle),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1946,27 +1680,412 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  /// Displays the Complete Client Onboarding Assessment Profile Modal for Master Admin.
+  /// Displays the Complete Client Detail Screen (Profile, Workout, Nutrition) for Master Admin.
   void _showClientProfileModal(BuildContext context, Map<String, dynamic> client) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminClientDetailScreen(
+          client: client,
+          workoutRepository: widget.workoutRepository,
+          macroRepository: widget.macroRepository,
+          activityRepository: widget.activityRepository,
+          weeklyProgressRepository: _weeklyProgressRepo,
+          initialTabIndex: 0,
+        ),
+      ),
+    );
+  }
+
+  // --- TAB 2: 🏋️ WORKOUT COMMAND TAB ---
+  Widget _buildWorkoutCommandTab() {
+    final colors = ClientThemeColors.of(context);
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            color: colors.surfaceCard,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: TabBar(
+                      indicator: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: colors.textSecondary,
+                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12),
+                      tabs: const [
+                        Tab(text: '🏋️ SESSIONS'),
+                        Tab(text: '📅 ASSIGNMENTS'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: const Text('CREATE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AdminCreateEditSessionScreen(
+                          workoutRepository: widget.workoutRepository,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                AdminWorkoutSessionsScreen(
+                  workoutRepository: widget.workoutRepository,
+                  showAppBar: false,
+                ),
+                _buildAssignmentsTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- TAB 3: 🥗 MACRO / DIET COMMAND TAB ---
+  Widget _buildMacroDietCommandTab() {
+    final colors = ClientThemeColors.of(context);
+    final clients = widget.workoutRepository.clientsList;
+
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          Container(
+            color: colors.surfaceCard,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: TabBar(
+                      indicator: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: colors.textSecondary,
+                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11),
+                      tabs: const [
+                        Tab(text: '🥗 ATHLETES'),
+                        Tab(text: '📖 FOOD LIBRARY'),
+                        Tab(text: '📸 PHOTOS'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
+                  label: const Text('NEW PLAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () => _showSelectClientForDietDialog(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildAthleteDietsSubTab(colors, clients),
+                _buildFoodLibrarySubTab(colors),
+                const AdminFoodPhotosMonitoringScreen(showAppBar: false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSelectClientForDietDialog() {
+    final clients = widget.workoutRepository.clientsList;
+    if (clients.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No registered clients available.'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.surfaceCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return _ClientProfileDetailSheet(
-          initialClient: client,
-          workoutRepository: widget.workoutRepository,
-          activityRepository: widget.activityRepository,
-          formatJoinDate: _formatJoinDate,
-          onAssignWorkout: () {
-            Navigator.of(ctx).pop();
-            _selectAdminTab(2);
-          },
-          onAssignDietPlan: (c) {
-            Navigator.of(ctx).pop();
-            _showAssignDietPlanDialog(context, c);
-          },
-          onSetMacros: (c) => _showMacroTargetsDialog(context, c),
+        return Container(
+          padding: const EdgeInsets.all(20),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select Athlete for Diet Plan',
+                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              const Text('Choose a client to configure and assign their daily macros & meals:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: clients.length,
+                  itemBuilder: (ctx, i) {
+                    final c = clients[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: AppColors.primaryRed,
+                        child: Text(
+                          (c['name'] ?? 'A').isNotEmpty ? (c['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      title: Text(c['name'] ?? 'Athlete', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                      subtitle: Text('${c['clientId'] ?? c['id']} • Goal: ${c['primaryGoal'] ?? 'Fitness'}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textTertiary),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminCreateEditDietPlanScreen(
+                              client: c,
+                              macroRepository: widget.macroRepository,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAthleteDietsSubTab(ClientThemeColors colors, List<Map<String, dynamic>> clients) {
+    if (clients.isEmpty) {
+      return Center(
+        child: Text('No clients found.', style: TextStyle(color: colors.textSecondary)),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: clients.length,
+      itemBuilder: (ctx, i) {
+        final client = clients[i];
+        final photoUrl = client['photoUrl']?.toString();
+        final name = client['name']?.toString() ?? 'Athlete';
+        final cid = client['clientId']?.toString() ?? client['id']?.toString() ?? '';
+        final goal = client['primaryGoal']?.toString() ?? 'General Fitness';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colors.surfaceCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: colors.primary,
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? Text(name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'A', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text('$cid • Goal: $goal', style: TextStyle(color: colors.textSecondary, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, color: AppColors.textSecondary, size: 18),
+                    tooltip: 'Macro Options',
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: colors.surfaceCard,
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                        builder: (ctx) => SafeArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.tune, color: AppColors.primaryRed),
+                                title: const Text('Quick Assign Macro Targets', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  _showMacroTargetsDialog(context, client);
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.playlist_add_check, color: AppColors.info),
+                                title: const Text('Assign Saved Diet Plan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  _showAssignDietPlanDialog(context, client);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.border),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.restaurant, size: 14, color: AppColors.accentRed),
+                      label: const Text('PRESCRIBE PLAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminCreateEditDietPlanScreen(
+                              client: client,
+                              macroRepository: widget.macroRepository,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.lunch_dining, size: 14, color: Colors.white),
+                      label: const Text('VIEW FOOD LOGS', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminClientDetailScreen(
+                              client: client,
+                              workoutRepository: widget.workoutRepository,
+                              macroRepository: widget.macroRepository,
+                              activityRepository: widget.activityRepository,
+                              weeklyProgressRepository: _weeklyProgressRepo,
+                              initialTabIndex: 2, // Nutrition tab
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFoodLibrarySubTab(ClientThemeColors colors) {
+    final foods = FoodDatabase.defaultFoods;
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: foods.length,
+      itemBuilder: (ctx, i) {
+        final f = foods[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.surfaceCard,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(f.name, style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${f.servingDisplay} • P:${f.protein.toInt()}g C:${f.carbs.toInt()}g F:${f.fat.toInt()}g Fib:${f.fiber.toInt()}g',
+                      style: TextStyle(color: colors.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${f.calories.toInt()} kcal',
+                  style: TextStyle(color: colors.primary, fontWeight: FontWeight.w900, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

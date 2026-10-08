@@ -104,6 +104,17 @@ async function runTests() {
     console.log('✔ TEST 3 PASSED: Non-admin email rejected from /api/admin/login (401 Unauthorized).');
 
     // TEST 4: Client normal login -> 200 + CLIENT role
+    await makeRequest(server, {
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body: {
+        email: 'member.athlete@alphaxgym.com',
+        password: 'member_password_123',
+        name: 'Member Athlete',
+        phone: '+15551234567',
+      },
+    });
+
     const clientLoginRes = await makeRequest(server, {
       method: 'POST',
       path: '/api/v1/auth/login',

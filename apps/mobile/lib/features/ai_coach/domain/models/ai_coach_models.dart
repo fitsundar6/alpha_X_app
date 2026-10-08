@@ -40,6 +40,8 @@ class AiDataCompleteness {
 
 class AiProposal {
   final String id;
+  final String? clientId;
+  final String? clientName;
   final AiProposalType type;
   final String title;
   final String summary;
@@ -53,6 +55,8 @@ class AiProposal {
 
   AiProposal({
     required this.id,
+    this.clientId,
+    this.clientName,
     required this.type,
     required this.title,
     required this.summary,
@@ -64,6 +68,10 @@ class AiProposal {
     this.approvedAt,
     this.rejectionReason,
   });
+
+  bool get isPending => status == AiProposalStatus.pending || status == AiProposalStatus.edited;
+  bool get isApproved => status == AiProposalStatus.approved;
+  bool get isRejected => status == AiProposalStatus.rejected;
 
   factory AiProposal.fromJson(Map<String, dynamic> json) {
     AiProposalType type = AiProposalType.workout;
@@ -89,8 +97,15 @@ class AiProposal {
         ? Map<String, dynamic>.from(rawPayload)
         : <String, dynamic>{};
 
+    final cId = json['clientId']?.toString() ?? payloadMap['clientId']?.toString();
+    final cName = json['clientName']?.toString() ??
+        payloadMap['clientName']?.toString() ??
+        payloadMap['workoutPlan']?['clientName']?.toString();
+
     return AiProposal(
       id: json['id']?.toString() ?? UniqueKey().toString(),
+      clientId: cId,
+      clientName: cName,
       type: type,
       title: json['title']?.toString() ?? 'AI Prescription',
       summary: json['summary']?.toString() ?? '',

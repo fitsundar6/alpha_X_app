@@ -128,62 +128,74 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
 
 export const requireRoles = (allowedRoles: UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      sendError(
-        res,
-        'UNAUTHORIZED',
-        'Authentication is required',
-        HttpStatus.UNAUTHORIZED,
-        undefined,
-        undefined,
-        {
-          activity: 'Verify Role Authorization',
-          explanation: 'No authenticated user identity found on request.',
-        }
-      );
-      return;
-    }
-
-    // Strict single-admin verification:
-    // If route requires ADMIN role, enforce that authenticated user's email strictly matches ADMIN_EMAIL.
-    if (allowedRoles.includes(UserRole.ADMIN)) {
-      const normalizedEmail = (req.user.email || '').trim().toLowerCase();
-      const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
-
-      if (!isMasterAdmin || req.user.role !== UserRole.ADMIN) {
+    const checkRole = () => {
+      if (!req.user) {
         sendError(
           res,
-          'FORBIDDEN',
-          'Access denied: This operation requires authorized administrator privileges',
-          HttpStatus.FORBIDDEN,
+          'UNAUTHORIZED',
+          'Authentication is required',
+          HttpStatus.UNAUTHORIZED,
           undefined,
           undefined,
           {
-            activity: 'Authorize Admin Role',
-            explanation: `User "${req.user.email}" (Role: ${req.user.role}) is not authorized for administrator endpoints. Master admin email is "${env.ADMIN_EMAIL}".`,
+            activity: 'Verify Role Authorization',
+            explanation: 'No authenticated user identity found on request.',
           }
         );
         return;
       }
-    }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      sendError(
-        res,
-        'FORBIDDEN',
-        `Access denied for role "${req.user.role}"`,
-        HttpStatus.FORBIDDEN,
-        undefined,
-        undefined,
-        {
-          activity: 'Verify Role Authorization',
-          explanation: `Endpoint requires one of roles [${allowedRoles.join(', ')}], but user has role "${req.user.role}".`,
+      // Strict single-admin verification:
+      // If route requires ADMIN role, enforce that authenticated user's email strictly matches ADMIN_EMAIL.
+      if (allowedRoles.includes(UserRole.ADMIN)) {
+        const normalizedEmail = (req.user.email || '').trim().toLowerCase();
+        const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+
+        if (!isMasterAdmin || req.user.role !== UserRole.ADMIN) {
+          sendError(
+            res,
+            'FORBIDDEN',
+            'Access denied: This operation requires authorized administrator privileges',
+            HttpStatus.FORBIDDEN,
+            undefined,
+            undefined,
+            {
+              activity: 'Authorize Admin Role',
+              explanation: `User "${req.user.email}" (Role: ${req.user.role}) is not authorized for administrator endpoints. Master admin email is "${env.ADMIN_EMAIL}".`,
+            }
+          );
+          return;
         }
-      );
+      }
+
+      if (!allowedRoles.includes(req.user.role)) {
+        sendError(
+          res,
+          'FORBIDDEN',
+          `Access denied for role "${req.user.role}"`,
+          HttpStatus.FORBIDDEN,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Role Authorization',
+            explanation: `Endpoint requires one of roles [${allowedRoles.join(', ')}], but user has role "${req.user.role}".`,
+          }
+        );
+        return;
+      }
+
+      next();
+    };
+
+    if (!req.user) {
+      requireAuth(req, res, (err?: any) => {
+        if (err) return next(err);
+        checkRole();
+      });
       return;
     }
 
-    next();
+    checkRole();
   };
 };
 

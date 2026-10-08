@@ -12,12 +12,14 @@ class AdminCreateEditDietPlanScreen extends StatefulWidget {
   final Map<String, dynamic> client;
   final MacroRepository macroRepository;
   final AssignedDietPlan? initialDietPlan;
+  final VoidCallback? onSaved;
 
   const AdminCreateEditDietPlanScreen({
     super.key,
     required this.client,
     required this.macroRepository,
     this.initialDietPlan,
+    this.onSaved,
   });
 
   @override
@@ -671,6 +673,7 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
 
       if (mounted) {
         if (success) {
+          widget.onSaved?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: AppColors.surfaceElevated,

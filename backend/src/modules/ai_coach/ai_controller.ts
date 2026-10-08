@@ -419,19 +419,27 @@ ${overloadData.hasHistory && overloadData.current ? `
     // Pull real Food Library entries
     const foodLibraryItems = await aiTools.queryFoodLibrary('', 'ALL', 30);
     const getFood = (nameSub: string, fallback: any) => {
-      const found = foodLibraryItems.find(f => f.name.toLowerCase().includes(nameSub.toLowerCase()));
+      const found = foodLibraryItems.find(f => {
+        const n = f.name.toLowerCase();
+        if (nameSub === 'rice') return n.includes('basmati rice') || n.includes('cooked white rice') || n.includes('brown rice');
+        if (nameSub === 'egg') return n.includes('whole egg') || n.includes('egg (medium') || n === 'egg';
+        if (nameSub === 'chicken') return n.includes('chicken breast');
+        if (nameSub === 'oat') return n.includes('rolled oat') || n.includes('oats');
+        return n.includes(nameSub.toLowerCase());
+      });
       if (found) {
+        const baseServing = found.servingSize > 0 ? found.servingSize : 100;
         return {
           foodId: found.id,
           name: found.name,
           category: found.category,
           servingUnit: found.servingUnit,
-          baseServing: found.servingSize,
-          calPerUnit: found.calories / found.servingSize,
-          proPerUnit: found.protein / found.servingSize,
-          carbPerUnit: found.carbohydrates / found.servingSize,
-          fatPerUnit: found.fat / found.servingSize,
-          fibPerUnit: found.fiber / found.servingSize,
+          baseServing,
+          calPerUnit: found.calories / baseServing,
+          proPerUnit: found.protein / baseServing,
+          carbPerUnit: found.carbohydrates / baseServing,
+          fatPerUnit: found.fat / baseServing,
+          fibPerUnit: found.fiber / baseServing,
         };
       }
       return fallback;
@@ -1049,18 +1057,38 @@ ${attentionItems.length > 0 ? attentionItems.map((a, i) => `#### ${i + 1}. ${a.c
       return selectedClientId.trim();
     }
 
-    // 2. Search message text for athlete name or AXG-XXXX ID
-    const axgMatch = rawText.match(/AXG-\d+/i);
+    // 2. Search message text for athlete name or AXG-XXXX ID or direct ID
+    const axgMatch = rawText.match(/AXG-[A-Za-z0-9]+/i);
     if (axgMatch) {
       return axgMatch[0].toUpperCase();
     }
 
-    // Look for client name in authorized clients
     const clients = await aiTools.getAuthorizedClients();
+
+    // Check direct ID match (e.g. client_marcus_vance)
+    const lowerText = rawText.toLowerCase();
     for (const c of clients) {
-      const nameParts = c.name.toLowerCase().split(' ');
+      if (c.id && lowerText.includes(c.id.toLowerCase())) {
+        return c.clientProfile?.clientId || c.id;
+      }
+      if (c.clientProfile?.clientId && lowerText.includes(c.clientProfile.clientId.toLowerCase())) {
+        return c.clientProfile.clientId;
+      }
+    }
+
+    // Check exact full name match first
+    for (const c of clients) {
+      if (c.name && c.name.length >= 3 && lowerText.includes(c.name.toLowerCase())) {
+        return c.clientProfile?.clientId || c.id;
+      }
+    }
+
+    // Look for unique specific name parts, excluding common generic terms
+    const skipWords = new Set(['client', 'athlete', 'user', 'member', 'the', 'for', 'workout', 'diet', 'plan', 'create', 'with', 'about']);
+    for (const c of clients) {
+      const nameParts = c.name.toLowerCase().split(' ').filter(p => !skipWords.has(p) && p.length >= 3);
       for (const part of nameParts) {
-        if (part.length >= 3 && rawText.toLowerCase().includes(part)) {
+        if (lowerText.includes(part)) {
           return c.clientProfile?.clientId || c.id;
         }
       }
