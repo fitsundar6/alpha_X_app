@@ -7,6 +7,7 @@ import {
   updateSessionSchema,
   assignSessionSchema,
   createWorkoutRecordSchema,
+  setCompletionSchema,
 } from './workout.validation';
 
 export class WorkoutController {
@@ -494,6 +495,60 @@ export class WorkoutController {
       record,
       HttpStatus.OK,
       `Retrieved workout record "${id}" ("${record.sessionTitle}")`
+    );
+  }
+
+  async toggleSetCompletion(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = (req.params.id || req.body.sessionId) as string;
+    if (!sessionId) {
+      sendError(res, 'BAD_REQUEST', 'Missing sessionId parameter or body field', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const parsed = setCompletionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const errorMsg = parsed.error.errors.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      sendError(
+        res,
+        'VALIDATION_ERROR',
+        `Set completion payload validation failed: ${errorMsg}`,
+        HttpStatus.BAD_REQUEST,
+        parsed.error.errors.map((e) => ({ field: e.path.join('.'), message: e.message })),
+        parsed.error
+      );
+      return;
+    }
+
+    try {
+      const result = await workoutService.toggleSetCompletion(clientId, sessionId, parsed.data);
+      sendSuccess(
+        res,
+        result,
+        HttpStatus.OK,
+        `Updated set ${result.setNumber} (isCompleted: ${result.isCompleted}) for exercise "${result.exerciseId}"`
+      );
+    } catch (err: any) {
+      sendError(
+        res,
+        'DATABASE_ERROR',
+        err?.message || 'Database error while saving set completion',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        undefined,
+        err
+      );
+    }
+  }
+
+  async getActiveSetCompletions(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const completions = await workoutService.getActiveSetCompletions(clientId, sessionId);
+    sendSuccess(
+      res,
+      completions,
+      HttpStatus.OK,
+      `Fetched ${completions.length} active set completion records for session "${sessionId}"`
     );
   }
 }

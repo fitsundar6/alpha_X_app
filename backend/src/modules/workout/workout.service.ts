@@ -234,6 +234,14 @@ export class WorkoutService {
     }
     return record;
   }
+
+  async toggleSetCompletion(clientId: string, sessionId: string, data: any) {
+    return workoutRepository.saveSetCompletion(clientId, sessionId, data);
+  }
+
+  async getActiveSetCompletions(clientId: string, sessionId: string) {
+    return workoutRepository.getActiveSetCompletions(clientId, sessionId);
+  }
 }
 
 export const workoutService = new WorkoutService();

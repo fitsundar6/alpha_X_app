@@ -1050,6 +1050,15 @@ class WorkoutSession {
   final WeeklyWorkoutSchedule? weeklySchedule;
   final ClientWorkoutPermissions permissions;
   final bool isCompleted;
+  final String? assignedClientId;
+  final String? assignedWorkoutId;
+  final String? workoutPlanId;
+  final String? workoutDayId;
+  final String status; // 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'ABANDONED'
+  final int currentExerciseIndex;
+  final DateTime? workoutDate;
+
+  String? get userId => assignedClientId;
 
   WorkoutSession({
     required this.id,
@@ -1077,6 +1086,13 @@ class WorkoutSession {
     this.weeklySchedule,
     this.permissions = const ClientWorkoutPermissions(),
     this.isCompleted = false,
+    this.assignedClientId,
+    this.assignedWorkoutId,
+    this.workoutPlanId,
+    this.workoutDayId,
+    this.status = 'NOT_STARTED',
+    this.currentExerciseIndex = 0,
+    this.workoutDate,
   })  : targetMuscleGroup = targetMuscleGroup ?? focus ?? 'Full Body',
         startedAt = startedAt ?? DateTime.now(),
         sections = sections ?? _defaultSections(),
@@ -1159,6 +1175,13 @@ class WorkoutSession {
     WeeklyWorkoutSchedule? weeklySchedule,
     ClientWorkoutPermissions? permissions,
     bool? isCompleted,
+    String? assignedClientId,
+    String? assignedWorkoutId,
+    String? workoutPlanId,
+    String? workoutDayId,
+    String? status,
+    int? currentExerciseIndex,
+    DateTime? workoutDate,
   }) {
     return WorkoutSession(
       id: id ?? this.id,
@@ -1185,6 +1208,13 @@ class WorkoutSession {
       weeklySchedule: weeklySchedule ?? this.weeklySchedule,
       permissions: permissions ?? this.permissions,
       isCompleted: isCompleted ?? this.isCompleted,
+      assignedClientId: assignedClientId ?? this.assignedClientId,
+      assignedWorkoutId: assignedWorkoutId ?? this.assignedWorkoutId,
+      workoutPlanId: workoutPlanId ?? this.workoutPlanId,
+      workoutDayId: workoutDayId ?? this.workoutDayId,
+      status: status ?? this.status,
+      currentExerciseIndex: currentExerciseIndex ?? this.currentExerciseIndex,
+      workoutDate: workoutDate ?? this.workoutDate,
     );
   }
 
@@ -1214,6 +1244,14 @@ class WorkoutSession {
       'weeklySchedule': weeklySchedule?.toJson(),
       'permissions': permissions.toJson(),
       'isCompleted': isCompleted,
+      'assignedClientId': assignedClientId,
+      'userId': assignedClientId,
+      'assignedWorkoutId': assignedWorkoutId,
+      'workoutPlanId': workoutPlanId,
+      'workoutDayId': workoutDayId,
+      'status': status,
+      'currentExerciseIndex': currentExerciseIndex,
+      'workoutDate': workoutDate?.toIso8601String(),
     };
   }
 
@@ -1264,6 +1302,13 @@ class WorkoutSession {
           ? ClientWorkoutPermissions.fromJson(json['permissions'] as Map<String, dynamic>)
           : const ClientWorkoutPermissions(),
       isCompleted: json['isCompleted'] as bool? ?? false,
+      assignedClientId: (json['assignedClientId'] ?? json['userId']) as String?,
+      assignedWorkoutId: json['assignedWorkoutId'] as String?,
+      workoutPlanId: json['workoutPlanId'] as String?,
+      workoutDayId: json['workoutDayId'] as String?,
+      status: json['status'] as String? ?? ((json['isCompleted'] as bool? ?? false) ? 'COMPLETED' : 'NOT_STARTED'),
+      currentExerciseIndex: json['currentExerciseIndex'] as int? ?? 0,
+      workoutDate: json['workoutDate'] != null ? DateTime.tryParse(json['workoutDate'] as String) : null,
     );
   }
 }
@@ -1400,6 +1445,8 @@ class ExercisePerformanceHistoryItem {
     required this.date,
     required this.sets,
   });
+
+  DateTime get completedAt => date;
 }
 
 /// Personal Record types detected during workout execution
@@ -1461,6 +1508,8 @@ class PersonalRecord {
     this.previousValue,
     required this.achievedAt,
   });
+
+  String get displayName => '$exerciseName ($formattedValue)';
 
   String get formattedValue {
     final weightStr = weight % 1 == 0 ? weight.toInt().toString() : weight.toStringAsFixed(1);

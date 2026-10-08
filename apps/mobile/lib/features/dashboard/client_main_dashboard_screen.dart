@@ -677,8 +677,11 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     final IconData buttonIcon;
 
     if (hasActive) {
+      final totalSets = active.totalSets;
+      final completedSets = active.totalCompletedSets;
+      final percent = totalSets > 0 ? ((completedSets / totalSets) * 100).round() : 0;
       sessionTitle = active.title;
-      sessionSubtitle = '${active.exercises.length} exercises • In progress';
+      sessionSubtitle = '$percent% complete • $completedSets/$totalSets sets done';
       statusLabel = 'IN PROGRESS';
       statusColor = AppColors.warning;
       buttonLabel = 'RESUME WORKOUT';
@@ -691,12 +694,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       buttonLabel = 'START WORKOUT';
       buttonIcon = Icons.play_arrow_rounded;
     } else {
-      sessionTitle = 'Active Recovery & Mobility';
-      sessionSubtitle = 'No scheduled workout today • Rest or browse library';
-      statusLabel = 'REST DAY';
+      sessionTitle = 'No workout assigned';
+      sessionSubtitle = "Your trainer hasn't assigned a workout yet.";
+      statusLabel = 'NO ASSIGNMENT';
       statusColor = colors.textSecondary;
-      buttonLabel = 'EXPLORE WORKOUTS';
-      buttonIcon = Icons.fitness_center_rounded;
+      buttonLabel = 'CONTACT YOUR TRAINER';
+      buttonIcon = Icons.chat_bubble_outline_rounded;
     }
 
     return Container(
@@ -821,6 +824,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     MaterialPageRoute(
                       builder: (ctx) => ClientWorkoutExecutionScreen(
                         workoutRepository: widget.workoutRepository,
+                        session: active,
+                        sessionId: active.id,
                       ),
                     ),
                   );
@@ -834,7 +839,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     ),
                   );
                 } else {
-                  _selectTab(1);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Your trainer hasn't assigned a workout yet. Please reach out to your coach."),
+                      backgroundColor: AppColors.surfaceElevated,
+                    ),
+                  );
                 }
               },
             ),

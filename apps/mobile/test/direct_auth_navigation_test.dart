@@ -5,6 +5,7 @@ import 'package:alpha_x_gym/main.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/core/auth/login_screen.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_splash_screen.dart';
 import 'package:alpha_x_gym/features/onboarding/client_onboarding_screen.dart';
 import 'package:alpha_x_gym/features/navigation/navigation_shell.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_main_dashboard_screen.dart';
@@ -20,7 +21,7 @@ void main() {
       auth = AuthService();
     });
 
-    testWidgets('1. App opens directly to LoginScreen (landing screen elements completely removed)', (tester) async {
+    testWidgets('1. App opens to AlphaXSplashScreen and transitions smoothly to LoginScreen', (tester) async {
       await tester.pumpWidget(const AlphaXGymApp());
       await tester.pump();
 
@@ -28,7 +29,13 @@ void main() {
       expect(find.text('ENTER ALPHA X GYM'), findsNothing);
       expect(find.text('Member Sign In'), findsNothing);
 
-      // App is directly on LoginScreen
+      // App is on AlphaXSplashScreen
+      expect(find.byType(AlphaXSplashScreen), findsOneWidget);
+
+      // Settle splash animation
+      await tester.pumpAndSettle();
+
+      // App settles onto LoginScreen
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // Root navigation check: cannot pop from LoginScreen (Android back button closes app)

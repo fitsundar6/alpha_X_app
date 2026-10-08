@@ -30,6 +30,8 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           MaterialPageRoute(
             builder: (ctx) => ClientWorkoutExecutionScreen(
               workoutRepository: workoutRepository,
+              session: active,
+              sessionId: active.id,
             ),
           ),
         );
@@ -78,6 +80,8 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           MaterialPageRoute(
             builder: (ctx) => ClientWorkoutExecutionScreen(
               workoutRepository: workoutRepository,
+              session: workoutRepository.activeSession,
+              sessionId: workoutRepository.activeSession.id,
             ),
           ),
         );
@@ -96,6 +100,8 @@ class ClientSessionOverviewScreen extends StatelessWidget {
         MaterialPageRoute(
           builder: (ctx) => ClientWorkoutExecutionScreen(
             workoutRepository: workoutRepository,
+            session: session,
+            sessionId: session.id,
           ),
         ),
       );

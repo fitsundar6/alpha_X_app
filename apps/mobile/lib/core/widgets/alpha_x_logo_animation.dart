@@ -39,6 +39,9 @@ class AlphaXLogoAnimation extends StatefulWidget {
   /// Optional custom glow color (defaults to [AppColors.primaryGold]).
   final Color? glowColor;
 
+  /// Duration of the entire animation sequence (defaults to 4600ms).
+  final Duration duration;
+
   const AlphaXLogoAnimation({
     super.key,
     this.size = 140.0,
@@ -49,6 +52,7 @@ class AlphaXLogoAnimation extends StatefulWidget {
     this.startSettled = false,
     this.allowTapToSkip = true,
     this.glowColor,
+    this.duration = const Duration(milliseconds: 4600),
   });
 
   @override
@@ -79,7 +83,7 @@ class AlphaXLogoAnimationState extends State<AlphaXLogoAnimation>
 
     _internalController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4600),
+      duration: widget.duration,
     );
 
     _initAnimations();

@@ -8,6 +8,7 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'client_session_overview_screen.dart';
 import 'client_workout_history_screen.dart';
+import 'client_workout_execution_screen.dart';
 
 /// Athletic Premium Workouts Hub
 /// Screen 3: Horizontal filter chips, workout cards (image + tags + lime Start).
@@ -43,6 +44,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     super.initState();
     widget.workoutRepository.addListener(_onRepoChange);
     widget.workoutRepository.fetchClientWorkouts();
+    final clientId = AuthService().currentUserId;
+    if (clientId.isNotEmpty) {
+      widget.workoutRepository.restoreActiveSessionForClient(clientId);
+    }
   }
 
   @override
@@ -81,6 +86,8 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     final colors = ClientThemeColors.of(context);
     final isDark = colors.isDark;
     final clientId = AuthService().currentUserId;
+    final hasActive = widget.workoutRepository.hasActiveSavedSession;
+    final activeSession = widget.workoutRepository.activeSession;
     final recommended = widget.workoutRepository.getRecommendedSessionForClient(clientId);
     final available = widget.workoutRepository.getAuthorizedSessionsForClient(clientId);
 
@@ -93,6 +100,8 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 s.title.toLowerCase().contains(cat);
           }).toList();
 
+    final hasAnyWorkouts = available.isNotEmpty || recommended != null || hasActive;
+
     final content = RefreshIndicator(
       color: isDark ? AppColors.primary : AppColors.lightPrimary,
       backgroundColor: colors.surfaceCard,
@@ -100,99 +109,109 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
         await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
       },
       child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          children: [
-          // Section 1: Recommended Session Hero Card
-          if (recommended != null) ...[
-            _sectionTitle('⭐ RECOMMENDED FOR YOU', colors),
-            const SizedBox(height: 10),
-            _buildRecommendedCard(recommended, colors, isDark),
-            const SizedBox(height: 24),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        children: [
+          // Section 0: Active Session Resume Card (if in progress)
+          if (hasActive) ...[
+            _buildActiveResumeBanner(activeSession, colors, isDark),
           ],
 
-          // Section 2: Horizontal Filter Chips
-          _sectionTitle('PRESCRIBED PROGRAMS', colors),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _categories.map((cat) {
-                final isSelected = _selectedCategory == cat;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: AlphaXPressable(
-                    onTap: () {
-                      AlphaXHaptics.selection();
-                      setState(() => _selectedCategory = cat);
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? (isDark ? AppColors.primary : AppColors.lightPrimary)
-                            : colors.surfaceCard,
-                        borderRadius: BorderRadius.circular(999), // Pill
-                        border: Border.all(
-                          color: isSelected
-                              ? (isDark ? AppColors.primary : AppColors.lightPrimary)
-                              : colors.border,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: (isDark ? AppColors.primary : AppColors.lightPrimary).withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        cat,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? AppColors.onPrimary // Dark text on lime
-                              : colors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 16),
+          if (!hasAnyWorkouts) ...[
+            // ZERO WORKOUTS ASSIGNED STATE (Never fallback to default/generic!)
+            _buildNoWorkoutAssignedState(colors, isDark),
+          ] else ...[
+            // Section 1: Recommended Session Hero Card
+            if (recommended != null) ...[
+              _sectionTitle('⭐ RECOMMENDED FOR YOU', colors),
+              const SizedBox(height: 10),
+              _buildRecommendedCard(recommended, colors, isDark),
+              const SizedBox(height: 24),
+            ],
 
-          Text(
-            'Prescribed workouts tailored to your training phase. Only active authorized sessions are displayed.',
-            style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
-          ),
-          const SizedBox(height: 14),
-
-          if (filteredSessions.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: colors.surfaceCard,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: colors.border),
-              ),
-              child: Center(
-                child: Text(
-                  available.isEmpty
-                      ? 'No workout sessions currently assigned. Contact gym admin.'
-                      : 'No workouts matching "$_selectedCategory". Tap "All" to view all assigned sessions.',
-                  style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
-                  textAlign: TextAlign.center,
+            // Section 2: Horizontal Filter Chips
+            if (available.isNotEmpty) ...[
+              _sectionTitle('PRESCRIBED PROGRAMS', colors),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _categories.map((cat) {
+                    final isSelected = _selectedCategory == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AlphaXPressable(
+                        onTap: () {
+                          AlphaXHaptics.selection();
+                          setState(() => _selectedCategory = cat);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? (isDark ? AppColors.primary : AppColors.lightPrimary)
+                                : colors.surfaceCard,
+                            borderRadius: BorderRadius.circular(999), // Pill
+                            border: Border.all(
+                              color: isSelected
+                                  ? (isDark ? AppColors.primary : AppColors.lightPrimary)
+                                  : colors.border,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: (isDark ? AppColors.primary : AppColors.lightPrimary).withOpacity(0.3),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            cat,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? AppColors.onPrimary // Dark text on lime
+                                  : colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
-            )
-          else
-            ...filteredSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
+              const SizedBox(height: 16),
+
+              Text(
+                'Prescribed workouts tailored to your training phase. Only active authorized sessions are displayed.',
+                style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+
+              if (filteredSessions.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceCard,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'No workouts matching "$_selectedCategory". Tap "All" to view all assigned sessions.',
+                      style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                ...filteredSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
+            ],
+          ],
         ],
       ),
     );
@@ -238,6 +257,295 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
         ],
       ),
       body: content,
+    );
+  }
+
+  Widget _buildActiveResumeBanner(WorkoutSession active, ClientThemeColors colors, bool isDark) {
+    final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
+    final totalSets = active.totalSets;
+    final completedSets = active.totalCompletedSets;
+    final percent = totalSets > 0 ? ((completedSets / totalSets) * 100).round() : 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: accentLime, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: accentLime.withOpacity(0.2),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accentLime.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: accentLime.withOpacity(0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accentLime,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'WORKOUT IN PROGRESS',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                        color: accentLime,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: colors.textTertiary,
+                tooltip: 'Discard workout',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () async {
+                  final discard = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: colors.surfaceCard,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      title: Text(
+                        'Discard Workout?',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: colors.textPrimary),
+                      ),
+                      content: Text(
+                        'Your logged sets in this active workout will be discarded.',
+                        style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: Text('Keep', style: GoogleFonts.poppins(color: colors.textSecondary)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.primaryRed,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: Text('Discard', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (discard == true) {
+                    await widget.workoutRepository.discardActiveSession();
+                    if (mounted) setState(() {});
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            active.title,
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: colors.textPrimary,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$percent% complete • $completedSets of $totalSets sets finished',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: colors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: totalSets > 0 ? (completedSets / totalSets).clamp(0.0, 1.0) : 0.0,
+              minHeight: 6,
+              backgroundColor: colors.border,
+              valueColor: AlwaysStoppedAnimation<Color>(accentLime),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentLime,
+                foregroundColor: AppColors.onPrimary,
+                shape: const StadiumBorder(),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.play_arrow_rounded, color: AppColors.onPrimary, size: 22),
+              label: Text(
+                'RESUME WORKOUT',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  letterSpacing: 1.0,
+                  color: AppColors.onPrimary,
+                ),
+              ),
+              onPressed: () {
+                AlphaXHaptics.tap();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => ClientWorkoutExecutionScreen(
+                      workoutRepository: widget.workoutRepository,
+                      session: active,
+                      sessionId: active.id,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoWorkoutAssignedState(ClientThemeColors colors, bool isDark) {
+    final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 40, horizontal: 8),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: colors.surfaceCard,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.25 : 0.03),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: colors.surfaceElevated,
+                shape: BoxShape.circle,
+                border: Border.all(color: colors.borderSubtle, width: 2),
+              ),
+              child: Icon(
+                Icons.fitness_center_outlined,
+                size: 36,
+                color: colors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No workout assigned',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: colors.textPrimary,
+                letterSpacing: -0.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Your trainer hasn't assigned a workout yet.\nOnce assigned, your prescribed routine will appear here automatically.",
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: colors.textSecondary,
+                height: 1.45,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentLime,
+                  foregroundColor: AppColors.onPrimary,
+                  shape: const StadiumBorder(),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: AppColors.onPrimary),
+                label: Text(
+                  'CONTACT YOUR TRAINER',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    letterSpacing: 0.8,
+                    color: AppColors.onPrimary,
+                  ),
+                ),
+                onPressed: () {
+                  AlphaXHaptics.tap();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Trainer notified! Your coach will assign your workout program shortly.',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      backgroundColor: colors.surfaceCard,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              icon: Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+              label: Text(
+                'Check for Updates',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textSecondary,
+                ),
+              ),
+              onPressed: () async {
+                AlphaXHaptics.selection();
+                await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 

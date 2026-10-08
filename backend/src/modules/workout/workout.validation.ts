@@ -96,3 +96,15 @@ export const createWorkoutRecordSchema = z.object({
   notes: z.string().optional().nullable(),
   exerciseRecords: z.array(workoutExerciseRecordSchema).min(1),
 });
+
+export const setCompletionSchema = z.object({
+  sessionId: z.string().optional(),
+  exerciseId: z.string().min(1, 'exerciseId is required'),
+  setNumber: z.coerce.number().int().min(1, 'setNumber must be at least 1'),
+  isCompleted: z.boolean(),
+  actualWeight: z.coerce.number().optional().nullable(),
+  actualReps: z.coerce.number().int().min(0).optional().nullable(),
+  actualRir: z.coerce.number().int().min(0).max(10).optional().nullable(),
+  actualRpe: z.coerce.number().min(0).max(10).optional().nullable(),
+  tempo: z.string().optional().nullable(),
+});

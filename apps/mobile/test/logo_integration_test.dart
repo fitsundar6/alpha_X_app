@@ -40,12 +40,15 @@ void main() {
       expect(imageWidget.semanticLabel, equals(AppConstants.appName));
     });
 
-    testWidgets('AlphaXGymApp launches directly into authentication without landing splash screen', (tester) async {
+    testWidgets('AlphaXGymApp launches with splash and settles into authentication without old landing buttons', (tester) async {
       await tester.pumpWidget(const AlphaXGymApp());
 
       // Landing splash screen buttons no longer appear
       expect(find.text('ENTER ALPHA X GYM'), findsNothing);
       expect(find.text('Member Sign In'), findsNothing);
+
+      // Settle splash animation
+      await tester.pumpAndSettle();
 
       // Directly renders LoginScreen with official logo & brand title
       expect(find.byType(LoginScreen), findsOneWidget);

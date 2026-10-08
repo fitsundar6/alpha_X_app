@@ -103,8 +103,32 @@ class WorkoutRepository extends ChangeNotifier {
   List<WorkoutSession> get adminSessions => List.unmodifiable(_sessions);
   List<Map<String, String>> get clientsList => List.unmodifiable(_clients);
   int get pendingSyncCount => _pendingSyncRecords.length;
-  bool get hasActiveSavedSession => _hasRestoredActiveSession && !_activeSession.isCompleted;
   DateTime? get activeSessionSavedAt => _activeSessionSavedAt;
+  bool get hasActiveSavedSession {
+    if (!_hasRestoredActiveSession) return false;
+    if (_activeSession.isCompleted) return false;
+    if (_activeSession.status == 'COMPLETED' || _activeSession.status == 'ABANDONED') return false;
+    final currentUid = AuthService().currentUserId;
+    if (currentUid.isNotEmpty &&
+        _activeSession.assignedClientId != null &&
+        _activeSession.assignedClientId!.isNotEmpty &&
+        _activeSession.assignedClientId != currentUid) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Adds an exercise dynamically to the currently active workout session.
+  void addExerciseToActiveSession(WorkoutExercise exercise) {
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises)..add(exercise);
+    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
+    if (uid.isNotEmpty) {
+      saveActiveSessionToLocalStorage(userId: uid);
+    }
+    notifyListeners();
+  }
+
   /// Fetches real registered clients exclusively from the shared backend database (PostgreSQL).
   /// NEVER falls back to demo/sample/example data.
   Future<List<Map<String, String>>> fetchClientsList({bool forceRefresh = false}) async {
@@ -864,13 +888,13 @@ class WorkoutRepository extends ChangeNotifier {
 
     _sessions.addAll([pushA, pullA, legsA]);
 
-    // Assignments: Push A is recommended for ALL clients
+    // Assignments: No default global recommendation to ensure client-assigned workouts are always respected
     _assignments.add(
       WorkoutAssignmentData(
         id: 'assign_push_a_all',
         sessionId: pushA.id,
         clientId: null,
-        isRecommended: true,
+        isRecommended: false,
       ),
     );
     _assignments.add(
@@ -1405,6 +1429,8 @@ class WorkoutRepository extends ChangeNotifier {
 
   // --- Client Discovery & Access Scoping ---
   WorkoutSession? getRecommendedSessionForClient(String clientId) {
+    if (clientId.isEmpty) return null;
+
     // 1. Look for client-specific recommended assignment
     final clientRec = _assignments.firstWhere(
       (a) => a.clientId == clientId && a.isRecommended,
@@ -1412,36 +1438,52 @@ class WorkoutRepository extends ChangeNotifier {
     );
     if (clientRec.sessionId.isNotEmpty) {
       final s = _sessions.where((s) => s.id == clientRec.sessionId && s.isActive).firstOrNull;
-      if (s != null) return s.copyWith(isRecommended: true);
+      if (s != null) return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
     }
 
-    // 2. Look for global ALL recommended assignment
-    final globalRec = _assignments.firstWhere(
-      (a) => a.clientId == null && a.isRecommended,
-      orElse: () => WorkoutAssignmentData(id: '', sessionId: ''),
-    );
-    if (globalRec.sessionId.isNotEmpty) {
-      final s = _sessions.where((s) => s.id == globalRec.sessionId && s.isActive).firstOrNull;
-      if (s != null) return s.copyWith(isRecommended: true);
+    // 2. Look for any client-specific assignment (newest assignment)
+    final clientAssignments = _assignments.where((a) => a.clientId == clientId).toList();
+    if (clientAssignments.isNotEmpty) {
+      final lastAssigned = clientAssignments.last;
+      final s = _sessions.where((s) => s.id == lastAssigned.sessionId && s.isActive).firstOrNull;
+      if (s != null) return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
     }
 
+    // DO NOT fall back to global or seeded default workout!
     return null;
   }
 
   List<WorkoutSession> getAuthorizedSessionsForClient(String clientId) {
-    final authorizedSessionIds = _assignments
-        .where((a) => a.clientId == null || a.clientId == clientId)
-        .map((a) => a.sessionId)
-        .toSet();
+    if (clientId.isEmpty) return [];
 
-    return _sessions.where((s) => s.isActive && authorizedSessionIds.contains(s.id)).toList();
+    final clientAssignments = _assignments.where((a) => a.clientId == clientId).toList();
+    if (clientAssignments.isNotEmpty) {
+      final authorizedSessionIds = clientAssignments.map((a) => a.sessionId).toSet();
+      return _sessions
+          .where((s) => s.isActive && authorizedSessionIds.contains(s.id))
+          .map((s) => s.copyWith(assignedClientId: clientId, assignedWorkoutId: s.id))
+          .toList();
+    }
+
+    return [];
   }
 
   WorkoutSession? getTodaySessionForClient(String clientId) {
-    final todayWeekday = DateTime.now().weekday; // 1 = Mon ... 7 = Sun
-    final authorized = getAuthorizedSessionsForClient(clientId);
+    if (clientId.isEmpty) return null;
 
-    // 1. Check weekly schedule mapping
+    // 1. If user already has an active IN_PROGRESS session, return that active session
+    if (hasActiveSavedSession &&
+        _activeSession.status == 'IN_PROGRESS' &&
+        (_activeSession.assignedClientId == clientId || _activeSession.assignedClientId == null)) {
+      return _activeSession;
+    }
+
+    final authorized = getAuthorizedSessionsForClient(clientId);
+    if (authorized.isEmpty) return null;
+
+    final todayWeekday = DateTime.now().weekday; // 1 = Mon ... 7 = Sun
+
+    // 2. Check weekly schedule mapping for authorized sessions
     for (final s in authorized) {
       if (s.weeklySchedule != null &&
           s.weeklySchedule!.dayOfWeekSessionId.containsKey(todayWeekday)) {
@@ -1455,25 +1497,32 @@ class WorkoutRepository extends ChangeNotifier {
       }
     }
 
-    // 2. Recommended session
+    // 3. Recommended session for this client
     final rec = getRecommendedSessionForClient(clientId);
     if (rec != null) return rec;
 
-    // 3. First authorized or default active
-    if (authorized.isNotEmpty) return authorized.first;
-    if (_sessions.isNotEmpty) return _sessions.first;
-    return null;
+    // 4. First authorized session assigned to this client
+    return authorized.first;
   }
 
   // --- Client Workout Execution ---
-  void startSession(WorkoutSession session) {
+  void startSession(WorkoutSession session, {String? clientId}) {
+    final targetClientId = clientId ?? session.assignedClientId ?? AuthService().currentUserId;
     _currentSessionSwaps.clear();
+    final now = DateTime.now();
+
     // Deep clone with fresh sets for execution (creates a new record without mutating template)
     _activeSession = session.copyWith(
-      startedAt: DateTime.now(),
+      id: session.id,
+      assignedClientId: targetClientId,
+      assignedWorkoutId: session.assignedWorkoutId ?? session.id,
+      status: 'IN_PROGRESS',
+      workoutDate: now,
+      startedAt: now,
       completedAt: null,
       durationSeconds: 0,
       isCompleted: false,
+      currentExerciseIndex: 0,
       exercises: session.exercises.map((ex) {
         return ex.copyWith(
           isSkipped: false,
@@ -1481,9 +1530,9 @@ class WorkoutRepository extends ChangeNotifier {
           clientNote: null,
           sets: ex.sets.map((s) {
             return s.copyWith(
-              isCompleted: false,
-              completedAt: null,
-              actualWeight: s.actualWeight ?? s.targetWeight,
+              isCompleted: s.isCompleted,
+              completedAt: s.completedAt,
+              actualWeight: s.actualWeight ?? (s.targetWeight > 0 ? s.targetWeight : null),
               actualReps: s.actualReps ?? s.targetRepsMin,
               actualRir: s.actualRir ?? s.targetRir,
               actualRpe: s.actualRpe ?? s.targetRpe,
@@ -1493,9 +1542,17 @@ class WorkoutRepository extends ChangeNotifier {
       }).toList(),
     );
     _hasRestoredActiveSession = true;
-    _activeSessionSavedAt = DateTime.now();
-    saveActiveSessionToLocalStorage(elapsedSeconds: 0);
+    _activeSessionSavedAt = now;
+    saveActiveSessionToLocalStorage(userId: targetClientId, elapsedSeconds: 0);
     notifyListeners();
+  }
+
+  void updateCurrentExerciseIndex(int index) {
+    if (index >= 0 && index < _activeSession.exercises.length) {
+      _activeSession = _activeSession.copyWith(currentExerciseIndex: index);
+      saveActiveSessionToLocalStorage();
+      notifyListeners();
+    }
   }
 
   void updateSetActual({
@@ -1560,6 +1617,18 @@ class WorkoutRepository extends ChangeNotifier {
     saveActiveSessionToLocalStorage();
     notifyListeners();
 
+    // Immediately sync set completion to backend and database
+    syncSetCompletionToBackend(
+      sessionId: _activeSession.id,
+      exerciseId: exercise.exerciseId.isNotEmpty ? exercise.exerciseId : exercise.id,
+      setNumber: updatedSet.setNumber,
+      isCompleted: true,
+      actualWeight: actualWeight,
+      actualReps: actualReps,
+      actualRpe: updatedSet.actualRpe,
+      actualRir: updatedSet.actualRir,
+    );
+
     return evaluateNewPR(
       exerciseId: exercise.exerciseId,
       exerciseName: exercise.exerciseName,
@@ -1579,6 +1648,7 @@ class WorkoutRepository extends ChangeNotifier {
     final oldSet = exercise.sets[setIndex];
     final updatedSet = oldSet.copyWith(
       isCompleted: false,
+      completedAt: null,
     );
 
     final updatedSets = List<ExerciseSet>.from(exercise.sets);
@@ -1590,6 +1660,18 @@ class WorkoutRepository extends ChangeNotifier {
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
     saveActiveSessionToLocalStorage();
     notifyListeners();
+
+    // Immediately sync undo completion to backend and database
+    syncSetCompletionToBackend(
+      sessionId: _activeSession.id,
+      exerciseId: exercise.exerciseId.isNotEmpty ? exercise.exerciseId : exercise.id,
+      setNumber: updatedSet.setNumber,
+      isCompleted: false,
+      actualWeight: oldSet.actualWeight,
+      actualReps: oldSet.actualReps,
+      actualRpe: oldSet.actualRpe,
+      actualRir: oldSet.actualRir,
+    );
   }
 
   void skipExercise(int exerciseIndex, {String? reason}) {
@@ -1935,32 +2017,24 @@ class WorkoutRepository extends ChangeNotifier {
   // --- Previous Performance Lookup ---
   List<ExerciseSet>? getPreviousPerformance(String exerciseId, {String? clientId}) {
     final targetClientId = clientId ?? AuthService().currentUserId;
-    final clientHistory = getClientExerciseHistory(
-      clientId: targetClientId,
-      exerciseId: exerciseId,
-    );
-    if (clientHistory.isNotEmpty) {
-      return clientHistory.first.sets;
+    if (targetClientId.isNotEmpty) {
+      final clientHistory = getClientExerciseHistory(
+        clientId: targetClientId,
+        exerciseId: exerciseId,
+      );
+      if (clientHistory.isNotEmpty) {
+        return clientHistory.first.sets;
+      }
+      // STRICTLY return null if no historical record exists for this specific client
+      return null;
     }
 
-    // Fallback across all records if none found for specific client (backward compatibility)
-    for (final record in _workoutHistory) {
-      final ex = record.exercises.firstWhere(
-        (e) => e.exerciseId == exerciseId && !e.isSkipped,
-        orElse: () => const WorkoutExercise(
-          id: '',
-          exerciseId: '',
-          exerciseName: '',
-          category: '',
-          primaryMusclesDisplay: '',
-          secondaryMusclesDisplay: '',
-          trainerNote: '',
-          sets: [],
-        ),
-      );
-      if (ex.exerciseId.isNotEmpty && ex.sets.isNotEmpty) {
-        final completedSets = ex.sets.where((s) => s.isCompleted).toList();
-        if (completedSets.isNotEmpty) return completedSets;
+    // Fallback for unauthenticated unit tests
+    for (final record in _workoutHistory.where((r) => r.isCompleted)) {
+      for (final ex in record.exercises) {
+        if (ex.exerciseId == exerciseId && !ex.isSkipped && ex.sets.any((s) => s.isCompleted)) {
+          return ex.sets.where((s) => s.isCompleted).toList();
+        }
       }
     }
     return null;
@@ -2223,14 +2297,18 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      // Restore active in-progress workout session if saved within 24 hours
-      final activeRaw = prefs.getString(_storageKeyActiveSession);
-      if (activeRaw != null && activeRaw.isNotEmpty) {
-        try {
+      // Restore active in-progress workout session for current authenticated user
+      final currentUid = AuthService().currentUserId;
+      if (currentUid.isNotEmpty) {
+        await restoreActiveSessionForClient(currentUid);
+      } else {
+        // Fallback for tests or offline active sessions when no current user id is set
+        final activeRaw = prefs.getString(_storageKeyActiveSession);
+        if (activeRaw != null && activeRaw.isNotEmpty) {
           final activeMap = jsonDecode(activeRaw) as Map<String, dynamic>;
           final restored = WorkoutSession.fromJson(activeMap);
-          final age = DateTime.now().difference(restored.startedAt);
-          if (!restored.isCompleted && age.inHours < 24) {
+          if (!restored.isCompleted &&
+              (restored.status == 'IN_PROGRESS' || restored.status == 'NOT_STARTED')) {
             _activeSession = restored;
             _hasRestoredActiveSession = true;
             final tsStr = prefs.getString(_storageKeyActiveSessionTimestamp);
@@ -2238,8 +2316,6 @@ class WorkoutRepository extends ChangeNotifier {
               _activeSessionSavedAt = DateTime.tryParse(tsStr);
             }
           }
-        } catch (e) {
-          debugPrint('[WorkoutRepository] Failed to restore active session: $e');
         }
       }
 
@@ -2250,16 +2326,59 @@ class WorkoutRepository extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> saveActiveSessionToLocalStorage({int? elapsedSeconds}) async {
+  String _activeSessionKey(String uid) => 'alpha_x_workout_active_session_state_$uid';
+  String _activeSessionTimestampKey(String uid) => 'alpha_x_workout_active_session_timestamp_$uid';
+  String _activeSessionDurationKey(String uid) => 'alpha_x_workout_active_session_duration_$uid';
+
+  Future<void> restoreActiveSessionForClient(String clientId) async {
+    if (clientId.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
+      final activeRaw = prefs.getString(_activeSessionKey(clientId)) ?? prefs.getString(_storageKeyActiveSession);
+      if (activeRaw != null && activeRaw.isNotEmpty) {
+        final activeMap = jsonDecode(activeRaw) as Map<String, dynamic>;
+        final restored = WorkoutSession.fromJson(activeMap);
+        final age = DateTime.now().difference(restored.startedAt);
+        if (!restored.isCompleted &&
+            (restored.status == 'IN_PROGRESS' || restored.status == 'NOT_STARTED') &&
+            age.inHours < 24) {
+          _activeSession = restored;
+          _hasRestoredActiveSession = true;
+          final tsStr = prefs.getString(_activeSessionTimestampKey(clientId)) ?? prefs.getString(_storageKeyActiveSessionTimestamp);
+          if (tsStr != null) {
+            _activeSessionSavedAt = DateTime.tryParse(tsStr);
+          }
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to restore active session for $clientId: $e');
+    }
+  }
+
+  Future<void> saveActiveSessionToLocalStorage({String? userId, int? elapsedSeconds}) async {
+    try {
+      final effectiveUid = userId ?? _activeSession.assignedClientId ?? AuthService().currentUserId;
+      final prefs = await SharedPreferences.getInstance();
       final sessionJson = _activeSession.toJson();
-      await prefs.setString(_storageKeyActiveSession, jsonEncode(sessionJson));
+      final jsonString = jsonEncode(sessionJson);
       final now = DateTime.now().toUtc().toIso8601String();
+
+      if (effectiveUid.isNotEmpty) {
+        await prefs.setString(_activeSessionKey(effectiveUid), jsonString);
+        await prefs.setString(_activeSessionTimestampKey(effectiveUid), now);
+        if (elapsedSeconds != null) {
+          await prefs.setInt(_activeSessionDurationKey(effectiveUid), elapsedSeconds);
+        }
+      }
+
+      // Always save to standard storage key for backward compatibility & offline logger
+      await prefs.setString(_storageKeyActiveSession, jsonString);
       await prefs.setString(_storageKeyActiveSessionTimestamp, now);
       if (elapsedSeconds != null) {
         await prefs.setInt(_storageKeyActiveSessionDuration, elapsedSeconds);
       }
+
       _hasRestoredActiveSession = true;
       _activeSessionSavedAt = DateTime.now();
     } catch (e) {
@@ -2267,12 +2386,19 @@ class WorkoutRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> discardActiveSession() async {
+  Future<void> discardActiveSession({String? userId}) async {
     try {
+      final effectiveUid = userId ?? _activeSession.assignedClientId ?? AuthService().currentUserId;
       final prefs = await SharedPreferences.getInstance();
+      if (effectiveUid.isNotEmpty) {
+        await prefs.remove(_activeSessionKey(effectiveUid));
+        await prefs.remove(_activeSessionTimestampKey(effectiveUid));
+        await prefs.remove(_activeSessionDurationKey(effectiveUid));
+      }
       await prefs.remove(_storageKeyActiveSession);
       await prefs.remove(_storageKeyActiveSessionTimestamp);
       await prefs.remove(_storageKeyActiveSessionDuration);
+
       _hasRestoredActiveSession = false;
       _activeSessionSavedAt = null;
       _currentSessionSwaps.clear();
@@ -2282,9 +2408,14 @@ class WorkoutRepository extends ChangeNotifier {
     }
   }
 
-  Future<int?> getSavedActiveSessionDuration() async {
+  Future<int?> getSavedActiveSessionDuration({String? userId}) async {
     try {
+      final effectiveUid = userId ?? _activeSession.assignedClientId ?? AuthService().currentUserId;
       final prefs = await SharedPreferences.getInstance();
+      if (effectiveUid.isNotEmpty) {
+        final val = prefs.getInt(_activeSessionDurationKey(effectiveUid));
+        if (val != null) return val;
+      }
       return prefs.getInt(_storageKeyActiveSessionDuration);
     } catch (_) {
       return null;
@@ -2331,6 +2462,60 @@ class WorkoutRepository extends ChangeNotifier {
     _pendingSyncRecords.removeWhere((r) => r.id == recordId);
     _savePendingSyncRecords();
     notifyListeners();
+  }
+
+  /// Push individual set completion state immediately to the backend REST API / database.
+  Future<bool> syncSetCompletionToBackend({
+    required String sessionId,
+    required String exerciseId,
+    required int setNumber,
+    required bool isCompleted,
+    double? actualWeight,
+    int? actualReps,
+    double? actualRpe,
+    int? actualRir,
+    String? authToken,
+  }) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/set-completion');
+      final token = authToken ??
+          (AuthService().currentToken.isNotEmpty
+              ? AuthService().currentToken
+              : 'alpha_x_mock_token_for_client');
+
+      final payload = {
+        'sessionId': sessionId,
+        'exerciseId': exerciseId,
+        'setNumber': setNumber,
+        'isCompleted': isCompleted,
+        'actualWeight': actualWeight,
+        'actualReps': actualReps,
+        'actualRpe': actualRpe,
+        'actualRir': actualRir,
+      };
+
+      final response = await _httpClient
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint('[WorkoutRepository] Successfully synced set completion ($exerciseId Set $setNumber: $isCompleted) to database.');
+        return true;
+      } else {
+        debugPrint('[WorkoutRepository] Backend set sync response ${response.statusCode}: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Notice during set completion sync: $e');
+      return false;
+    }
   }
 
   /// Push an individual workout record to the backend REST API.

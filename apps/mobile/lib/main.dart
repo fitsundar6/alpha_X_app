@@ -10,6 +10,7 @@ import 'core/auth/auth_service.dart';
 import 'core/auth/login_screen.dart';
 import 'core/auth/create_account_screen.dart';
 import 'core/auth/admin_login_screen.dart';
+import 'core/widgets/alpha_x_splash_screen.dart';
 import 'features/navigation/navigation_shell.dart';
 import 'features/workout/data/repositories/workout_repository.dart';
 import 'features/activity/data/repositories/activity_repository.dart';
@@ -82,6 +83,10 @@ Widget getInitialScreen({
   final weeklyProgressRepo = weeklyProgressRepository ?? WeeklyProgressRepository();
 
   if (auth.isAuthenticated) {
+    if (auth.isTokenExpired) {
+      auth.logout();
+      return const LoginScreen(animateLogo: false);
+    }
     if (auth.isAdmin) {
       return AdminMainDashboardScreen(
         workoutRepository: workoutRepo,
@@ -102,7 +107,7 @@ Widget getInitialScreen({
       }
     }
   } else {
-    return const LoginScreen();
+    return const LoginScreen(animateLogo: false);
   }
 }
 
@@ -189,12 +194,19 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
         debugShowCheckedModeBanner: false,
         theme: effectiveTheme,
         home: widget.home ??
-            getInitialScreen(
+            AlphaXSplashScreen(
               authService: _authService,
               workoutRepository: _workoutRepository,
               activityRepository: _activityRepository,
               macroRepository: _macroRepository,
               weeklyProgressRepository: _weeklyProgressRepository,
+              destinationBuilder: () => getInitialScreen(
+                authService: _authService,
+                workoutRepository: _workoutRepository,
+                activityRepository: _activityRepository,
+                macroRepository: _macroRepository,
+                weeklyProgressRepository: _weeklyProgressRepository,
+              ),
             ),
         onGenerateRoute: _onGenerateRoute,
         routes: {
@@ -204,7 +216,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
             macroRepository: _macroRepository,
             weeklyProgressRepository: _weeklyProgressRepository,
           ),
-          '/login': (context) => const LoginScreen(),
+          '/login': (context) => const LoginScreen(animateLogo: false),
           '/register': (context) => const CreateAccountScreen(),
           '/admin/login': (context) => const AdminLoginScreen(),
           '/onboarding': (context) => const ClientOnboardingScreen(),

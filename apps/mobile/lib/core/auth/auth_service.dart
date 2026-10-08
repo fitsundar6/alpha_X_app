@@ -1029,4 +1029,12 @@ class AuthService extends ChangeNotifier {
     _isInitialized = true;
     notifyListeners();
   }
+
+  /// Test helper to completely reset initialized state and active session for tests.
+  @visibleForTesting
+  void resetForTesting() {
+    _resetSession();
+    _isInitialized = false;
+    notifyListeners();
+  }
 }
