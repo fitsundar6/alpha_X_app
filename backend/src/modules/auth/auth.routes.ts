@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { requireAuth } from '../../middlewares/auth';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
-import { UserRole } from '../../constants/roles';
+import { UserRole, UserStatus } from '../../constants/roles';
 import { env } from '../../config/environment';
 import { HttpStatus } from '../../constants/httpStatus';
 import { adminAuthService } from './admin_auth.service';
@@ -43,7 +43,28 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
   const role = isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT;
 
   let profileData: any = null;
+  let userStatus: UserStatus = UserStatus.APPROVED;
+  let rejectionReason: string | null = null;
+  let rejectedAt: string | null = null;
+  let approvedAt: string | null = null;
+
   if (!isMasterAdmin) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        status: true,
+        rejectionReason: true,
+        rejectedAt: true,
+        approvedAt: true,
+      },
+    });
+    if (dbUser) {
+      userStatus = dbUser.status as UserStatus;
+      rejectionReason = dbUser.rejectionReason;
+      rejectedAt = dbUser.rejectedAt ? dbUser.rejectedAt.toISOString() : null;
+      approvedAt = dbUser.approvedAt ? dbUser.approvedAt.toISOString() : null;
+    }
+
     const dbProfile = await prisma.clientProfile.findUnique({
       where: { userId: user.id },
       include: {
@@ -59,6 +80,10 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     email: normalizedEmail,
     name: role === UserRole.ADMIN ? 'Alpha X Administrator' : (user as any).name || 'Athlete Member',
     role,
+    status: userStatus,
+    rejectionReason,
+    rejectedAt,
+    approvedAt,
     clientId: profileData?.clientId ?? (role === UserRole.ADMIN ? 'AXG-ADMIN' : null),
     assessmentCompleted: profileData?.onboardingCompleted ?? false,
     onboardingCompleted: profileData?.onboardingCompleted ?? false,
@@ -254,13 +279,14 @@ router.post('/register', async (req: Request, res: Response) => {
     // 4. Securely hash password with bcrypt (Never plain text!)
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 5. Create real Client Account in shared PostgreSQL database
+    // 5. Create real Client Account in shared PostgreSQL database with default PENDING verification status
     const newUser = await prisma.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
         name: cleanName,
         role: UserRole.CLIENT,
+        status: UserStatus.PENDING,
         clientProfile: {
           create: {
             clientId: uniqueClientId,
@@ -295,10 +321,11 @@ router.post('/register', async (req: Request, res: Response) => {
     sendSuccess(
       res,
       {
-        message: 'Account created successfully',
+        message: 'Account created successfully. Submitted for admin verification.',
         clientId: uniqueClientId,
         instruction: `Your Alpha X Gym Client ID is ${uniqueClientId}. Please keep this ID safe for future login.`,
         token,
+        status: UserStatus.PENDING,
         assessmentCompleted: false,
         onboardingCompleted: false,
         onboardingStep: 0,
@@ -309,6 +336,7 @@ router.post('/register', async (req: Request, res: Response) => {
           email: newUser.email,
           phone: cleanPhone,
           role: newUser.role,
+          status: UserStatus.PENDING,
           createdAt: newUser.createdAt.toISOString(),
         },
         profile: clientProfile,
@@ -408,6 +436,8 @@ router.post('/google', async (req: Request, res: Response) => {
           isNewClient: false,
           token,
           clientId: resolvedClientId,
+          status: existingUser.status,
+          rejectionReason: existingUser.rejectionReason || null,
           assessmentCompleted: isAssessmentCompleted,
           onboardingCompleted: isAssessmentCompleted,
           onboardingStep: currentAssessmentStep,
@@ -418,6 +448,8 @@ router.post('/google', async (req: Request, res: Response) => {
             email: existingUser.email,
             phone: clientProfile?.phone || null,
             role: existingUser.role,
+            status: existingUser.status,
+            rejectionReason: existingUser.rejectionReason || null,
           },
           profile: clientProfile,
         },
@@ -426,7 +458,7 @@ router.post('/google', async (req: Request, res: Response) => {
       return;
     }
 
-    // New Google client -> auto-generate unique sequential Client ID (AXG-XXXX)
+    // New Google client -> auto-generate unique sequential Client ID (AXG-XXXX) with PENDING status
     const uniqueClientId = await generateNextClientId();
     const cleanName = (name || 'Athlete Member').trim();
 
@@ -436,6 +468,7 @@ router.post('/google', async (req: Request, res: Response) => {
         name: cleanName,
         googleUid: cleanGoogleUid,
         role: UserRole.CLIENT,
+        status: UserStatus.PENDING,
         clientProfile: {
           create: {
             clientId: uniqueClientId,
@@ -469,10 +502,11 @@ router.post('/google', async (req: Request, res: Response) => {
       res,
       {
         isNewClient: true,
-        message: 'Google account linked successfully',
+        message: 'Google account linked successfully. Submitted for admin verification.',
         clientId: uniqueClientId,
         instruction: `Your Alpha X Gym Client ID is ${uniqueClientId}. Please keep this ID safe for future login.`,
         token,
+        status: UserStatus.PENDING,
         assessmentCompleted: false,
         onboardingCompleted: false,
         onboardingStep: 0,
@@ -483,6 +517,7 @@ router.post('/google', async (req: Request, res: Response) => {
           email: newUser.email,
           phone: null,
           role: newUser.role,
+          status: UserStatus.PENDING,
           createdAt: newUser.createdAt.toISOString(),
         },
         profile: clientProfile,
@@ -603,6 +638,12 @@ router.post('/login', async (req: Request, res: Response) => {
     const isAssessmentCompleted = clientProfile?.onboardingCompleted ?? false;
     const currentAssessmentStep = clientProfile?.onboardingStep ?? 0;
 
+    // Track last login timestamp asynchronously
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: { lastLoginAt: new Date() },
+    }).catch(() => {});
+
     // Generate JWT
     const token = jwt.sign(
       {
@@ -621,6 +662,10 @@ router.post('/login', async (req: Request, res: Response) => {
       {
         token,
         clientId: resolvedClientId,
+        status: dbUser.status,
+        rejectionReason: dbUser.rejectionReason || null,
+        rejectedAt: dbUser.rejectedAt ? dbUser.rejectedAt.toISOString() : null,
+        approvedAt: dbUser.approvedAt ? dbUser.approvedAt.toISOString() : null,
         assessmentCompleted: isAssessmentCompleted,
         onboardingCompleted: isAssessmentCompleted,
         onboardingStep: currentAssessmentStep,
@@ -631,12 +676,17 @@ router.post('/login', async (req: Request, res: Response) => {
           email: dbUser.email,
           phone: clientProfile?.phone || null,
           role: dbUser.role,
+          status: dbUser.status,
+          rejectionReason: dbUser.rejectionReason || null,
+          rejectedAt: dbUser.rejectedAt ? dbUser.rejectedAt.toISOString() : null,
+          approvedAt: dbUser.approvedAt ? dbUser.approvedAt.toISOString() : null,
+          lastLoginAt: new Date().toISOString(),
         },
         profile: clientProfile,
       },
       HttpStatus.OK,
       `Client "${resolvedClientId}" (${dbUser.name}) logged in successfully`,
-      { clientId: resolvedClientId, email: dbUser.email }
+      { clientId: resolvedClientId, email: dbUser.email, status: dbUser.status }
     );
   } catch (err: any) {
     sendError(res, 'INTERNAL_ERROR', 'Authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err, {

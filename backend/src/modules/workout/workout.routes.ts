@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireRoles } from '../../middlewares/auth';
+import { requireAuth, requireRoles, requireApprovedUser } from '../../middlewares/auth';
 import { UserRole } from '../../constants/roles';
 import { workoutController } from './workout.controller';
 
@@ -31,10 +31,10 @@ adminRouter.get('/clients/:clientId/workout-history', (req, res) => workoutContr
 router.use('/admin', adminRouter);
 
 // ==========================================
-// CLIENT WORKOUT SYSTEM ROUTES (Role: CLIENT only)
+// CLIENT WORKOUT SYSTEM ROUTES (Role: CLIENT only, Approved status required)
 // ==========================================
 const clientRouter = Router();
-clientRouter.use(requireAuth, requireRoles([UserRole.CLIENT]));
+clientRouter.use(requireAuth, requireRoles([UserRole.CLIENT]), requireApprovedUser);
 
 // Client Session Discovery & Overview
 clientRouter.get('/sessions', (req, res) => workoutController.getClientSessions(req, res));
@@ -51,9 +51,9 @@ clientRouter.get('/history/:id', (req, res) => workoutController.getWorkoutRecor
 router.use('/client', clientRouter);
 
 // Support root /api/workout/save or /api/v1/workout/save & set-completion
-router.post(['/records', '/save'], requireAuth, (req, res) => workoutController.recordWorkout(req, res));
-router.post(['/sessions/:id/set-completion', '/set-completion'], requireAuth, (req, res) => workoutController.toggleSetCompletion(req, res));
-router.get('/sessions/:id/set-completions', requireAuth, (req, res) => workoutController.getActiveSetCompletions(req, res));
+router.post(['/records', '/save'], requireAuth, requireApprovedUser, (req, res) => workoutController.recordWorkout(req, res));
+router.post(['/sessions/:id/set-completion', '/set-completion'], requireAuth, requireApprovedUser, (req, res) => workoutController.toggleSetCompletion(req, res));
+router.get('/sessions/:id/set-completions', requireAuth, requireApprovedUser, (req, res) => workoutController.getActiveSetCompletions(req, res));
 
 export const workoutRoutes = router;
 

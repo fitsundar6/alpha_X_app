@@ -4,6 +4,7 @@ import { adminAuthService } from '../auth/admin_auth.service';
 import { workoutController } from '../workout/workout.controller';
 import { exerciseController } from '../exercise/exercise.controller';
 import { HttpStatus } from '../../constants/httpStatus';
+import { UserRole, UserStatus } from '../../constants/roles';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { prisma } from '../../config/prisma';
 import { foodPhotoController } from '../food/food.photo.controller';
@@ -41,6 +42,407 @@ router.post('/login', async (req: Request, res: Response) => {
 // Unauthorized clients receive 403 Forbidden.
 // ==========================================
 router.use(requireAuth, requireAdmin);
+
+// ==========================================
+// 2B. ADMIN USER VERIFICATION & APPROVAL SYSTEM
+// All endpoints below require requireAuth + requireAdmin.
+// Supports:
+// - User listing with tabs (ALL, PENDING, APPROVED, REJECTED, SUSPENDED)
+// - Search by name, email, phone, clientId
+// - Summary metrics (total, pending, approved, rejected, suspended)
+// - Action endpoints: Approve, Reject, Suspend, Reactivate
+// - Verification audit trail logging
+// ==========================================
+
+// GET /verification/metrics: Dashboard summary card counters
+router.get('/verification/metrics', async (_req: Request, res: Response) => {
+  try {
+    const [total, pending, approved, rejected, suspended] = await Promise.all([
+      prisma.user.count({ where: { role: UserRole.CLIENT } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.PENDING } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.APPROVED } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.REJECTED } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.SUSPENDED } }),
+    ]);
+
+    sendSuccess(res, {
+      total,
+      pending,
+      approved,
+      rejected,
+      suspended,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to calculate verification metrics', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// GET /verification/users: Filtered user listing with search and audit history
+router.get('/verification/users', async (req: Request, res: Response) => {
+  try {
+    const tab = String(req.query.tab || req.query.status || 'ALL').toUpperCase();
+    const search = String(req.query.search || '').trim().toLowerCase();
+
+    const whereClause: any = { role: UserRole.CLIENT };
+    if (tab !== 'ALL' && ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'].includes(tab)) {
+      whereClause.status = tab as UserStatus;
+    }
+
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { clientProfile: { phone: { contains: search, mode: 'insensitive' } } },
+        { clientProfile: { clientId: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [users, totalCount, pendingCount, approvedCount, rejectedCount, suspendedCount] = await Promise.all([
+      prisma.user.findMany({
+        where: whereClause,
+        include: {
+          clientProfile: true,
+          verificationLogs: {
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          },
+        },
+        orderBy: [
+          tab === 'ALL' ? { status: 'asc' } : { createdAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+      prisma.user.count({ where: { role: UserRole.CLIENT } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.PENDING } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.APPROVED } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.REJECTED } }),
+      prisma.user.count({ where: { role: UserRole.CLIENT, status: UserStatus.SUSPENDED } }),
+    ]);
+
+    const formattedUsers = users.map((u) => {
+      const cp = u.clientProfile;
+      return {
+        id: u.id,
+        clientId: cp?.clientId || u.id,
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        phone: cp?.phone || null,
+        photoUrl: cp?.photoUrl || u.photoUrl || null,
+        status: u.status,
+        role: u.role,
+        createdAt: u.createdAt.toISOString(),
+        updatedAt: u.updatedAt.toISOString(),
+        lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+        approvedAt: u.approvedAt ? u.approvedAt.toISOString() : null,
+        approvedBy: u.approvedBy,
+        rejectedAt: u.rejectedAt ? u.rejectedAt.toISOString() : null,
+        rejectedBy: u.rejectedBy,
+        rejectionReason: u.rejectionReason,
+        suspendedAt: u.suspendedAt ? u.suspendedAt.toISOString() : null,
+        suspendedBy: u.suspendedBy,
+        adminNotes: cp?.adminNotes || null,
+        membership: {
+          plan: 'ALPHA-X Athlete',
+          status: u.status === UserStatus.APPROVED ? 'ACTIVE' : u.status,
+        },
+        profile: {
+          fitnessLevel: cp?.fitnessLevel || 'beginner',
+          primaryGoal: cp?.primaryGoal || 'Fat Loss',
+          secondaryGoal: cp?.secondaryGoal || null,
+          weightKg: cp?.weightKg || null,
+          heightCm: cp?.heightCm || null,
+          age: cp?.age || null,
+          gender: cp?.gender || null,
+          onboardingCompleted: cp?.onboardingCompleted ?? false,
+          onboardingStep: cp?.onboardingStep ?? 0,
+        },
+        verificationLogs: u.verificationLogs.map((log) => ({
+          id: log.id,
+          userId: log.userId,
+          adminId: log.adminId,
+          adminEmail: log.adminEmail,
+          previousStatus: log.previousStatus,
+          newStatus: log.newStatus,
+          reason: log.reason,
+          createdAt: log.createdAt.toISOString(),
+        })),
+      };
+    });
+
+    sendSuccess(res, {
+      users: formattedUsers,
+      counts: {
+        total: totalCount,
+        pending: pendingCount,
+        approved: approvedCount,
+        rejected: rejectedCount,
+        suspended: suspendedCount,
+      },
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve verification users', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// POST /verification/:userId/approve: Admin confirms approval
+router.post('/verification/:userId/approve', async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || 'alex@alphax.gym';
+  const customReason = (req.body?.reason as string || '').trim() || 'Approved by administrator';
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: { clientProfile: true },
+    });
+
+    if (!user) {
+      sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const previousStatus = user.status;
+    const updatedUser = await prisma.user.update({
+      where: { id: targetId },
+      data: {
+        status: UserStatus.APPROVED,
+        approvedAt: new Date(),
+        approvedBy: adminEmail,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: null,
+        suspendedAt: null,
+        suspendedBy: null,
+      },
+      include: { clientProfile: true },
+    });
+
+    // Record audit log
+    await prisma.userVerificationLog.create({
+      data: {
+        userId: targetId,
+        adminId: adminUser.id,
+        adminEmail,
+        previousStatus,
+        newStatus: UserStatus.APPROVED,
+        reason: customReason,
+      },
+    });
+
+    sendSuccess(res, {
+      user: {
+        id: updatedUser.id,
+        clientId: updatedUser.clientProfile?.clientId || updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        status: updatedUser.status,
+        approvedAt: updatedUser.approvedAt?.toISOString(),
+        approvedBy: updatedUser.approvedBy,
+      },
+      message: `Account for ${updatedUser.name} has been approved.`,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to approve user', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// POST /verification/:userId/reject: Admin rejects user with reason
+router.post('/verification/:userId/reject', async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || 'alex@alphax.gym';
+  const reason = (req.body?.reason as string || '').trim() || 'Not a gym member';
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: { clientProfile: true },
+    });
+
+    if (!user) {
+      sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const previousStatus = user.status;
+    const updatedUser = await prisma.user.update({
+      where: { id: targetId },
+      data: {
+        status: UserStatus.REJECTED,
+        rejectedAt: new Date(),
+        rejectedBy: adminEmail,
+        rejectionReason: reason,
+      },
+      include: { clientProfile: true },
+    });
+
+    // Record audit log
+    await prisma.userVerificationLog.create({
+      data: {
+        userId: targetId,
+        adminId: adminUser.id,
+        adminEmail,
+        previousStatus,
+        newStatus: UserStatus.REJECTED,
+        reason,
+      },
+    });
+
+    sendSuccess(res, {
+      user: {
+        id: updatedUser.id,
+        clientId: updatedUser.clientProfile?.clientId || updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        status: updatedUser.status,
+        rejectedAt: updatedUser.rejectedAt?.toISOString(),
+        rejectedBy: updatedUser.rejectedBy,
+        rejectionReason: updatedUser.rejectionReason,
+      },
+      message: `Account for ${updatedUser.name} has been rejected.`,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to reject user', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// POST /verification/:userId/suspend: Admin suspends an approved user
+router.post('/verification/:userId/suspend', async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || 'alex@alphax.gym';
+  const reason = (req.body?.reason as string || '').trim() || 'Suspended by administrator';
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: { clientProfile: true },
+    });
+
+    if (!user) {
+      sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const previousStatus = user.status;
+    const updatedUser = await prisma.user.update({
+      where: { id: targetId },
+      data: {
+        status: UserStatus.SUSPENDED,
+        suspendedAt: new Date(),
+        suspendedBy: adminEmail,
+        rejectionReason: reason,
+      },
+      include: { clientProfile: true },
+    });
+
+    await prisma.userVerificationLog.create({
+      data: {
+        userId: targetId,
+        adminId: adminUser.id,
+        adminEmail,
+        previousStatus,
+        newStatus: UserStatus.SUSPENDED,
+        reason,
+      },
+    });
+
+    sendSuccess(res, {
+      user: {
+        id: updatedUser.id,
+        clientId: updatedUser.clientProfile?.clientId || updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        status: updatedUser.status,
+        suspendedAt: updatedUser.suspendedAt?.toISOString(),
+        suspendedBy: updatedUser.suspendedBy,
+      },
+      message: `Account for ${updatedUser.name} has been suspended.`,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to suspend user', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// POST /verification/:userId/reactivate: Admin reactivates suspended or rejected user
+router.post('/verification/:userId/reactivate', async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || 'alex@alphax.gym';
+  const reason = (req.body?.reason as string || '').trim() || 'Reactivated and approved by administrator';
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: { clientProfile: true },
+    });
+
+    if (!user) {
+      sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const previousStatus = user.status;
+    const updatedUser = await prisma.user.update({
+      where: { id: targetId },
+      data: {
+        status: UserStatus.APPROVED,
+        approvedAt: new Date(),
+        approvedBy: adminEmail,
+        rejectionReason: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        suspendedAt: null,
+        suspendedBy: null,
+      },
+      include: { clientProfile: true },
+    });
+
+    await prisma.userVerificationLog.create({
+      data: {
+        userId: targetId,
+        adminId: adminUser.id,
+        adminEmail,
+        previousStatus,
+        newStatus: UserStatus.APPROVED,
+        reason,
+      },
+    });
+
+    sendSuccess(res, {
+      user: {
+        id: updatedUser.id,
+        clientId: updatedUser.clientProfile?.clientId || updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        status: updatedUser.status,
+        approvedAt: updatedUser.approvedAt?.toISOString(),
+        approvedBy: updatedUser.approvedBy,
+      },
+      message: `Account for ${updatedUser.name} has been reactivated and approved.`,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to reactivate user', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// GET /verification/:userId/history: Admin views verification audit logs for a user
+router.get('/verification/:userId/history', async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+
+  try {
+    const logs = await prisma.userVerificationLog.findMany({
+      where: { userId: targetId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    sendSuccess(res, { logs });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve verification history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
 
 // --- Admin Workout Operations ---
 router.get(['/workouts', '/sessions'], (req: Request, res: Response) => workoutController.getAllAdminSessions(req, res));

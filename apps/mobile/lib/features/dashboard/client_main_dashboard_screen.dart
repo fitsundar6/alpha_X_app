@@ -1599,7 +1599,11 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   void _openProgressSubPage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ClientWeeklyProgressScreen(repository: _weeklyProgressRepository),
+        builder: (_) => ClientWeeklyProgressScreen(
+          repository: _weeklyProgressRepository,
+          workoutRepository: widget.workoutRepository,
+          activityRepository: widget.activityRepository,
+        ),
       ),
     );
   }

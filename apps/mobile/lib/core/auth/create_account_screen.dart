@@ -249,20 +249,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               ),
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  color: Colors.amber.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.withOpacity(0.4)),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.amber, size: 18),
+                    Icon(Icons.hourglass_top, color: Colors.amber, size: 20),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Keep this ID safe! You can use this Client ID or your email to log in anytime.',
-                        style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600),
+                        'Your account has been submitted for verification. Please wait for the admin to approve your account.',
+                        style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600, height: 1.3),
                       ),
                     ),
                   ],
@@ -281,10 +281,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 ),
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.of(context).pushReplacementNamed('/onboarding');
+                  Navigator.of(context).pushReplacementNamed('/pending-verification');
                 },
                 child: const Text(
-                  'PROCEED TO FITNESS ASSESSMENT',
+                  'VIEW VERIFICATION STATUS',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,

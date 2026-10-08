@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../../middlewares/auth';
+import { requireAuth, requireApprovedUser } from '../../middlewares/auth';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { HttpStatus } from '../../constants/httpStatus';
 import { UserRole } from '../../constants/roles';
@@ -30,6 +30,10 @@ async function getAuthenticatedClientProfile(userId: string) {
           email: true,
           name: true,
           role: true,
+          status: true,
+          rejectionReason: true,
+          rejectedAt: true,
+          approvedAt: true,
           createdAt: true,
         },
       },
@@ -38,6 +42,7 @@ async function getAuthenticatedClientProfile(userId: string) {
 }
 
 // GET /api/v1/client/me
+// Allowed for all authenticated users to check their current profile & verification status
 router.get('/me', async (req: Request, res: Response) => {
   try {
     const profile = await getAuthenticatedClientProfile(req.user!.id);
@@ -52,6 +57,10 @@ router.get('/me', async (req: Request, res: Response) => {
       name: profile.user.name,
       email: profile.user.email,
       phone: profile.phone,
+      status: profile.user.status,
+      rejectionReason: profile.user.rejectionReason,
+      rejectedAt: profile.user.rejectedAt ? profile.user.rejectedAt.toISOString() : null,
+      approvedAt: profile.user.approvedAt ? profile.user.approvedAt.toISOString() : null,
       assessmentCompleted: profile.onboardingCompleted,
       onboardingCompleted: profile.onboardingCompleted,
       onboardingStep: profile.onboardingStep,
@@ -61,6 +70,11 @@ router.get('/me', async (req: Request, res: Response) => {
     sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve profile', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
+
+// CRITICAL SECURITY ENFORCEMENT:
+// All functional client endpoints below (assessment, workout, macros, diet, progress, etc.)
+// require status = APPROVED in PostgreSQL database.
+router.use(requireApprovedUser);
 
 // PUT & POST /api/v1/client/me/profile (also /profile and /me/assessment, /assessment)
 // Self-service: client updates their own assessment & profile in the database

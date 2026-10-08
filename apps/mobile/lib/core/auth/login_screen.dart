@@ -183,6 +183,19 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
+      // User Verification Status Routing:
+      final status = (result['status']?.toString() ?? _authService.userStatus).toUpperCase();
+      if (status == 'PENDING') {
+        Navigator.of(context).pushNamedAndRemoveUntil('/pending-verification', (route) => false);
+        return;
+      } else if (status == 'REJECTED') {
+        Navigator.of(context).pushNamedAndRemoveUntil('/rejected-account', (route) => false);
+        return;
+      } else if (status == 'SUSPENDED') {
+        Navigator.of(context).pushNamedAndRemoveUntil('/suspended-account', (route) => false);
+        return;
+      }
+
       final isAssessmentComplete = result['assessmentCompleted'] == true || _authService.onboardingCompleted;
 
       if (!isAssessmentComplete) {

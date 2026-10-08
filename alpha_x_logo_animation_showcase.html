@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Alpha X Gym — Animated Logo Concept Showcase</title>
+  <title>ALPHA X GYM — Futuristic Neon Outline Landing Animation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -14,14 +14,14 @@
       --bg-card: #141418;
       --bg-card-hover: #1A1A20;
       --border-subtle: #1E1E24;
-      --border-active: #D4AF37;
-      --gold-primary: #D4AF37;
-      --gold-bright: #F2C94C;
-      --gold-light: #FFF5D6;
+      --border-active: #E0E6ED;
+      --silver-bright: #FFFFFF;
+      --silver-mid: #D8DFE8;
+      --silver-dark: #64748B;
+      --silver-glow: rgba(226, 232, 240, 0.35);
       --text-primary: #FFFFFF;
       --text-secondary: #A0A0AA;
       --text-muted: #62626E;
-      --accent-glow: rgba(212, 175, 55, 0.28);
     }
 
     * {
@@ -51,8 +51,8 @@
       pointer-events: none;
       z-index: 0;
       background: 
-        radial-gradient(circle at 50% 20%, rgba(212, 175, 55, 0.07) 0%, transparent 60%),
-        radial-gradient(circle at 80% 80%, rgba(242, 201, 76, 0.03) 0%, transparent 40%),
+        radial-gradient(circle at 50% 20%, rgba(220, 230, 245, 0.04) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(200, 215, 235, 0.02) 0%, transparent 40%),
         #060607;
     }
 
@@ -60,12 +60,12 @@
     header {
       position: relative;
       z-index: 10;
-      padding: 24px 40px;
+      padding: 20px 40px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid var(--border-subtle);
-      background: rgba(10, 10, 12, 0.7);
+      background: rgba(10, 10, 12, 0.75);
       backdrop-filter: blur(20px);
     }
 
@@ -80,25 +80,19 @@
       height: 44px;
       border-radius: 12px;
       background: linear-gradient(135deg, #1C1C22 0%, #121215 100%);
-      border: 1px solid rgba(212, 175, 55, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 16px rgba(212, 175, 55, 0.15);
-    }
-
-    .brand-badge img {
-      width: 32px;
-      height: 32px;
-      object-fit: contain;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 16px rgba(255, 255, 255, 0.1);
     }
 
     .brand-title {
       font-size: 19px;
       font-weight: 800;
-      letter-spacing: 1.5px;
+      letter-spacing: 2px;
       text-transform: uppercase;
-      background: linear-gradient(135deg, #FFFFFF 60%, var(--gold-bright) 100%);
+      background: linear-gradient(135deg, #FFFFFF 60%, #BAC7D5 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -110,17 +104,23 @@
       letter-spacing: 0.5px;
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 6px 14px;
       border-radius: 999px;
-      background: rgba(212, 175, 55, 0.12);
-      border: 1px solid rgba(212, 175, 55, 0.35);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       font-size: 12px;
       font-weight: 700;
-      color: var(--gold-bright);
+      color: #FFFFFF;
       letter-spacing: 0.6px;
     }
 
@@ -128,14 +128,35 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--gold-bright);
-      box-shadow: 0 0 10px var(--gold-bright);
+      background: #FFFFFF;
+      box-shadow: 0 0 10px #FFFFFF;
       animation: pulse 2s infinite ease-in-out;
     }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .fullscreen-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .fullscreen-btn:hover {
+      background: #FFFFFF;
+      color: #000000;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
     }
 
     /* Main Container */
@@ -146,9 +167,9 @@
       max-width: 1480px;
       width: 100%;
       margin: 0 auto;
-      padding: 40px 32px 64px;
+      padding: 36px 32px 64px;
       display: grid;
-      grid-template-columns: 480px 1fr;
+      grid-template-columns: 460px 1fr;
       gap: 48px;
       align-items: start;
     }
@@ -165,7 +186,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 24px;
+      gap: 20px;
+      width: 100%;
+      max-width: 420px;
     }
 
     .phone-container {
@@ -178,8 +201,8 @@
       box-shadow: 
         0 0 0 2px #2A2A32,
         0 0 0 5px #15151A,
-        0 30px 80px rgba(0, 0, 0, 0.9),
-        0 0 60px rgba(212, 175, 55, 0.12);
+        0 30px 80px rgba(0, 0, 0, 0.95),
+        0 0 60px rgba(255, 255, 255, 0.08);
       user-select: none;
     }
 
@@ -187,7 +210,7 @@
       position: relative;
       width: 100%;
       height: 100%;
-      background: #0A0A0A;
+      background: #000000;
       border-radius: 42px;
       overflow: hidden;
       display: flex;
@@ -204,34 +227,93 @@
       transform: translateX(-50%);
       width: 110px;
       height: 28px;
-      background: #000;
+      background: #000000;
       border-radius: 20px;
       z-index: 50;
       box-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
     }
 
-    /* Screen Video Player */
-    .screen-video {
+    /* Interactive Live SVG Canvas Viewport */
+    .neon-animation-stage {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      display: block;
+      background: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
       z-index: 10;
     }
 
-    /* Screen Overlay Canvas (for live interactive mode) */
-    .screen-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .neon-svg-wrap {
+      position: relative;
+      width: 340px;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center center;
+    }
+
+    .neon-svg-canvas {
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      display: none;
-      z-index: 15;
+      overflow: visible;
+    }
+
+    /* Anamorphic Light Sweep Overlay */
+    .sweep-light-beam {
+      position: absolute;
+      top: 50%;
+      left: -200px;
+      width: 240px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.2) 20%, #FFFFFF 50%, rgba(255, 255, 255, 0.2) 80%, transparent 100%);
+      transform: translateY(-50%);
+      pointer-events: none;
+      opacity: 0;
+      filter: blur(0.5px);
+      box-shadow: 0 0 16px #FFFFFF, 0 0 32px rgba(220, 235, 255, 0.8);
+      z-index: 25;
+    }
+
+    .sweep-flare-burst {
+      position: absolute;
+      top: 50%;
+      left: -200px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #FFFFFF 0%, rgba(255, 255, 255, 0.8) 30%, rgba(200, 225, 255, 0.2) 70%, transparent 100%);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0;
+      filter: blur(1px);
+      box-shadow: 0 0 24px #FFFFFF;
+      z-index: 26;
+    }
+
+    /* Sine Energy Filament Wave (Screenshot 1) */
+    .energy-filament-path {
+      fill: none;
+      stroke: #FFFFFF;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      opacity: 0;
+      filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 16px rgba(200, 225, 255, 0.7));
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Four-Point Sparkle */
+    .sparkle-group {
+      transform-origin: 452px 196px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
 
     /* Optional Mockup Login Overlay */
@@ -254,12 +336,12 @@
     }
 
     .mock-glass-card {
-      background: rgba(20, 20, 24, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(20, 20, 24, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 22px;
       backdrop-filter: blur(24px);
       padding: 16px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -275,7 +357,7 @@
     }
 
     .mock-btn {
-      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold-primary) 100%);
+      background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
       color: #0A0A0A;
       font-weight: 800;
       font-size: 12px;
@@ -284,10 +366,10 @@
       padding: 12px;
       border-radius: 12px;
       text-transform: uppercase;
-      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.35);
+      box-shadow: 0 4px 16px rgba(255, 255, 255, 0.25);
     }
 
-    /* Video Control Dock */
+    /* Control Dock */
     .dock-controls {
       display: flex;
       align-items: center;
@@ -317,16 +399,16 @@
     }
 
     .dock-btn:hover {
-      background: rgba(212, 175, 55, 0.2);
-      border-color: var(--gold-primary);
-      color: var(--gold-bright);
+      background: rgba(255, 255, 255, 0.2);
+      border-color: #FFFFFF;
+      color: #FFFFFF;
       transform: translateY(-2px);
     }
 
     .dock-btn.active {
-      background: var(--gold-primary);
+      background: #FFFFFF;
       color: #0A0A0A;
-      border-color: var(--gold-bright);
+      border-color: #FFFFFF;
     }
 
     .timeline-wrap {
@@ -338,7 +420,7 @@
 
     .timeline-slider {
       width: 100%;
-      accent-color: var(--gold-primary);
+      accent-color: #FFFFFF;
       cursor: pointer;
     }
 
@@ -354,7 +436,7 @@
     .info-column {
       display: flex;
       flex-direction: column;
-      gap: 32px;
+      gap: 28px;
     }
 
     .hero-text h1 {
@@ -362,15 +444,15 @@
       font-weight: 900;
       letter-spacing: -0.5px;
       margin-bottom: 12px;
-      background: linear-gradient(135deg, #FFFFFF 30%, #E2E2E8 60%, var(--gold-bright) 100%);
+      background: linear-gradient(135deg, #FFFFFF 30%, #E2E8F0 60%, #94A3B8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .hero-text p {
-      font-size: 16px;
+      font-size: 15px;
       color: var(--text-secondary);
-      max-width: 680px;
+      max-width: 720px;
       line-height: 1.6;
     }
 
@@ -378,7 +460,7 @@
     .specs-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
+      gap: 14px;
     }
 
     @media (max-width: 800px) {
@@ -395,10 +477,11 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      transition: all 0.2s;
     }
 
     .spec-card:hover {
-      border-color: rgba(212, 175, 55, 0.3);
+      border-color: rgba(255, 255, 255, 0.3);
       background: var(--bg-card-hover);
     }
 
@@ -411,14 +494,14 @@
     }
 
     .spec-val {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 800;
       color: var(--text-primary);
     }
 
     .spec-sub {
       font-size: 11px;
-      color: var(--gold-bright);
+      color: #CBD5E1;
       font-family: 'JetBrains Mono', monospace;
     }
 
@@ -426,22 +509,22 @@
     .timeline-steps {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
       border-radius: 20px;
-      padding: 24px;
+      padding: 22px;
     }
 
     .timeline-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .timeline-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       letter-spacing: 0.5px;
       display: flex;
@@ -451,31 +534,33 @@
 
     .step-item {
       display: grid;
-      grid-template-columns: 100px 1fr;
-      gap: 20px;
-      padding: 16px;
+      grid-template-columns: 105px 1fr;
+      gap: 18px;
+      padding: 14px 16px;
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid rgba(255, 255, 255, 0.04);
       border-radius: 14px;
       transition: all 0.2s;
+      cursor: pointer;
     }
 
     .step-item:hover, .step-item.active {
-      background: rgba(212, 175, 55, 0.06);
-      border-color: rgba(212, 175, 55, 0.35);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateX(4px);
     }
 
     .step-badge {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
 
     .step-time {
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
       font-weight: 700;
-      color: var(--gold-bright);
+      color: #FFFFFF;
     }
 
     .step-frames {
@@ -484,7 +569,7 @@
     }
 
     .step-content h4 {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 700;
       margin-bottom: 4px;
       color: var(--text-primary);
@@ -504,18 +589,18 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold-primary) 100%);
+      background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
       color: #0A0A0A;
       font-weight: 800;
-      font-size: 14px;
+      font-size: 13.5px;
       letter-spacing: 0.8px;
-      padding: 14px 28px;
+      padding: 13px 26px;
       border-radius: 14px;
       text-decoration: none;
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      box-shadow: 0 4px 20px rgba(212, 175, 55, 0.35);
+      box-shadow: 0 4px 20px rgba(255, 255, 255, 0.25);
       transition: transform 0.2s, box-shadow 0.2s;
       cursor: pointer;
       border: none;
@@ -523,17 +608,17 @@
 
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(212, 175, 55, 0.5);
+      box-shadow: 0 8px 30px rgba(255, 255, 255, 0.4);
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text-primary);
       font-weight: 700;
-      font-size: 14px;
-      padding: 14px 24px;
+      font-size: 13.5px;
+      padding: 13px 22px;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -543,8 +628,8 @@
     }
 
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
     }
 
     /* Code Blueprint Accordion */
@@ -556,21 +641,6 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
-    }
-
-    .blueprint-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .blueprint-title {
-      font-size: 15px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--text-primary);
     }
 
     pre code {
@@ -586,29 +656,122 @@
       line-height: 1.6;
     }
 
-    .code-comment { color: #626270; }
-    .code-kw { color: #FF7B72; font-weight: 700; }
-    .code-fn { color: #D2A8FF; }
-    .code-var { color: #79C0FF; }
-    .code-num { color: #FFA657; }
+    /* Fullscreen Modal View */
+    /* Fullscreen Modal View */
+    body.fullscreen-active {
+      overflow: hidden;
+    }
+    body.fullscreen-active header,
+    body.fullscreen-active .info-column,
+    body.fullscreen-active .bg-ambient {
+      display: none !important;
+    }
+    body.fullscreen-active main {
+      padding: 0 !important;
+      margin: 0 !important;
+      max-width: 100vw !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      height: 100vh !important;
+      width: 100vw !important;
+    }
+    body.fullscreen-active .device-column {
+      max-width: 100vw !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 0 !important;
+    }
+    body.fullscreen-active .phone-container {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      z-index: 1000 !important;
+    }
+    body.fullscreen-active .phone-screen {
+      border-radius: 0 !important;
+    }
+    body.fullscreen-active .dynamic-island {
+      display: none !important;
+    }
+    body.fullscreen-active .neon-svg-wrap {
+      width: 90vw !important;
+      max-width: 860px !important;
+      height: 330px !important;
+    }
+    body.fullscreen-active .dock-controls {
+      position: fixed !important;
+      bottom: 24px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      z-index: 1050 !important;
+      opacity: 0.35;
+      transition: opacity 0.3s;
+    }
+    body.fullscreen-active .dock-controls:hover {
+      opacity: 1;
+    }
+    body.fullscreen-active .exit-fullscreen-float {
+      display: block !important;
+    }
+
+    .exit-fullscreen-float {
+      display: none;
+      position: fixed;
+      top: 24px;
+      right: 28px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #FFFFFF;
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      z-index: 2000;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
+    }
+    .exit-fullscreen-float:hover {
+      background: #FFFFFF;
+      color: #000000;
+    }
   </style>
 </head>
 <body>
   <div class="bg-ambient"></div>
 
+  <!-- Header -->
   <header>
     <div class="brand-group">
       <div class="brand-badge">
-        <img src="apps/mobile/assets/images/alpha_x_logo.png" alt="Alpha X Gym Logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
       </div>
       <div>
-        <div class="brand-title">ALPHA X GYM</div>
-        <div class="brand-subtitle">Mobile Login / Landing Screen Logo Animation Concept</div>
+        <div class="brand-title">ALPHA-X</div>
+        <div class="brand-subtitle">Neon Outline Reveal • Stroke Draw • Light Sweep • Glitch/Morph</div>
       </div>
     </div>
-    <div class="status-badge">
-      <span class="status-dot"></span>
-      RENDER COMPLETE & READY FOR REVIEW
+    <div class="header-actions">
+      <button id="btnOpenFullscreen" class="fullscreen-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+        FULLSCREEN LANDING VIEW
+      </button>
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        60 FPS REAL-TIME SVG ENGINE
+      </div>
     </div>
   </header>
 
@@ -616,20 +779,113 @@
     <!-- Left Column: Smartphone Device Simulation -->
     <div class="device-column">
       <div class="phone-container">
-        <div class="phone-screen">
+        <div class="phone-screen" id="phoneScreen">
           <div class="dynamic-island"></div>
           
-          <!-- Exact 60 FPS Rendered Video -->
-          <video id="logoVideo" class="screen-video" autoplay loop muted playsinline>
-            <source src="alpha_x_logo_animation.mp4" type="video/mp4">
-            <source src="alpha_x_logo_animation.webm" type="video/webm">
-            Your browser does not support HTML5 video.
-          </video>
+          <!-- Live Interactive SVG Animation Stage -->
+          <div class="neon-animation-stage" id="neonStage">
+            <div class="neon-svg-wrap" id="neonSvgWrap">
+              <svg id="alphaXNeonSvg" class="neon-svg-canvas" viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <!-- Multi-layer subtle neon glow filter -->
+                  <filter id="subtleNeonBloom" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="1.5" result="blurCore" />
+                    <feGaussianBlur stdDeviation="4.0" result="blurMid" />
+                    <feGaussianBlur stdDeviation="10.0" result="blurOuter" />
+                    <feMerge>
+                      <feMergeNode in="blurOuter" opacity="0.25" />
+                      <feMergeNode in="blurMid" opacity="0.45" />
+                      <feMergeNode in="blurCore" opacity="0.8" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+
+                  <!-- Sparkle burst radial glow -->
+                  <radialGradient id="sparkleGlow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1" />
+                    <stop offset="35%" stop-color="#E2E8F0" stop-opacity="0.8" />
+                    <stop offset="70%" stop-color="#94A3B8" stop-opacity="0.2" />
+                    <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+                  </radialGradient>
+                </defs>
+
+                <!-- Layer 1: Ambient Faint Dormant Outline (0.0s - 0.8s) -->
+                <g id="dormantLayer" opacity="0.08" stroke="#334155" stroke-width="1.2" fill="none">
+                  <!-- A1 -->
+                  <path d="M 38 158.5 L 74 67 Q 78 63 82 67 L 118 158.5 A 5 5 0 0 1 109 162.5 L 81.5 89 Q 78 85.5 74.5 89 L 47 162.5 A 5 5 0 0 1 38 158.5 Z" />
+                  <!-- L -->
+                  <path d="M 148 69.5 A 4.5 4.5 0 0 1 157 69.5 L 157 149 A 7 7 0 0 0 164 156 L 208 156 A 4.5 4.5 0 0 1 208 165 L 164 165 A 16 16 0 0 1 148 149 Z" />
+                  <!-- P (Futuristic Open Loop) -->
+                  <path d="M 231 65 L 268 65 A 26 26 0 0 1 268 117 L 246 117 A 16 16 0 0 1 230 133 L 230 160.5 A 4.5 4.5 0 0 0 239 160.5 L 239 130 A 7 7 0 0 0 246 108 L 268 108 A 17 17 0 0 0 268 74 L 231 74 A 4.5 4.5 0 0 1 231 65 Z" />
+                  <!-- H left & right -->
+                  <path d="M 318 69.5 A 4.5 4.5 0 0 1 327 69.5 L 327 106.5 A 4 4 0 0 0 331 110.5 L 348 110.5 A 4.5 4.5 0 0 1 348 119.5 L 331 119.5 A 4 4 0 0 0 327 123.5 L 327 160.5 A 4.5 4.5 0 0 1 318 160.5 Z" />
+                  <path d="M 383 69.5 A 4.5 4.5 0 0 1 392 69.5 L 392 160.5 A 4.5 4.5 0 0 1 383 160.5 L 383 123.5 A 4 4 0 0 0 379 119.5 L 362 119.5 A 4.5 4.5 0 0 1 362 110.5 L 379 110.5 A 4 4 0 0 0 383 106.5 Z" />
+                  <!-- A2 -->
+                  <path d="M 412 158.5 L 448 67 Q 452 63 456 67 L 492 158.5 A 5 5 0 0 1 483 162.5 L 455.5 89 Q 452 85.5 448.5 89 L 421 162.5 A 5 5 0 0 1 412 158.5 Z" />
+                  <!-- Hyphen -->
+                  <path d="M 515 110.5 H 537 A 4.5 4.5 0 0 1 537 119.5 H 515 A 4.5 4.5 0 0 1 515 110.5 Z" />
+                  <!-- X diagonals -->
+                  <path d="M 560.1 73.4 L 614.1 161.4 A 4.5 4.5 0 0 0 621.9 156.6 L 567.9 68.6 A 4.5 4.5 0 0 0 560.1 73.4 Z" />
+                  <path d="M 567.9 161.4 L 621.9 73.4 A 4.5 4.5 0 0 0 614.1 68.6 L 560.1 156.6 A 4.5 4.5 0 0 0 567.9 161.4 Z" />
+                </g>
+
+                <!-- Layer 2: Progressive Active SVG Stroke Reveal (0.8s - 2.2s+) -->
+                <g id="strokeDrawLayer" filter="url(#subtleNeonBloom)" fill="none">
+                  <!-- Individual Glyphs with ID for morph/glitch and stroke animation -->
+                  <path id="glyph-A1" class="letter-stroke" data-seq="0" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 38 158.5 L 74 67 Q 78 63 82 67 L 118 158.5 A 5 5 0 0 1 109 162.5 L 81.5 89 Q 78 85.5 74.5 89 L 47 162.5 A 5 5 0 0 1 38 158.5 Z" />
+
+                  <path id="glyph-L" class="letter-stroke" data-seq="1" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 148 69.5 A 4.5 4.5 0 0 1 157 69.5 L 157 149 A 7 7 0 0 0 164 156 L 208 156 A 4.5 4.5 0 0 1 208 165 L 164 165 A 16 16 0 0 1 148 149 Z" />
+
+                  <path id="glyph-P" class="letter-stroke" data-seq="2" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 231 65 L 268 65 A 26 26 0 0 1 268 117 L 246 117 A 16 16 0 0 1 230 133 L 230 160.5 A 4.5 4.5 0 0 0 239 160.5 L 239 130 A 7 7 0 0 0 246 108 L 268 108 A 17 17 0 0 0 268 74 L 231 74 A 4.5 4.5 0 0 1 231 65 Z" />
+
+                  <path id="glyph-H1" class="letter-stroke" data-seq="3" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 318 69.5 A 4.5 4.5 0 0 1 327 69.5 L 327 106.5 A 4 4 0 0 0 331 110.5 L 348 110.5 A 4.5 4.5 0 0 1 348 119.5 L 331 119.5 A 4 4 0 0 0 327 123.5 L 327 160.5 A 4.5 4.5 0 0 1 318 160.5 Z" />
+
+                  <path id="glyph-H2" class="letter-stroke" data-seq="4" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 383 69.5 A 4.5 4.5 0 0 1 392 69.5 L 392 160.5 A 4.5 4.5 0 0 1 383 160.5 L 383 123.5 A 4 4 0 0 0 379 119.5 L 362 119.5 A 4.5 4.5 0 0 1 362 110.5 L 379 110.5 A 4 4 0 0 0 383 106.5 Z" />
+
+                  <path id="glyph-A2" class="letter-stroke" data-seq="5" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 412 158.5 L 448 67 Q 452 63 456 67 L 492 158.5 A 5 5 0 0 1 483 162.5 L 455.5 89 Q 452 85.5 448.5 89 L 421 162.5 A 5 5 0 0 1 412 158.5 Z" />
+
+                  <path id="glyph-HY" class="letter-stroke" data-seq="6" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 515 110.5 H 537 A 4.5 4.5 0 0 1 537 119.5 H 515 A 4.5 4.5 0 0 1 515 110.5 Z" />
+
+                  <path id="glyph-X1" class="letter-stroke" data-seq="7" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 560.1 73.4 L 614.1 161.4 A 4.5 4.5 0 0 0 621.9 156.6 L 567.9 68.6 A 4.5 4.5 0 0 0 560.1 73.4 Z" />
+
+                  <path id="glyph-X2" class="letter-stroke" data-seq="8" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+                        d="M 567.9 161.4 L 621.9 73.4 A 4.5 4.5 0 0 0 614.1 68.6 L 560.1 156.6 A 4.5 4.5 0 0 0 567.9 161.4 Z" />
+                </g>
+
+                <!-- Sine Energy Filament Wave (Screenshot 1: 1.70s - 2.80s) -->
+                <path id="energyWave" class="energy-filament-path"
+                      d="M 10 130 Q 80 50 150 115 T 290 120 T 430 85 T 570 145 T 670 110" />
+
+                <!-- Layer 3: Small Four-Point Sparkle below Logo (3.50s - 4.50s) -->
+                <g id="sparkleGroup" class="sparkle-group">
+                  <!-- Soft Radial Glow Halo -->
+                  <circle cx="452" cy="196" r="14" fill="url(#sparkleGlow)" opacity="0.6" />
+                  <!-- 4-Point Star Diamond Shape -->
+                  <path id="sparkleStar" d="M 452 188 Q 452 196 460 196 Q 452 196 452 204 Q 452 196 444 196 Q 452 196 452 188 Z"
+                        fill="#FFFFFF" />
+                  <!-- Center Specular Core -->
+                  <circle cx="452" cy="196" r="1.4" fill="#FFFFFF" />
+                </g>
+              </svg>
+
+              <!-- Anamorphic Specular Light Sweep Overlay (2.30s - 3.30s) -->
+              <div id="sweepBeam" class="sweep-light-beam"></div>
+              <div id="sweepBurst" class="sweep-flare-burst"></div>
+            </div>
+          </div>
 
           <!-- Interactive Mobile Login Form Mockup (Appears after hold) -->
           <div id="loginOverlay" class="mock-login-ui">
             <div class="mock-glass-card">
-              <div style="font-size: 11px; font-weight: 700; color: #D4AF37; letter-spacing: 1px;">MEMBER PORTAL</div>
+              <div style="font-size: 11px; font-weight: 700; color: #FFFFFF; letter-spacing: 1px;">MEMBER PORTAL</div>
               <div class="mock-input">Client ID (e.g. AXG-1001)</div>
               <div class="mock-input">Password ••••••••••</div>
               <div class="mock-btn">SIGN IN TO ALPHA X</div>
@@ -656,10 +912,10 @@
         </button>
 
         <div class="timeline-wrap">
-          <input type="range" id="timeSlider" class="timeline-slider" min="0" max="4.5" step="0.01" value="0">
+          <input type="range" id="timeSlider" class="timeline-slider" min="0" max="4.8" step="0.01" value="0">
           <div class="timeline-time">
             <span id="curTimeText">0.00s</span>
-            <span>4.50s</span>
+            <span>4.80s</span>
           </div>
         </div>
 
@@ -672,61 +928,61 @@
       </div>
     </div>
 
-    <!-- Right Column: Concept Specs, Choreography & Flutter Blueprint -->
+    <!-- Right Column: Spec Sheet & Choreography -->
     <div class="info-column">
       <div class="hero-text">
-        <h1>Cinematic Brand Activation</h1>
+        <h1>Neon Outline Logo Reveal</h1>
         <p>
-          A high-precision, 60 FPS mobile logo reveal engineered specifically for the <strong>Alpha X Gym</strong> Flutter authentication flow. Uses your original source PNG with zero deformation, powered by a progressive titanium ignition sweep and resonant atmospheric back-glow.
+          High-precision, 60 FPS real-time vector animation reproducing the authentic reference sequence: obsidian black void &rarr; progressive geometric stroke drawing &rarr; controlled morph/glitch &rarr; anamorphic light sweep &rarr; pristine sharp ALPHA-X wordmark with subtle silver neon glow and delicate four-point sparkle.
         </p>
       </div>
 
       <!-- Specs Grid -->
       <div class="specs-grid">
         <div class="spec-card">
-          <div class="spec-label">Resolution</div>
-          <div class="spec-val">1080 × 1920</div>
-          <div class="spec-sub">9:16 Vertical Portrait</div>
+          <div class="spec-label">Engine</div>
+          <div class="spec-val">SVG + RAF</div>
+          <div class="spec-sub">Vector Outline Draw</div>
         </div>
         <div class="spec-card">
           <div class="spec-label">Frame Rate</div>
           <div class="spec-val">60 FPS</div>
-          <div class="spec-sub">270 Pristine Frames</div>
+          <div class="spec-sub">GPU Hardware-Accelerated</div>
         </div>
         <div class="spec-card">
-          <div class="spec-label">Total Duration</div>
-          <div class="spec-val">4.50s</div>
-          <div class="spec-sub">1.6s Hero Hold</div>
+          <div class="spec-label">Duration</div>
+          <div class="spec-val">4.80s</div>
+          <div class="spec-sub">Continuous Hold After 4.5s</div>
         </div>
         <div class="spec-card">
-          <div class="spec-label">Source Fidelity</div>
-          <div class="spec-val">100% Exact</div>
-          <div class="spec-sub">Original Logo PNG</div>
+          <div class="spec-label">Typography</div>
+          <div class="spec-val">ALPHA-X</div>
+          <div class="spec-sub">Futuristic Geometric Outlines</div>
         </div>
       </div>
 
-      <!-- 4-Phase Choreography -->
+      <!-- Choreography Timeline & Motion Phases -->
       <div class="timeline-steps">
         <div class="timeline-header">
           <div class="timeline-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold-bright)" stroke-width="2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-            CHOREOGRAPHY TIMELINE & MOTION PHASES
+            7-PHASE CHOREOGRAPHY SEQUENCE
           </div>
         </div>
 
         <!-- Phase 1 -->
         <div class="step-item" id="step-phase1">
           <div class="step-badge">
-            <div class="step-time">0.0s – 0.4s</div>
-            <div class="step-frames">Frames 0–24</div>
+            <div class="step-time">0.00s – 0.80s</div>
+            <div class="step-frames">Frames 0–48</div>
           </div>
           <div class="step-content">
-            <h4>Phase 1: Cinematic Obsidian Void & Atmospheric Warmth</h4>
+            <h4>Phase 1: Obsidian Void & Almost Invisible Strokes</h4>
             <p>
-              Starts in deep cinematic darkness (#0A0A0A). At 0.20s, a faint atmospheric warmth begins awakening deep behind where the emblem sits. The logo emerges subtly at 12% dormant standby opacity with an initial scale of 0.96.
+              Starts in pure #000000 black fullscreen void. Very faint, dormant outline paths of ALPHA-X sit in the darkness with ~8% standby opacity, evoking the dormant neon structure.
             </p>
           </div>
         </div>
@@ -734,13 +990,13 @@
         <!-- Phase 2 -->
         <div class="step-item" id="step-phase2">
           <div class="step-badge">
-            <div class="step-time">0.4s – 1.8s</div>
-            <div class="step-frames">Frames 24–108</div>
+            <div class="step-time">0.80s – 2.20s</div>
+            <div class="step-frames">Frames 48–132</div>
           </div>
           <div class="step-content">
-            <h4>Phase 2: Progressive Energy Ignition & Sheen Sweep</h4>
+            <h4>Phase 2: Progressive SVG Stroke-Drawing Animation</h4>
             <p>
-              A 34° diagonal specular energy wave sweeps across the logo from top-left to bottom-right. As the wave passes over the geometric contours of the "AX" mark, each stroke flares into high-voltage brilliance before locking into crisp pure white. Scale glides smoothly to 1.00 via ease-out cubic.
+              Thin geometric outline strokes progressively draw each letter via stroke-dashoffset. Sequential ignition across A &rarr; L &rarr; P &rarr; H &rarr; A &rarr; - &rarr; X with building silver luminance.
             </p>
           </div>
         </div>
@@ -748,13 +1004,13 @@
         <!-- Phase 3 -->
         <div class="step-item" id="step-phase3">
           <div class="step-badge">
-            <div class="step-time">1.8s – 3.4s</div>
-            <div class="step-frames">Frames 108–204</div>
+            <div class="step-time">1.70s – 2.80s</div>
+            <div class="step-frames">Frames 102–168</div>
           </div>
           <div class="step-content">
-            <h4>Phase 3: Hero Solidification & Micro-Resonance Hold</h4>
+            <h4>Phase 3: Controlled Morph, Glitch & Sine Filament Wave</h4>
             <p>
-              Held with 100% clarity, zero jitter, and rock-solid authority for 1.6 seconds. The atmospheric back-glow performs a gentle, imperceptible athletic respiration micro-breathing (±2.5%), keeping the brand feeling alive and powerful.
+              An electric sine-wave energy filament traverses the wordmark. Individual strokes undergo subtle horizontal displacement (&plusmn;2.5px) and micro-vibration before locking firmly in place.
             </p>
           </div>
         </div>
@@ -762,13 +1018,55 @@
         <!-- Phase 4 -->
         <div class="step-item" id="step-phase4">
           <div class="step-badge">
-            <div class="step-time">3.4s – 4.5s</div>
-            <div class="step-frames">Frames 204–270</div>
+            <div class="step-time">2.30s – 3.30s</div>
+            <div class="step-frames">Frames 138–198</div>
           </div>
           <div class="step-content">
-            <h4>Phase 4: Settling Glow & Mobile UI Transition</h4>
+            <h4>Phase 4: Bright Specular Light Sweep & Anamorphic Flare</h4>
             <p>
-              The power surge aura smoothly recedes to a clean, minimal 8% resting ambient glow. The logo remains 100% crisp and visible, perfectly primed for the frosted-glass login card and credentials form to slide smoothly into place.
+              A narrow, high-intensity horizontal light sweep traverses the tubing from left to right. Letters flare into blinding specular brilliance, followed by a focused anamorphic flare burst.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 5 -->
+        <div class="step-item" id="step-phase5">
+          <div class="step-badge">
+            <div class="step-time">3.00s – 4.00s</div>
+            <div class="step-frames">Frames 180–240</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 5: Logo Settles into Sharp Pristine State</h4>
+            <p>
+              All jitter and morph decay to zero. The ALPHA-X lettering locks into razor-sharp, stable registration with a refined multi-layer silver neon glow around the hollow tubes.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 6 -->
+        <div class="step-item" id="step-phase6">
+          <div class="step-badge">
+            <div class="step-time">3.50s – 4.50s</div>
+            <div class="step-frames">Frames 210–270</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 6: Four-Point Sparkle Awakening</h4>
+            <p>
+              A delicate 4-pointed diamond sparkle emerges smoothly below the logo beneath the second 'A', shimmering with subtle breath-pulse glow.
+            </p>
+          </div>
+        </div>
+
+        <!-- Phase 7 -->
+        <div class="step-item" id="step-phase7">
+          <div class="step-badge">
+            <div class="step-time">4.50s+</div>
+            <div class="step-frames">Hold State</div>
+          </div>
+          <div class="step-content">
+            <h4>Phase 7: Clean Hero Hold</h4>
+            <p>
+              Pure black background (#000000), crisp silver outline ALPHA-X wordmark, subtle ambient neon glow, and delicate star sparkle hold cleanly without distraction.
             </p>
           </div>
         </div>
@@ -776,144 +1074,376 @@
 
       <!-- Action Row -->
       <div class="action-row">
-        <a href="alpha_x_logo_animation.mp4" download class="btn-primary">
+        <button id="btnActionReplay" class="btn-primary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
+            <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
-          DOWNLOAD MP4 (1080×1920 60 FPS)
-        </a>
-        <a href="alpha_x_logo_animation.webm" download class="btn-secondary">
+          REPLAY ANIMATION (60 FPS)
+        </button>
+        <button id="btnActionFullscreen" class="btn-secondary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
           </svg>
-          DOWNLOAD WEBM (VP9)
-        </a>
+          OPEN FULLSCREEN LANDING VIEW
+        </button>
       </div>
 
       <!-- Flutter Integration Blueprint -->
       <div class="blueprint-box">
         <div class="blueprint-header">
           <div class="blueprint-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--gold-bright)" stroke-width="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2">
               <polyline points="16 18 22 12 16 6"/>
               <polyline points="8 6 2 12 8 18"/>
             </svg>
-            FLUTTER INTEGRATION BLUEPRINT (Ready for Step 2)
+            FLUTTER PRODUCTION BLUEPRINT (CustomPainter + Path Metrics)
           </div>
         </div>
         <p style="font-size: 13px; color: var(--text-secondary);">
-          Once approved, this exact animation concept can be integrated directly into your Flutter login screen with 0 video assets needed—using a hardware-accelerated <code>AnimationController</code> and <code>ShaderMask</code>:
+          Implemented directly in <code>AlphaXLogoAnimation</code> via hardware-accelerated <code>CustomPainter</code> with vector stroke dash offsets, sweep gradient shaders, and procedural four-point sparkle:
         </p>
-        <pre><code><span class="code-comment">// Alpha X Gym - Animated Logo Controller Concept</span>
-<span class="code-kw">class</span> <span class="code-fn">AlphaXAnimatedLogo</span> <span class="code-kw">extends</span> <span class="code-var">StatefulWidget</span> { ... }
+        <pre><code><span style="color:#FF7B72;">class</span> <span style="color:#D2A8FF;">AlphaXNeonOutlinePainter</span> <span style="color:#FF7B72;">extends</span> <span style="color:#79C0FF;">CustomPainter</span> {
+  <span style="color:#FF7B72;">final</span> <span style="color:#79C0FF;">double</span> progress; <span style="color:#626270;">// 0.0 to 1.0 (0s - 4.8s)</span>
 
-<span class="code-comment">// Staggered curves matching the video choreography</span>
-_fadeAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: <span class="code-num">0.0</span>, end: <span class="code-num">1.0</span>).animate(
-  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.05</span>, <span class="code-num">0.38</span>, curve: Curves.easeOutCubic)),
-);
-_scaleAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: <span class="code-num">0.96</span>, end: <span class="code-num">1.00</span>).animate(
-  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.05</span>, <span class="code-num">0.35</span>, curve: Curves.easeOutCubic)),
-);
-_sweepAnim = <span class="code-fn">Tween</span>&lt;<span class="code-kw">double</span>&gt;(begin: -<span class="code-num">1.2</span>, end: <span class="code-num">1.2</span>).animate(
-  <span class="code-fn">CurvedAnimation</span>(parent: _controller, curve: <span class="code-fn">Interval</span>(<span class="code-num">0.10</span>, <span class="code-num">0.42</span>, curve: Curves.easeInOutCubic)),
-);</code></pre>
+  <span style="color:#D2A8FF;">@override</span>
+  <span style="color:#FF7B72;">void</span> <span style="color:#D2A8FF;">paint</span>(Canvas canvas, Size size) {
+    <span style="color:#626270;">// 1. Draw dormant faint outline paths at 0.08 opacity</span>
+    <span style="color:#626270;">// 2. Extract and draw progressive stroke paths (0.80s - 2.20s)</span>
+    <span style="color:#626270;">// 3. Apply glitch displacement matrix during morph window (1.70s - 2.80s)</span>
+    <span style="color:#626270;">// 4. Sweep specular highlight and anamorphic streak (2.30s - 3.30s)</span>
+    <span style="color:#626270;">// 5. Draw 4-point sparkle diamond star below second 'A' (3.50s - 4.50s)</span>
+  }
+}</code></pre>
       </div>
     </div>
   </main>
 
+  <!-- Floating Exit Fullscreen Button -->
+  <button id="btnExitFullscreen" class="exit-fullscreen-float">&times; EXIT FULLSCREEN (ESC)</button>
+
   <script>
-    const video = document.getElementById('logoVideo');
+    // =========================================================================
+    // HIGH-PRECISION 60 FPS SVG ANIMATION ENGINE
+    // =========================================================================
+    const TOTAL_DURATION = 4.80; // Total timeline duration in seconds
+    let currentTime = 0.0;
+    let isPlaying = true;
+    let playbackRate = 1.0;
+    let lastTimestamp = null;
+    let showMockUI = false;
+
+    // DOM Elements
+    const timeSlider = document.getElementById('timeSlider');
+    const curTimeText = document.getElementById('curTimeText');
     const btnPlayPause = document.getElementById('btnPlayPause');
     const btnRestart = document.getElementById('btnRestart');
     const btnSpeed = document.getElementById('btnSpeed');
     const btnToggleUI = document.getElementById('btnToggleUI');
-    const timeSlider = document.getElementById('timeSlider');
-    const curTimeText = document.getElementById('curTimeText');
     const loginOverlay = document.getElementById('loginOverlay');
+    const sweepBeam = document.getElementById('sweepBeam');
+    const sweepBurst = document.getElementById('sweepBurst');
+    const energyWave = document.getElementById('energyWave');
+    const sparkleGroup = document.getElementById('sparkleGroup');
+    const dormantLayer = document.getElementById('dormantLayer');
+    const strokeDrawLayer = document.getElementById('strokeDrawLayer');
+    const letterStrokes = document.querySelectorAll('.letter-stroke');
 
-    const steps = [
-      { id: 'step-phase1', start: 0.0, end: 0.4 },
-      { id: 'step-phase2', start: 0.4, end: 1.8 },
-      { id: 'step-phase3', start: 1.8, end: 3.4 },
-      { id: 'step-phase4', start: 3.4, end: 4.5 }
-    ];
+    // Fullscreen elements
+    const btnOpenFullscreen = document.getElementById('btnOpenFullscreen');
+    const btnActionFullscreen = document.getElementById('btnActionFullscreen');
 
-    let speeds = [1.0, 0.5, 0.25];
+    // Speeds cycle
+    const speeds = [1.0, 0.5, 0.25];
     let speedIdx = 0;
 
-    // Toggle Play/Pause
-    btnPlayPause.addEventListener('click', () => {
-      if (video.paused) {
-        video.play();
-        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+    // Timeline Steps mapping
+    const steps = [
+      { id: 'step-phase1', start: 0.00, end: 0.80 },
+      { id: 'step-phase2', start: 0.80, end: 2.20 },
+      { id: 'step-phase3', start: 1.70, end: 2.80 },
+      { id: 'step-phase4', start: 2.30, end: 3.30 },
+      { id: 'step-phase5', start: 3.00, end: 4.00 },
+      { id: 'step-phase6', start: 3.50, end: 4.50 },
+      { id: 'step-phase7', start: 4.50, end: 4.80 }
+    ];
+
+    // Precalculate SVG path lengths for smooth dashoffset animation
+    const pathLengths = [];
+    letterStrokes.forEach((stroke, i) => {
+      const len = stroke.getTotalLength();
+      pathLengths[i] = len;
+      stroke.style.strokeDasharray = `${len} ${len}`;
+      stroke.style.strokeDashoffset = `${len}`;
+    });
+
+    const energyWaveLen = energyWave.getTotalLength();
+    energyWave.style.strokeDasharray = `${energyWaveLen} ${energyWaveLen}`;
+    energyWave.style.strokeDashoffset = `${energyWaveLen}`;
+
+    // Respect prefers-reduced-motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      currentTime = TOTAL_DURATION;
+      isPlaying = false;
+    }
+
+    // =========================================================================
+    // FRAME RENDERER (Evaluates exact state at currentTime t)
+    // =========================================================================
+    function renderFrame(t) {
+      // 1. Dormant layer opacity: faint visibility early on, stays dormant
+      if (t < 0.80) {
+        const dormantOp = 0.06 + 0.04 * Math.sin(t * Math.PI);
+        dormantLayer.setAttribute('opacity', dormantOp.toFixed(3));
       } else {
-        video.pause();
-        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        dormantLayer.setAttribute('opacity', '0.04');
       }
-    });
 
-    // Restart
-    btnRestart.addEventListener('click', () => {
-      video.currentTime = 0;
-      video.play();
-    });
+      // 2. Progressive Stroke Drawing (0.80s – 2.20s)
+      const drawStart = 0.80;
+      const drawEnd = 2.20;
+      const totalDrawDuration = drawEnd - drawStart;
 
-    // Speed Cycle
-    btnSpeed.addEventListener('click', () => {
-      speedIdx = (speedIdx + 1) % speeds.length;
-      video.playbackRate = speeds[speedIdx];
-      btnSpeed.textContent = speeds[speedIdx] + 'x';
-    });
+      letterStrokes.forEach((stroke, i) => {
+        const seq = parseInt(stroke.getAttribute('data-seq') || i);
+        // Stagger sequence slightly: A1 (0), L (1), P (2), H1 (3), H2 (4), A2 (5), HY (6), X1 (7), X2 (8)
+        const staggerDelay = (seq / 9) * 0.45;
+        const glyphStart = drawStart + staggerDelay;
+        const glyphEnd = Math.min(drawEnd + 0.1, glyphStart + 0.95);
 
-    // Toggle UI Overlay
-    let showMockUI = false;
-    btnToggleUI.addEventListener('click', () => {
-      showMockUI = !showMockUI;
-      btnToggleUI.classList.toggle('active', showMockUI);
-      updateUIVisibility();
-    });
+        let progress = 0;
+        if (t <= glyphStart) {
+          progress = 0;
+        } else if (t >= glyphEnd) {
+          progress = 1;
+        } else {
+          // Smooth easeOutCubic curve
+          const p = (t - glyphStart) / (glyphEnd - glyphStart);
+          progress = 1 - Math.pow(1 - p, 3);
+        }
 
-    function updateUIVisibility() {
-      if (showMockUI && video.currentTime >= 2.0) {
+        const len = pathLengths[i] || 300;
+        const offset = len * (1 - progress);
+        stroke.style.strokeDashoffset = offset.toFixed(2);
+
+        // Opacity and luminance building
+        if (progress <= 0) {
+          stroke.style.opacity = '0';
+        } else if (progress < 1) {
+          stroke.style.opacity = (0.2 + progress * 0.8).toFixed(2);
+        } else {
+          stroke.style.opacity = '1';
+        }
+
+        // 3. Controlled Morph / Glitch Displacement (1.70s – 2.80s)
+        let dx = 0;
+        let dy = 0;
+        let scaleY = 1.0;
+
+        if (t >= 1.70 && t <= 2.80) {
+          const glitchProg = (t - 1.70) / (2.80 - 1.70);
+          const envelope = Math.sin(glitchProg * Math.PI); // Peaks at ~2.25s
+
+          // Subtle pseudo-random high frequency jitter based on letter index
+          const seed = Math.sin(t * 45 + seq * 17);
+          if (Math.abs(seed) > 0.45) {
+            dx = (seed * 2.8 * envelope);
+            dy = (Math.cos(t * 30 + seq) * 1.2 * envelope);
+            scaleY = 1.0 + (seed * 0.03 * envelope);
+          }
+        }
+
+        stroke.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(1, ${scaleY.toFixed(3)})`;
+      });
+
+      // 3. Sine Energy Filament Wave (Screenshot 1: 1.70s – 2.80s)
+      if (t >= 1.65 && t <= 2.85) {
+        const waveProg = (t - 1.65) / (2.85 - 1.65);
+        const waveEnv = Math.sin(waveProg * Math.PI);
+        energyWave.style.opacity = (waveEnv * 0.95).toFixed(2);
+        // Animate stroke draw across
+        const waveOffset = energyWaveLen * (1 - waveProg);
+        energyWave.style.strokeDashoffset = waveOffset.toFixed(2);
+      } else {
+        energyWave.style.opacity = '0';
+      }
+
+      // 4. Bright Horizontal Light Sweep & Anamorphic Flare (2.30s – 3.30s)
+      if (t >= 2.25 && t <= 3.35) {
+        const sweepProg = (t - 2.25) / (3.35 - 2.25);
+        const easeSweep = sweepProg * sweepProg * (3 - 2 * sweepProg); // smooth step
+        const sweepX = -80 + easeSweep * 480; // Sweeps from left to right across the 340px phone container
+
+        sweepBeam.style.left = `${sweepX.toFixed(1)}px`;
+        sweepBurst.style.left = `${(sweepX + 120).toFixed(1)}px`;
+
+        const sweepEnv = Math.sin(sweepProg * Math.PI);
+        sweepBeam.style.opacity = (sweepEnv * 1.0).toFixed(2);
+        sweepBurst.style.opacity = (sweepEnv * 0.9).toFixed(2);
+
+        // Specular flare flushes strokes beneath the light head
+        strokeDrawLayer.style.filter = `url(#subtleNeonBloom) drop-shadow(0 0 ${(sweepEnv * 8).toFixed(1)}px rgba(255, 255, 255, ${(sweepEnv * 0.9).toFixed(2)}))`;
+      } else {
+        sweepBeam.style.opacity = '0';
+        sweepBurst.style.opacity = '0';
+        strokeDrawLayer.style.filter = 'url(#subtleNeonBloom)';
+      }
+
+      // 5. Settling into Sharp Outline (3.00s – 4.00s)
+      // Done automatically as glitch decays to 0 and sweep finishes!
+
+      // 6. Four-Point Sparkle Awakening (3.50s – 4.50s+)
+      if (t >= 3.50) {
+        const sparkleProg = Math.min(1.0, (t - 3.50) / 0.80);
+        // Ease out pop
+        const scale = 0.2 + 0.8 * Math.sin(sparkleProg * Math.PI * 0.5);
+        // Subtle respiration glimmer after 4.30s
+        let glimmer = 1.0;
+        if (t > 4.30) {
+          glimmer = 0.88 + 0.12 * Math.sin((t - 4.30) * Math.PI * 2.0);
+        }
+        sparkleGroup.style.opacity = (sparkleProg * glimmer).toFixed(2);
+        sparkleGroup.style.transform = `scale(${scale.toFixed(3)})`;
+      } else {
+        sparkleGroup.style.opacity = '0';
+        sparkleGroup.style.transform = 'scale(0.2)';
+      }
+
+      // Update UI Slider & Texts
+      timeSlider.value = t.toFixed(2);
+      curTimeText.textContent = t.toFixed(2) + 's';
+
+      // Update timeline step highlights
+      steps.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (el) {
+          if (t >= s.start && t < s.end) {
+            el.classList.add('active');
+          } else {
+            el.classList.remove('active');
+          }
+        }
+      });
+
+      // Login overlay visibility if toggled
+      if (showMockUI && t >= 3.8) {
         loginOverlay.classList.add('visible');
       } else {
         loginOverlay.classList.remove('visible');
       }
+
     }
 
-    // Time update listener
-    video.addEventListener('timeupdate', () => {
-      const cur = video.currentTime;
-      timeSlider.value = cur;
-      curTimeText.textContent = cur.toFixed(2) + 's';
+    // =========================================================================
+    // ANIMATION LOOP (requestAnimationFrame)
+    // =========================================================================
+    function animationLoop(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const deltaSec = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
 
-      // Update active timeline step
-      steps.forEach(s => {
-        const el = document.getElementById(s.id);
-        if (cur >= s.start && cur < s.end) {
-          el.classList.add('active');
-        } else {
-          el.classList.remove('active');
+      if (isPlaying) {
+        currentTime += deltaSec * playbackRate;
+        if (currentTime >= TOTAL_DURATION) {
+          currentTime = TOTAL_DURATION;
+          isPlaying = false;
+          btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
         }
-      });
+        renderFrame(currentTime);
+      }
 
-      updateUIVisibility();
+      requestAnimationFrame(animationLoop);
+    }
+    requestAnimationFrame(animationLoop);
+
+    // =========================================================================
+    // USER CONTROLS & EVENT LISTENERS
+    // =========================================================================
+    // Play/Pause
+    btnPlayPause.addEventListener('click', () => {
+      if (isPlaying) {
+        isPlaying = false;
+        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      } else {
+        if (currentTime >= TOTAL_DURATION) currentTime = 0.0;
+        isPlaying = true;
+        lastTimestamp = performance.now();
+        btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      }
     });
 
-    // Slider scrub
+    // Replay
+    function restartAnimation() {
+      currentTime = 0.0;
+      isPlaying = true;
+      lastTimestamp = performance.now();
+      btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      renderFrame(0.0);
+    }
+    btnRestart.addEventListener('click', restartAnimation);
+    document.getElementById('btnActionReplay').addEventListener('click', restartAnimation);
+
+    // Speed Cycle
+    btnSpeed.addEventListener('click', () => {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      playbackRate = speeds[speedIdx];
+      btnSpeed.textContent = playbackRate + 'x';
+    });
+
+    // Timeline Slider Scrubbing
     timeSlider.addEventListener('input', () => {
-      video.currentTime = parseFloat(timeSlider.value);
+      currentTime = parseFloat(timeSlider.value);
+      isPlaying = false;
+      btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      renderFrame(currentTime);
     });
 
     // Step item click to seek
     steps.forEach(s => {
-      document.getElementById(s.id).addEventListener('click', () => {
-        video.currentTime = s.start;
-      });
+      const el = document.getElementById(s.id);
+      if (el) {
+        el.addEventListener('click', () => {
+          currentTime = s.start;
+          isPlaying = false;
+          btnPlayPause.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+          renderFrame(currentTime);
+        });
+      }
+    });
+
+    // Toggle Login UI Overlay
+    btnToggleUI.addEventListener('click', () => {
+      showMockUI = !showMockUI;
+      btnToggleUI.classList.toggle('active', showMockUI);
+      if (showMockUI && currentTime >= 3.8) {
+        loginOverlay.classList.add('visible');
+      } else {
+        loginOverlay.classList.remove('visible');
+      }
+    });
+
+    // Fullscreen View Mode
+    const btnExitFullscreen = document.getElementById('btnExitFullscreen');
+
+    function openFullscreen() {
+      document.body.classList.add('fullscreen-active');
+      restartAnimation();
+    }
+
+    function closeFullscreen() {
+      document.body.classList.remove('fullscreen-active');
+    }
+
+    btnOpenFullscreen.addEventListener('click', openFullscreen);
+    btnActionFullscreen.addEventListener('click', openFullscreen);
+    btnExitFullscreen.addEventListener('click', closeFullscreen);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeFullscreen();
+      if (e.code === 'Space') {
+        e.preventDefault();
+        btnPlayPause.click();
+      }
     });
   </script>
 </body>

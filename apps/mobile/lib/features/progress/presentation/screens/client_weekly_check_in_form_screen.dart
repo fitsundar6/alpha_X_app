@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
+import 'package:alpha_x_gym/features/progress/domain/models/weekly_check_in.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 
 class ClientWeeklyCheckInFormScreen extends StatefulWidget {
@@ -75,7 +76,20 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    _weightCtrl.addListener(_onFieldChanged);
+    _waistCtrl.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _weightCtrl.removeListener(_onFieldChanged);
+    _waistCtrl.removeListener(_onFieldChanged);
     _weightCtrl.dispose();
     _waistCtrl.dispose();
     _chestCtrl.dispose();
@@ -255,6 +269,7 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
                           ),
                         ],
                       ),
+                      _buildLiveDeltaPreview(widget.repository.latestCheckIn ?? widget.repository.currentStatus?.lastCheckIn),
                       const SizedBox(height: 10),
                       TextButton.icon(
                         onPressed: () => setState(() => _showAdvancedMeasurements = !_showAdvancedMeasurements),
@@ -803,6 +818,141 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLiveDeltaPreview(WeeklyCheckIn? prev) {
+    if (prev == null) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AlphaXColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AlphaXColors.border),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.flag_outlined, size: 14, color: AlphaXColors.redAccent),
+            SizedBox(width: 8),
+            Text(
+              'Week 1 Baseline: Recording starting body metrics',
+              style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 11.5),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final weightText = _weightCtrl.text.trim();
+    final waistText = _waistCtrl.text.trim();
+    final currentWeight = double.tryParse(weightText);
+    final currentWaist = double.tryParse(waistText);
+
+    final double? weightDiff = currentWeight != null ? (((currentWeight - prev.weightKg) * 10).round() / 10.0) : null;
+    final double? waistDiff = (currentWaist != null && prev.waistCm != null)
+        ? (((currentWaist - prev.waistCm!) * 10).round() / 10.0)
+        : null;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AlphaXColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AlphaXColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PREVIOUS: ${prev.weightDisplay}${prev.waistCm != null ? " • Waist ${prev.waistDisplay}" : ""}',
+                style: const TextStyle(
+                  color: AlphaXColors.textTertiary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const Row(
+                children: [
+                  Icon(Icons.auto_awesome, size: 12, color: AlphaXColors.gold),
+                  SizedBox(width: 4),
+                  Text(
+                    'AUTO-CALCULATED',
+                    style: TextStyle(color: AlphaXColors.gold, fontSize: 9.5, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      weightDiff == null
+                          ? Icons.remove_circle_outline
+                          : (weightDiff <= 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded),
+                      size: 16,
+                      color: weightDiff == null
+                          ? AlphaXColors.textTertiary
+                          : (weightDiff <= 0 ? AlphaXColors.success : AlphaXColors.warning),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      weightDiff == null
+                          ? 'Weight Change: —'
+                          : 'Weight: ${weightDiff > 0 ? "+" : ""}${weightDiff.toStringAsFixed(1)} kg',
+                      style: TextStyle(
+                        color: weightDiff == null
+                            ? AlphaXColors.textTertiary
+                            : (weightDiff <= 0 ? AlphaXColors.success : AlphaXColors.warning),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (prev.waistCm != null)
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(
+                        waistDiff == null
+                            ? Icons.remove_circle_outline
+                            : (waistDiff <= 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded),
+                        size: 16,
+                        color: waistDiff == null
+                            ? AlphaXColors.textTertiary
+                            : (waistDiff <= 0 ? AlphaXColors.success : AlphaXColors.warning),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        waistDiff == null
+                            ? 'Waist Change: —'
+                            : 'Waist: ${waistDiff > 0 ? "+" : ""}${waistDiff.toStringAsFixed(1)} cm',
+                        style: TextStyle(
+                          color: waistDiff == null
+                              ? AlphaXColors.textTertiary
+                              : (waistDiff <= 0 ? AlphaXColors.success : AlphaXColors.warning),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

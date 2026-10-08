@@ -10,12 +10,16 @@ import 'core/auth/auth_service.dart';
 import 'core/auth/login_screen.dart';
 import 'core/auth/create_account_screen.dart';
 import 'core/auth/admin_login_screen.dart';
+import 'core/auth/pending_verification_screen.dart';
+import 'core/auth/rejected_account_screen.dart';
+import 'core/auth/suspended_account_screen.dart';
 import 'core/widgets/alpha_x_splash_screen.dart';
 import 'features/navigation/navigation_shell.dart';
 import 'features/workout/data/repositories/workout_repository.dart';
 import 'features/activity/data/repositories/activity_repository.dart';
 import 'features/macro_planner/data/repositories/macro_repository.dart';
 import 'features/dashboard/admin_main_dashboard_screen.dart';
+import 'features/dashboard/admin_client_verification_screen.dart';
 import 'features/dashboard/client_main_dashboard_screen.dart';
 import 'features/workout/presentation/admin/admin_workout_sessions_screen.dart';
 import 'features/workout/presentation/admin/admin_create_edit_session_screen.dart';
@@ -95,6 +99,17 @@ Widget getInitialScreen({
         weeklyProgressRepository: weeklyProgressRepo,
       );
     } else {
+      // Central Client Verification Gate
+      if (auth.isPending) {
+        return const PendingVerificationScreen();
+      }
+      if (auth.isRejected) {
+        return const RejectedAccountScreen();
+      }
+      if (auth.isSuspended) {
+        return const SuspendedAccountScreen();
+      }
+
       if (!auth.onboardingCompleted) {
         return const ClientOnboardingScreen();
       } else {
@@ -221,6 +236,10 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
           '/register': (context) => const CreateAccountScreen(),
           '/admin/login': (context) => const AdminLoginScreen(),
           '/onboarding': (context) => const ClientOnboardingScreen(),
+          '/pending-verification': (context) => const PendingVerificationScreen(),
+          '/rejected-account': (context) => const RejectedAccountScreen(),
+          '/suspended-account': (context) => const SuspendedAccountScreen(),
+          '/admin/verification': (context) => const AdminClientVerificationScreen(),
         },
       ),
     );
@@ -255,6 +274,17 @@ Route<dynamic>? buildAppRoute(
         weeklyProgressRepository: weeklyProgressRepo,
       ),
     );
+  }
+
+  // Verification Screen routes
+  if (path == '/pending-verification') {
+    return MaterialPageRoute(builder: (_) => const PendingVerificationScreen());
+  }
+  if (path == '/rejected-account') {
+    return MaterialPageRoute(builder: (_) => const RejectedAccountScreen());
+  }
+  if (path == '/suspended-account') {
+    return MaterialPageRoute(builder: (_) => const SuspendedAccountScreen());
   }
 
   // Master Administrator Login route (Public portal)
@@ -355,6 +385,25 @@ Route<dynamic>? buildAppRoute(
             workoutRepository: workoutRepo,
           ),
         );
+      case '/admin/verification':
+        return MaterialPageRoute(
+          builder: (_) => const AdminClientVerificationScreen(),
+        );
+    }
+  }
+
+  // Central Client Verification Gate for all private athlete features
+  if (path.startsWith('/client') || path == '/dashboard' || path == '/onboarding') {
+    if (!auth.isAdmin && auth.isAuthenticated) {
+      if (auth.isPending) {
+        return MaterialPageRoute(builder: (_) => const PendingVerificationScreen());
+      }
+      if (auth.isRejected) {
+        return MaterialPageRoute(builder: (_) => const RejectedAccountScreen());
+      }
+      if (auth.isSuspended) {
+        return MaterialPageRoute(builder: (_) => const SuspendedAccountScreen());
+      }
     }
   }
 
@@ -374,6 +423,8 @@ Route<dynamic>? buildAppRoute(
         return MaterialPageRoute(
           builder: (_) => ClientWeeklyProgressScreen(
             repository: weeklyProgressRepo,
+            workoutRepository: workoutRepo,
+            activityRepository: activityRepo,
           ),
         );
       case '/client/workout':

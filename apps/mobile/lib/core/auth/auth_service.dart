@@ -47,6 +47,13 @@ class AuthService extends ChangeNotifier {
   Map<String, dynamic> _clientProfile = {};
   bool _hasPendingAssessmentSync = false;
 
+  // Real-Time User Verification & Authorization States
+  String _userStatus = 'APPROVED'; // 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED'
+  String? _rejectionReason;
+  String? _rejectedAt;
+  String? _approvedAt;
+  String? _suspendedAt;
+
   AuthService._internal();
 
   UserRole get currentRole => _role;
@@ -60,6 +67,17 @@ class AuthService extends ChangeNotifier {
   String get currentUserEmail => _userEmail;
   String? get currentUserPhone => _userPhone;
   String? get currentUserPhotoUrl => _photoUrl;
+
+  // Verification Status Getters
+  String get userStatus => _role == UserRole.admin ? 'APPROVED' : _userStatus;
+  bool get isPending => _isAuthenticated && _role == UserRole.client && _userStatus == 'PENDING';
+  bool get isApproved => !_isAuthenticated || _role == UserRole.admin || _userStatus == 'APPROVED';
+  bool get isRejected => _isAuthenticated && _role == UserRole.client && _userStatus == 'REJECTED';
+  bool get isSuspended => _isAuthenticated && _role == UserRole.client && _userStatus == 'SUSPENDED';
+  String? get rejectionReason => _rejectionReason;
+  String? get rejectedAt => _rejectedAt;
+  String? get approvedAt => _approvedAt;
+  String? get suspendedAt => _suspendedAt;
   String get currentToken {
     if (_token.isNotEmpty) return _token;
     if (_role == UserRole.admin) return 'local_admin_session_token';
@@ -205,6 +223,11 @@ class AuthService extends ChangeNotifier {
           _onboardingCompleted = session['onboardingCompleted'] == true || session['assessmentCompleted'] == true;
           _onboardingStep = session['onboardingStep'] is int ? session['onboardingStep'] : 0;
           _clientProfile = session['clientProfile'] is Map ? Map<String, dynamic>.from(session['clientProfile']) : {};
+          _userStatus = (session['status']?.toString() ?? 'APPROVED').toUpperCase();
+          _rejectionReason = session['rejectionReason']?.toString();
+          _rejectedAt = session['rejectedAt']?.toString();
+          _approvedAt = session['approvedAt']?.toString();
+          _suspendedAt = session['suspendedAt']?.toString();
           _isAuthenticated = true;
           _token = session['token']?.toString() ?? '';
 
@@ -268,6 +291,11 @@ class AuthService extends ChangeNotifier {
         'photoUrl': _photoUrl,
         'role': _role == UserRole.admin ? 'ADMIN' : 'CLIENT',
         'token': _token,
+        'status': _userStatus,
+        'rejectionReason': _rejectionReason,
+        'rejectedAt': _rejectedAt,
+        'approvedAt': _approvedAt,
+        'suspendedAt': _suspendedAt,
         'onboardingCompleted': _onboardingCompleted,
         'assessmentCompleted': _onboardingCompleted,
         'onboardingStep': _onboardingStep,
@@ -392,6 +420,11 @@ class AuthService extends ChangeNotifier {
           _userPhone = cleanPhone;
           _photoUrl = null;
           _token = token;
+          _userStatus = (data['status']?.toString() ?? user['status']?.toString() ?? 'PENDING').toUpperCase();
+          _rejectionReason = null;
+          _rejectedAt = null;
+          _approvedAt = null;
+          _suspendedAt = null;
           _onboardingCompleted = false;
           _onboardingStep = 0;
           _clientProfile = Map<String, dynamic>.from(profile);
@@ -420,6 +453,9 @@ class AuthService extends ChangeNotifier {
 
           return {
             'clientId': generatedClientId,
+            'status': _userStatus,
+            'isPending': _userStatus == 'PENDING',
+            'isApproved': _userStatus == 'APPROVED',
             'message': data['instruction'] ?? 'Your Alpha X Gym Client ID is $generatedClientId',
             'assessmentCompleted': false,
           };
@@ -556,6 +592,11 @@ class AuthService extends ChangeNotifier {
           _userPhone = user['phone']?.toString() ?? profile['phone']?.toString();
           _photoUrl = user['photoUrl']?.toString();
           _token = data['token']?.toString() ?? '';
+          _userStatus = (data['status']?.toString() ?? user['status']?.toString() ?? 'APPROVED').toUpperCase();
+          _rejectionReason = data['rejectionReason']?.toString() ?? user['rejectionReason']?.toString();
+          _rejectedAt = data['rejectedAt']?.toString() ?? user['rejectedAt']?.toString();
+          _approvedAt = data['approvedAt']?.toString() ?? user['approvedAt']?.toString();
+          _suspendedAt = data['suspendedAt']?.toString() ?? user['suspendedAt']?.toString();
           _onboardingCompleted = isComplete;
           _onboardingStep = step;
           _clientProfile = Map<String, dynamic>.from(profile);
@@ -580,6 +621,12 @@ class AuthService extends ChangeNotifier {
           return {
             'role': 'CLIENT',
             'clientId': resolvedClientId,
+            'status': _userStatus,
+            'isApproved': _userStatus == 'APPROVED',
+            'isPending': _userStatus == 'PENDING',
+            'isRejected': _userStatus == 'REJECTED',
+            'isSuspended': _userStatus == 'SUSPENDED',
+            'rejectionReason': _rejectionReason,
             'assessmentCompleted': _onboardingCompleted,
             'onboardingCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
@@ -999,10 +1046,68 @@ class AuthService extends ChangeNotifier {
     _userPhone = null;
     _photoUrl = null;
     _token = '';
+    _userStatus = 'APPROVED';
+    _rejectionReason = null;
+    _rejectedAt = null;
+    _approvedAt = null;
+    _suspendedAt = null;
     _isAuthenticated = false;
     _onboardingCompleted = false;
     _onboardingStep = 0;
     _clientProfile = {};
+  }
+
+  /// Real-time verification status check:
+  /// Queries backend /auth/me to refresh current verification status from PostgreSQL database.
+  Future<Map<String, dynamic>> checkVerificationStatus() async {
+    if (_token.isEmpty || _role == UserRole.admin) {
+      return {'status': _userStatus, 'isApproved': true};
+    }
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/me');
+      final res = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          final data = decoded['data'];
+          final newStatus = (data['status']?.toString() ?? 'APPROVED').toUpperCase();
+          _userStatus = newStatus;
+          _rejectionReason = data['rejectionReason']?.toString();
+          _rejectedAt = data['rejectedAt']?.toString();
+          _approvedAt = data['approvedAt']?.toString();
+          _suspendedAt = data['suspendedAt']?.toString();
+          await _saveActiveSession();
+          notifyListeners();
+          return {
+            'status': _userStatus,
+            'isApproved': _userStatus == 'APPROVED',
+            'isPending': _userStatus == 'PENDING',
+            'isRejected': _userStatus == 'REJECTED',
+            'isSuspended': _userStatus == 'SUSPENDED',
+            'rejectionReason': _rejectionReason,
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] checkVerificationStatus network notice: $e');
+    }
+
+    return {
+      'status': _userStatus,
+      'isApproved': _userStatus == 'APPROVED',
+      'isPending': _userStatus == 'PENDING',
+      'isRejected': _userStatus == 'REJECTED',
+      'isSuspended': _userStatus == 'SUSPENDED',
+      'rejectionReason': _rejectionReason,
+    };
   }
 
   /// Test helper to simulate authenticated sessions in unit/widget tests.
@@ -1016,6 +1121,8 @@ class AuthService extends ChangeNotifier {
     String? phone = '+1 (555) 123-4567',
     String token = 'test_token',
     bool onboardingCompleted = true,
+    String status = 'APPROVED',
+    String? rejectionReason,
   }) {
     _role = role;
     _userEmail = email;
@@ -1024,6 +1131,8 @@ class AuthService extends ChangeNotifier {
     _clientId = clientId;
     _userName = userName;
     _token = token;
+    _userStatus = status.toUpperCase();
+    _rejectionReason = rejectionReason;
     _onboardingCompleted = onboardingCompleted;
     _isAuthenticated = true;
     _isInitialized = true;

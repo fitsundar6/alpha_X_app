@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { activityController } from './activity.controller';
-import { requireAuth, requireRoles } from '../../middlewares/auth';
+import { requireAuth, requireRoles, requireApprovedUser } from '../../middlewares/auth';
 import { UserRole } from '../../constants/roles';
 
 const router = Router();
 
-// Client routes (Authenticated client)
-router.post('/sync', requireAuth, (req, res, next) => activityController.syncActivity(req, res, next));
-router.get('/today', requireAuth, (req, res, next) => activityController.getToday(req, res, next));
-router.get('/history', requireAuth, (req, res, next) => activityController.getHistory(req, res, next));
+// Client routes (Authenticated and Approved client only)
+router.post('/sync', requireAuth, requireApprovedUser, (req, res, next) => activityController.syncActivity(req, res, next));
+router.get('/today', requireAuth, requireApprovedUser, (req, res, next) => activityController.getToday(req, res, next));
+router.get('/history', requireAuth, requireApprovedUser, (req, res, next) => activityController.getHistory(req, res, next));
 
 // Admin management routes
 router.get(

@@ -15,25 +15,57 @@ enum UserRole {
   ADMIN
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 model User {
-  id                   String   @id @default(uuid())
-  email                String   @unique
+  id                   String     @id @default(uuid())
+  email                String     @unique
   passwordHash         String?
   name                 String
-  role                 UserRole @default(CLIENT)
-  googleUid            String?  @unique
+  role                 UserRole   @default(CLIENT)
+  status               UserStatus @default(PENDING)
+  approvedAt           DateTime?
+  approvedBy           String?
+  rejectedAt           DateTime?
+  rejectedBy           String?
+  rejectionReason      String?
+  suspendedAt          DateTime?
+  suspendedBy          String?
+  lastLoginAt          DateTime?
+  googleUid            String?    @unique
   photoUrl             String?
   oneSignalPlayerId    String? // Push notification device token
-  notificationsEnabled Boolean  @default(true) // Client can opt out
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  notificationsEnabled Boolean    @default(true) // Client can opt out
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  clientProfile   ClientProfile?
-  assignedClients ClientProfile[]     @relation("TrainerClients")
-  assignments     WorkoutAssignment[] @relation("ClientAssignments")
-  workoutRecords  WorkoutRecord[]     @relation("ClientWorkoutRecords")
+  clientProfile    ClientProfile?
+  assignedClients  ClientProfile[]        @relation("TrainerClients")
+  assignments      WorkoutAssignment[]    @relation("ClientAssignments")
+  workoutRecords   WorkoutRecord[]        @relation("ClientWorkoutRecords")
+  verificationLogs UserVerificationLog[]  @relation("UserVerificationLogs")
 
   @@map("users")
+}
+
+model UserVerificationLog {
+  id             String     @id @default(uuid())
+  userId         String
+  user           User       @relation("UserVerificationLogs", fields: [userId], references: [id], onDelete: Cascade)
+  adminId        String?
+  adminEmail     String?
+  previousStatus UserStatus
+  newStatus      UserStatus
+  reason         String?
+  createdAt      DateTime   @default(now())
+
+  @@index([userId])
+  @@map("user_verification_logs")
 }
 
 model ClientProfile {

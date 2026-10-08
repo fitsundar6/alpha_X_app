@@ -24,6 +24,9 @@ import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/ad
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:alpha_x_gym/features/dashboard/admin_client_verification_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -58,6 +61,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _clientSearchController = TextEditingController();
   String _clientSearchQuery = '';
+  int _pendingVerificationCount = 0;
 
   final List<String> _tabTitles = [
     '🏠 DASHBOARD',
@@ -68,6 +72,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     '📈 WEEKLY PROGRESS',
     '⚠️ CLIENT ATTENTION',
     '📸 CLIENT FOOD PHOTOS',
+    '🛡️ USERS & VERIFICATION',
   ];
 
   @override
@@ -80,12 +85,37 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     // request on every setState(), causing repeated AI_SERVICE_UNAVAILABLE logs.
     _aiSummaryFuture = _aiCoachRepo.getDailySummary();
     _loadClients();
+    _loadVerificationMetrics();
   }
 
   @override
   void dispose() {
     _clientSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadVerificationMetrics() async {
+    try {
+      final token = await AuthService().getValidToken();
+      if (token.isEmpty) return;
+      final res = await http.get(
+        Uri.parse('${AppConstants.apiBaseUrl}/admin/verification/metrics'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          if (mounted) {
+            setState(() {
+              _pendingVerificationCount = (decoded['data']['pending'] as num?)?.toInt() ?? 0;
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   /// Select an admin tab and record it in history for back-gesture support.
@@ -99,6 +129,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       });
       if (idx == 1) {
         _loadClients(forceRefresh: true);
+      }
+      if (idx == 0 || idx == 8) {
+        _loadVerificationMetrics();
       }
     }
   }
@@ -348,6 +381,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         return const AdminAttentionCenterView();
       case 7:
         return const AdminFoodPhotosMonitoringScreen(showAppBar: false);
+      case 8:
+        return const AdminClientVerificationScreen(showAppBar: false);
       default:
         return _buildAdminHomeTab();
     }
@@ -404,6 +439,57 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             },
           ),
           _drawerItem(1, 'Clients', Icons.groups_outlined, colors),
+          ListTile(
+            leading: Icon(
+              Icons.verified_user_outlined,
+              color: _pendingVerificationCount > 0 ? const Color(0xFFF59E0B) : colors.textSecondary,
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Users & Verification',
+                    style: TextStyle(
+                      color: _selectedIndex == 8 ? colors.primary : colors.textPrimary,
+                      fontWeight: _selectedIndex == 8 ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_pendingVerificationCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$_pendingVerificationCount PENDING',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Text(
+              _pendingVerificationCount > 0
+                  ? '$_pendingVerificationCount new users awaiting approval'
+                  : 'Manage approvals & account statuses',
+              style: TextStyle(
+                color: _pendingVerificationCount > 0 ? const Color(0xFFF59E0B) : colors.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+            selected: _selectedIndex == 8,
+            onTap: () {
+              Navigator.of(context).pop();
+              _selectAdminTab(8);
+            },
+          ),
           _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined, colors),
           ListTile(
             leading: Icon(Icons.storage_outlined, color: colors.textSecondary),
@@ -517,6 +603,83 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_pendingVerificationCount > 0) ...[
+          AlphaXSubtleEntrance(
+            child: InkWell(
+              onTap: () => _selectAdminTab(8),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFF59E0B).withOpacity(0.20),
+                      const Color(0xFFB45309).withOpacity(0.08),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.7), width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withOpacity(0.25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.person_add_alt_1, color: Color(0xFFF59E0B), size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'NEW USERS PENDING VERIFICATION',
+                                style: TextStyle(
+                                  color: Color(0xFFF59E0B),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$_pendingVerificationCount',
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$_pendingVerificationCount ${_pendingVerificationCount == 1 ? "client has" : "clients have"} joined and ${_pendingVerificationCount == 1 ? "is" : "are"} waiting for verification.',
+                            style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, color: Color(0xFFF59E0B), size: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         // Operational Header Banner
         AlphaXSubtleEntrance(
           child: AlphaXCard(
@@ -719,6 +882,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             _adminActionChip('Client Food Photos', Icons.camera_alt_outlined, () {
               _selectAdminTab(7);
             }),
+            _adminActionChip(
+              _pendingVerificationCount > 0
+                  ? 'Verification ($_pendingVerificationCount)'
+                  : 'Client Verification',
+              Icons.verified_user_outlined,
+              () => _selectAdminTab(8),
+            ),
             _adminActionChip('Global Step Target', Icons.flag_outlined, () {
               _showSetStepGoalDialog();
             }),

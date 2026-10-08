@@ -2,13 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/environment';
 import { HttpStatus } from '../constants/httpStatus';
-import { UserRole } from '../constants/roles';
+import { UserRole, UserStatus } from '../constants/roles';
 import { sendError } from '../utils/responseEnvelope';
+import { prisma } from '../config/prisma';
 
 export interface AuthenticatedUser {
   id: string;
   email: string;
   role: UserRole;
+  status?: UserStatus;
 }
 
 // Augment Express Request to include user
@@ -258,3 +260,121 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
   }
   next();
 };
+
+/**
+ * CRITICAL SECURITY MIDDLEWARE:
+ * Enforces that authenticated user's account status is APPROVED in PostgreSQL database.
+ * If status is:
+ * - PENDING: Blocks protected features, returns 403 USER_PENDING_VERIFICATION
+ * - REJECTED: Blocks access, returns 403 USER_REJECTED with rejection reason
+ * - SUSPENDED: Blocks access, returns 403 USER_SUSPENDED
+ * Admins (matching ADMIN_EMAIL) bypass this check.
+ * NEVER trusts client-supplied status; reads actual status from database!
+ */
+export const requireApprovedUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (!req.user) {
+    sendError(res, 'UNAUTHORIZED', 'Authentication is required', HttpStatus.UNAUTHORIZED);
+    return;
+  }
+
+  // Admin users are always authorized
+  if (req.user.role === UserRole.ADMIN) {
+    next();
+    return;
+  }
+
+  // Allow mock clients in test environment
+  if (env.NODE_ENV !== 'production' && req.user.id === 'client_marcus_vance') {
+    req.user.status = UserStatus.APPROVED;
+    next();
+    return;
+  }
+
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        status: true,
+        rejectionReason: true,
+        rejectedAt: true,
+      },
+    });
+
+    if (!dbUser) {
+      sendError(res, 'USER_NOT_FOUND', 'User account not found', HttpStatus.UNAUTHORIZED);
+      return;
+    }
+
+    req.user.status = dbUser.status as UserStatus;
+
+    if (dbUser.status === UserStatus.APPROVED) {
+      next();
+      return;
+    }
+
+    if (dbUser.status === UserStatus.PENDING) {
+      sendError(
+        res,
+        'USER_PENDING_VERIFICATION',
+        'Your account has been submitted for verification. Please wait for the admin to approve your account.',
+        HttpStatus.FORBIDDEN,
+        [{ field: 'status', message: UserStatus.PENDING }],
+        undefined,
+        {
+          resourceId: req.user.id,
+          resourceType: 'User',
+          activity: 'Verify Account Approval Status',
+          explanation: 'Access to protected client features is restricted until an administrator approves your account.',
+        }
+      );
+      return;
+    }
+
+    if (dbUser.status === UserStatus.REJECTED) {
+      sendError(
+        res,
+        'USER_REJECTED',
+        dbUser.rejectionReason
+          ? `Your account has not been approved by the administrator. Reason: ${dbUser.rejectionReason}`
+          : 'Your account has not been approved by the administrator.',
+        HttpStatus.FORBIDDEN,
+        [
+          { field: 'status', message: UserStatus.REJECTED },
+          ...(dbUser.rejectionReason ? [{ field: 'rejectionReason', message: dbUser.rejectionReason }] : []),
+        ],
+        undefined,
+        {
+          resourceId: req.user.id,
+          resourceType: 'User',
+          activity: 'Verify Account Approval Status',
+          explanation: 'Account has been rejected by administration.',
+        }
+      );
+      return;
+    }
+
+    if (dbUser.status === UserStatus.SUSPENDED) {
+      sendError(
+        res,
+        'USER_SUSPENDED',
+        'Your account has been suspended by the administrator.',
+        HttpStatus.FORBIDDEN,
+        [{ field: 'status', message: UserStatus.SUSPENDED }],
+        undefined,
+        {
+          resourceId: req.user.id,
+          resourceType: 'User',
+          activity: 'Verify Account Approval Status',
+          explanation: 'Account has been suspended by administration.',
+        }
+      );
+      return;
+    }
+
+    sendError(res, 'FORBIDDEN', 'Access denied: account is not approved', HttpStatus.FORBIDDEN);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to verify user approval status', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+};
+
