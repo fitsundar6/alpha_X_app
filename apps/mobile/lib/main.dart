@@ -140,6 +140,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
     // Initialize global auto-refresh engine so all assignments reflect immediately
     AppAutoRefreshService.instance.initialize(
       workoutRepository: _workoutRepository,
+      activityRepository: _activityRepository,
       macroRepository: _macroRepository,
       weeklyProgressRepository: _weeklyProgressRepository,
       notificationRepository: NotificationRepository(),

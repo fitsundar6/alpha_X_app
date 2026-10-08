@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/notifications/data/repositories/notification_repository.dart';
@@ -26,6 +27,7 @@ class AppAutoRefreshService with WidgetsBindingObserver {
   AppAutoRefreshService._internal();
 
   WorkoutRepository? _workoutRepository;
+  ActivityRepository? _activityRepository;
   MacroRepository? _macroRepository;
   WeeklyProgressRepository? _weeklyProgressRepository;
   NotificationRepository? _notificationRepository;
@@ -48,11 +50,13 @@ class AppAutoRefreshService with WidgetsBindingObserver {
   /// Initialize the auto-refresh coordinator with all repositories
   void initialize({
     required WorkoutRepository workoutRepository,
+    required ActivityRepository activityRepository,
     required MacroRepository macroRepository,
     required WeeklyProgressRepository weeklyProgressRepository,
     required NotificationRepository notificationRepository,
   }) {
     _workoutRepository = workoutRepository;
+    _activityRepository = activityRepository;
     _macroRepository = macroRepository;
     _weeklyProgressRepository = weeklyProgressRepository;
     _notificationRepository = notificationRepository;
@@ -151,6 +155,12 @@ class AppAutoRefreshService with WidgetsBindingObserver {
 
         if (_notificationRepository != null) {
           futures.add(_notificationRepository!.fetchNotifications(silent: !force));
+        }
+
+        // ── FIX: Always refresh step count in every sync cycle ──
+        // ── This was completely missing from the auto-refresh loop ──
+        if (_activityRepository != null) {
+          futures.add(_activityRepository!.refreshActivityData());
         }
 
         await Future.wait(futures);

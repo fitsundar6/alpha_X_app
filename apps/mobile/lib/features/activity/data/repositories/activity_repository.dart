@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show SocketException;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
@@ -13,7 +13,7 @@ import 'package:alpha_x_gym/features/activity/domain/models/activity_models.dart
 ///
 /// Strictly enforces REAL step data belonging to the authenticated Client ID.
 /// No example, demo, synthetic, or hardcoded step data.
-class ActivityRepository extends ChangeNotifier {
+class ActivityRepository extends ChangeNotifier with WidgetsBindingObserver {
   final HealthService _healthService;
   final http.Client _httpClient;
 
@@ -42,6 +42,44 @@ class ActivityRepository extends ChangeNotifier {
   })  : _healthService = healthService ?? HealthService(),
         _httpClient = httpClient ?? http.Client() {
     _initialize();
+    // Register for app lifecycle events so steps refresh when returning from background
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Called by Flutter when the app comes back to the foreground.
+  /// Triggers a step refresh immediately without user interaction.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[STEP] App resumed — refreshing step count from health source');
+      _ensureHealthInitializedAndRefresh();
+    }
+  }
+
+  /// Ensures health service is initialized before refreshing.
+  /// Safe to call multiple times — HealthService tracks internal state.
+  Future<void> _ensureHealthInitializedAndRefresh() async {
+    if (_currentClientId.isEmpty) return;
+    try {
+      // Always try to initialize (idempotent — returns fast if already initialized)
+      await _healthService.initialize();
+      final hasPerm = await _healthService.hasPermissions();
+      debugPrint('[STEP] Permission status: ${hasPerm ? "GRANTED" : "DENIED/UNAVAILABLE"} (source: ${_healthService.activeSource.name})');
+      if (hasPerm) {
+        _connectionStatus = HealthConnectionStatus.authorized;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('alpha_x_health_enabled', true);
+      }
+    } catch (e) {
+      debugPrint('[STEP] Health init check error: $e');
+    }
+    await refreshActivityData();
   }
 
   // Getters
@@ -193,6 +231,9 @@ class ActivityRepository extends ChangeNotifier {
 
     // Asynchronously pull latest from backend for this client
     fetchClientActivityFromBackend(clientId);
+
+    // Immediately refresh steps from device health source (do not wait for auto-refresh heartbeat)
+    _ensureHealthInitializedAndRefresh();
   }
 
   /// Switch the active client profile (for Admin mode)
@@ -401,7 +442,8 @@ class ActivityRepository extends ChangeNotifier {
     }
   }
 
-  /// Core data refresh: pulls from health service, caches locally, and triggers backend sync
+  /// Core data refresh: pulls from health service, caches locally, and triggers backend sync.
+  /// Called on: manual sync tap, pull-to-refresh, app resume, and initial health connection.
   Future<void> refreshActivityData() async {
     _syncStatus = SyncStatus.syncing;
     notifyListeners();
@@ -409,13 +451,38 @@ class ActivityRepository extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      debugPrint('[STEP] === refreshActivityData START ===');
+      debugPrint('[STEP] Client: $_currentClientId | Connection: ${_connectionStatus.name}');
+      debugPrint('[STEP] Active source: ${_healthService.activeSource.name}');
+
+      // ── Auto-repair: if health service is initialized and has permissions  ──
+      // ── but connectionStatus is notConfigured, fix it automatically.       ──
+      if (_connectionStatus != HealthConnectionStatus.authorized) {
+        final hasPerm = await _healthService.hasPermissions();
+        debugPrint('[STEP] Permission status (re-check): ${hasPerm ? "GRANTED" : "DENIED"}');
+        if (hasPerm) {
+          _connectionStatus = HealthConnectionStatus.authorized;
+          await prefs.setBool('alpha_x_health_enabled', true);
+          debugPrint('[STEP] Auto-repaired connection status to AUTHORIZED');
+        }
+      }
+
       // 1. If connected, read live steps from device health platform
       if (_connectionStatus == HealthConnectionStatus.authorized) {
+        final now = DateTime.now();
+        final startOfDay = _healthService.getLocalStartOfDay(now);
+        debugPrint('[STEP] Query start: $startOfDay');
+        debugPrint('[STEP] Query end:   $now');
+
         final rawLiveSteps = await _healthService.fetchTodaySteps(since: _stepTrackingStartDate);
+        debugPrint('[STEP] Raw step records returned: $rawLiveSteps');
+
         final liveTodaySteps = await _processStepsWithBaseline(rawLiveSteps, prefs);
-        final metrics = await _healthService.fetchDailyMetrics(DateTime.now());
-        final todayKey = _dateToKey(DateTime.now());
-        final todayDate = _healthService.getLocalStartOfDay(DateTime.now());
+        debugPrint('[STEP] Calculated today\'s steps (after baseline): $liveTodaySteps');
+
+        final metrics = await _healthService.fetchDailyMetrics(now);
+        final todayKey = _dateToKey(now);
+        final todayDate = _healthService.getLocalStartOfDay(now);
 
         final cardioMinutes = metrics['cardioMinutes'] as int? ?? 0;
         final rawCalories = metrics['calories'] as double? ?? 0.0;
@@ -440,6 +507,7 @@ class ActivityRepository extends ChangeNotifier {
         );
 
         _recordsMap[todayKey] = updatedRecord;
+        debugPrint('[STEP] Flutter step value set to: $liveTodaySteps (goal: $_currentStepGoal)');
 
         // Fetch historical days strictly since client joined
         if (_stepTrackingStartDate != null) {
@@ -457,25 +525,31 @@ class ActivityRepository extends ChangeNotifier {
             }
           }
         }
+      } else {
+        debugPrint('[STEP] ⚠️ Skipping health data read — connection status: ${_connectionStatus.name}');
+        debugPrint('[STEP] ⚠️ User must tap "Allow Step Tracking" to grant permissions');
       }
 
       // 2. Persist to local disk cache immediately (Offline Protection)
       await _persistLocalCache();
 
       // 3. Push pending records to Backend API
+      debugPrint('[STEP] API sync start — pending records: ${_recordsMap.values.where((r) => r.syncStatus == SyncStatus.pending).length}');
       await _syncPendingRecordsWithBackend();
 
       _syncStatus = SyncStatus.synced;
       _lastSyncedAt = DateTime.now();
       await prefs.setString('alpha_x_last_sync_$_currentClientId', _lastSyncedAt!.toIso8601String());
+      debugPrint('[STEP] Dashboard displayed step count: ${todayRecord.steps}');
+      debugPrint('[STEP] === refreshActivityData COMPLETE ===');
     } on SocketException catch (_) {
       // Offline: keep cached data, mark pending
       _syncStatus = SyncStatus.pending;
-      debugPrint('[ActivityRepository] Offline: queued sync for later.');
+      debugPrint('[STEP] Offline — queued sync for later. Cached steps preserved.');
     } catch (e) {
       _syncStatus = SyncStatus.failed;
       _errorMessage = 'Synchronization failed: $e';
-      debugPrint('[ActivityRepository] refreshActivityData error: $e');
+      debugPrint('[STEP] refreshActivityData error: $e');
     } finally {
       notifyListeners();
     }
@@ -490,19 +564,35 @@ class ActivityRepository extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final isEnabled = prefs.getBool('alpha_x_health_enabled') ?? false;
-      if (isEnabled) {
-        final hasPerm = await _healthService.hasPermissions();
-        _connectionStatus = hasPerm
-            ? HealthConnectionStatus.authorized
+
+      // ── FIX: Always attempt health initialization on startup, not just when ──
+      // ── previously enabled. Health Connect requires initialization before    ──
+      // ── hasPermissions() can return correct results.                         ──
+      debugPrint('[STEP] Initializing health service on app startup...');
+      await _healthService.initialize();
+
+      final hasPerm = await _healthService.hasPermissions();
+      debugPrint('[STEP] Health Connect / HealthKit availability: ${_healthService.activeSource.name}');
+      debugPrint('[STEP] Permission status: ${hasPerm ? "GRANTED" : "DENIED or not yet requested"}');
+
+      if (hasPerm) {
+        _connectionStatus = HealthConnectionStatus.authorized;
+        await prefs.setBool('alpha_x_health_enabled', true);
+        debugPrint('[STEP] Health tracking auto-authorized from stored permissions');
+      } else {
+        // Still check saved pref for UI state
+        final wasEnabled = prefs.getBool('alpha_x_health_enabled') ?? false;
+        _connectionStatus = wasEnabled
+            ? HealthConnectionStatus.notConfigured
             : HealthConnectionStatus.notConfigured;
       }
+
       final lastSyncStr = prefs.getString('alpha_x_last_sync_$_currentClientId');
       if (lastSyncStr != null) {
         _lastSyncedAt = DateTime.tryParse(lastSyncStr);
       }
     } catch (e) {
-      debugPrint('[ActivityRepository] init error: $e');
+      debugPrint('[STEP] ActivityRepository init error: $e');
     }
     notifyListeners();
   }
@@ -603,35 +693,46 @@ class ActivityRepository extends ChangeNotifier {
     }
   }
 
-  /// First day baseline handling: if underlying source provides a cumulative count,
-  /// subtract the baseline established when client joins so historical steps from
-  /// earlier before the join time are never counted.
+  /// Baseline handling: Health Connect and HealthKit return steps-for-today (not cumulative),
+  /// so we do NOT subtract any baseline for those sources.
+  /// Baseline subtraction is only needed for raw pedometer which is cumulative since boot.
+  ///
+  /// BUG FIX: The previous implementation incorrectly used DateTime == comparison to detect
+  /// "first day", which fails when datetimes have microsecond differences.
+  /// It also zeroed out ALL steps on the first connect, breaking any user who had already
+  /// walked that day before opening the app.
+  ///
+  /// NEW BEHAVIOR:
+  /// - Health Connect / HealthKit: returns steps for the calendar day already — return as-is.
+  /// - Pedometer (cumulative): store boot-step baseline per-day; subtract it.
+  /// - No baseline manipulation for Health Connect (avoids the 0-step bug).
   Future<int> _processStepsWithBaseline(int rawSteps, SharedPreferences prefs) async {
     if (rawSteps <= 0) return 0;
 
-    final baselineKey = 'alpha_x_baseline_steps_$_currentClientId';
+    // Health Connect and HealthKit query steps FOR TODAY specifically — already scoped.
+    // Do NOT subtract a baseline; return raw value directly.
+    if (_healthService.activeSource == StepSource.healthConnect) {
+      debugPrint('[STEP] Health Connect source — using raw today steps: $rawSteps (no baseline subtraction needed)');
+      return rawSteps;
+    }
+
+    // Pedometer is cumulative since device boot. We subtract the count at start-of-day.
+    // Use date string comparison to avoid DateTime microsecond mismatches.
+    final todayKey = _dateToKey(DateTime.now());
+    final baselineKey = 'alpha_x_pedometer_baseline_${_currentClientId}_$todayKey';
     final hasBaseline = prefs.containsKey(baselineKey);
 
     if (!hasBaseline) {
-      // First connection for client: if client joined today and phone already reports steps
-      final isFirstDay = _stepTrackingStartDate != null &&
-          _healthService.getLocalStartOfDay(_stepTrackingStartDate!) ==
-              _healthService.getLocalStartOfDay(DateTime.now());
-
-      if (isFirstDay && rawSteps > 0) {
-        await prefs.setInt(baselineKey, rawSteps);
-        return 0; // Fresh clean start at 0
-      } else {
-        await prefs.setInt(baselineKey, 0);
-        return rawSteps;
-      }
+      // First pedometer reading for today — save as baseline
+      await prefs.setInt(baselineKey, rawSteps);
+      debugPrint('[STEP] Pedometer baseline set for $todayKey: $rawSteps');
+      return 0;
     }
 
     final baseline = prefs.getInt(baselineKey) ?? 0;
-    if (baseline > 0 && rawSteps >= baseline) {
-      return rawSteps - baseline;
-    }
-    return rawSteps;
+    final todaySteps = rawSteps >= baseline ? rawSteps - baseline : rawSteps;
+    debugPrint('[STEP] Pedometer today steps: $todaySteps (raw=$rawSteps, baseline=$baseline)');
+    return todaySteps;
   }
 
   Future<void> _persistLocalCache() async {
@@ -710,6 +811,11 @@ class ActivityRepository extends ChangeNotifier {
       final authClientId = AuthService().currentClientId;
       final targetClientId = authClientId.isNotEmpty ? authClientId : _currentClientId;
 
+      final todayPending = pendingRecords.where((r) => _dateToKey(r.date) == _dateToKey(DateTime.now()));
+      for (final r in todayPending) {
+        debugPrint('[STEP] API synchronization — sending steps=${r.steps} for date=${_dateToKey(r.date)} clientId=$targetClientId');
+      }
+
       final url = Uri.parse('${AppConstants.apiBaseUrl}/activity/sync');
       final body = jsonEncode({
         'clientId': targetClientId,
@@ -730,6 +836,8 @@ class ActivityRepository extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 4));
 
+      debugPrint('[STEP] Backend sync response: HTTP ${response.statusCode}');
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Mark as synced
         for (final r in pendingRecords) {
@@ -740,9 +848,13 @@ class ActivityRepository extends ChangeNotifier {
           );
         }
         await _persistLocalCache();
+        debugPrint('[STEP] Database saved step count: OK (${pendingRecords.length} record(s) synced)');
+      } else {
+        debugPrint('[STEP] Backend sync failed: HTTP ${response.statusCode} — ${response.body}');
       }
-    } catch (_) {
+    } catch (e) {
       // Offline: keep as pending for next automatic sync retry without losing steps
+      debugPrint('[STEP] Backend sync exception (will retry): $e');
     }
   }
 

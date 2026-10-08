@@ -93,20 +93,24 @@ class HealthService {
     try {
       if (Platform.isAndroid) {
         final status = await _health.getHealthConnectSdkStatus();
+        debugPrint('[STEP] Health Connect SDK status: $status');
         if (status != HealthConnectSdkStatus.sdkAvailable) {
-          debugPrint('[HealthService] Health Connect not available (status: $status)');
+          debugPrint('[STEP] Health Connect not available — will try pedometer fallback');
           return false;
         }
         await _health.configure();
+        debugPrint('[STEP] Health Connect configured successfully');
       }
 
+      debugPrint('[STEP] Requesting Health Connect / HealthKit authorization...');
       final granted = await _health.requestAuthorization(
         _requestedTypes,
         permissions: _permissions,
       );
+      debugPrint('[STEP] Health Connect authorization granted: $granted');
       return granted;
     } catch (e) {
-      debugPrint('[HealthService] Health Connect init error: $e');
+      debugPrint('[STEP] Health Connect init error: $e');
       return false;
     }
   }
@@ -232,15 +236,21 @@ class HealthService {
   Future<int> fetchStepsForInterval(DateTime startTime, DateTime endTime) async {
     if (kIsWeb) return 0;
     if (_activeSource == StepSource.pedometer) {
+      debugPrint('[STEP] Pedometer source — returning in-memory today steps: $_pedometerTodaySteps');
       return _pedometerTodaySteps;
     }
     try {
+      debugPrint('[STEP] Querying Health Connect/HealthKit steps from $startTime to $endTime');
       final totalSteps = await _health.getTotalStepsInInterval(startTime, endTime);
+      debugPrint('[STEP] Raw step records returned from health API: $totalSteps');
       return totalSteps ?? 0;
     } catch (e) {
-      debugPrint('[HealthService] fetchStepsForInterval error: $e');
+      debugPrint('[STEP] fetchStepsForInterval error: $e');
       // Auto-fallback to pedometer if Health Connect fails mid-session
-      if (_pedometerTodaySteps > 0) return _pedometerTodaySteps;
+      if (_pedometerTodaySteps > 0) {
+        debugPrint('[STEP] Falling back to pedometer: $_pedometerTodaySteps steps');
+        return _pedometerTodaySteps;
+      }
       return 0;
     }
   }

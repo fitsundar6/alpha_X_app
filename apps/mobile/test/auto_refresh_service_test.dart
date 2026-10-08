@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
@@ -28,6 +29,7 @@ void main() {
 
     refreshService.initialize(
       workoutRepository: workoutRepo,
+      activityRepository: ActivityRepository(),
       macroRepository: macroRepo,
       weeklyProgressRepository: progressRepo,
       notificationRepository: notificationRepo,

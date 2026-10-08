@@ -33,8 +33,11 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen> {
 
     widget.activityRepository.addListener(_onRepoUpdate);
 
-    // Initial check for health permission dialog on first launch if not configured and shown standalone
+    // Refresh steps as soon as the screen opens (covers tab-switch and direct navigation)
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.activityRepository.refreshActivityData();
+
+      // Initial check for health permission dialog on first launch if not configured and shown standalone
       if (widget.showAppBar && widget.activityRepository.connectionStatus == HealthConnectionStatus.notConfigured) {
         _showPermissionBottomSheet();
       }
