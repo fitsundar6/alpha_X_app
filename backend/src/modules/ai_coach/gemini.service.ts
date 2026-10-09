@@ -1,8 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { env } from '../../config/environment';
+import { geminiReliability, classifyGeminiError, redactSecrets } from './gemini.reliability';
 import {
   buildAlphaXSystemPrompt,
   ALPHA_X_AI_PROMPT_VERSION,
@@ -59,9 +56,7 @@ export class GeminiService {
   private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
   private static readonly FALLBACK_MODELS = [
     'gemini-flash-latest',
-    'gemini-3.8-flash',
-    'gemini-3.7-flash',
-    'gemini-3.5-flash',
+    'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
   ];
   private static readonly MAX_RETRIES = 3;
@@ -100,26 +95,8 @@ export class GeminiService {
       throw new Error('Message prompt cannot be empty');
     }
 
-    // 2. Validate API Key & Sanitize Quotes/Whitespace (dynamically re-read .env to avoid stale in-memory state)
-    let rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
-    try {
-      const envPath = path.resolve(__dirname, '../../../.env');
-      if (fs.existsSync(envPath)) {
-        const fileContent = fs.readFileSync(envPath, 'utf8');
-        const parsed = dotenv.parse(fileContent);
-        if (parsed.GEMINI_API_KEY) {
-          rawApiKey = parsed.GEMINI_API_KEY;
-          process.env.GEMINI_API_KEY = parsed.GEMINI_API_KEY;
-        }
-      }
-    } catch (_) {}
-
-    const apiKey = (rawApiKey || '')
-      .trim()
-      .replace(/^["']|["']$/g, '')
-      .trim();
-
-    if (!apiKey) {
+    // 2. Validate API Key & Circuit Breaker State (Safe in-memory resolution, zero disk I/O on Vercel)
+    if (!geminiReliability.hasConfiguredKey()) {
       this.logAudit({
         requestId,
         conversationId: effectiveConvId,
@@ -130,6 +107,22 @@ export class GeminiService {
         message: 'GEMINI_API_KEY environment variable is not configured',
       });
       throw new Error('AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.');
+    }
+
+    if (geminiReliability.isCircuitTripped()) {
+      const remainingSec = geminiReliability.getCircuitCooldownRemainingSeconds();
+      this.logAudit({
+        requestId,
+        conversationId: effectiveConvId,
+        adminId,
+        status: 'FAILED',
+        errorCategory: 'AUTHENTICATION_ERROR',
+        latencyMs: 0,
+        message: 'Circuit breaker active: invalid API credentials',
+      });
+      throw new Error(
+        `AI service authentication is temporarily suspended due to recent invalid credentials (${remainingSec}s remaining). Server in degraded safe mode.`
+      );
     }
 
 
@@ -159,8 +152,7 @@ export class GeminiService {
       effectiveSlots.clientContext = clientContextService.formatActiveClientContextSlot(verifiedClient);
     }
 
-    // 4. Initialize GoogleGenAI Client
-    const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+    // 4. Target Model & Execution Context
     const targetModel = options.model || GeminiService.DEFAULT_MODEL;
     const executionContext: ToolExecutionContext = {
       adminId,
@@ -169,21 +161,25 @@ export class GeminiService {
       verifiedClient: verifiedClient || null,
     };
 
-    // 5. Execute with Retry + Timeout (retries on Gemini 503 "high demand" spikes)
-    const MAX_RETRIES = GeminiService.MAX_RETRIES;
-    let lastError: any;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-      const response = await this.executeWithTimeout(
-        ai,
-        targetModel,
-        cleanMessage,
-        timeoutMs,
-        effectiveSlots,
-        history,
-        executionContext,
-        options.toolsEnabled !== false
+    // 5. Execute with Bounded Retries, Jitter & Safe Backup Failover
+    try {
+      const response = await geminiReliability.executeWithReliability(
+        async (ai) => {
+          return this.executeWithTimeout(
+            ai,
+            targetModel,
+            cleanMessage,
+            timeoutMs,
+            effectiveSlots,
+            history,
+            executionContext,
+            options.toolsEnabled !== false
+          );
+        },
+        {
+          operationName: `GeminiChat_${requestId}`,
+          maxRetries: GeminiService.MAX_RETRIES,
+        }
       );
 
       const latencyMs = Date.now() - startTime;
@@ -226,48 +222,29 @@ export class GeminiService {
         toolsInvokedNames: response.toolsInvokedNames,
         verifiedClient: verifiedClient || null,
       };
-      } catch (err: any) {
-        lastError = err;
-        const rawMsg = err?.message || String(err);
-        console.error('[GEMINI RAW ERROR]', rawMsg);
-        const isOverloaded = rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE') || rawMsg.includes('high demand') || rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED');
-        if (isOverloaded && attempt < MAX_RETRIES) {
-          const delayMs = Math.min(Math.pow(2, attempt) * 1500, 30000); // cap at 30s
-          console.warn(`[GEMINI RETRY] Attempt ${attempt}/${MAX_RETRIES} — high demand 503. Retrying in ${delayMs}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          continue;
-        }
-        break;
-      }
-    }
-
-    // All attempts exhausted — map to safe client-facing error
-    {
+    } catch (err: any) {
       const latencyMs = Date.now() - startTime;
-      const errorMsg = lastError?.message || String(lastError);
-      const isTimeout = errorMsg.includes('timed out');
-      const isAuthError = errorMsg.includes('API key not valid') || errorMsg.includes('403');
-      const isRateLimit = errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('503') || errorMsg.includes('high demand');
-      const isModelError = errorMsg.includes('not found') || errorMsg.includes('thought_signature') || errorMsg.includes('INVALID_ARGUMENT');
+      const classified = classifyGeminiError(err);
+      const isTimeout = classified.sanitizedMessage.includes('timed out');
 
-      let errorCategory = 'GEMINI_API_ERROR';
+      let errorCategory = classified.category as string;
       let clientFacingMessage = 'AI service is temporarily unavailable. Please try again shortly.';
 
       if (isTimeout) {
         errorCategory = 'TIMEOUT';
         clientFacingMessage = 'AI service request timed out. Please try again.';
-      } else if (isAuthError) {
+      } else if (classified.isAuth) {
         errorCategory = 'AUTHENTICATION_ERROR';
         clientFacingMessage = 'AI service authentication failed. Please verify server API key configuration.';
-      } else if (isRateLimit) {
+      } else if (classified.isQuota || classified.isRateLimit) {
         errorCategory = 'RATE_LIMIT_EXCEEDED';
         clientFacingMessage = 'Gemini is experiencing high demand. Please wait a moment and try again.';
-      } else if (isModelError) {
+      } else if (classified.isModelError) {
         errorCategory = 'MODEL_ERROR';
-        clientFacingMessage = `AI model configuration error: ${errorMsg.substring(0, 120)}`;
+        clientFacingMessage = `AI model configuration error: ${classified.sanitizedMessage.substring(0, 120)}`;
       } else {
         errorCategory = 'GEMINI_API_ERROR';
-        clientFacingMessage = `AI service error: ${errorMsg.substring(0, 150)}`;
+        clientFacingMessage = `AI service error: ${classified.sanitizedMessage.substring(0, 150)}`;
       }
 
       this.logAudit({
@@ -372,7 +349,13 @@ export class GeminiService {
 
         for (const call of currentResponse.functionCalls) {
           if (toolCallsExecuted >= maxCalls) {
-            break;
+            functionResponseParts.push({
+              functionResponse: {
+                name: call.name,
+                response: { output: { notice: 'Maximum tool call depth reached.' } },
+              },
+            });
+            continue;
           }
 
           toolCallsExecuted++;
@@ -400,18 +383,54 @@ export class GeminiService {
         });
 
         // Call model with tool responses to generate final synthesis
+        const nextToolsConfig = toolCallsExecuted < maxCalls ? toolsConfig : undefined;
         currentResponse = await this.callModelWithFallback(
           ai,
           modelName,
           contentsPayload,
           systemInstruction,
-          toolsConfig
+          nextToolsConfig
         );
       }
 
-      console.log(`[DEBUG GEMINI] Gemini final response: toolsCount=${toolsInvokedNames.length}, length=${(currentResponse?.text || '').length}, preview="${(currentResponse?.text || '').substring(0, 100)}..."`);
+      // If loop exited but model still left pending function calls, close them and synthesize final text
+      if (
+        currentResponse?.functionCalls &&
+        currentResponse.functionCalls.length > 0 &&
+        (!currentResponse.text || currentResponse.text.trim().length === 0)
+      ) {
+        if (currentResponse?.candidates?.[0]?.content) {
+          contentsPayload.push(currentResponse.candidates[0].content);
+        }
+        const capResponses = currentResponse.functionCalls.map((fc: any) => ({
+          functionResponse: {
+            name: fc.name,
+            response: { output: { notice: 'Tool call cap reached. Please provide final answer using gathered data.' } },
+          },
+        }));
+        contentsPayload.push({
+          role: 'user',
+          parts: capResponses,
+        });
+        currentResponse = await this.callModelWithFallback(
+          ai,
+          modelName,
+          contentsPayload,
+          systemInstruction,
+          undefined
+        );
+      }
+
+      let finalText = currentResponse?.text || '';
+      if (!finalText && currentResponse?.candidates?.[0]?.content?.parts) {
+        for (const p of currentResponse.candidates[0].content.parts) {
+          if (p.text) finalText += p.text;
+        }
+      }
+
+      console.log(`[DEBUG GEMINI] Gemini final response: toolsCount=${toolsInvokedNames.length}, length=${finalText.length}, preview="${finalText.substring(0, 100)}..."`);
       return {
-        text: currentResponse?.text || '',
+        text: finalText,
         toolsInvokedCount: toolsInvokedNames.length,
         toolsInvokedNames,
       };
@@ -459,13 +478,12 @@ export class GeminiService {
         });
       } catch (err: any) {
         lastErr = err;
-        const msg = err?.message || String(err);
-        const isAuthError = msg.includes('401') || msg.includes('invalid authentication') || msg.includes('API key not valid') || msg.includes('403');
-        if (isAuthError) {
-          console.warn(`[GEMINI SERVICE] Authentication failure (401/403) with model ${currentModel}: ${msg.substring(0, 100)}. Skipping remaining fallback models.`);
+        const classified = classifyGeminiError(err);
+        if (classified.isAuth || classified.isQuota) {
+          console.warn(`[GEMINI SERVICE] Authentication / Quota failure with model ${currentModel}: ${classified.sanitizedMessage.substring(0, 100)}. Skipping remaining fallback models.`);
           throw err;
         }
-        console.warn(`[GEMINI SERVICE] Model ${currentModel} failed (${msg.substring(0, 80)}), trying fallback...`);
+        console.warn(`[GEMINI SERVICE] Model ${currentModel} failed (${classified.sanitizedMessage.substring(0, 80)}), trying fallback...`);
       }
     }
     throw lastErr;
@@ -497,7 +515,9 @@ export class GeminiService {
       : '';
     const convLog = meta.conversationId ? ` ConvID=${meta.conversationId}` : '';
     console.log(
-      `[ALPHA X AI AUDIT] [${timestamp}] RequestID=${meta.requestId}${convLog} AdminID=${meta.adminId} Status=${meta.status} Latency=${meta.latencyMs}ms ${meta.model ? 'Model=' + meta.model : ''}${meta.promptVersion ? ' PromptVer=' + meta.promptVersion : ''}${ragLog} ${meta.errorCategory ? 'ErrorCategory=' + meta.errorCategory : ''}`
+      redactSecrets(
+        `[ALPHA X AI AUDIT] [${timestamp}] RequestID=${meta.requestId}${convLog} AdminID=${meta.adminId} Status=${meta.status} Latency=${meta.latencyMs}ms ${meta.model ? 'Model=' + meta.model : ''}${meta.promptVersion ? ' PromptVer=' + meta.promptVersion : ''}${ragLog} ${meta.errorCategory ? 'ErrorCategory=' + meta.errorCategory : ''}`
+      )
     );
   }
 }

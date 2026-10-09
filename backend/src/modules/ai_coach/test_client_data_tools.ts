@@ -690,7 +690,7 @@ async function runPhase6Tests(): Promise<void> {
       // TEST 21: Real Gemini AI Client Data Retrieval
       console.log('--- TEST 21: Real Gemini AI Client Data Retrieval ---');
       const reply21 = await geminiService.generateFitnessResponse({
-        message: `What is ${marcusUser.name}'s current weight according to Alpha X records?`,
+        message: `What is ${marcusUser.name} (${marcusAxId})'s current weight according to Alpha X records?`,
         adminId: adminContext.adminId,
         requestId: 'req_test_21',
         conversationId: adminContext.conversationId,

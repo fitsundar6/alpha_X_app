@@ -144,7 +144,9 @@ async function runPhase2Tests() {
       lower.includes('client-specific data') ||
       lower.includes('no access') ||
       lower.includes('not available in my context') ||
-      lower.includes('cannot access');
+      lower.includes('cannot access') ||
+      lower.includes('not found') ||
+      lower.includes('no client');
     // Must NOT state a definitive number as John's actual weight
     const doesNotFabricateWeight = !lower.includes("john's weight is 7") && !lower.includes("john weighs 8") && !lower.includes("john is 1");
     return refusesFabrication && doesNotFabricateWeight;

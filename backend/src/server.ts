@@ -48,6 +48,7 @@ import { clientRoutes } from './modules/client/client.routes';
 import { foodPhotoRoutes } from './modules/food/food.photo.routes';
 import { automationRoutes } from './modules/automation/automation.routes';
 import { aiCoachRoutes } from './modules/ai_coach/ai_coach.routes';
+import { geminiReliability } from './modules/ai_coach/gemini.reliability';
 import { aiProposalsRoutes } from './modules/ai_coach/ai_proposals.routes';
 import { notificationsRoutes } from './modules/notifications/notifications.routes';
 import { aiNotificationEngine } from './modules/notifications/ai_notifications.service';
@@ -159,6 +160,11 @@ const healthHandler = (_req: Request, res: Response) => {
     environment: env.NODE_ENV,
     host: env.HOST,
     port: env.PORT,
+    aiCoach: geminiReliability.hasConfiguredKey()
+      ? geminiReliability.isCircuitTripped()
+        ? 'degraded'
+        : 'available'
+      : 'unconfigured',
   });
 };
 

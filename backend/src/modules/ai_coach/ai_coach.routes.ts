@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../../middlewares/auth';
 import { geminiService } from './gemini.service';
+import { geminiReliability } from './gemini.reliability';
 import { aiController } from './ai_controller';
 import { aiTools } from './ai_tools';
 import { conversationService, conversationStore, clientContextService } from './conversation';
@@ -155,14 +156,8 @@ router.post('/chat', async (req: Request, res: Response) => {
   // 7. Extract bounded multi-turn conversation history
   const history = conversationService.getRecentHistory(conversation);
 
-  const rawApiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
-  const apiKey = (rawApiKey || '')
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .trim();
-
-  // 8. Call Google Gemini Foundation Model if API Key is configured
-  if (apiKey && apiKey.length > 0) {
+  // 8. Call Google Gemini Foundation Model if configured and not circuit-tripped
+  if (geminiReliability.hasConfiguredKey() && !geminiReliability.isCircuitTripped()) {
     try {
       const geminiResult = await geminiService.generateFitnessResponse({
         message: cleanMessage,
@@ -205,59 +200,18 @@ router.post('/chat', async (req: Request, res: Response) => {
       const isAuthError = errMsg.includes('401') || errMsg.includes('authentication') || errMsg.includes('API key');
       console.error(`[GEMINI SERVICE NOTICE] [${requestId}]:`, errMsg);
 
-      // Attempt intelligent database-backed fallback via AiController (e.g. for "Give me today's report", missed workouts, client reviews)
-      try {
-        console.log(`[AI COACH FALLBACK] [${requestId}]: Attempting database-backed fallback via AiController for prompt: "${cleanMessage}"...`);
-        const fallbackResult = await aiController.handleAdminMessage({
-          adminId,
-          adminName: adminUser.name || 'Alex Stone',
-          conversationId: conversation.id,
-          message: cleanMessage,
-          selectedClientId: conversation.verifiedClient?.clientId || selectedClientId,
-        });
-
-        conversationService.recordExchange(conversation, cleanMessage, fallbackResult.replyText, {
-          model: 'alpha-x-database-engine',
-          promptVersion: '2.0-fallback',
-          latencyMs: 50,
-          verifiedClient: conversation.verifiedClient || null,
-        });
-
-        sendSuccess(res, {
-          conversationId: conversation.id,
-          response: fallbackResult.replyText,
-          replyText: fallbackResult.replyText,
-          requestId,
-          model: 'alpha-x-database-engine',
-          promptVersion: '2.0-fallback',
-          latencyMs: 50,
-          intent: fallbackResult.intent || 'FACILITY_QUERY',
-          reportCard: fallbackResult.reportCard,
-          proposal: fallbackResult.proposal,
-          suggestedFollowUps: fallbackResult.suggestedFollowUps || [
-            'Give me today\'s report',
-            'Show clients needing review',
-            'Who missed workouts today?',
-          ],
-          verifiedClient: conversation.verifiedClient || null,
-        }, HttpStatus.OK, `AI Coach answered via Alpha X Analytics Engine (Prompt: "${cleanMessage}")`);
-        return;
-      } catch (fallbackErr: any) {
-        console.error(`[AI COACH FALLBACK ERROR] [${requestId}]:`, fallbackErr?.message);
-      }
-
-      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (${isAuthError ? 'HTTP 401' : 'HTTP 503'} ERROR) "${errMsg}"`);
+      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503 ERROR) "${errMsg}"`);
       sendError(
         res,
         isAuthError ? 'AI_AUTHENTICATION_ERROR' : 'AI_SERVICE_UNAVAILABLE',
         errMsg || 'AI service is temporarily unavailable.',
-        isAuthError ? HttpStatus.UNAUTHORIZED : HttpStatus.SERVICE_UNAVAILABLE,
+        HttpStatus.SERVICE_UNAVAILABLE,
         undefined,
         err,
         {
           activity: 'AI Coach Natural Language Query',
           explanation: isAuthError
-            ? 'Google Gemini API rejected authentication credentials (HTTP 401). Verify GEMINI_API_KEY in server environment.'
+            ? 'Google Gemini API rejected authentication credentials. Verify GEMINI_API_KEY in server environment.'
             : 'External AI reasoning model execution encountered an error.',
           receivedPayload: { message: cleanMessage, conversationId: conversation.id },
         }
@@ -678,4 +632,28 @@ router.get('/clients/:clientId/summary', async (req: Request, res: Response) => 
   }
 });
 
+/**
+ * GET /api/v1/admin/ai-coach/health
+ * Also accessible via /api/admin/ai-coach/health
+ *
+ * Lightweight Gemini API connectivity probe with TTL caching (no credential leaks).
+ * Query param: ?refresh=true forces a fresh probe instead of returning cached status.
+ */
+router.get('/health', async (req: Request, res: Response) => {
+  try {
+    const forceRefresh = req.query.refresh === 'true';
+    const health = await geminiReliability.checkHealth(forceRefresh);
+    const statusCode = health.healthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
+    sendSuccess(res, health, statusCode);
+  } catch (err: any) {
+    sendError(
+      res,
+      'HEALTH_CHECK_ERROR',
+      err?.message || 'Failed to check Gemini AI health',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+});
+
 export const aiCoachRoutes = router;
+

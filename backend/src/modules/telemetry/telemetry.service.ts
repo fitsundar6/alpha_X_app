@@ -12,7 +12,7 @@
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/environment';
 import { oneSignalService } from '../notifications/onesignal.service';
-import { GoogleGenAI } from '@google/genai';
+import { geminiReliability, classifyGeminiError, redactSecrets } from '../ai_coach/gemini.reliability';
 import {
   WeeklyTelemetryReport,
   MuscleGroupTelemetry,
@@ -24,7 +24,7 @@ import {
 
 export class TelemetryService {
   private readonly defaultModel = 'gemini-flash-lite-latest';
-  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash'];
+  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
   /**
    * Calculate a memorable real-world physical comparison for iron volume moved.
@@ -152,32 +152,45 @@ export class TelemetryService {
   }
 
   /**
-   * Helper to execute Gemini generation with fallback.
+   * Helper to execute Gemini generation with reliability and fallback.
    */
   private async generateAiCommentary(prompt: string, fallback: string): Promise<string> {
-    const rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    const apiKey = (rawApiKey || '')
-      .trim()
-      .replace(/^["']|["']$/g, '')
-      .trim();
-    if (!apiKey) return fallback;
-
-    const ai = new GoogleGenAI({ apiKey });
-    const models = [this.defaultModel, ...this.fallbackModels];
-
-    for (const model of models) {
-      try {
-        const resp = await ai.models.generateContent({ model, contents: prompt });
-        const text = (resp.text || '').trim().replace(/^["']|["']$/g, '');
-        if (text.length > 20 && text.length <= 320) {
-          return text;
-        }
-      } catch (err: any) {
-        console.warn(`[TELEMETRY] Model ${model} failed, trying next...`);
-      }
+    if (!geminiReliability.hasConfiguredKey() || geminiReliability.isCircuitTripped()) {
+      return fallback;
     }
 
-    return fallback;
+    try {
+      return await geminiReliability.executeWithReliability(
+        async (ai) => {
+          const models = [this.defaultModel, ...this.fallbackModels];
+          for (const model of models) {
+            try {
+              const resp = await ai.models.generateContent({ model, contents: prompt });
+              const text = (resp.text || '').trim().replace(/^["']|["']$/g, '');
+              if (text.length > 20 && text.length <= 320) {
+                return text;
+              }
+            } catch (err: any) {
+              const classified = classifyGeminiError(err);
+              if (classified.isAuth || classified.isQuota) {
+                throw err;
+              }
+              console.warn(
+                `[TELEMETRY] Model ${model} failed, trying next...:`,
+                redactSecrets(classified.sanitizedMessage)
+              );
+            }
+          }
+          return fallback;
+        },
+        {
+          operationName: 'TelemetryCommentary',
+          maxRetries: 2,
+        }
+      );
+    } catch (_) {
+      return fallback;
+    }
   }
 
   /**

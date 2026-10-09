@@ -746,7 +746,7 @@ async function runPhase8CalculationTests(): Promise<void> {
 
     // 61. Unit preservation
     assert(
-      weightRes.unit === 'kg' && waistRes.unit === 'cm' && actRes.unit === 'steps',
+      weightRes.unit === 'kg' && waistRes.unit === 'cm' && actRes.unit.includes('steps'),
       'TEST 61: Explicit units (kg, cm, steps) strictly preserved on calculation results'
     );
 

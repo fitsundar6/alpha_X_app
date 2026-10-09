@@ -1,9 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import dotenv from 'dotenv';
-import https from 'https';
-import { env } from '../../config/environment';
 import { prisma } from '../../config/prisma';
+import { geminiReliability, classifyGeminiError, redactSecrets } from '../ai_coach/gemini.reliability';
 
 export interface DetectedFoodResult {
   name: string;
@@ -136,12 +132,15 @@ export class FoodAiService {
       fiber?: number;
     }> | null = null;
 
-    const activeApiKey = (env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim();
-    if (activeApiKey.length > 0) {
+    if (geminiReliability.hasConfiguredKey() && !geminiReliability.isCircuitTripped()) {
       try {
         rawDetections = await this.callGeminiVisionApi(cleanBase64, mimeType);
-      } catch (err) {
-        console.warn('[AI FOOD SCANNER] Gemini API notice, falling back to local vision engine:', err);
+      } catch (err: any) {
+        const classified = classifyGeminiError(err);
+        console.warn(
+          `[AI FOOD SCANNER] Gemini API notice (${classified.category}), falling back to local vision engine:`,
+          redactSecrets(classified.sanitizedMessage)
+        );
       }
     }
 
@@ -230,7 +229,7 @@ export class FoodAiService {
   }
 
   /**
-   * Calls Google Gemini Vision REST API
+   * Calls Google Gemini Vision Multimodal API via Gemini Reliability Engine
    */
   private async callGeminiVisionApi(base64Image: string, mimeType: string): Promise<any[]> {
     const prompt = `You are a certified sports nutritionist analyzing a meal captured live from a fitness app's camera.
@@ -243,86 +242,44 @@ Example format:
   {"name": "Steamed White Rice", "estimatedGrams": 200, "confidence": 0.88, "calories": 260, "protein": 5, "carbs": 56, "fat": 1, "fiber": 1}
 ]`;
 
-    const requestBody = JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: prompt },
+    return geminiReliability.executeWithReliability(
+      async (ai) => {
+        const response = await ai.models.generateContent({
+          model: 'gemini-flash-lite-latest',
+          contents: [
             {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64Image,
-              },
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Image,
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-      generationConfig: {
-        response_mime_type: 'application/json',
-        temperature: 0.2,
-      },
-    });
-
-    let rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    try {
-      const envPath = path.resolve(__dirname, '../../../.env');
-      if (fs.existsSync(envPath)) {
-        const fileContent = fs.readFileSync(envPath, 'utf8');
-        const parsed = dotenv.parse(fileContent);
-        if (parsed.GEMINI_API_KEY) {
-          rawApiKey = parsed.GEMINI_API_KEY;
-        }
-      }
-    } catch (_) {}
-
-    const apiKey = (rawApiKey || '').trim().replace(/^["']|["']$/g, '').trim();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`;
-
-    return new Promise((resolve, reject) => {
-      const parsedUrl = new URL(url);
-      const req = https.request(
-        {
-          hostname: parsedUrl.hostname,
-          path: parsedUrl.pathname + parsedUrl.search,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(requestBody),
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
           },
-          timeout: 10000,
-        },
-        (res) => {
-          let data = '';
-          res.on('data', (chunk) => (data += chunk));
-          res.on('end', () => {
-            try {
-              if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                const parsed = JSON.parse(data);
-                const candidate = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (candidate) {
-                  const jsonArray = JSON.parse(candidate);
-                  if (Array.isArray(jsonArray) && jsonArray.length > 0) {
-                    return resolve(jsonArray);
-                  }
-                }
-              }
-              reject(new Error(`Gemini API returned status ${res.statusCode}`));
-            } catch (err) {
-              reject(err);
-            }
-          });
+        });
+
+        const text = response.text || '';
+        if (text) {
+          const jsonArray = JSON.parse(text);
+          if (Array.isArray(jsonArray) && jsonArray.length > 0) {
+            return jsonArray;
+          }
         }
-      );
-
-      req.on('error', reject);
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Gemini Vision API request timed out'));
-      });
-
-      req.write(requestBody);
-      req.end();
-    });
+        throw new Error('Empty or invalid food items array returned by Gemini');
+      },
+      {
+        operationName: 'GeminiFoodVision',
+        maxRetries: 2,
+      }
+    );
   }
 
   /**

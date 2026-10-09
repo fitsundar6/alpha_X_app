@@ -17,11 +17,7 @@
 
 import { prisma } from '../../config/prisma';
 import { oneSignalService } from './onesignal.service';
-import fs from 'fs';
-import path from 'path';
-import dotenv from 'dotenv';
-import { env } from '../../config/environment';
-import { GoogleGenAI } from '@google/genai';
+import { geminiReliability, classifyGeminiError, redactSecrets } from '../ai_coach/gemini.reliability';
 
 export interface MorningCheckInContext {
   firstName: string;
@@ -55,9 +51,6 @@ export interface MissedWorkoutContext {
 export interface EveningCheckInContext {
   firstName: string;
   workoutDoneToday: boolean;
-  stepsToday: number;
-  stepGoal: number;
-  stepsRemaining: number;
   proteinLoggedToday: number;
   proteinTargetG: number | null;
   proteinRemainingG: number | null;
@@ -67,51 +60,51 @@ export interface EveningCheckInContext {
 
 export class AiNotificationEngine {
   private readonly defaultModel = 'gemini-flash-lite-latest';
-  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-flash'];
+  private readonly fallbackModels = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
   /**
    * Helper to execute Gemini generation with robust model fallback and timeout.
    */
   private async callGemini(prompt: string, fallbackText: string): Promise<string> {
-    let rawApiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    try {
-      const envPath = path.resolve(__dirname, '../../../.env');
-      if (fs.existsSync(envPath)) {
-        const fileContent = fs.readFileSync(envPath, 'utf8');
-        const parsed = dotenv.parse(fileContent);
-        if (parsed.GEMINI_API_KEY) {
-          rawApiKey = parsed.GEMINI_API_KEY;
-        }
-      }
-    } catch (_) {}
-
-    const apiKey = (rawApiKey || '')
-      .trim()
-      .replace(/^["']|["']$/g, '')
-      .trim();
-    if (!apiKey) {
+    if (!geminiReliability.hasConfiguredKey() || geminiReliability.isCircuitTripped()) {
       return fallbackText;
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-    const modelsToTry = [this.defaultModel, ...this.fallbackModels];
-
-    for (const model of modelsToTry) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-        });
-        const text = (response.text || '').trim().replace(/^["']|["']$/g, '');
-        if (text.length > 0 && text.length <= 180) {
-          return text;
+    try {
+      return await geminiReliability.executeWithReliability(
+        async (ai) => {
+          const modelsToTry = [this.defaultModel, ...this.fallbackModels];
+          for (const model of modelsToTry) {
+            try {
+              const response = await ai.models.generateContent({
+                model,
+                contents: prompt,
+              });
+              const text = (response.text || '').trim().replace(/^["']|["']$/g, '');
+              if (text.length > 0 && text.length <= 180) {
+                return text;
+              }
+            } catch (err: any) {
+              const classified = classifyGeminiError(err);
+              if (classified.isAuth || classified.isQuota) {
+                throw err;
+              }
+              console.warn(
+                `[AI NOTIFICATIONS] Model ${model} failed, trying next...:`,
+                redactSecrets(classified.sanitizedMessage)
+              );
+            }
+          }
+          return fallbackText;
+        },
+        {
+          operationName: 'AiNotificationPush',
+          maxRetries: 2,
         }
-      } catch (err: any) {
-        console.warn(`[AI NOTIFICATIONS] Model ${model} failed, trying next...:`, err?.message);
-      }
+      );
+    } catch (_) {
+      return fallbackText;
     }
-
-    return fallbackText;
   }
 
   // =========================================================================
