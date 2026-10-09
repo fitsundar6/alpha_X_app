@@ -303,17 +303,35 @@ export class GeminiReliabilityManager {
    * Works seamlessly on Vercel serverless environments and local development.
    */
   public getResolvedCredentials(): { primaryKey: string; backupKey: string | null } {
-    const rawPrimary =
-      process.env.GEMINI_API_KEY !== undefined
-        ? process.env.GEMINI_API_KEY
-        : (env.GEMINI_API_KEY || '');
-    const cleanPrimary = rawPrimary.trim().replace(/^["']|["']$/g, '').trim();
+    let rawPrimary = '';
+    if (process.env.GEMINI_API_KEY !== undefined && process.env.GEMINI_API_KEY.trim() !== '') {
+      rawPrimary = process.env.GEMINI_API_KEY;
+    } else if (process.env.GOOGLE_API_KEY !== undefined && process.env.GOOGLE_API_KEY.trim() !== '') {
+      rawPrimary = process.env.GOOGLE_API_KEY;
+    } else if (process.env.GOOGLE_GENAI_API_KEY !== undefined && process.env.GOOGLE_GENAI_API_KEY.trim() !== '') {
+      rawPrimary = process.env.GOOGLE_GENAI_API_KEY;
+    } else if (process.env.GEMINI_API_KEY !== undefined) {
+      rawPrimary = process.env.GEMINI_API_KEY;
+    } else {
+      rawPrimary = env.GEMINI_API_KEY || '';
+    }
 
-    const rawBackup =
-      process.env.GEMINI_API_KEY_BACKUP !== undefined
-        ? process.env.GEMINI_API_KEY_BACKUP
-        : (env.GEMINI_API_KEY_BACKUP || '');
-    const cleanBackup = rawBackup.trim().replace(/^["']|["']$/g, '').trim();
+    let cleanPrimary = rawPrimary.trim().replace(/^["']|["']$/g, '').trim();
+    if (cleanPrimary === 'undefined' || cleanPrimary === 'null') {
+      cleanPrimary = '';
+    }
+
+    let rawBackup = '';
+    if (process.env.GEMINI_API_KEY_BACKUP !== undefined) {
+      rawBackup = process.env.GEMINI_API_KEY_BACKUP;
+    } else {
+      rawBackup = env.GEMINI_API_KEY_BACKUP || '';
+    }
+
+    let cleanBackup = rawBackup.trim().replace(/^["']|["']$/g, '').trim();
+    if (cleanBackup === 'undefined' || cleanBackup === 'null') {
+      cleanBackup = '';
+    }
 
     // Guard against fake/duplicate backup: never use the exact same key as backup
     let validBackup: string | null = null;
@@ -343,7 +361,10 @@ export class GeminiReliabilityManager {
    */
   public hasConfiguredKey(): boolean {
     const { primaryKey, backupKey } = this.getResolvedCredentials();
-    return Boolean(primaryKey || backupKey);
+    return Boolean(
+      (primaryKey && primaryKey.length >= 10) ||
+      (backupKey && backupKey.length >= 10)
+    );
   }
 
   /**
