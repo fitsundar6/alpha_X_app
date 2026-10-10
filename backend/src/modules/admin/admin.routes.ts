@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth, requireAdmin } from '../../middlewares/auth';
 import { adminAuthService } from '../auth/admin_auth.service';
 import { workoutController } from '../workout/workout.controller';
@@ -10,6 +11,8 @@ import { prisma } from '../../config/prisma';
 import { foodPhotoController } from '../food/food.photo.controller';
 import { automationController } from '../automation/automation.controller';
 import { maskPhone, maskEmail } from '../../utils/pii_mask';
+import { passwordResetService } from '../../services/password_reset.service';
+import { env } from '../../config/environment';
 
 const router = Router();
 
@@ -441,6 +444,80 @@ router.get('/verification/:userId/history', async (req: Request, res: Response) 
     sendSuccess(res, { logs });
   } catch (err: any) {
     sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve verification history', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// Rate limiter for admin password reset operations (30 per 15 min per admin)
+const adminPasswordResetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many password reset requests. Please wait a few minutes.',
+    },
+  },
+});
+
+// POST /verification/:userId/issue-reset-code: Admin verifies client identity and generates single-use 6-digit code
+router.post('/verification/:userId/issue-reset-code', adminPasswordResetRateLimiter, async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || env.ADMIN_EMAIL;
+  const reason = ((req.body?.reason as string) || '').trim() || 'In-person / admin verification';
+
+  try {
+    const result = await passwordResetService.adminIssueResetCode(
+      adminUser.id,
+      adminEmail,
+      targetId,
+      reason
+    );
+
+    if (!result.success) {
+      sendError(res, result.error || 'BAD_REQUEST', result.message || 'Failed to issue reset code', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, {
+      code: result.code,
+      expiresInMinutes: result.expiresInMinutes,
+      message: result.message,
+    }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to issue reset code', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
+// POST /verification/:userId/set-temp-password: Admin sets temporary password with forced change on login
+router.post('/verification/:userId/set-temp-password', adminPasswordResetRateLimiter, async (req: Request, res: Response) => {
+  const targetId = String(req.params.userId || '').trim();
+  const adminUser = req.user!;
+  const adminEmail = adminUser.email || env.ADMIN_EMAIL;
+  const tempPassword = req.body?.temporaryPassword ? String(req.body.temporaryPassword).trim() : undefined;
+
+  try {
+    const result = await passwordResetService.adminSetTemporaryPassword(
+      adminUser.id,
+      adminEmail,
+      targetId,
+      tempPassword
+    );
+
+    if (!result.success) {
+      sendError(res, result.error || 'BAD_REQUEST', result.message || 'Failed to set temporary password', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, {
+      temporaryPassword: result.temporaryPassword,
+      message: result.message,
+    }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to set temporary password', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 

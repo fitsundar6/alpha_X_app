@@ -2,6 +2,7 @@ process.env.NODE_ENV = 'test';
 import http from 'http';
 import app from './server';
 import { env } from './config/environment';
+import { prisma } from './config/prisma';
 
 function makeRequest(
   server: http.Server,
@@ -275,6 +276,10 @@ async function runTests() {
     // TEST 11: Client fetches assigned Diet Plan & Macros via Client API
     // -------------------------------------------------------------
     console.log('TEST 11: Client fetches assigned Diet Plan and Macros');
+    await prisma.user.update({
+      where: { email: testEmail },
+      data: { status: 'APPROVED', approvedAt: new Date(), approvedBy: 'fitsundar6@gmail.com' },
+    });
     const clientDietRes = await makeRequest(server, {
       method: 'GET',
       path: '/api/v1/client/me/diet-plan',

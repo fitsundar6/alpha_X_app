@@ -291,6 +291,137 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
     }
   }
 
+  Future<void> _issueResetCodeForUser(Map<String, dynamic> user) async {
+    final userId = user['id']?.toString() ?? '';
+    final userName = user['name']?.toString() ?? 'Athlete';
+    final clientId = user['clientId']?.toString() ?? '';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFFD4A034))),
+    );
+
+    try {
+      final token = await _authService.getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/verification/$userId/issue-reset-code');
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'reason': 'Admin verified athlete identity'}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          final code = decoded['data']['code']?.toString() ?? '';
+          if (mounted) {
+            _showCodeDialog(userName, clientId, code);
+          }
+          return;
+        }
+      }
+
+      final errorMsg = jsonDecode(res.body)['error']?['message'] ?? 'Failed to generate reset code';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppColors.primaryRed, content: Text('Error: $errorMsg')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppColors.primaryRed, content: Text('Network error: $e')),
+        );
+      }
+    }
+  }
+
+  void _showCodeDialog(String userName, String clientId, String code) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFD4A034), width: 1.5),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.verified_user_rounded, color: Color(0xFFD4A034), size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Reset Code for $userName',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Share this single-use 6-digit code with $userName ($clientId). The athlete will enter this on the app password recovery screen.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD4A034), width: 2),
+              ),
+              child: Center(
+                child: SelectableText(
+                  code,
+                  style: const TextStyle(
+                    color: Color(0xFFD4A034),
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 6,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.timer_outlined, color: Colors.amber, size: 14),
+                  SizedBox(width: 6),
+                  Text(
+                    'Expires in 15 minutes • Single-use only',
+                    style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- Dialogs ---
 
   void _showApproveDialog(Map<String, dynamic> user) {
@@ -549,6 +680,54 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                       ),
                       const SizedBox(height: 16),
                     ],
+                    _sectionTitle('SECURITY & PASSWORD RECOVERY'),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD4A034).withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.shield_outlined, color: Color(0xFFD4A034), size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Athlete Identity Verification & Reset',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Verify the athlete in person or by phone. You can issue a single-use 6-digit reset code (valid 15 minutes) for instant recovery without email.',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 11.5, height: 1.4),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            key: const Key('admin_issue_reset_code_button'),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFFD4A034), width: 1.2),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            icon: const Icon(Icons.key_rounded, color: Color(0xFFD4A034), size: 16),
+                            label: const Text(
+                              'GENERATE 6-DIGIT RESET CODE',
+                              style: TextStyle(color: Color(0xFFD4A034), fontWeight: FontWeight.w900, fontSize: 11),
+                            ),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              _issueResetCodeForUser(user);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     _sectionTitle('VERIFICATION AUDIT HISTORY'),
                     if (logs.isEmpty)
                       const Padding(

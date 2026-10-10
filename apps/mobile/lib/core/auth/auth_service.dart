@@ -630,6 +630,7 @@ class AuthService extends ChangeNotifier {
             'assessmentCompleted': _onboardingCompleted,
             'onboardingCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
+            'mustChangePassword': data['mustChangePassword'] == true,
           };
         }
       }
@@ -1108,6 +1109,456 @@ class AuthService extends ChangeNotifier {
       'isSuspended': _userStatus == 'SUSPENDED',
       'rejectionReason': _rejectionReason,
     };
+  }
+
+  /// Requests a password reset link for the provided email address.
+  /// Enforces anti-enumeration uniformly across all accounts.
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    if (_isTestEnvironment) {
+      return {
+        'success': true,
+        'message':
+            'If an account exists with this email, a password reset link has been sent.',
+      };
+    }
+    Future<http.Response> postToUrl(String base) {
+      final url = Uri.parse('$base/auth/forgot-password');
+      return http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': cleanEmail}),
+          )
+          .timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      final primaryBase = AppConstants.apiBaseUrl;
+      http.Response res;
+      try {
+        res = await postToUrl(primaryBase);
+      } catch (primaryErr) {
+        if (!primaryBase.contains(ApiConfig.defaultHostIp) && !primaryBase.contains('localhost')) {
+          debugPrint('[AuthService] Primary connection failed ($primaryErr), trying LAN server: ${ApiConfig.physicalLanUrl}');
+          res = await postToUrl(ApiConfig.physicalLanUrl);
+        } else {
+          rethrow;
+        }
+      }
+
+      // If remote backend returns 404 (e.g. unpushed endpoints on Vercel), try local LAN server
+      if (res.statusCode == 404 &&
+          !primaryBase.contains(ApiConfig.defaultHostIp) &&
+          !primaryBase.contains('localhost')) {
+        try {
+          debugPrint('[AuthService] Primary returned 404 on forgot-password, trying LAN: ${ApiConfig.physicalLanUrl}');
+          final lanRes = await postToUrl(ApiConfig.physicalLanUrl);
+          if (lanRes.statusCode >= 200 && lanRes.statusCode < 300) {
+            res = lanRes;
+          }
+        } catch (_) {}
+      }
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return {
+          'success': true,
+          'message': data['data']?['message'] ??
+              'If an account exists with this email, a password reset link has been sent.',
+        };
+      } else {
+        final errorMsg = data['error']?['message'] as String?;
+        final safeMsg = (errorMsg != null && errorMsg.contains('Endpoint not found'))
+            ? 'Password reset endpoint is currently unavailable on this server. Please use the zero-cost "Contact Admin" option below or check your server configuration.'
+            : (errorMsg ?? 'Unable to process password reset request. Please check your connection.');
+        return {
+          'success': false,
+          'message': safeMsg,
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] requestPasswordReset network error: $e');
+      return {
+        'success': false,
+        'message':
+            'Network connection error. Please ensure your backend server is accessible.',
+      };
+    }
+  }
+
+  /// Verifies a password reset token with the backend without consuming it.
+  Future<Map<String, dynamic>> verifyResetToken(String token) async {
+    final cleanToken = token.trim();
+    if (cleanToken.isEmpty) {
+      return {
+        'valid': false,
+        'message': 'Password reset token cannot be empty.',
+      };
+    }
+
+    if (_isTestEnvironment) {
+      if (cleanToken.contains('expired')) {
+        return {
+          'valid': false,
+          'error': 'TOKEN_EXPIRED',
+          'message': 'This password reset link has expired.',
+        };
+      }
+      return {
+        'valid': true,
+        'email': 'athlete@example.com',
+        'role': 'CLIENT',
+      };
+    }
+
+    Future<http.Response> getFromUrl(String base) {
+      final url = Uri.parse(
+        '$base/auth/reset-password/verify?token=${Uri.encodeComponent(cleanToken)}',
+      );
+      return http.get(url).timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      final primaryBase = AppConstants.apiBaseUrl;
+      http.Response res;
+      try {
+        res = await getFromUrl(primaryBase);
+      } catch (primaryErr) {
+        if (!primaryBase.contains(ApiConfig.defaultHostIp) && !primaryBase.contains('localhost')) {
+          res = await getFromUrl(ApiConfig.physicalLanUrl);
+        } else {
+          rethrow;
+        }
+      }
+
+      if (res.statusCode == 404 &&
+          !primaryBase.contains(ApiConfig.defaultHostIp) &&
+          !primaryBase.contains('localhost')) {
+        try {
+          final lanRes = await getFromUrl(ApiConfig.physicalLanUrl);
+          if (lanRes.statusCode == 200) {
+            res = lanRes;
+          }
+        } catch (_) {}
+      }
+
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200 && data['success'] == true) {
+        return {
+          'valid': true,
+          'email': data['data']?['email'],
+          'role': data['data']?['role'],
+        };
+      } else {
+        return {
+          'valid': false,
+          'error': data['error']?['code'] ?? 'INVALID_TOKEN',
+          'message': data['error']?['message'] ??
+              'The password reset link is invalid or has expired.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] verifyResetToken network error: $e');
+      return {
+        'valid': false,
+        'error': 'NETWORK_ERROR',
+        'message':
+            'Failed to verify reset token. Please check your network connection.',
+      };
+    }
+  }
+
+  /// Securely updates user password using the single-use reset token.
+  Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    if (_isTestEnvironment) {
+      return {
+        'success': true,
+        'message':
+            'Password has been successfully reset. You can now log in with your new password.',
+      };
+    }
+    Future<http.Response> postReset(String base) {
+      final url = Uri.parse('$base/auth/reset-password');
+      return http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'token': token.trim(),
+              'newPassword': newPassword,
+              'confirmPassword': confirmPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      final primaryBase = AppConstants.apiBaseUrl;
+      http.Response res;
+      try {
+        res = await postReset(primaryBase);
+      } catch (primaryErr) {
+        if (!primaryBase.contains(ApiConfig.defaultHostIp) && !primaryBase.contains('localhost')) {
+          res = await postReset(ApiConfig.physicalLanUrl);
+        } else {
+          rethrow;
+        }
+      }
+
+      if (res.statusCode == 404 &&
+          !primaryBase.contains(ApiConfig.defaultHostIp) &&
+          !primaryBase.contains('localhost')) {
+        try {
+          final lanRes = await postReset(ApiConfig.physicalLanUrl);
+          if (lanRes.statusCode == 200) {
+            res = lanRes;
+          }
+        } catch (_) {}
+      }
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['data']?['message'] ??
+              'Password has been successfully reset. You can now log in with your new password.',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error']?['code'] ?? 'RESET_FAILED',
+          'message': data['error']?['message'] ??
+              'Failed to reset password. Please try again.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] resetPassword network error: $e');
+      return {
+        'success': false,
+        'error': 'NETWORK_ERROR',
+        'message': 'Network connection error while updating password.',
+      };
+    }
+  }
+
+  /// Fetches official gym contact details for admin verification and assistance.
+  Future<Map<String, dynamic>> getGymContactInfo() async {
+    if (_isTestEnvironment) {
+      return {
+        'gymName': 'Alpha X Gym',
+        'adminEmail': AdminConfig.adminEmail,
+        'deskPhone': '+1 (555) 019-2834',
+        'deskHours': 'Mon-Sun 6:00 AM - 10:00 PM',
+        'instructions':
+            'Visit the front desk or contact your administrator to verify your athlete identity and receive a secure single-use reset code.',
+        'emailConfigured': false,
+      };
+    }
+
+    Future<http.Response> getInfo(String base) {
+      final url = Uri.parse('$base/auth/gym-contact-info');
+      return http.get(url).timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      final primaryBase = AppConstants.apiBaseUrl;
+      http.Response res;
+      try {
+        res = await getInfo(primaryBase);
+      } catch (_) {
+        res = await getInfo(ApiConfig.physicalLanUrl);
+      }
+
+      if (res.statusCode == 404 &&
+          !primaryBase.contains(ApiConfig.defaultHostIp) &&
+          !primaryBase.contains('localhost')) {
+        try {
+          final lanRes = await getInfo(ApiConfig.physicalLanUrl);
+          if (lanRes.statusCode == 200) {
+            res = lanRes;
+          }
+        } catch (_) {}
+      }
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        return Map<String, dynamic>.from(data['data'] as Map);
+      }
+    } catch (e) {
+      debugPrint('[AuthService] getGymContactInfo error: $e');
+    }
+    return {
+      'gymName': 'Alpha X Gym',
+      'adminEmail': AdminConfig.adminEmail,
+      'deskPhone': '+1 (555) 019-2834',
+      'deskHours': 'Mon-Sun 6:00 AM - 10:00 PM',
+      'instructions':
+          'Visit the front desk or contact your administrator to verify your athlete identity and receive a secure single-use reset code.',
+      'emailConfigured': false,
+    };
+  }
+
+  /// Resets athlete password using an admin-issued single-use 6-digit verification code.
+  Future<Map<String, dynamic>> resetPasswordWithCode({
+    required String identifier,
+    required String code,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final cleanId = identifier.trim();
+    final cleanCode = code.trim();
+
+    if (_isTestEnvironment) {
+      if (cleanCode == '000000' || cleanCode.contains('fail')) {
+        return {
+          'success': false,
+          'error': 'INVALID_CODE',
+          'message':
+              'Invalid reset code. Please check the 6-digit code provided by your administrator.',
+        };
+      }
+      if (cleanCode.contains('expired')) {
+        return {
+          'success': false,
+          'error': 'CODE_EXPIRED',
+          'message':
+              'This reset code has expired. Reset codes are valid for 15 minutes.',
+        };
+      }
+      return {
+        'success': true,
+        'message':
+            'Password has been successfully reset. You can now log in with your new password.',
+      };
+    }
+
+    Future<http.Response> postReset(String base) {
+      final url = Uri.parse('$base/auth/reset-password-with-code');
+      return http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'identifier': cleanId,
+              'code': cleanCode,
+              'newPassword': newPassword,
+              'confirmPassword': confirmPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      final primaryBase = AppConstants.apiBaseUrl;
+      http.Response res;
+      try {
+        res = await postReset(primaryBase);
+      } catch (primaryErr) {
+        if (!primaryBase.contains(ApiConfig.defaultHostIp) && !primaryBase.contains('localhost')) {
+          debugPrint('[AuthService] Primary connection failed ($primaryErr), trying LAN server: ${ApiConfig.physicalLanUrl}');
+          res = await postReset(ApiConfig.physicalLanUrl);
+        } else {
+          rethrow;
+        }
+      }
+
+      if (res.statusCode == 404 &&
+          !primaryBase.contains(ApiConfig.defaultHostIp) &&
+          !primaryBase.contains('localhost')) {
+        try {
+          debugPrint('[AuthService] Primary returned 404 on reset-password-with-code, trying LAN: ${ApiConfig.physicalLanUrl}');
+          final lanRes = await postReset(ApiConfig.physicalLanUrl);
+          if (lanRes.statusCode == 200) {
+            res = lanRes;
+          }
+        } catch (_) {}
+      }
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['data']?['message'] ??
+              'Password has been successfully reset. You can now log in with your new password.',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error']?['code'] ?? 'RESET_FAILED',
+          'message': data['error']?['message'] ??
+              'Failed to reset password. Please check your reset code.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] resetPasswordWithCode network error: $e');
+      return {
+        'success': false,
+        'error': 'NETWORK_ERROR',
+        'message': 'Network connection error while resetting password.',
+      };
+    }
+  }
+
+  /// Authenticated password update.
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    if (_isTestEnvironment) {
+      return {
+        'success': true,
+        'message': 'Password has been successfully updated.',
+      };
+    }
+
+    try {
+      final token = await getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/change-password');
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'currentPassword': currentPassword,
+              'newPassword': newPassword,
+              'confirmPassword': confirmPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['data']?['message'] ??
+              'Password has been successfully updated.',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error']?['code'] ?? 'CHANGE_PASSWORD_FAILED',
+          'message': data['error']?['message'] ??
+              'Failed to update password. Please check your current password.',
+        };
+      }
+    } catch (e) {
+      debugPrint('[AuthService] changePassword network error: $e');
+      return {
+        'success': false,
+        'error': 'NETWORK_ERROR',
+        'message': 'Network connection error while updating password.',
+      };
+    }
   }
 
   /// Test helper to simulate authenticated sessions in unit/widget tests.

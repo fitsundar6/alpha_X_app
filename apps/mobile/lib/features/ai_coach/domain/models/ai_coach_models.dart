@@ -312,15 +312,23 @@ class AiDailySummary {
     );
   }
 
-  factory AiDailySummary.fallback() {
-    return const AiDailySummary(
-      title: "Today's AI Summary",
-      date: 'Today',
-      workoutsCompleted: 12,
-      foodLogsRecorded: 7,
-      weeklyCheckInsPending: 4,
-      clientsNeedReview: 3,
-      totalActiveClients: 18,
+  factory AiDailySummary.fallback({
+    String title = "Today's AI Summary",
+    String date = 'Today',
+    int workoutsCompleted = 0,
+    int foodLogsRecorded = 0,
+    int weeklyCheckInsPending = 0,
+    int clientsNeedReview = 0,
+    int totalActiveClients = 0,
+  }) {
+    return AiDailySummary(
+      title: title,
+      date: date,
+      workoutsCompleted: workoutsCompleted,
+      foodLogsRecorded: foodLogsRecorded,
+      weeklyCheckInsPending: weeklyCheckInsPending,
+      clientsNeedReview: clientsNeedReview,
+      totalActiveClients: totalActiveClients,
     );
   }
 }

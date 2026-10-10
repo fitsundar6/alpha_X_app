@@ -48,9 +48,10 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
   void initState() {
     super.initState();
     widget.repository.addListener(_onRepoUpdate);
-    final currentWeight = widget.repository.currentInput?.weightKg ?? 81.0;
-    _reviewWeightController.text = currentWeight.toStringAsFixed(1);
-    _reviewWaistController.text = '83.5';
+    final currentWeight = widget.repository.currentInput?.weightKg;
+    if (currentWeight != null) {
+      _reviewWeightController.text = currentWeight.toStringAsFixed(1);
+    }
     _fetchInitialData();
   }
 
@@ -855,7 +856,8 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
   }
 
   Widget _buildWeeklyCheckInCard(ClientThemeColors colors) {
-    final currentWeight = widget.repository.currentInput?.weightKg ?? 81.0;
+    final currentWeight = widget.repository.currentInput?.weightKg;
+    final weightLabel = currentWeight != null ? '${currentWeight.toStringAsFixed(1)} kg' : 'Not set';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -893,7 +895,7 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                     border: Border.all(color: colors.borderSubtle),
                   ),
                   child: Text(
-                    '${currentWeight.toStringAsFixed(1)} kg',
+                    weightLabel,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -913,7 +915,9 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
           if (_isReviewOpen) ...[
             const SizedBox(height: 10),
             Text(
-              'Update your body weight to refresh your macro baseline. Weight fluctuates daily with hydration, so track weekly trends.',
+              currentWeight != null
+                  ? 'Update your body weight to refresh your macro baseline. Weight fluctuates daily with hydration, so track weekly trends.'
+                  : 'Enter your starting body weight to establish your baseline macro targets.',
               style: TextStyle(fontSize: 11, color: colors.textTertiary, height: 1.3),
             ),
             const SizedBox(height: 12),

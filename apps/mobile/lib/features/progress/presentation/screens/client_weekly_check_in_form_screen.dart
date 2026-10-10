@@ -61,7 +61,6 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
     'Poor sleep',
     'Missed meals',
     'Calories not followed',
-    'Low steps',
     'Poor recovery',
     'Stress/busy schedule',
     'Motivation issue',

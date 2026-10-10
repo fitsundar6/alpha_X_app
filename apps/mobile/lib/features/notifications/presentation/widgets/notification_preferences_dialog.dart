@@ -89,7 +89,7 @@ class _NotificationPreferencesDialogState extends State<NotificationPreferencesD
             _switchTile('Workout Reminders', 'Scheduled session alerts and completion confirmations', _workout, (v) => setState(() => _workout = v)),
             _switchTile('Nutrition Tracking', 'Daily macro targets, protein gap and meal logging reminders', _nutrition, (v) => setState(() => _nutrition = v)),
             _switchTile('Weekly Check-In', 'Unlocked check-in and weekly progress submission reminders', _checkIn, (v) => setState(() => _checkIn = v)),
-            _switchTile('Steps & Activity', 'Daily step target progress and evening activity prompts', _activity, (v) => setState(() => _activity = v)),
+            _switchTile('Activity Reminders', 'Daily active minutes and workout consistency prompts', _activity, (v) => setState(() => _activity = v)),
             _switchTile('Membership Notices', 'Renewal reminders and plan expiry warnings', _membership, (v) => setState(() => _membership = v)),
             const Divider(color: AppColors.border),
             _switchTile(

@@ -89,15 +89,16 @@ export function extractClientId(req?: Request): string | undefined {
   if (!req) return undefined;
 
   // 1. From authenticated req.user (JWT verified)
-  if (req.user) {
-    if ((req.user as any).clientId && typeof (req.user as any).clientId === 'string') {
-      return (req.user as any).clientId;
+  const user = (req as any).user;
+  if (user) {
+    if (user.clientId && typeof user.clientId === 'string') {
+      return user.clientId;
     }
-    if (req.user.id && typeof req.user.id === 'string') {
-      return req.user.id;
+    if (user.id && typeof user.id === 'string') {
+      return user.id;
     }
-    if ((req.user as any).email && typeof (req.user as any).email === 'string') {
-      return (req.user as any).email;
+    if (user.email && typeof user.email === 'string') {
+      return user.email;
     }
   }
 
@@ -320,9 +321,44 @@ export function formatActivityLog(info: ServerActivityInfo): string {
   // Received payload summary (if bad request or validation error)
   if (info.receivedPayload && status === 400) {
     try {
-      const sanitized = { ...info.receivedPayload };
-      if (sanitized.password) sanitized.password = '***REDACTED***';
-      if (sanitized.confirmPassword) sanitized.confirmPassword = '***REDACTED***';
+      const scrubSensitive = (obj: any): any => {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(scrubSensitive);
+        const sensitiveKeys = [
+          'password',
+          'newpassword',
+          'confirmpassword',
+          'oldpassword',
+          'currentpassword',
+          'temppassword',
+          'temporarypassword',
+          'token',
+          'resettoken',
+          'refreshtoken',
+          'accesstoken',
+          'code',
+          'resetcode',
+          'hash',
+          'passwordhash',
+          'secret',
+          'jwt',
+          'credential',
+          'authorization',
+        ];
+        const res: Record<string, any> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          const lk = k.toLowerCase();
+          if (sensitiveKeys.some((sk) => lk.includes(sk))) {
+            res[k] = '***REDACTED***';
+          } else if (typeof v === 'object' && v !== null) {
+            res[k] = scrubSensitive(v);
+          } else {
+            res[k] = v;
+          }
+        }
+        return res;
+      };
+      const sanitized = scrubSensitive(info.receivedPayload);
       lines.push(`Received Payload: ${JSON.stringify(sanitized)}`);
     } catch (_) {}
   }

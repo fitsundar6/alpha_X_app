@@ -6,10 +6,28 @@ import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { UserRole, UserStatus } from '../../constants/roles';
 import { env } from '../../config/environment';
 import { HttpStatus } from '../../constants/httpStatus';
+import rateLimit from 'express-rate-limit';
 import { adminAuthService } from './admin_auth.service';
 import { prisma } from '../../config/prisma';
+import { passwordResetService } from '../../services/password_reset.service';
+import { emailService } from '../../services/email.service';
 
 const router = Router();
+
+// Rate limiter for forgot-password requests to prevent abuse
+const forgotPasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // Up to 15 requests per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many password reset requests. Please try again later.',
+    },
+  },
+});
 
 /**
  * Generates the next sequential unique Client ID in format AXG-XXXX (e.g. AXG-0001)
@@ -669,6 +687,7 @@ router.post('/login', async (req: Request, res: Response) => {
         assessmentCompleted: isAssessmentCompleted,
         onboardingCompleted: isAssessmentCompleted,
         onboardingStep: currentAssessmentStep,
+        mustChangePassword: dbUser.mustChangePassword ?? false,
         user: {
           id: dbUser.id,
           clientId: resolvedClientId,
@@ -937,6 +956,181 @@ router.post('/admin/login', async (req: Request, res: Response) => {
 
   const session = adminAuthService.generateAdminSession();
   sendSuccess(res, session, HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * Initiates the password recovery flow.
+ * Rate-limited to prevent enumeration and denial-of-service.
+ * Enforces strict anti-enumeration: always returns uniform confirmation.
+ */
+router.post('/forgot-password', forgotPasswordRateLimiter, async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  const result = await passwordResetService.requestPasswordReset(email);
+  if (!result.success) {
+    sendError(res, 'SERVICE_UNAVAILABLE', result.message, HttpStatus.SERVICE_UNAVAILABLE);
+    return;
+  }
+  sendSuccess(res, { message: result.message }, HttpStatus.OK);
+});
+
+/**
+ * GET /api/v1/auth/reset-password/verify
+ * Validates a password reset token without consuming it.
+ * Used by recovery screens to verify token validity before presenting password inputs.
+ */
+router.get('/reset-password/verify', async (req: Request, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+
+  if (!token) {
+    sendError(res, 'VALIDATION_ERROR', 'Reset token query parameter is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const result = await passwordResetService.verifyResetToken(token);
+  if (!result.valid) {
+    sendError(res, result.error || 'INVALID_TOKEN', result.message || 'Invalid or expired reset token', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  sendSuccess(res, {
+    valid: true,
+    email: result.email,
+    role: result.role,
+  }, HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/auth/reset-password
+ * Executes password update using the verified single-use reset token.
+ * Validates password, saves new bcrypt hash, and consumes token.
+ */
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const { token, newPassword, confirmPassword } = req.body;
+
+  if (!token || typeof token !== 'string') {
+    sendError(res, 'VALIDATION_ERROR', 'Reset token is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (confirmPassword && newPassword !== confirmPassword) {
+    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const result = await passwordResetService.resetPassword(token, newPassword);
+  if (!result.success) {
+    sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  sendSuccess(res, {
+    message: result.message,
+  }, HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/auth/reset-password-with-code
+ * Zero-cost, email-free password reset using admin-issued single-use 6-digit code.
+ * Validates identifier (email or Client ID AXG-XXXX) + single-use code + new password.
+ * Rate-limited to prevent brute-force attacks.
+ * Strictly avoids exposing passwords, password hashes, reset tokens, or client PII.
+ */
+router.post('/reset-password-with-code', forgotPasswordRateLimiter, async (req: Request, res: Response) => {
+  const { identifier, code, newPassword, confirmPassword } = req.body;
+
+  if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+    sendError(res, 'VALIDATION_ERROR', 'Athlete email or Client ID is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (!code || typeof code !== 'string' || !code.trim()) {
+    sendError(res, 'VALIDATION_ERROR', '6-digit verification code is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (confirmPassword && newPassword !== confirmPassword) {
+    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const result = await passwordResetService.resetPasswordWithAdminCode(
+    identifier.trim(),
+    code.trim(),
+    newPassword
+  );
+
+  if (!result.success) {
+    sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  sendSuccess(res, {
+    message: result.message,
+  }, HttpStatus.OK);
+});
+
+/**
+ * GET /api/v1/auth/gym-contact-info
+ * Returns official gym administrator contact details for zero-cost, email-free recovery.
+ */
+router.get('/gym-contact-info', async (_req: Request, res: Response) => {
+  sendSuccess(res, {
+    gymName: 'Alpha X Gym',
+    adminEmail: env.ADMIN_EMAIL,
+    instructions: 'Visit the Alpha X Gym front desk or contact your gym administrator to verify your athlete identity and receive a secure single-use reset code.',
+    verificationMethod: 'In-Person or Direct Administrator Verification',
+    emailConfigured: emailService.isConfigured(),
+  }, HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/auth/change-password
+ * Authenticated password update (used for user settings and forced password changes).
+ */
+router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+
+  if (!currentPassword || typeof currentPassword !== 'string') {
+    sendError(res, 'VALIDATION_ERROR', 'Current password is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (confirmPassword && newPassword !== confirmPassword) {
+    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const result = await passwordResetService.changePassword(
+    req.user!.id,
+    currentPassword,
+    newPassword
+  );
+
+  if (!result.success) {
+    sendError(res, result.error || 'CHANGE_PASSWORD_FAILED', result.message, HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  sendSuccess(res, {
+    message: result.message,
+  }, HttpStatus.OK);
 });
 
 export const authRoutes = router;

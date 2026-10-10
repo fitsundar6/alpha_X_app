@@ -5,6 +5,7 @@ import { HttpStatus } from '../constants/httpStatus';
 import { UserRole, UserStatus } from '../constants/roles';
 import { sendError } from '../utils/responseEnvelope';
 import { prisma } from '../config/prisma';
+import { passwordResetService } from '../services/password_reset.service';
 
 export interface AuthenticatedUser {
   id: string;
@@ -22,7 +23,7 @@ declare global {
   }
 }
 
-export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -106,6 +107,30 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
       email: normalizedEmail,
       role: effectiveRole,
     };
+
+    // Server-side enforcement: If temporary password was issued, force password change before normal app access
+    if (
+      !req.originalUrl.includes('/change-password') &&
+      !req.originalUrl.includes('/auth/me')
+    ) {
+      const isForced = await passwordResetService.isForcedPasswordChangeRequired(decoded.id);
+      if (isForced) {
+        sendError(
+          res,
+          'FORCED_PASSWORD_CHANGE_REQUIRED',
+          'Action Required: You must change your temporary password before accessing gym features.',
+          HttpStatus.FORBIDDEN,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Temporary Password Status',
+            explanation: 'This account was assigned a temporary password by an administrator. A permanent password must be configured via /api/v1/auth/change-password.',
+          }
+        );
+        return;
+      }
+    }
+
     next();
   } catch (err: any) {
     const isExpired = err?.name === 'TokenExpiredError';

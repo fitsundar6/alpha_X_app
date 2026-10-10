@@ -123,7 +123,7 @@ keyPassword=your_key_password
 keyAlias=upload
 storeFile=app/upload-keystore.jks
 ```
-*(If `key.properties` is absent, the Gradle build will automatically fall back to debug signing for testing).*
+*(If `key.properties` is absent, release builds will fail closed to prevent accidental debug signing in production).*
 
 #### 2. Build Production APK (Direct Sideloading / Testing)
 ```bash

@@ -173,7 +173,6 @@ void main() {
       expect(find.text('Workout'), findsWidgets);
       expect(find.text('Exercises'), findsWidgets);
       expect(find.text('Nutrition'), findsWidgets);
-      expect(find.text('Steps'), findsWidgets);
     });
 
     testWidgets('ClientProfileSubScreen renders Appearance section and toggles Light/Dark/System mode', (tester) async {

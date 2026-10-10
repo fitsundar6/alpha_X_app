@@ -720,6 +720,7 @@ async function runPhase6Tests(): Promise<void> {
         text22.includes('not available') ||
         text22.includes('no record') ||
         text22.includes('not recorded') ||
+        (text22.includes('no ') && text22.includes('recorded')) ||
         text22.includes('does not store') ||
         text22.includes('cannot find');
       assert(

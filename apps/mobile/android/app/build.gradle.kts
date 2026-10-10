@@ -35,22 +35,45 @@ android {
 
     signingConfigs {
         create("release") {
-            if (hasKeyProperties) {
-                keyAlias = keystoreProperties["keyAlias"] as String?
-                keyPassword = keystoreProperties["keyPassword"] as String?
-                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-                storePassword = keystoreProperties["storePassword"] as String?
+            if (hasKeyProperties && keystorePropertiesFile.isFile) {
+                val storeFilePath = keystoreProperties.getProperty("storeFile")
+                val keyAliasVal = keystoreProperties.getProperty("keyAlias")
+                val storePassVal = keystoreProperties.getProperty("storePassword")
+                val keyPassVal = keystoreProperties.getProperty("keyPassword")
+
+                if (storeFilePath.isNullOrBlank() || keyAliasVal.isNullOrBlank() ||
+                    storePassVal.isNullOrBlank() || keyPassVal.isNullOrBlank()) {
+                    throw GradleException(
+                        "Release signing configuration error: 'apps/mobile/android/key.properties' is missing required fields " +
+                        "(storeFile, storePassword, keyAlias, keyPassword)."
+                    )
+                }
+
+                val resolvedStoreFile = rootProject.file(storeFilePath)
+                if (resolvedStoreFile.exists()) {
+                    storeFile = resolvedStoreFile
+                } else {
+                    val appStoreFile = file(storeFilePath)
+                    if (appStoreFile.exists()) {
+                        storeFile = appStoreFile
+                    } else {
+                        throw GradleException(
+                            "Release signing configuration error: Keystore file '$storeFilePath' specified in key.properties does not exist."
+                        )
+                    }
+                }
+
+                keyAlias = keyAliasVal
+                keyPassword = keyPassVal
+                storePassword = storePassVal
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (hasKeyProperties && keystorePropertiesFile.isFile) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Strictly enforce release signing configuration. Never fall back silently to debug signing.
+            signingConfig = signingConfigs.getByName("release")
             // Disable minification and resource shrinking to avoid R8/ProGuard issues in CI
             isMinifyEnabled = false
             isShrinkResources = false
@@ -59,6 +82,26 @@ android {
                 debugSymbolLevel = "none"
             }
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseTasks = allTasks.filter {
+        it.name.contains("Release", ignoreCase = true) && !it.name.contains("lint", ignoreCase = true)
+    }
+    if (releaseTasks.isNotEmpty() && (!hasKeyProperties || !keystorePropertiesFile.isFile)) {
+        throw GradleException(
+            "\n========================================================================\n" +
+            "❌ PRODUCTION RELEASE SIGNING ERROR:\n" +
+            "Release build aborted: 'apps/mobile/android/key.properties' was not found.\n\n" +
+            "Alpha X Gym enforces strict production signing and DOES NOT permit\n" +
+            "silent fallback to debug signing for release artifacts.\n\n" +
+            "To build a production signed release:\n" +
+            "  1. Ensure your authorized production keystore exists (e.g. apps/mobile/android/app/upload-keystore.jks)\n" +
+            "  2. Create untracked 'apps/mobile/android/key.properties' (see key.properties.example)\n" +
+            "  3. Configure: storeFile, storePassword, keyAlias, keyPassword\n" +
+            "========================================================================\n"
+        )
     }
 }
 

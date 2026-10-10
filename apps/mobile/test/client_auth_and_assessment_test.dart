@@ -234,7 +234,6 @@ void main() {
       expect(find.text('MY WORKOUT'), findsOneWidget);
       expect(find.text('EXERCISE LIBRARY'), findsOneWidget);
       expect(find.text('NUTRITION & MACROS'), findsOneWidget);
-      expect(find.text('DAILY STEPS'), findsOneWidget);
       expect(find.text('MY PROGRESS'), findsOneWidget);
       expect(find.text('MY ATTENDANCE'), findsNothing);
       expect(find.text('MY CHALLENGE'), findsNothing);

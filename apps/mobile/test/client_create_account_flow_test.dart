@@ -154,6 +154,7 @@ void main() {
         MaterialApp(
           routes: {
             '/': (_) => const CreateAccountScreen(),
+            '/pending-verification': (_) => const Scaffold(body: Text('PENDING_VERIFICATION')),
             '/onboarding': (_) => const ClientOnboardingScreen(initialStep: 1),
             '/dashboard': (_) => const Scaffold(body: Text('CLIENT_HOME_DASHBOARD')),
           },
@@ -175,7 +176,7 @@ void main() {
       // 7. Verify Account Created Successfully banner & dialog
       expect(find.text('Account Created Successfully ✓'), findsOneWidget);
       expect(find.text('YOUR ALPHA X CLIENT ID'), findsOneWidget);
-      expect(find.text('PROCEED TO FITNESS ASSESSMENT'), findsOneWidget);
+      expect(find.text('VIEW VERIFICATION STATUS'), findsOneWidget);
 
       // 8. Verify client authentication
       expect(auth.isAuthenticated, isTrue);
@@ -184,12 +185,11 @@ void main() {
       expect(auth.currentClientId, startsWith('AXG-'));
       expect(auth.assessmentCompleted, isFalse);
 
-      // 9. Tap Proceed -> Opens onboarding / assessment
-      await tester.tap(find.text('PROCEED TO FITNESS ASSESSMENT'));
+      // 9. Tap View Verification Status -> Opens pending verification
+      await tester.tap(find.text('VIEW VERIFICATION STATUS'));
       await tester.pumpAndSettle();
 
-      expect(find.text('STEP 1 OF 10'), findsOneWidget);
-      expect(find.text('WELCOME TO ALPHA X GYM'), findsOneWidget);
+      expect(find.text('PENDING_VERIFICATION'), findsOneWidget);
 
       // 10-11. Complete Assessment & reach dashboard
       await auth.saveOnboardingStep({'fitnessLevel': 'intermediate'}, step: 10, isComplete: true);

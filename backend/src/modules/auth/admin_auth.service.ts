@@ -142,6 +142,23 @@ export class AdminAuthService {
       },
     };
   }
+
+  /**
+   * Returns a cryptographic snippet of the active password hash (used for single-use token binding).
+   */
+  public async getActivePasswordHashSnippet(): Promise<string> {
+    if (!this.activePasswordHash) {
+      await this.initializePasswordHash();
+    }
+    return (this.activePasswordHash || '').slice(-10);
+  }
+
+  /**
+   * Updates the in-memory active master administrator password hash using bcrypt (12 rounds).
+   */
+  public async updateAdminPassword(newPassword: string): Promise<void> {
+    this.activePasswordHash = await bcrypt.hash(newPassword, 12);
+  }
 }
 
 export const adminAuthService = AdminAuthService.getInstance();

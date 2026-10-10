@@ -69,10 +69,35 @@ class MacroRepository extends ChangeNotifier {
   double? _customTargetFat;
   double? _customTargetFiber;
 
-  MacroRepository({MacroSettings? initialSettings})
-      : _settings = initialSettings ?? MacroSettings.defaults() {
-    _seedDefaultData();
+  final bool _isTest;
+
+  MacroRepository({
+    MacroSettings? initialSettings,
+    bool? isTestEnvironment,
+    bool? seedDemoData,
+  })  : _settings = initialSettings ?? MacroSettings.defaults(),
+        _isTest = seedDemoData ?? isTestEnvironment ?? _detectTestEnvironment() {
+    if (_isTest) {
+      _seedDefaultData();
+    }
     _loadLocalCache();
+  }
+
+  /// Named constructor for clean production state with zero synthetic demo data
+  MacroRepository.clean({MacroSettings? initialSettings})
+      : this(initialSettings: initialSettings, seedDemoData: false);
+
+  /// Named constructor for test suites requiring synthetic fixtures
+  MacroRepository.withFixtures({MacroSettings? initialSettings})
+      : this(initialSettings: initialSettings, seedDemoData: true);
+
+  static bool _detectTestEnvironment() {
+    if (kIsWeb) return false;
+    try {
+      return Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
   }
 
   // Getters
@@ -106,6 +131,7 @@ class MacroRepository extends ChangeNotifier {
     if (fat != null) _customTargetFat = fat;
     if (fiber != null) _customTargetFiber = fiber;
     notifyListeners();
+    _saveTargetsToPrefs();
   }
 
   /// Seed realistic client default data
@@ -201,13 +227,20 @@ class MacroRepository extends ChangeNotifier {
     // Insert at beginning of chronological history
     _history.insert(0, entry);
     notifyListeners();
+    _saveTargetsToPrefs();
   }
 
   /// Re-apply an old historical calculation snapshot as active target
   void restoreFromHistory(MacroHistoryEntry entry) {
     _currentInput = entry.input;
     _currentResult = entry.result;
+    _customTargetCalories = entry.result.targetCalories.toDouble();
+    _customTargetProtein = entry.result.proteinGrams.toDouble();
+    _customTargetCarbs = entry.result.carbGrams.toDouble();
+    _customTargetFat = entry.result.fatGrams.toDouble();
+    _customTargetFiber = entry.result.fiberGrams.toDouble();
     notifyListeners();
+    _saveTargetsToPrefs();
   }
 
   /// Submit a body progress check-in (Weight, Waist)
@@ -278,6 +311,9 @@ class MacroRepository extends ChangeNotifier {
   static const String _prefCustomFoodsKey = 'alpha_x_custom_foods_v1';
   static const String _prefServerFoodsKey = 'alpha_x_server_foods_v1';
   static const String _prefAssignedDietPlanKey = 'alpha_x_assigned_diet_plan_v1';
+  static const String _prefCurrentInputKey = 'alpha_x_current_macro_input_v1';
+  static const String _prefTargetsKey = 'alpha_x_custom_macro_targets_v1';
+  static const String _prefHistoryKey = 'alpha_x_macro_history_v1';
 
   List<FoodItem> get customFoods {
     final currentUserId = resolveClientId(null);
@@ -1101,6 +1137,42 @@ class MacroRepository extends ChangeNotifier {
   Future<void> _loadLocalCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // 1. Restore persistent macro targets & profile input
+      final inputJson = prefs.getString(_prefCurrentInputKey);
+      if (inputJson != null && inputJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(inputJson) as Map<String, dynamic>;
+          _currentInput = MacroInput.fromJson(decoded);
+          if (_currentInput != null) {
+            _currentResult = MacroCalculator.calculate(input: _currentInput!, settings: _settings);
+          }
+        } catch (_) {}
+      }
+
+      final targetsJson = prefs.getString(_prefTargetsKey);
+      if (targetsJson != null && targetsJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(targetsJson) as Map<String, dynamic>;
+          _customTargetCalories = (decoded['calories'] as num?)?.toDouble();
+          _customTargetProtein = (decoded['protein'] as num?)?.toDouble();
+          _customTargetCarbs = (decoded['carbs'] as num?)?.toDouble();
+          _customTargetFat = (decoded['fat'] as num?)?.toDouble();
+          _customTargetFiber = (decoded['fiber'] as num?)?.toDouble();
+        } catch (_) {}
+      }
+
+      final histJson = prefs.getString(_prefHistoryKey);
+      if (histJson != null && histJson.isNotEmpty) {
+        try {
+          final List<dynamic> list = jsonDecode(histJson);
+          _history.clear();
+          for (final item in list) {
+            _history.add(MacroHistoryEntry.fromJson(item as Map<String, dynamic>));
+          }
+        } catch (_) {}
+      }
+
       final customJson = prefs.getString(_prefCustomFoodsKey);
       if (customJson != null && customJson.isNotEmpty) {
         final List<dynamic> list = jsonDecode(customJson);
@@ -1126,7 +1198,7 @@ class MacroRepository extends ChangeNotifier {
         for (final item in list) {
           _foodLogs.add(FoodLogEntry.fromJson(item as Map<String, dynamic>));
         }
-      } else {
+      } else if (_isTest) {
         _seedFoodLogData();
       }
 
@@ -1155,11 +1227,30 @@ class MacroRepository extends ChangeNotifier {
         fetchAssignedDietPlan();
       }
     } catch (_) {
-      // In test environments or first run, fallback to in-memory seeds
-      if (_foodLogs.isEmpty) {
+      // In test environments only, fallback to in-memory seeds
+      if (_foodLogs.isEmpty && _isTest) {
         _seedFoodLogData();
       }
     }
+  }
+
+  Future<void> _saveTargetsToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_currentInput != null) {
+        await prefs.setString(_prefCurrentInputKey, jsonEncode(_currentInput!.toJson()));
+      }
+      final targetsMap = {
+        'calories': _customTargetCalories,
+        'protein': _customTargetProtein,
+        'carbs': _customTargetCarbs,
+        'fat': _customTargetFat,
+        'fiber': _customTargetFiber,
+      };
+      await prefs.setString(_prefTargetsKey, jsonEncode(targetsMap));
+      final histList = _history.map((e) => e.toJson()).toList();
+      await prefs.setString(_prefHistoryKey, jsonEncode(histList));
+    } catch (_) {}
   }
 
   Future<void> _saveFoodLogsToPrefs() async {

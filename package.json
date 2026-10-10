@@ -5,6 +5,7 @@
   "description": "Alpha X Gym monorepo root",
   "scripts": {
     "dev": "npm --prefix backend run dev",
+    "build": "npm --prefix backend run build",
     "backend:dev": "npm --prefix backend run dev",
     "backend:build": "npm --prefix backend run build",
     "backend:start": "npm --prefix backend start",

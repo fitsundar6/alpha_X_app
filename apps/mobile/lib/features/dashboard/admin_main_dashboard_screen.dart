@@ -595,17 +595,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     final sessions = widget.workoutRepository.adminSessions;
     final clients = widget.workoutRepository.clientsList;
     final assignments = widget.workoutRepository.assignments;
-    int totalStepsSum = 0;
-    for (final c in clients) {
-      final dynamic raw = c['todaySteps'];
-      final int stepVal = raw is int ? raw : (int.tryParse(raw?.toString() ?? '0') ?? 0);
-      totalStepsSum += stepVal;
-    }
-    final avgSteps = clients.isNotEmpty ? (totalStepsSum / clients.length).round() : 0;
-    final avgStepsFormatted = avgSteps.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
-    );
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -737,7 +726,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Prescribe elite workout sessions, configure superset programming, manage athlete roster, monitor step output, and track transformation progress in real time.',
+                  'Prescribe elite workout sessions, configure superset programming, manage athlete roster, and track transformation progress in real time.',
                   style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.4),
                 ),
               ],
@@ -790,22 +779,37 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: AlphaXStatCard(
-                      label: 'ATHLETE ENGAGEMENT',
-                      value: clients.isEmpty ? '0%' : '92%',
-                      subtext: 'Active training roster',
-                      icon: Icons.trending_up,
-                      accentColor: AlphaXColors.textPrimary,
+                    child: Builder(
+                      builder: (context) {
+                        final engagementRate = clients.isEmpty
+                            ? 0
+                            : ((clients.where((c) => assignments.any((a) => a.clientId == c['id'])).length / clients.length) * 100).round();
+                        return AlphaXStatCard(
+                          label: 'ATHLETE ENGAGEMENT',
+                          value: '$engagementRate%',
+                          subtext: clients.isEmpty ? '0 active athletes' : 'Active training roster',
+                          icon: Icons.trending_up,
+                          accentColor: AlphaXColors.textPrimary,
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
-                    child: AlphaXStatCard(
-                      label: 'WORKOUT COMPLETION',
-                      value: '84%',
-                      subtext: 'Target: >80%',
-                      icon: Icons.fitness_center_outlined,
-                      accentColor: AlphaXColors.redAccent,
+                  Expanded(
+                    child: Builder(
+                      builder: (context) {
+                        final history = widget.workoutRepository.workoutHistory;
+                        final completed = history.where((r) => r.isCompleted).length;
+                        final total = history.length;
+                        final completionRate = total > 0 ? ((completed / total) * 100).round() : 0;
+                        return AlphaXStatCard(
+                          label: 'WORKOUT COMPLETION',
+                          value: '$completionRate%',
+                          subtext: total > 0 ? '$completed of $total completed' : 'No workout sessions yet',
+                          icon: Icons.fitness_center_outlined,
+                          accentColor: AlphaXColors.redAccent,
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -815,10 +819,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 children: [
                   Expanded(
                     child: AlphaXStatCard(
-                      label: 'AVERAGE STEPS',
-                      value: avgStepsFormatted,
-                      subtext: clients.isEmpty ? 'No data' : (avgSteps > 0 ? 'Live client average' : '0 steps logged today'),
-                      icon: Icons.directions_walk,
+                      label: 'WORKOUT SESSIONS',
+                      value: '${sessions.length}',
+                      subtext: sessions.isEmpty ? 'No created sessions' : '${sessions.length} library routines',
+                      icon: Icons.fitness_center_outlined,
                       accentColor: AlphaXColors.textPrimary,
                     ),
                   ),
@@ -897,9 +901,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               Icons.verified_user_outlined,
               () => _selectAdminTab(8),
             ),
-            _adminActionChip('Global Step Target', Icons.flag_outlined, () {
-              _showSetStepGoalDialog();
-            }),
           ],
         ),
         const SizedBox(height: 24),
@@ -1142,58 +1143,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  void _showSetStepGoalDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AlphaXColors.surfaceCard,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: AlphaXColors.border),
-          ),
-          title: const Text(
-            'SET ATHLETE STEP GOAL',
-            style: TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Configure standard daily baseline activity target for gym members.',
-                style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              ...[6000, 8000, 10000, 12000].map((steps) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.directions_walk, color: AlphaXColors.redAccent),
-                  title: Text('$steps steps / day', style: const TextStyle(color: AlphaXColors.textPrimary, fontWeight: FontWeight.w700)),
-                  trailing: const Icon(Icons.check, color: AlphaXColors.textSecondary, size: 18),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AlphaXColors.surfaceCard,
-                        content: Text('Step goal updated to $steps steps/day', style: const TextStyle(color: AlphaXColors.textPrimary)),
-                      ),
-                    );
-                  },
-                );
-              }),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('CANCEL', style: TextStyle(color: AlphaXColors.textSecondary)),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
 
   // --- TAB 1: 👥 CLIENTS TAB ---
@@ -2743,15 +2692,8 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
     final surgeryDetails = _clientData['surgeryDetails']?.toString() ?? 'None';
     final activityLevel = _clientData['activityLevel']?.toString() ?? 'MODERATE';
     final sleepHours = _clientData['sleepHours']?.toString() ?? '7–8 hours';
-    final dailyStepGoal = int.tryParse(_clientData['dailySteps']?.toString() ?? _clientData['dailyStepGoal']?.toString() ?? '6000') ?? 6000;
     final trainingTimePref = _clientData['trainingTimePref']?.toString() ?? 'Flexible';
     final trainingPreferences = _formatList(_clientData['trainingPreferences']);
-
-    // Step Tracking Metrics (from live PostgreSQL database activity records)
-    final todaySteps = _clientData['todaySteps'] is int ? _clientData['todaySteps'] as int : int.tryParse(_clientData['todaySteps']?.toString() ?? '0') ?? 0;
-    final stepHistory = _clientData['stepHistory'] is List ? _clientData['stepHistory'] as List : [];
-    final stepProgress = dailyStepGoal > 0 ? (todaySteps / dailyStepGoal).clamp(0.0, 1.0) : 0.0;
-    final isStepGoalAchieved = todaySteps >= dailyStepGoal;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.90,
@@ -2959,7 +2901,6 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   items: [
                     {'label': 'Daily Activity Outside Gym', 'value': activityLevel},
                     {'label': 'Average Sleep', 'value': sleepHours},
-                    {'label': 'Daily Step Target', 'value': '$dailyStepGoal steps/day'},
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -2974,169 +2915,9 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                 ),
                 const SizedBox(height: 14),
 
-                // 8. SYNCHRONIZED STEP TRACKING & ACTIVITY DATA (LIVE FROM DATABASE)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.directions_walk, size: 16, color: AppColors.primaryRed),
-                              SizedBox(width: 8),
-                              Text(
-                                '8. SYNCHRONIZED STEP TRACKING (DATABASE)',
-                                style: TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'HEALTH CONNECT / SENSORS',
-                              style: TextStyle(color: AppColors.primaryRed, fontSize: 9, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
 
-                      // Today's Steps Hero
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.borderSubtle),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('TODAY\'S STEPS', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
-                                Text(
-                                  isStepGoalAchieved ? 'GOAL ACHIEVED 🎯' : 'IN PROGRESS',
-                                  style: TextStyle(
-                                    color: isStepGoalAchieved ? AppColors.success : AppColors.gold,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                Text(
-                                  todaySteps.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},'),
-                                  style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '/ ${dailyStepGoal.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} steps',
-                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  '${(stepProgress * 100).round()}%',
-                                  style: const TextStyle(color: AppColors.primaryRed, fontSize: 16, fontWeight: FontWeight.w900),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: stepProgress,
-                                minHeight: 6,
-                                backgroundColor: AppColors.surfaceCard,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  isStepGoalAchieved ? AppColors.success : AppColors.primaryRed,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
 
-                      // Step History
-                      const Text(
-                        'RECENT SYNCHRONIZED STEP HISTORY',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      if (stepHistory.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'No prior daily records synced yet. Steps recorded by device sensors or smartwatch will appear here automatically upon sync.',
-                            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
-                          ),
-                        )
-                      else
-                        ...stepHistory.take(7).map((entry) {
-                          final dateRaw = entry['date']?.toString() ?? '';
-                          String displayDate = dateRaw;
-                          try {
-                            final dt = DateTime.parse(dateRaw).toLocal();
-                            final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                            displayDate = '${dt.day} ${months[dt.month - 1]}';
-                          } catch (_) {}
-                          final steps = entry['steps'] is int ? entry['steps'] as int : int.tryParse(entry['steps']?.toString() ?? '0') ?? 0;
-                          final goal = entry['stepGoal'] is int ? entry['stepGoal'] as int : int.tryParse(entry['stepGoal']?.toString() ?? '6000') ?? 6000;
-                          final achieved = steps >= goal;
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 70,
-                                  child: Text(displayDate, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '${steps.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} steps',
-                                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 12),
-                                  ),
-                                ),
-                                if (achieved)
-                                  const Icon(Icons.check_circle, size: 14, color: AppColors.success)
-                                else
-                                  const Text('Incomplete', style: TextStyle(color: AppColors.textTertiary, fontSize: 10)),
-                              ],
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // 9. Individual Client Management Quick Actions
+                // 8. Individual Client Management Quick Actions
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -3152,7 +2933,7 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                           Icon(Icons.tune, size: 16, color: AppColors.primaryRed),
                           SizedBox(width: 8),
                           Text(
-                            '9. INDIVIDUAL CLIENT MANAGEMENT',
+                            '8. INDIVIDUAL CLIENT MANAGEMENT',
                             style: TextStyle(
                               color: AppColors.textTertiary,
                               fontWeight: FontWeight.w800,

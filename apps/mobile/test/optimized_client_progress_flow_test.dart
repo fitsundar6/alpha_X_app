@@ -198,7 +198,6 @@ void main() {
             body: SingleChildScrollView(
               child: ClientInteractiveProgressChart(
                 checkIns: [w1, w2],
-                currentDailySteps: 8500,
               ),
             ),
           ),
@@ -209,7 +208,6 @@ void main() {
       // Metric toggle pills
       expect(find.text('Weight'), findsOneWidget);
       expect(find.text('Waist'), findsOneWidget);
-      expect(find.text('Steps'), findsOneWidget);
       expect(find.text('Strength'), findsOneWidget);
 
       // Default metric is Weight
@@ -220,11 +218,6 @@ void main() {
       await tester.tap(find.text('Waist'));
       await tester.pumpAndSettle();
       expect(find.text('34.2 cm'), findsOneWidget);
-
-      // Tap Steps
-      await tester.tap(find.text('Steps'));
-      await tester.pumpAndSettle();
-      expect(find.text('8500 / day'), findsOneWidget);
 
       // Tap Strength
       await tester.tap(find.text('Strength'));
@@ -341,11 +334,10 @@ void main() {
       expect(find.text('OVERALL PROGRESS'), findsOneWidget);
       expect(find.textContaining('Excellent Progress'), findsOneWidget);
 
-      // 2. Key Weekly Changes (5 Vital Metrics)
+      // 2. Key Weekly Changes (4 Vital Metrics)
       expect(find.text('KEY WEEKLY CHANGES'), findsOneWidget);
       expect(find.text('WEIGHT'), findsOneWidget);
       expect(find.text('WAIST'), findsOneWidget);
-      expect(find.text('STEPS'), findsOneWidget);
       expect(find.text('PROTEIN'), findsOneWidget);
       expect(find.text('SLEEP'), findsOneWidget);
 

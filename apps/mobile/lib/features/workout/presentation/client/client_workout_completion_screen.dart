@@ -1,374 +1,323 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:alpha_x_gym/core/theme/app_colors.dart';
-import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 
+/// Simplified, premium workout completion screen for Alpha X Gym.
+///
+/// Replaces detailed metrics/summaries (muscles, sets, reps, volume)
+/// with a single, changing motivational fitness message displayed
+/// prominently in the center with a black-and-gold aesthetic.
 class ClientWorkoutCompletionScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
+  final WorkoutRecord? completedRecord;
   final int durationSeconds;
   final List<PersonalRecord> achievedPRs;
+  final String? motivationalMessage;
 
   const ClientWorkoutCompletionScreen({
     super.key,
     required this.workoutRepository,
+    this.completedRecord,
     required this.durationSeconds,
     this.achievedPRs = const [],
+    this.motivationalMessage,
   });
 
+  /// Curated list of short, powerful motivational fitness messages.
+  static const List<String> motivationalMessages = [
+    'Beast Mode Activated!',
+    'Another Step Closer to Your Goal!',
+    'You Showed Up. You Won!',
+    'Discipline Beats Motivation!',
+    'Stronger Than Yesterday!',
+    'Champions Are Built, Not Born!',
+    'One Workout. One Step Forward!',
+    'Your Future Self Thanks You!',
+    'Progress Over Perfection!',
+    'You Earned This Victory!',
+  ];
+
+  static String? _lastMotivationalMessage;
+  static const String prefLastMessageKey =
+      'alpha_x_last_completion_motivational_message';
+
+  /// Selects a motivational message randomly from [motivationalMessages],
+  /// avoiding the immediately previous message whenever possible.
+  static String selectNextMotivationalMessage({
+    Random? random,
+    String? previousMessage,
+  }) {
+    final prev = previousMessage ?? _lastMotivationalMessage;
+    final rng = random ?? Random();
+
+    final candidates =
+        motivationalMessages.where((msg) => msg != prev).toList();
+    final pool = candidates.isNotEmpty ? candidates : motivationalMessages;
+
+    final selected = pool[rng.nextInt(pool.length)];
+    _lastMotivationalMessage = selected;
+    return selected;
+  }
+
+  @visibleForTesting
+  static void setLastMessageForTesting(String? message) {
+    _lastMotivationalMessage = message;
+  }
+
+  @visibleForTesting
+  static String? get lastMotivationalMessage => _lastMotivationalMessage;
+
+  @visibleForTesting
+  static void resetLastMessageForTesting() {
+    _lastMotivationalMessage = null;
+  }
+
   @override
-  State<ClientWorkoutCompletionScreen> createState() => _ClientWorkoutCompletionScreenState();
+  State<ClientWorkoutCompletionScreen> createState() =>
+      _ClientWorkoutCompletionScreenState();
 }
 
-class _ClientWorkoutCompletionScreenState extends State<ClientWorkoutCompletionScreen>
+class _ClientWorkoutCompletionScreenState
+    extends State<ClientWorkoutCompletionScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _workoutNoteController = TextEditingController();
-  late AnimationController _animController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+  late final String _motivationalMessage;
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<double> _scaleAnimation;
+  bool _isNavigatingBack = false;
 
   @override
   void initState() {
     super.initState();
-    // Trigger celebration haptic feedback
-    HapticFeedback.heavyImpact();
+    _motivationalMessage = widget.motivationalMessage ??
+        ClientWorkoutCompletionScreen.selectNextMotivationalMessage();
+    _saveLastMessageToPrefs(_motivationalMessage);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
+      }
+    });
 
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 700),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeIn),
+    _scaleAnimation = Tween<double>(begin: 0.90, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: Curves.easeOutBack,
+      ),
     );
 
     _animController.forward();
+    HapticFeedback.heavyImpact();
+  }
+
+  Future<void> _saveLastMessageToPrefs(String message) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        ClientWorkoutCompletionScreen.prefLastMessageKey,
+        message,
+      );
+    } catch (_) {
+      // Gracefully ignore in testing or restricted environments
+    }
   }
 
   @override
   void dispose() {
     _animController.dispose();
-    _workoutNoteController.dispose();
     super.dispose();
   }
 
-  void _finishAndSave() {
-    HapticFeedback.mediumImpact();
-    widget.workoutRepository.completeWorkout(
-      notes: _workoutNoteController.text.trim().isEmpty ? null : _workoutNoteController.text.trim(),
-      durationSeconds: widget.durationSeconds,
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Workout saved & synced to backend successfully!'),
-        backgroundColor: AppColors.primaryRed,
-      ),
-    );
-
-    Navigator.of(context).pop();
+  void _onDone() {
+    if (_isNavigatingBack) return;
+    _isNavigatingBack = true;
+    HapticFeedback.lightImpact();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = widget.workoutRepository.activeSession;
-
-    int totalCompleted = 0;
-    int totalSkipped = 0;
-    double totalVolume = 0.0;
-    double rpeSum = 0;
-    int rpeCount = 0;
-    double rirSum = 0;
-    int rirCount = 0;
-
-    for (final ex in session.exercises) {
-      if (ex.isSkipped) {
-        totalSkipped += ex.sets.length;
-      } else {
-        for (final s in ex.sets) {
-          if (s.isCompleted) {
-            totalCompleted++;
-            totalVolume += s.volume;
-            if (s.actualRpe != null) {
-              rpeSum += s.actualRpe!;
-              rpeCount++;
-            }
-            if (s.actualRir != null) {
-              rirSum += s.actualRir!;
-              rirCount++;
-            }
-          } else {
-            totalSkipped++;
-          }
-        }
-      }
-    }
-
-    final durationMin = (widget.durationSeconds / 60).floor();
-    final durationSec = widget.durationSeconds % 60;
-    final avgRpe = rpeCount > 0 ? (rpeSum / rpeCount).toStringAsFixed(1) : '—';
-    final avgRir = rirCount > 0 ? (rirSum / rirCount).toStringAsFixed(1) : '—';
-
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Row(
-          children: const [
-            AlphaXLogo.appBar(size: 26),
-            SizedBox(width: 10),
-            Text(
-              'ALPHA X GYM',
-              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 16),
-            ),
-          ],
+      backgroundColor: const Color(0xFF0D0D0D),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.0, -0.2),
+            radius: 0.9,
+            colors: [
+              Color(0x18FFDE00), // Subtle ambient gold aura
+              Color(0xFF0D0D0D), // Deep obsidian background
+            ],
+          ),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Celebration Icon with smooth entrance animation
-          Center(
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: FadeTransition(
+        child: SafeArea(
+          child: AnimatedBuilder(
+            animation: _animController,
+            builder: (context, child) {
+              return FadeTransition(
                 opacity: _fadeAnimation,
-                child: Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: AppColors.glowRed,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primaryRed, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryRed.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.check_circle_rounded, color: AppColors.primaryRed, size: 50),
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: child,
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          const Center(
-            child: Text(
-              'WORKOUT COMPLETE',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-                fontSize: 24,
-              ),
-            ),
-          ),
-          Center(
-            child: Text(
-              session.title,
-              style: const TextStyle(
-                color: AppColors.primaryRed,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Stats Grid
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _statItem('Duration', '${durationMin}m ${durationSec}s', Icons.timer),
-                    _statItem('Total Volume', '${totalVolume.toInt()} kg', Icons.fitness_center),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Divider(color: AppColors.border),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _statItem('Exercises', '${session.exercises.length}', Icons.format_list_bulleted),
-                    _statItem('Completed Sets', '$totalCompleted', Icons.check_circle_outline),
-                    _statItem('Skipped Sets', '$totalSkipped', Icons.skip_next),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Divider(color: AppColors.border),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _statItem('Average RPE', avgRpe, Icons.speed),
-                    _statItem('Average RIR', avgRir, Icons.trending_up),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Personal Records achieved section
-          if (widget.achievedPRs.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.glowRed,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.primaryRed),
-              ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  // --- TOP BRANDING ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.emoji_events, color: AppColors.gold, size: 20),
-                      SizedBox(width: 8),
+                      const AlphaXLogo.appBar(size: 20),
+                      const SizedBox(width: 8),
                       Text(
-                        'PERSONAL RECORDS ACHIEVED',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
+                        'ALPHA X GYM',
+                        style: GoogleFonts.poppins(
                           fontSize: 13,
-                          letterSpacing: 1.0,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.2,
+                          color: const Color(0xFFFFDE00),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  ...widget.achievedPRs.map((pr) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Row(
+
+                  // --- CENTER MOTIVATIONAL MESSAGE ---
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.arrow_right, color: AppColors.gold, size: 16),
-                          Expanded(
-                            child: Text(
-                              '${pr.exerciseName}: ${pr.formattedValue}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                          // Celebratory Gold Trophy / Shield Badge
+                          Container(
+                            width: 96,
+                            height: 96,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF242424),
+                                  Color(0xFF141414),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: const Color(0xFFFFDE00),
+                                width: 2.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFFDE00).withOpacity(0.35),
+                                  blurRadius: 36,
+                                  spreadRadius: 2,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.emoji_events_rounded,
+                                color: Color(0xFFFFDE00),
+                                size: 50,
+                              ),
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryRed,
-                              borderRadius: BorderRadius.circular(4),
+
+                          const SizedBox(height: 32),
+
+                          // Clean category header
+                          Text(
+                            'WORKOUT COMPLETED',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 3.0,
+                              color: const Color(0xFF9E9E9E),
                             ),
+                            textAlign: TextAlign.center,
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Single prominent motivational message
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
-                              pr.type.badgeLabel,
-                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                              _motivationalMessage,
+                              key: const ValueKey('completion_motivational_message'),
+                              style: GoogleFonts.poppins(
+                                fontSize: 30,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: -0.5,
+                                height: 1.25,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-
-          // Workout Note Input
-          TextField(
-            controller: _workoutNoteController,
-            maxLines: 2,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-            decoration: InputDecoration(
-              labelText: 'Session Performance Note (Optional)',
-              labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              hintText: 'e.g. Great shoulder pump, felt strong on pressing...',
-              hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
-              filled: true,
-              fillColor: AppColors.surfaceCard,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Finish and Save Button with AlphaXPressable
-          AlphaXPressable(
-            onTap: _finishAndSave,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withOpacity(0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
+                    ),
                   ),
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.save, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'FINISH & SAVE WORKOUT',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                      fontSize: 16,
+
+                  // --- BOTTOM ACTION: RETURN TO DASHBOARD ---
+                  KeyedSubtree(
+                    key: const ValueKey('completion_done_button_top'),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        key: const ValueKey('completion_done_button'),
+                        onPressed: _isNavigatingBack ? null : _onDone,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFDE00),
+                          foregroundColor: const Color(0xFF111111),
+                          disabledBackgroundColor:
+                              const Color(0xFFFFDE00).withOpacity(0.5),
+                          elevation: 6,
+                          shadowColor: const Color(0xFFFFDE00).withOpacity(0.35),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          'Return to Dashboard',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                            color: const Color(0xFF111111),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 32),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _statItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, size: 18, color: AppColors.primaryRed),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textTertiary,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
     );
   }
 }

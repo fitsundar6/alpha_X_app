@@ -10,7 +10,6 @@ import 'package:alpha_x_gym/features/workout/presentation/client/client_session_
 import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_execution_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/client/client_workout_history_screen.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
-import 'package:alpha_x_gym/features/activity/presentation/screens/activity_dashboard_screen.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_design_system.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
@@ -24,6 +23,7 @@ import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_weekly_progress_screen.dart';
 import 'package:alpha_x_gym/features/notifications/data/repositories/notification_repository.dart';
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_sheet.dart';
+import 'package:alpha_x_gym/features/analytics/presentation/screens/workout_analytics_screen.dart';
 import 'package:alpha_x_gym/features/progress/presentation/screens/client_transformation_timeline_screen.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my_food_photos_screen.dart';
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
@@ -264,7 +264,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           ),
           drawer: _buildClientDrawer(),
           body: IndexedStack(
-            index: _currentTabIndex,
+            index: _currentTabIndex.clamp(0, 4),
             children: [
               _buildClientHomeScreen(),
               ClientWorkoutScreen(
@@ -276,8 +276,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                 repository: widget.macroRepository,
                 showAppBar: false,
               ),
-              ActivityDashboardScreen(
-                activityRepository: widget.activityRepository,
+              WorkoutAnalyticsScreen(
+                workoutRepository: widget.workoutRepository,
                 showAppBar: false,
               ),
             ],
@@ -355,9 +355,9 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                         label: 'Nutrition',
                       ),
                       NavigationDestination(
-                        icon: Icon(Icons.directions_walk_outlined),
-                        selectedIcon: Icon(Icons.directions_walk_rounded, color: AppColors.primary),
-                        label: 'Steps',
+                        icon: Icon(Icons.analytics_outlined),
+                        selectedIcon: Icon(Icons.analytics_rounded, color: AppColors.primary),
+                        label: 'Analytics',
                       ),
                     ],
                   ),
@@ -442,7 +442,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           _drawerItem(1, 'Workout', Icons.fitness_center_outlined),
           _drawerItem(2, 'Exercise Library', Icons.format_list_bulleted_rounded),
           _drawerItem(3, 'Nutrition & Macros', Icons.pie_chart_outline),
-          _drawerItem(4, 'Steps & Activity', Icons.directions_walk_outlined),
+          _drawerItem(4, 'Workout Analytics', Icons.analytics_outlined),
           Divider(color: colors.border),
           _drawerSubPageItem('Food Library', Icons.restaurant_menu_outlined, () {
             Navigator.of(context).pop();
@@ -1109,8 +1109,6 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     final weekNum = status?.currentWeekNumber ?? 1;
     final weightVal = AuthService().clientProfile['weightKg'];
     final weightStr = weightVal != null && (weightVal as num) > 0 ? '$weightVal kg' : '-- kg';
-    final stepsStr = widget.activityRepository.todayRecord.formattedSteps;
-    final stepsGoal = widget.activityRepository.todayRecord.formattedGoal;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1197,16 +1195,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   colors: colors,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildProgressStatItem(
-                  label: 'TODAY STEPS',
-                  value: '$stepsStr / $stepsGoal',
-                  icon: Icons.directions_walk_rounded,
-                  colors: colors,
-                ),
-              ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildProgressStatItem(
                   label: 'SESSIONS',
@@ -1515,12 +1504,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     _clientSectionChip('MY WORKOUT', Icons.fitness_center, () => _selectTab(1)),
                     _clientSectionChip('EXERCISE LIBRARY', Icons.format_list_bulleted_rounded, () => _selectTab(2)),
                     _clientSectionChip('NUTRITION & MACROS', Icons.restaurant_menu, () => _selectTab(3)),
+                    _clientSectionChip('ANALYTICS', Icons.analytics_rounded, () => _selectTab(4)),
                     _clientSectionChip('FOOD PHOTOS', Icons.camera_alt, () {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const MyFoodPhotosScreen()),
                       );
                     }),
-                    _clientSectionChip('DAILY STEPS', Icons.directions_walk, () => _selectTab(4)),
                     _clientSectionChip('MY PROGRESS', Icons.auto_graph, () => _openProgressSubPage(context)),
                     _clientSectionChip('MY PROFILE', Icons.person, () => _openProfileSubPage(context)),
                   ],

@@ -533,9 +533,6 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
 
     final activityLevel = _clientData['activityLevel']?.toString() ?? 'MODERATE';
     final sleepHours = _clientData['sleepHours']?.toString() ?? '7–8 hours';
-    final dailyStepGoal = int.tryParse(_clientData['dailySteps']?.toString() ?? _clientData['dailyStepGoal']?.toString() ?? '6000') ?? 6000;
-    final todaySteps = _clientData['todaySteps'] is int ? _clientData['todaySteps'] as int : int.tryParse(_clientData['todaySteps']?.toString() ?? '0') ?? 0;
-    final stepProgress = dailyStepGoal > 0 ? (todaySteps / dailyStepGoal).clamp(0.0, 1.0) : 0.0;
 
     return RefreshIndicator(
       color: colors.primary,
@@ -637,27 +634,12 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
           ),
           const SizedBox(height: 14),
 
-          // 4. Daily Lifestyle & Step Target Card
+          // 4. Daily Lifestyle & Activity Card
           _buildCard(
             colors: colors,
             title: 'LIFESTYLE & DAILY ACTIVITY',
-            icon: Icons.directions_walk_rounded,
+            icon: Icons.nightlife_rounded,
             children: [
-              _buildDataRow('Daily Step Target', '$dailyStepGoal steps'),
-              _buildDataRow('Today Logged Steps', '$todaySteps steps'),
-              const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: stepProgress,
-                  minHeight: 6,
-                  backgroundColor: colors.surfaceElevated,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    todaySteps >= dailyStepGoal ? AppColors.success : colors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
               _buildDataRow('Activity Level', activityLevel),
               _buildDataRow('Sleep Schedule', sleepHours),
             ],

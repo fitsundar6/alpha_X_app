@@ -19,8 +19,8 @@ import 'package:alpha_x_gym/features/activity/data/repositories/activity_reposit
 ///
 /// Designed so clients understand their entire weekly progress within 5–10 seconds:
 /// 1. Overall Progress (score & status)
-/// 2. Key Weekly Changes (Weight, Waist, Steps, Protein, Sleep)
-/// 3. Interactive Progress Chart (Weight, Waist, Steps, Strength)
+/// 2. Key Weekly Changes (Weight, Waist, Protein, Sleep)
+/// 3. Interactive Progress Chart (Weight, Waist, Strength)
 /// 4. Weekly Intelligence Summary (What Improved, Needs Attention, Next Week Focus)
 /// 5. Progress Journey (Visual Week Timeline)
 /// 6. Body Measurements (Clean & non-overwhelming)
@@ -516,8 +516,6 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
   // ==========================================
   Widget _buildKeyWeeklyChangesCard() {
     final c = _selectedCheckIn;
-    final int avgSteps = widget.activityRepository?.weeklySummary.weeklyAverage ??
-        widget.activityRepository?.todayRecord.steps ?? 0;
 
     // Weight delta
     final weightDelta = c?.weightChange;
@@ -538,11 +536,6 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
     final waistTag = waistDelta == null
         ? (c?.waistCm != null ? 'Baseline' : 'Not Logged')
         : (waistDelta < 0 ? 'Tightened' : (waistDelta > 0 ? 'Increased' : 'Stable'));
-
-    // Steps
-    final stepsStr = avgSteps > 0 ? '${_formatNumber(avgSteps)} / day' : (c != null ? 'Active' : '—');
-    final stepsColor = avgSteps >= 7000 ? AlphaXColors.success : const Color(0xFF00E5FF);
-    final stepsTag = avgSteps >= 8000 ? 'On Target' : (avgSteps > 0 ? 'Logged' : 'Pending');
 
     // Protein
     final proteinVal = c?.nutritionProtein ?? 'Good';
@@ -625,18 +618,6 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: _buildMetricTile(
-                  label: 'STEPS',
-                  value: stepsStr,
-                  sub: 'Weekly Average',
-                  statusText: stepsTag,
-                  statusColor: stepsColor,
-                  icon: Icons.directions_walk_rounded,
-                  isImproved: avgSteps >= 7000,
-                ),
-              ),
-              const SizedBox(width: 10),
               Expanded(
                 child: _buildMetricTile(
                   label: 'PROTEIN',
@@ -748,10 +729,8 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
   // SECTION 3: UNIFIED INTERACTIVE CHART
   // ==========================================
   Widget _buildInteractiveChartSection() {
-    final int avgSteps = widget.activityRepository?.weeklySummary.weeklyAverage ?? 0;
     return ClientInteractiveProgressChart(
       checkIns: _history,
-      currentDailySteps: avgSteps,
     );
   }
 
@@ -1407,13 +1386,6 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
       whatImproved: 'Welcome to Alpha X. Complete your Week 1 check-in to record baseline metrics.',
       needsAttention: 'Ensure you log your starting weight, waist, and nutrition profile.',
       nextWeekFocus: 'Complete all prescribed workout sessions and log your first weekly review.',
-    );
-  }
-
-  String _formatNumber(int n) {
-    return n.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},',
     );
   }
 }
