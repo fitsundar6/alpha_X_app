@@ -21,8 +21,6 @@ export interface ClientContext {
   proteinTargetGrams: number;
   waterConsumedLiters?: number;
   waterTargetLiters?: number;
-  stepsToday: number;
-  stepsGoal: number;
   daysInactive: number;
   checkInAvailable: boolean;
   membershipDaysRemaining?: number;
@@ -36,7 +34,6 @@ export type NotificationTriggerRule =
   | 'FOOD_NOT_LOGGED'
   | 'PROTEIN_BELOW_TARGET'
   | 'WATER_BELOW_TARGET'
-  | 'STEPS_BELOW_TARGET'
   | 'CHECK_IN_AVAILABLE'
   | 'CHECK_IN_MISSING'
   | 'MEMBERSHIP_EXPIRING_SOON'
@@ -54,7 +51,6 @@ export class AiEngagementService {
   ): { title: string; message: string; priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' } {
     const name = ctx.firstName || 'Athlete';
     const proteinGap = Math.max(0, Math.round(ctx.proteinTargetGrams - ctx.proteinConsumedGrams));
-    const stepsGap = Math.max(0, ctx.stepsGoal - ctx.stepsToday);
 
     switch (rule) {
       case 'INACTIVE_1_DAY':
@@ -105,13 +101,6 @@ export class AiEngagementService {
         return {
           title: 'Hydration Reminder 💧',
           message: `${name}, keep your hydration up! Grab a tall glass of water now to support energy and recovery.`,
-          priority: 'LOW',
-        };
-
-      case 'STEPS_BELOW_TARGET':
-        return {
-          title: 'Daily Step Momentum 👟',
-          message: `${name}, you have ${stepsGap.toLocaleString()} steps remaining to achieve today's ${ctx.stepsGoal.toLocaleString()} step target. An evening walk will get you there!`,
           priority: 'LOW',
         };
 

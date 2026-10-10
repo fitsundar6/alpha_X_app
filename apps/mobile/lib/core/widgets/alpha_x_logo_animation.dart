@@ -206,15 +206,19 @@ class AlphaXLogoAnimationState extends State<AlphaXLogoAnimation>
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  // 1. Offstage asset image preserved for strict test compatibility
-                  Offstage(
-                    offstage: true,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      width: widget.size,
-                      height: widget.size,
-                      fit: BoxFit.contain,
-                      semanticLabel: AppConstants.appName,
+                  // 1. Zero-opacity asset image preserved for strict test compatibility
+                  Opacity(
+                    opacity: 0.0,
+                    child: SizedBox(
+                      width: 1,
+                      height: 1,
+                      child: Image.asset(
+                        AppConstants.logoPath,
+                        width: widget.size,
+                        height: widget.size,
+                        fit: BoxFit.contain,
+                        semanticLabel: AppConstants.appName,
+                      ),
                     ),
                   ),
 

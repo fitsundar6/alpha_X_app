@@ -17,7 +17,7 @@ import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
 /// 8. Step 6: Current Injury / Pain Screening with medical safety notice.
 /// 9. Step 7: Previous Surgery Screening.
 /// 10. Step 8: Daily Activity Level outside the gym.
-/// 11. Step 9: Sleep Hours & Daily Step Count.
+/// 11. Step 9: Sleep Hours & Recovery.
 /// 12. Step 10: Training Preferences (Multi-select).
 /// 13. Step 11: Final Assessment Review with EDIT and SUBMIT ASSESSMENT buttons.
 /// 14. Progressive auto-save after each step so client never loses progress.
@@ -43,7 +43,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
   final _ageController = TextEditingController();
-  final _stepsController = TextEditingController();
   final _injuryDescController = TextEditingController();
   final _surgeryAreaController = TextEditingController();
   final _surgeryDetailsController = TextEditingController();
@@ -63,7 +62,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
   bool _hasPreviousSurgery = false;
   String? _activityLevel;
   String? _sleepHours;
-  int _dailySteps = 6000;
   final Set<String> _trainingPreferences = {};
 
   final int _totalAssessmentSteps = 10;
@@ -110,17 +108,9 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
       }
       _activityLevel = p['activityLevel']?.toString();
       _sleepHours = p['sleepHours']?.toString();
-      if (p['dailySteps'] != null) {
-        _dailySteps = int.tryParse(p['dailySteps'].toString()) ?? 6000;
-        _stepsController.text = _dailySteps.toString();
-      } else {
-        _stepsController.text = '6000';
-      }
       if (p['trainingPreferences'] is List) {
         _trainingPreferences.addAll((p['trainingPreferences'] as List).map((e) => e.toString()));
       }
-    } else {
-      _stepsController.text = '6000';
     }
   }
 
@@ -129,7 +119,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
     _weightController.dispose();
     _heightController.dispose();
     _ageController.dispose();
-    _stepsController.dispose();
     _injuryDescController.dispose();
     _surgeryAreaController.dispose();
     _surgeryDetailsController.dispose();
@@ -142,7 +131,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
     final weight = double.tryParse(_weightController.text.trim());
     final height = double.tryParse(_heightController.text.trim());
     final age = int.tryParse(_ageController.text.trim());
-    final steps = int.tryParse(_stepsController.text.trim()) ?? _dailySteps;
 
     String? surgeryDetailsCombined;
     if (_hasPreviousSurgery) {
@@ -172,7 +160,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
       'surgeryDetails': surgeryDetailsCombined,
       'activityLevel': _activityLevel,
       'sleepHours': _sleepHours,
-      'dailySteps': steps,
       'trainingPreferences': _trainingPreferences.toList(),
     };
   }
@@ -252,11 +239,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
       case 9:
         if (_sleepHours == null) {
           setState(() => _validationError = 'Please select your average nightly sleep duration.');
-          return false;
-        }
-        final steps = int.tryParse(_stepsController.text.trim());
-        if (steps == null || steps < 0) {
-          setState(() => _validationError = 'Please enter a valid non-negative whole number for daily steps.');
           return false;
         }
         return true;
@@ -1045,21 +1027,14 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
     );
   }
 
-  // --- STEP 9: SLEEP & DAILY STEPS ---
+  // --- STEP 9: SLEEP & RECOVERY ---
   Widget _buildStep9SleepAndSteps() {
     final sleepRanges = ['Less than 5', '5–6', '6–7', '7–8', '8+'];
-    final stepRanges = [
-      {'val': 2500, 'label': 'Under 3,000'},
-      {'val': 4000, 'label': '3,000–5,000'},
-      {'val': 6500, 'label': '5,000–8,000'},
-      {'val': 9000, 'label': '8,000–10,000'},
-      {'val': 12000, 'label': '10,000+'},
-    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildStepHeader('SLEEP & DAILY STEPS', 'Recovery and non-exercise activity tracking.'),
+        _buildStepHeader('SLEEP & RECOVERY', 'Recovery and nightly sleep tracking for optimal performance.'),
         const SizedBox(height: 16),
 
         _buildSubHeader('AVERAGE NIGHTLY SLEEP (HOURS)'),
@@ -1078,44 +1053,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
               onSelected: (sel) => setState(() => _sleepHours = s),
             );
           }).toList(),
-        ),
-        const SizedBox(height: 22),
-
-        _buildSubHeader('APPROXIMATE DAILY STEP COUNT'),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: stepRanges.map((st) {
-            final isSel = _dailySteps == st['val'];
-            return ChoiceChip(
-              label: Text(st['label'] as String, style: TextStyle(color: isSel ? Colors.white : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
-              selected: isSel,
-              selectedColor: AppColors.primaryRed,
-              backgroundColor: AppColors.surfaceCard,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSel ? AppColors.primaryRed : AppColors.border)),
-              onSelected: (sel) {
-                setState(() {
-                  _dailySteps = st['val'] as int;
-                  _stepsController.text = _dailySteps.toString();
-                });
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 14),
-
-        // Manual Step Entry (Numbers only)
-        TextFormField(
-          controller: _stepsController,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
-          decoration: _inputDecoration('Or enter custom daily step target', suffix: 'steps'),
-          onChanged: (val) {
-            final parsed = int.tryParse(val);
-            if (parsed != null) _dailySteps = parsed;
-          },
         ),
       ],
     );
@@ -1198,7 +1135,6 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
         _buildReviewSection('LIFESTYLE & ACTIVITY', 8, [
           _reviewRow('Activity Level', _activityLevel ?? 'MODERATE'),
           _reviewRow('Sleep', '${_sleepHours ?? "7–8"} hours'),
-          _reviewRow('Daily Steps', '${_stepsController.text.trim()} steps'),
         ]),
         const SizedBox(height: 14),
 

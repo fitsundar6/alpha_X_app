@@ -16,8 +16,8 @@ class ApiConfig {
   /// DEFAULT HOST IP FOR PHYSICAL MOBILE DEVICES (iPhone & Android)
   ///
   /// Set this to your Windows PC's LAN IPv4 address (found via `ipconfig`).
-  /// Currently detected: 192.168.29.2
-  static const String defaultHostIp = '192.168.29.2';
+  /// Currently detected: 192.168.1.5
+  static const String defaultHostIp = '192.168.1.5';
 
   /// Backend server TCP listening port
   static const int defaultPort = 5000;
@@ -54,16 +54,19 @@ class ApiConfig {
   static Future<void> initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getString(storageKey);
+      final saved = prefs.getString(storageKey) ?? prefs.getString('custom_api_url');
       if (saved != null && saved.trim().isNotEmpty) {
         final normalized = normalizeUrl(saved.trim());
-        // Prune stale local development IPs only in release mode
-        final isLocalAddress = normalized.contains('10.0.2.2') ||
-            normalized.contains('127.0.0.1') ||
-            normalized.contains('localhost') ||
-            normalized.contains('192.168.');
-        if (isLocalAddress && kReleaseMode) {
-          debugPrint('[API CONFIG] Pruning stale local server URL in release: $normalized -> using production $productionUrl');
+        // Prune only unusable loopback addresses on mobile release mode;
+        // never prune valid user-configured physical LAN (192.168.x.x) overrides.
+        final isLoopbackOnly = normalized.contains('127.0.0.1') ||
+            (normalized.contains('localhost') &&
+                defaultTargetPlatform != TargetPlatform.windows &&
+                defaultTargetPlatform != TargetPlatform.linux &&
+                defaultTargetPlatform != TargetPlatform.macOS &&
+                !kIsWeb);
+        if (isLoopbackOnly && kReleaseMode) {
+          debugPrint('[API CONFIG] Pruning unusable loopback server URL in release: $normalized -> using production $productionUrl');
           customServerUrl = null;
           await prefs.remove(storageKey);
         } else {
@@ -170,6 +173,9 @@ class ApiConfig {
     }
     if (env == 'local' || env == 'localhost' || env == 'dev') {
       return localhostUrl;
+    }
+    if (env == 'lan' || env == 'physical') {
+      return physicalLanUrl;
     }
 
     // 5. Desktop (Windows, macOS, Linux) or Web development -> localhostUrl

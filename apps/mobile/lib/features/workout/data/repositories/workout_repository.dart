@@ -101,7 +101,14 @@ class WorkoutRepository extends ChangeNotifier {
 
   WorkoutSession get activeSession => _activeSession;
   List<WorkoutSession> get adminSessions => List.unmodifiable(_sessions);
+  List<WorkoutRecord> get workoutHistory => List.unmodifiable(_workoutHistory);
   List<Map<String, String>> get clientsList => List.unmodifiable(_clients);
+
+  void addCompletedRecordForTesting(WorkoutRecord record) {
+    _workoutHistory.removeWhere((r) => r.id == record.id);
+    _workoutHistory.insert(0, record);
+    notifyListeners();
+  }
   int get pendingSyncCount => _pendingSyncRecords.length;
   DateTime? get activeSessionSavedAt => _activeSessionSavedAt;
   bool get hasActiveSavedSession {

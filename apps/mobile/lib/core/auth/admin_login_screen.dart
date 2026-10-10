@@ -636,7 +636,32 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                   return null;
                                                 },
                                               ),
-                                              const SizedBox(height: 14),
+                                              const SizedBox(height: 4),
+                                              Align(
+                                                alignment: Alignment.centerRight,
+                                                child: TextButton(
+                                                  key: const Key('admin_forgot_password_button'),
+                                                  onPressed: () => Navigator.of(context).pushNamed(
+                                                    '/forgot-password',
+                                                    arguments: {'email': _emailController.text.trim()},
+                                                  ),
+                                                  style: TextButton.styleFrom(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                  child: const Text(
+                                                    'Forgot Password?',
+                                                    style: TextStyle(
+                                                      color: AppColors.primaryRed,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      letterSpacing: 0.2,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
 
                                               // Authenticate Admin Button
                                               SizedBox(

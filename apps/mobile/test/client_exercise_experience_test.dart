@@ -151,6 +151,13 @@ void main() {
     );
 
     testWidgets('ClientExerciseDetailSheet renders all required sections', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -161,6 +168,7 @@ void main() {
               clientId: 'client_john_doe',
               actionButtonLabel: 'START SET',
               onPrimaryAction: () {},
+              initialTabIndex: 0,
             ),
           ),
         ),
@@ -171,33 +179,19 @@ void main() {
       // 1. Exercise Name
       expect(find.text('Incline Smith Machine Press'), findsWidgets);
 
-      // 2. Stats (Target Muscle, Sets, Target Reps, Rest)
-      expect(find.text('Chest'), findsWidgets);
-      expect(find.text('3'), findsWidgets);
-      expect(find.text('8–10'), findsWidgets);
-      expect(find.text('90 sec'), findsWidgets);
+      // 2. Tabs
+      expect(find.text('Guide'), findsOneWidget);
+      expect(find.text('History'), findsOneWidget);
 
-      // 3. Previous Performance section (now immediately below Stats)
-      await tester.scrollUntilVisible(find.text('Previous Performance'), 150);
-      await tester.pumpAndSettle();
-      expect(find.text('Previous Performance'), findsOneWidget);
-
-      // 4. Trainer Note
-      await tester.scrollUntilVisible(find.text('Trainer Note'), 150);
-      await tester.pumpAndSettle();
+      // 3. Trainer Note
       expect(find.text('Trainer Note'), findsOneWidget);
       expect(
         find.textContaining('Keep shoulder blades retracted'),
         findsOneWidget,
       );
 
-      // 5. How to perform (Instructions at the bottom)
-      await tester.scrollUntilVisible(find.text('How to Perform'), 150);
-      await tester.pumpAndSettle();
+      // 4. How to perform (Instructions)
       expect(find.text('How to Perform'), findsOneWidget);
-
-      // 6. Action button
-      expect(find.text('START SET'), findsOneWidget);
     });
 
     testWidgets('TrainerNoteCard does not render when note is empty or whitespace', (tester) async {

@@ -212,8 +212,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Initially at tab 0: Dashboard
-      expect(find.text('🏠 DASHBOARD'), findsOneWidget);
+      // Initially at tab 0: AI Coach
+      expect(find.text('🤖 AI COACH'), findsOneWidget);
 
       var adminNavBar = tester.widget<NavigationBar>(find.byType(NavigationBar));
 
@@ -226,7 +226,7 @@ void main() {
       adminNavBar = tester.widget<NavigationBar>(find.byType(NavigationBar));
       adminNavBar.onDestinationSelected!(2);
       await tester.pumpAndSettle();
-      expect(find.text('🏋️ WORKOUT SESSIONS'), findsOneWidget);
+      expect(find.text('🏋️ WORKOUT COMMAND'), findsOneWidget);
 
       // Back 1: returns to Clients
       final popScopeFinder = find.byWidgetPredicate((w) => w is PopScope);
@@ -235,10 +235,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('👥 CLIENTS'), findsOneWidget);
 
-      // Back 2: returns to Dashboard
+      // Back 2: returns to AI Coach
       popScope.onPopInvokedWithResult?.call(false, null);
       await tester.pumpAndSettle();
-      expect(find.text('🏠 DASHBOARD'), findsOneWidget);
+      expect(find.text('🤖 AI COACH'), findsOneWidget);
 
       // Back 3: shows double-back exit snackbar
       popScope.onPopInvokedWithResult?.call(false, null);
@@ -282,8 +282,8 @@ void main() {
       await tester.flingFrom(Offset(screenWidth - 10, 400), const Offset(-300, 0), 1000.0);
       await tester.pumpAndSettle();
 
-      // Should have navigated back to tab 0 (Dashboard)
-      expect(find.text('🏠 DASHBOARD'), findsOneWidget);
+      // Should have navigated back to tab 0 (AI Coach)
+      expect(find.text('🤖 AI COACH'), findsOneWidget);
     });
   });
 

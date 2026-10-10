@@ -122,7 +122,7 @@ void main() {
       expect(find.text('Workout Reminders'), findsOneWidget);
       expect(find.text('Nutrition Tracking'), findsOneWidget);
       expect(find.text('Weekly Check-In'), findsOneWidget);
-      expect(find.text('Steps & Activity'), findsOneWidget);
+      expect(find.text('Activity Reminders'), findsOneWidget);
       expect(find.text('Membership Notices'), findsOneWidget);
       expect(find.text('AI Personalized Motivation'), findsOneWidget);
       expect(find.text('SAVE PREFERENCES'), findsOneWidget);

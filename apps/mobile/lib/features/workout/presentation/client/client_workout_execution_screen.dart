@@ -225,20 +225,67 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
         final key = s.id;
 
         if (!_weightControllers.containsKey(key)) {
-          final weightVal = s.actualWeight ?? (s.targetWeight > 0 ? s.targetWeight : s.previousWeight);
-          final weightText = weightVal != null && weightVal > 0
-              ? (weightVal % 1 == 0 ? weightVal.toInt().toString() : weightVal.toStringAsFixed(1))
-              : '';
+          final String weightText;
+          if (s.isCompleted && s.actualWeight != null && s.actualWeight! > 0) {
+            final w = s.actualWeight!;
+            weightText = w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(1);
+          } else {
+            weightText = '';
+          }
           _weightControllers[key] = TextEditingController(text: weightText);
         }
 
         if (!_repsControllers.containsKey(key)) {
-          final repsVal = s.actualReps ?? (s.targetRepsMin > 0 ? s.targetRepsMin : s.previousReps);
-          final repsText = repsVal != null && repsVal > 0 ? repsVal.toString() : '';
+          final String repsText;
+          if (s.isCompleted && s.actualReps != null && s.actualReps! > 0) {
+            repsText = s.actualReps!.toString();
+          } else {
+            repsText = '';
+          }
           _repsControllers[key] = TextEditingController(text: repsText);
         }
       }
     }
+  }
+
+  // --- Automatic Weight & Reps Carry-Forward Suggestion Engine ---
+  ({double? weight, int? reps})? _getSuggestionForSet({
+    required int exerciseIndex,
+    required int setIndex,
+  }) {
+    if (setIndex <= 0) return null;
+    final session = widget.workoutRepository.activeSession;
+    if (exerciseIndex >= session.exercises.length) return null;
+    final exercise = session.exercises[exerciseIndex];
+    if (setIndex >= exercise.sets.length) return null;
+
+    final targetSet = exercise.sets[setIndex];
+    if (targetSet.isCompleted) return null;
+
+    // Look at previous set in the same exercise
+    final prevSet = exercise.sets[setIndex - 1];
+
+    // 1. Check if user entered values into previous set's controllers
+    final enteredWeightStr = _weightControllers[prevSet.id]?.text.trim() ?? '';
+    final enteredRepsStr = _repsControllers[prevSet.id]?.text.trim() ?? '';
+    final enteredWeight = double.tryParse(enteredWeightStr);
+    final enteredReps = int.tryParse(enteredRepsStr);
+
+    double? candidateWeight = (enteredWeight != null && enteredWeight > 0) ? enteredWeight : null;
+    int? candidateReps = (enteredReps != null && enteredReps > 0) ? enteredReps : null;
+
+    // 2. If no entered text, check if prevSet was completed with recorded values
+    if (candidateWeight == null && prevSet.isCompleted && prevSet.actualWeight != null && prevSet.actualWeight! > 0) {
+      candidateWeight = prevSet.actualWeight;
+    }
+    if (candidateReps == null && prevSet.isCompleted && prevSet.actualReps != null && prevSet.actualReps! > 0) {
+      candidateReps = prevSet.actualReps;
+    }
+
+    if (candidateWeight != null || candidateReps != null) {
+      return (weight: candidateWeight, reps: candidateReps);
+    }
+    return null;
   }
 
   // --- Set Logging & Persistence ---
@@ -264,6 +311,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       weight: weight,
       reps: reps,
     );
+
+    // Update UI immediately so next incomplete set shows placeholder suggestions in real time
+    setState(() {});
   }
 
   void _toggleCompleteSet({
@@ -290,14 +340,37 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       final weightStr = _weightControllers[s.id]?.text.trim() ?? '';
       final repsStr = _repsControllers[s.id]?.text.trim() ?? '';
 
-      final weight = double.tryParse(weightStr) ?? (s.targetWeight > 0 ? s.targetWeight : 0.0);
-      final reps = int.tryParse(repsStr) ?? (s.targetRepsMin > 0 ? s.targetRepsMin : 10);
+      final suggestion = _getSuggestionForSet(
+        exerciseIndex: exerciseIndex,
+        setIndex: setIndex,
+      );
 
-      // Make sure controller shows the value
-      if (weightStr.isEmpty && weight > 0) {
+      // Preserve entered values; otherwise automatically use carry-forward suggestion; fallback to target
+      final double weight;
+      if (weightStr.isNotEmpty && double.tryParse(weightStr) != null && double.tryParse(weightStr)! >= 0) {
+        weight = double.parse(weightStr);
+      } else if (suggestion?.weight != null && suggestion!.weight! > 0) {
+        weight = suggestion.weight!;
+      } else {
+        weight = s.targetWeight > 0 ? s.targetWeight : 0.0;
+      }
+
+      final int reps;
+      if (repsStr.isNotEmpty && int.tryParse(repsStr) != null && int.tryParse(repsStr)! > 0) {
+        reps = int.parse(repsStr);
+      } else if (suggestion?.reps != null && suggestion!.reps! > 0) {
+        reps = suggestion.reps!;
+      } else {
+        reps = s.targetRepsMin > 0 ? s.targetRepsMin : 10;
+      }
+
+      // Update controller text immediately so UI shows actual applied values
+      if (weightStr == '0') {
+        _weightControllers[s.id]?.text = '0';
+      } else if (weight > 0) {
         _weightControllers[s.id]?.text = weight % 1 == 0 ? weight.toInt().toString() : weight.toStringAsFixed(1);
       }
-      if (repsStr.isEmpty && reps > 0) {
+      if (reps > 0) {
         _repsControllers[s.id]?.text = reps.toString();
       }
 
@@ -322,7 +395,13 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               children: [
                 const Icon(Icons.emoji_events, color: AppColors.gold, size: 20),
                 const SizedBox(width: 8),
-                Text('NEW PERSONAL RECORD: ${pr.displayName}!'),
+                Expanded(
+                  child: Text(
+                    'NEW PERSONAL RECORD: ${pr.displayName}!',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             backgroundColor: AppColors.surfaceElevated,
@@ -498,7 +577,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
   }
 
   // --- Finish Workout Confirmation Dialog ---
-  void _showFinishConfirmation() {
+  bool _isFinishingWorkout = false;
+
+  Future<void> _showFinishConfirmation() async {
     HapticFeedback.lightImpact();
     final session = widget.workoutRepository.activeSession;
     final totalExercises = session.exercises.length;
@@ -509,7 +590,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
     final colors = ClientThemeColors.of(context);
 
-    showDialog(
+    final shouldFinish = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: colors.surfaceCard,
@@ -553,7 +634,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Continue Workout',
               style: TextStyle(color: colors.textSecondary, fontWeight: FontWeight.w600),
@@ -566,15 +647,16 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _finishWorkout();
-            },
+            onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Finish Workout', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
     );
+
+    if (shouldFinish == true && mounted) {
+      _finishWorkout();
+    }
   }
 
   Widget _buildSummaryRow(String label, String value, ClientThemeColors colors) {
@@ -588,7 +670,10 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
   }
 
   void _finishWorkout() {
-    widget.workoutRepository.completeWorkout(
+    if (_isFinishingWorkout) return;
+    _isFinishingWorkout = true;
+
+    final record = widget.workoutRepository.completeWorkout(
       durationSeconds: _elapsedSeconds,
     );
 
@@ -596,6 +681,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       MaterialPageRoute(
         builder: (ctx) => ClientWorkoutCompletionScreen(
           workoutRepository: widget.workoutRepository,
+          completedRecord: record,
           durationSeconds: _elapsedSeconds,
           achievedPRs: _achievedPRs,
         ),
@@ -1385,6 +1471,50 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
     final isCompleted = set.isCompleted;
 
+    final suggestion = _getSuggestionForSet(
+      exerciseIndex: exerciseIndex,
+      setIndex: setIndex,
+    );
+
+    final String weightHint;
+    if (suggestion?.weight != null && suggestion!.weight! > 0) {
+      final sw = suggestion.weight!;
+      weightHint = sw % 1 == 0 ? sw.toInt().toString() : sw.toStringAsFixed(1);
+    } else {
+      weightHint = '-';
+    }
+
+    final TextStyle weightHintStyle = (suggestion?.weight != null && suggestion!.weight! > 0)
+        ? GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDark ? const Color(0xFF757575) : const Color(0xFF9E9E9E),
+          )
+        : GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: colors.textTertiary,
+          );
+
+    final String repsHint;
+    if (suggestion?.reps != null && suggestion!.reps! > 0) {
+      repsHint = suggestion.reps!.toString();
+    } else {
+      repsHint = '-';
+    }
+
+    final TextStyle repsHintStyle = (suggestion?.reps != null && suggestion!.reps! > 0)
+        ? GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDark ? const Color(0xFF757575) : const Color(0xFF9E9E9E),
+          )
+        : GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: colors.textTertiary,
+          );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
@@ -1486,11 +1616,12 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                 fontWeight: FontWeight.w700,
                 color: isCompleted ? colors.textTertiary : colors.textPrimary,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
-                hintText: '-',
+                hintText: weightHint,
+                hintStyle: weightHintStyle,
               ),
               onChanged: (_) => _onSetInputChanged(exerciseIndex: exerciseIndex, setIndex: setIndex),
             ),
@@ -1520,11 +1651,12 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                 fontWeight: FontWeight.w700,
                 color: isCompleted ? colors.textTertiary : colors.textPrimary,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
-                hintText: '-',
+                hintText: repsHint,
+                hintStyle: repsHintStyle,
               ),
               onChanged: (_) => _onSetInputChanged(exerciseIndex: exerciseIndex, setIndex: setIndex),
             ),

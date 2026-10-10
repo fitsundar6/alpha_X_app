@@ -26,8 +26,7 @@ class NotificationSheet extends StatelessWidget {
       case 'CHECK_IN':
         return Icons.event_available_rounded;
       case 'ACTIVITY':
-      case 'STEPS':
-        return Icons.directions_walk_rounded;
+        return Icons.local_fire_department_rounded;
       case 'MEMBERSHIP':
         return Icons.card_membership_rounded;
       default:
@@ -44,7 +43,6 @@ class NotificationSheet extends StatelessWidget {
       case 'CHECK_IN':
         return AppColors.gold;
       case 'ACTIVITY':
-      case 'STEPS':
         return Colors.lightBlueAccent;
       case 'MEMBERSHIP':
         return Colors.orangeAccent;

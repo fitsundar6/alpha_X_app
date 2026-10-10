@@ -13,6 +13,8 @@ import 'core/auth/admin_login_screen.dart';
 import 'core/auth/pending_verification_screen.dart';
 import 'core/auth/rejected_account_screen.dart';
 import 'core/auth/suspended_account_screen.dart';
+import 'core/auth/forgot_password_screen.dart';
+import 'core/auth/reset_password_screen.dart';
 import 'core/widgets/alpha_x_splash_screen.dart';
 import 'features/navigation/navigation_shell.dart';
 import 'features/workout/data/repositories/workout_repository.dart';
@@ -34,6 +36,7 @@ import 'features/notifications/data/repositories/notification_repository.dart';
 import 'core/services/app_auto_refresh_service.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'features/workout_summary/screens/workout_summary_demo_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -240,6 +243,10 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
           '/rejected-account': (context) => const RejectedAccountScreen(),
           '/suspended-account': (context) => const SuspendedAccountScreen(),
           '/admin/verification': (context) => const AdminClientVerificationScreen(),
+          '/workout-summary-demo': (context) => const WorkoutSummaryDemoScreen(),
+          '/workout-summary': (context) => const WorkoutSummaryDemoScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
+          '/reset-password': (context) => const ResetPasswordScreen(),
         },
       ),
     );
@@ -276,6 +283,11 @@ Route<dynamic>? buildAppRoute(
     );
   }
 
+  // Workout Summary Demo portal
+  if (path == '/workout-summary-demo' || path == '/workout-summary') {
+    return MaterialPageRoute(builder: (_) => const WorkoutSummaryDemoScreen());
+  }
+
   // Verification Screen routes
   if (path == '/pending-verification') {
     return MaterialPageRoute(builder: (_) => const PendingVerificationScreen());
@@ -285,6 +297,22 @@ Route<dynamic>? buildAppRoute(
   }
   if (path == '/suspended-account') {
     return MaterialPageRoute(builder: (_) => const SuspendedAccountScreen());
+  }
+
+  // Password Recovery routes (Public portals)
+  if (path == '/forgot-password') {
+    final emailArg = uri.queryParameters['email'];
+    return MaterialPageRoute(
+      builder: (_) => ForgotPasswordScreen(initialEmail: emailArg),
+      settings: settings,
+    );
+  }
+  if (path == '/reset-password') {
+    final tokenArg = uri.queryParameters['token'];
+    return MaterialPageRoute(
+      builder: (_) => ResetPasswordScreen(initialToken: tokenArg),
+      settings: settings,
+    );
   }
 
   // Master Administrator Login route (Public portal)

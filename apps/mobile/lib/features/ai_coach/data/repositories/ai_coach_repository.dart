@@ -214,6 +214,11 @@ class AiCoachRepository extends ChangeNotifier {
       debugPrint('[AI COACH REPO] Summary fetch notice: $e');
     }
 
+    // Preserve genuine previously cached summary if network is temporarily offline
+    if (_cachedSummary != null) {
+      return _cachedSummary!;
+    }
+
     _cachedSummary = AiDailySummary.fallback();
     notifyListeners();
     return _cachedSummary!;

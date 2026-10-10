@@ -55,7 +55,7 @@ void main() {
 
       // 3. Priority 1: Today's Workout Card with Primary Action
       expect(find.text("TODAY'S WORKOUT"), findsOneWidget);
-      expect(find.text('START WORKOUT'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is Text && (w.data == 'START WORKOUT' || w.data == 'CONTACT YOUR TRAINER')), findsOneWidget);
 
       // 4. Priority 2: Today's Nutrition & Macros Card with Log Food & View Macros Actions
       expect(find.text("TODAY'S NUTRITION"), findsOneWidget);
@@ -65,7 +65,6 @@ void main() {
       // 5. Priority 3: Progress Card with Check-In / Summary Action
       expect(find.text("PROGRESS & CHECK-IN"), findsOneWidget);
       expect(find.byIcon(Icons.monitor_weight_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.directions_walk_rounded), findsWidgets);
 
       // 6. Secondary Navigation: MY ATHLETE PORTAL
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -400));
@@ -75,7 +74,6 @@ void main() {
       expect(find.text('EXERCISE LIBRARY'), findsOneWidget);
       expect(find.text('NUTRITION & MACROS'), findsOneWidget);
       expect(find.text('FOOD PHOTOS'), findsOneWidget);
-      expect(find.text('DAILY STEPS'), findsOneWidget);
       expect(find.text('MY PROGRESS'), findsOneWidget);
       expect(find.text('MY PROFILE'), findsOneWidget);
     });

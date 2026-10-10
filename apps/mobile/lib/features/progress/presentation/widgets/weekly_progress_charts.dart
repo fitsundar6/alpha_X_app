@@ -987,7 +987,7 @@ class _HabitStatus {
 }
 
 /// Unified, interactive progression chart for the client progress dashboard.
-/// Features clean metric tabs (Weight, Waist, Steps, Strength), smooth curves,
+/// Features clean metric tabs (Weight, Waist, Strength), smooth curves,
 /// dynamic scaling, and sleek Alpha X dark theme styling.
 class ClientInteractiveProgressChart extends StatefulWidget {
   final List<WeeklyCheckIn> checkIns;
@@ -1012,7 +1012,7 @@ class ClientInteractiveProgressChart extends StatefulWidget {
 class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgressChart> {
   String _selectedMetric = 'Weight';
 
-  final List<String> _metrics = ['Weight', 'Waist', 'Steps', 'Strength'];
+  final List<String> _metrics = ['Weight', 'Waist', 'Strength'];
 
   @override
   Widget build(BuildContext context) {
@@ -1033,14 +1033,6 @@ class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgre
         if (withWaist.isNotEmpty) {
           latestDisplay = '${withWaist.last.waistCm!.toStringAsFixed(1)} cm';
         }
-        break;
-      case 'Steps':
-        accentColor = const Color(0xFF00E5FF);
-        metricIcon = Icons.directions_walk_rounded;
-        unit = 'steps';
-        latestDisplay = widget.currentDailySteps > 0
-            ? '${widget.currentDailySteps} / day'
-            : (sorted.isNotEmpty ? 'Active' : '—');
         break;
       case 'Strength':
         accentColor = const Color(0xFF10B981);
@@ -1214,20 +1206,6 @@ class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgre
         }
         break;
 
-      case 'Steps':
-        for (int i = 0; i < sorted.length; i++) {
-          final wNum = sorted[i].weekNumber;
-          double stepsVal = widget.weeklySteps?[wNum] ??
-              (widget.currentDailySteps > 0
-                  ? widget.currentDailySteps.toDouble()
-                  : 8000.0 + (i * 350.0).clamp(0.0, 4000.0));
-          spots.add(FlSpot(i.toDouble(), stepsVal));
-          labels[i] = 'W$wNum';
-          minY = min(minY, stepsVal);
-          maxY = max(maxY, stepsVal);
-        }
-        break;
-
       case 'Strength':
         for (int i = 0; i < sorted.length; i++) {
           final wNum = sorted[i].weekNumber;
@@ -1255,10 +1233,7 @@ class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgre
     }
 
     if (spots.length == 1) {
-      final val = spots.first.y;
-      final displayVal = _selectedMetric == 'Steps'
-          ? '${val.toInt()} steps'
-          : '${val.toStringAsFixed(1)} $unit';
+      final displayVal = '${spots.first.y.toStringAsFixed(1)} $unit';
       return Container(
         height: 150,
         alignment: Alignment.center,
@@ -1308,9 +1283,7 @@ class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgre
                 showTitles: true,
                 reservedSize: 38,
                 getTitlesWidget: (value, meta) {
-                  final formatted = _selectedMetric == 'Steps'
-                      ? '${(value / 1000).toStringAsFixed(0)}k'
-                      : '${value.toInt()}$unit';
+                  final formatted = '${value.toInt()}$unit';
                   return Text(
                     formatted,
                     style: const TextStyle(color: AlphaXColors.textTertiary, fontSize: 9.5),
@@ -1356,10 +1329,7 @@ class _ClientInteractiveProgressChartState extends State<ClientInteractiveProgre
                 return touchedSpots.map((spot) {
                   final idx = spot.x.toInt();
                   final weekLabel = labels[idx] ?? 'Week ${idx + 1}';
-                  final val = spot.y;
-                  final displayVal = _selectedMetric == 'Steps'
-                      ? '${val.toInt()} steps'
-                      : '${val.toStringAsFixed(1)} $unit';
+                  final displayVal = '${spot.y.toStringAsFixed(1)} $unit';
                   return LineTooltipItem(
                     '$weekLabel\n$displayVal',
                     TextStyle(

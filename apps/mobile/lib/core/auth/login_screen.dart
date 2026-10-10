@@ -183,6 +183,20 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
 
+      // Forced Password Change Gate (for temporary passwords issued by admin):
+      if (result['mustChangePassword'] == true) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/reset-password',
+          (route) => false,
+          arguments: {
+            'mode': 'code',
+            'forcedChange': true,
+            'identifier': normalizedIdentifier,
+          },
+        );
+        return;
+      }
+
       // User Verification Status Routing:
       final status = (result['status']?.toString() ?? _authService.userStatus).toUpperCase();
       if (status == 'PENDING') {
@@ -576,7 +590,31 @@ class _LoginScreenState extends State<LoginScreen>
                                                   return null;
                                                 },
                                               ),
-                                              const SizedBox(height: 10),
+                                              const SizedBox(height: 4),
+
+                                              // Forgot Password Action Link
+                                              Align(
+                                                alignment: Alignment.centerRight,
+                                                child: TextButton(
+                                                  key: const Key('forgot_password_button'),
+                                                  onPressed: () => Navigator.of(context).pushNamed('/forgot-password'),
+                                                  style: TextButton.styleFrom(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  ),
+                                                  child: Text(
+                                                    'Forgot Password?',
+                                                    style: GoogleFonts.poppins(
+                                                      color: _goldAccent,
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.w600,
+                                                      letterSpacing: 0.2,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
 
                                                // Reusable Solid Gold Action Button (#D4A034, Rounded Corners, Non-Clipping)
                                                AlphaXActionButton.solid(
@@ -631,20 +669,25 @@ class _LoginScreenState extends State<LoginScreen>
 
                                   // Dedicated Admin Login Action Link (With SafeArea insets to prevent iOS home indicator collision)
                                   const SizedBox(height: 4),
-                                  Center(
-                                    child: TextButton.icon(
-                                      onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
-                                      icon: const Icon(Icons.shield_outlined, size: 14, color: _goldAccent),
-                                      label: Text(
-                                        'ADMIN LOGIN',
-                                        style: GoogleFonts.poppins(
-                                          color: _goldAccent,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.8,
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      TextButton.icon(
+                                        key: const Key('admin_login_link_button'),
+                                        onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
+                                        icon: const Icon(Icons.shield_outlined, size: 14, color: _goldAccent),
+                                        label: Text(
+                                          'ADMIN LOGIN',
+                                          style: GoogleFonts.poppins(
+                                            color: _goldAccent,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.8,
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
                                   const SizedBox(height: 8),
                                 ],

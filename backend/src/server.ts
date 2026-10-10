@@ -218,6 +218,7 @@ app.use('/api/activity', activityRoutes);
 // Authentication & Role Checking Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 
 // Client Self-Service Routes (Strictly scoped to authenticated user)
 app.use('/api/v1/client', authRoutes); // Supports /api/v1/client/register, /api/v1/client/login

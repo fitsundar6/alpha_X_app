@@ -62,12 +62,7 @@ export class AutomationService {
       const msSinceActive = today.getTime() - new Date(lastActiveDate).getTime();
       const daysInactive = Math.floor(msSinceActive / (1000 * 60 * 60 * 24));
 
-      // 2. Calculate Today's Steps
-      const todayActivity = client.activityRecords[0];
-      const stepsToday = todayActivity ? todayActivity.steps : 0;
-      const stepGoal = client.dailyStepGoal || 6000;
-
-      // 3. Calculate Today's Nutrition Progress
+      // 2. Calculate Today's Nutrition Progress
       const foodLoggedToday = client.foodLogs.length > 0;
       let proteinConsumed = 0;
       for (const item of client.foodLogs) {
@@ -189,16 +184,6 @@ export class AutomationService {
         });
       }
 
-      // Steps below target (after 20:00)
-      if (stepsToday < (stepGoal * 0.5) && today.getHours() >= 20) {
-        attentionTriggers.push({
-          type: 'LOW_STEPS',
-          severity: 'LOW',
-          title: 'Low Step Volume',
-          details: `Logged ${stepsToday} steps against ${stepGoal} daily goal (<50%).`,
-        });
-      }
-
       // Membership expiring soon or expired
       if (isMembershipExpired) {
         attentionTriggers.push({
@@ -271,8 +256,6 @@ export class AutomationService {
         candidateRule = 'FOOD_NOT_LOGGED';
       } else if (foodLoggedToday && (proteinTarget - proteinConsumed >= 30) && prefs.nutritionReminders && today.getHours() >= 17) {
         candidateRule = 'PROTEIN_BELOW_TARGET';
-      } else if (stepsToday < stepGoal && prefs.activityReminders && today.getHours() >= 18) {
-        candidateRule = 'STEPS_BELOW_TARGET';
       }
 
       if (candidateRule) {
@@ -292,8 +275,6 @@ export class AutomationService {
             foodLoggedToday,
             proteinConsumedGrams: proteinConsumed,
             proteinTargetGrams: proteinTarget,
-            stepsToday,
-            stepsGoal: stepGoal,
             daysInactive,
             checkInAvailable,
             membershipDaysRemaining,
@@ -388,12 +369,6 @@ export class AutomationService {
     });
     const totalWorkoutVolume = completedWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
 
-    // Steps average in last 7 days
-    const recentActivity = cp.activityRecords.filter((a) => new Date(a.date) >= sevenDaysAgo);
-    const avgSteps = recentActivity.length > 0
-      ? Math.round(recentActivity.reduce((sum, a) => sum + a.steps, 0) / recentActivity.length)
-      : 0;
-
     // Food logging consistency in last 7 days
     const uniqueDaysLogged = new Set(
       cp.foodLogs
@@ -420,7 +395,6 @@ export class AutomationService {
         waistDeltaCm: waistDelta,
         workoutsCompleted: completedWorkouts.length,
         totalWorkoutVolumeKg: Math.round(totalWorkoutVolume),
-        dailyStepsAverage: avgSteps,
         daysFoodLogged: uniqueDaysLogged,
         totalDaysInPeriod: 7,
       },

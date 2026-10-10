@@ -41,6 +41,7 @@ model User {
   photoUrl             String?
   oneSignalPlayerId    String? // Push notification device token
   notificationsEnabled Boolean    @default(true) // Client can opt out
+  mustChangePassword   Boolean    @default(false)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
@@ -49,8 +50,27 @@ model User {
   assignments      WorkoutAssignment[]    @relation("ClientAssignments")
   workoutRecords   WorkoutRecord[]        @relation("ClientWorkoutRecords")
   verificationLogs UserVerificationLog[]  @relation("UserVerificationLogs")
+  passwordResetCodes PasswordResetCode[]  @relation("UserPasswordResetCodes")
 
   @@map("users")
+}
+
+model PasswordResetCode {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation("UserPasswordResetCodes", fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  adminId    String?
+  adminEmail String?
+  reason     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_codes")
 }
 
 model UserVerificationLog {

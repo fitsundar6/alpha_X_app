@@ -29,6 +29,14 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),
   ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD must be at least 8 characters if provided').optional(),
   ADMIN_PASSWORD_HASH: z.string().optional(),
+  // Email & SMTP Configuration for Password Recovery
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().default('587').transform((val) => parseInt(val, 10)),
+  SMTP_SECURE: z.string().default('false').transform((val) => val === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('Alpha X Gym <noreply@alphaxgym.com>'),
+  APP_URL: z.string().default('http://localhost:3000'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
