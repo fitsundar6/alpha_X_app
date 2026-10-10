@@ -57,16 +57,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       next();
       return;
     }
-
-    if (token === 'alpha_x_mock_token_for_client') {
-      req.user = {
-        id: 'client_marcus_vance',
-        email: 'marcus@client.alphax.gym',
-        role: UserRole.CLIENT,
-      };
-      next();
-      return;
-    }
   }
 
   try {
@@ -252,14 +242,6 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
       };
       return next();
     }
-    if (token === 'alpha_x_mock_token_for_client') {
-      req.user = {
-        id: 'client_marcus_vance',
-        email: 'marcus@client.alphax.gym',
-        role: UserRole.CLIENT,
-      };
-      return next();
-    }
   }
 
   try {
@@ -316,13 +298,6 @@ export const requireApprovedUser = async (req: Request, res: Response, next: Nex
 
   // Admin users are always authorized
   if (req.user.role === UserRole.ADMIN) {
-    next();
-    return;
-  }
-
-  // Allow mock clients in test environment
-  if (env.NODE_ENV !== 'production' && req.user.id === 'client_marcus_vance') {
-    req.user.status = UserStatus.APPROVED;
     next();
     return;
   }

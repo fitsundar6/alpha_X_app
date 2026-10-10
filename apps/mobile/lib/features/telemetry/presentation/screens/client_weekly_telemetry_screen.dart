@@ -48,90 +48,10 @@ class _ClientWeeklyTelemetryScreenState extends State<ClientWeeklyTelemetryScree
     final report = await widget.repository.fetchWeeklyTelemetry();
     if (mounted) {
       setState(() {
-        _report = report ?? _buildFallbackReport();
+        _report = report;
         _isLoading = false;
       });
     }
-  }
-
-  WeeklyTelemetryReport _buildFallbackReport() {
-    return WeeklyTelemetryReport(
-      id: 'tel-preview',
-      clientId: 'current',
-      clientName: 'Athlete',
-      weekNumber: 40,
-      year: 2026,
-      startDate: '2026-09-28',
-      endDate: '2026-10-04',
-      totalWorkoutsCompleted: 4,
-      targetWorkouts: 4,
-      adherencePercentage: 100,
-      totalDurationMinutes: 210,
-      totalVolumeKg: 48200,
-      completedSetsCount: 54,
-      averageRpe: 8.4,
-      physicalComparison: const PhysicalComparison(
-        tonnageKg: 48200,
-        equivalentLabel: '26 Ford F-150 Trucks',
-        itemCount: 26,
-        itemIcon: '🛻',
-        description: 'You moved 48,200 kg this week — equivalent to hoisting 26 Ford F-150 SuperDuty trucks!',
-      ),
-      muscleHeatmap: const [
-        MuscleGroupTelemetry(
-          muscleGroup: 'CHEST',
-          displayName: 'Chest & Pecs',
-          totalSets: 14,
-          totalVolumeKg: 12400,
-          status: 'OPTIMAL',
-          statusColor: Color(0xFF00FF87),
-          topExercises: ['Incline DB Press', 'Flat Barbell Bench'],
-        ),
-        MuscleGroupTelemetry(
-          muscleGroup: 'BACK',
-          displayName: 'Back & Lats',
-          totalSets: 18,
-          totalVolumeKg: 18600,
-          status: 'OPTIMAL',
-          statusColor: Color(0xFF00FF87),
-          topExercises: ['Conventional Deadlift', 'Barbell Row'],
-        ),
-        MuscleGroupTelemetry(
-          muscleGroup: 'LEGS',
-          displayName: 'Quads & Glutes',
-          totalSets: 12,
-          totalVolumeKg: 14200,
-          status: 'OPTIMAL',
-          statusColor: Color(0xFF00FF87),
-          topExercises: ['Back Squat', 'Leg Press'],
-        ),
-        MuscleGroupTelemetry(
-          muscleGroup: 'SHOULDERS',
-          displayName: 'Delts & Shoulders',
-          totalSets: 6,
-          totalVolumeKg: 2100,
-          status: 'OPTIMAL',
-          statusColor: Color(0xFF00FF87),
-          topExercises: ['Overhead Press', 'Lateral Raises'],
-        ),
-        MuscleGroupTelemetry(
-          muscleGroup: 'ARMS',
-          displayName: 'Biceps & Triceps',
-          totalSets: 8,
-          totalVolumeKg: 1900,
-          status: 'OPTIMAL',
-          statusColor: Color(0xFF00FF87),
-          topExercises: ['Incline Curls', 'Dips'],
-        ),
-      ],
-      personalRecords: const [
-        PRHighlight(exerciseName: 'Conventional Deadlift', type: 'WEIGHT', value: 200, weight: 200, reps: 3, achievedAt: ''),
-        PRHighlight(exerciseName: 'Incline DB Press', type: 'WEIGHT', value: 42, weight: 42, reps: 8, achievedAt: ''),
-      ],
-      aiCoachCommentary: 'Marcus moved a monstrous 48,200 kg across 4 sessions this week (26 Ford F-150s)! Your back and chest volume were elite with 32 combined sets and a 200kg Deadlift PR. Continue locking in recovery sleep as we advance next week’s split 🏆',
-      streakWeeks: 4,
-      generatedAt: DateTime.now().toIso8601String(),
-    );
   }
 
   void _nextPage() {
@@ -156,14 +76,93 @@ class _ClientWeeklyTelemetryScreenState extends State<ClientWeeklyTelemetryScree
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF07090E),
+        body: Center(
+          child: CircularProgressIndicator(color: AlphaXColors.primary),
+        ),
+      );
+    }
+
+    if (_report == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF07090E),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white70),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'Weekly Telemetry',
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AlphaXColors.primary.withOpacity(0.12),
+                    border: Border.all(color: AlphaXColors.primary.withOpacity(0.3)),
+                  ),
+                  child: const Icon(
+                    Icons.insights_rounded,
+                    color: AlphaXColors.primary,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'No Telemetry Recorded Yet',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Complete your scheduled workouts this week to unlock your volumetric tonnage analysis, physical lift comparisons, and AI recovery feedback.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AlphaXColors.primary,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Back to Dashboard', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF07090E),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AlphaXColors.primary),
-              )
-            : Stack(
+        child: Stack(
                 children: [
                   // Atmospheric Gradient Glow
                   Positioned.fill(

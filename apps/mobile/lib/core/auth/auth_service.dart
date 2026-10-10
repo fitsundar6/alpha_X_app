@@ -807,7 +807,8 @@ class AuthService extends ChangeNotifier {
 
     try {
       final payload = jsonDecode(pendingJson) as Map<String, dynamic>;
-      final token = _token.isNotEmpty ? _token : 'alpha_x_mock_token_for_client';
+      final token = _token.isNotEmpty ? _token : (_isTestEnvironment ? 'alpha_x_mock_token_for_client' : '');
+      if (token.isEmpty) return false;
       final headers = {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',

@@ -78,10 +78,13 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   WorkoutRepository({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client() {
-    _initSeededSessions();
-    _activeSession = _sessions.first;
-    _initSeededChangeRequests();
+    _activeSession = WorkoutSession.empty();
     if (_isTestEnvironment) {
+      _initSeededSessions();
+      if (_sessions.isNotEmpty) {
+        _activeSession = _sessions.first;
+      }
+      _initSeededChangeRequests();
       _initTestWorkoutHistory();
     }
     _loadFromLocalStorage();
@@ -2546,7 +2549,7 @@ class WorkoutRepository extends ChangeNotifier {
       final token = authToken ??
           (AuthService().currentToken.isNotEmpty
               ? AuthService().currentToken
-              : 'alpha_x_mock_token_for_client');
+              : (_isTestEnvironment ? 'alpha_x_mock_token_for_client' : ''));
 
       final payload = {
         'sessionId': sessionId,
@@ -2592,7 +2595,7 @@ class WorkoutRepository extends ChangeNotifier {
       final token = authToken ??
           (AuthService().currentToken.isNotEmpty
               ? AuthService().currentToken
-              : 'alpha_x_mock_token_for_client');
+              : (_isTestEnvironment ? 'alpha_x_mock_token_for_client' : ''));
 
       final payload = _formatBackendRecordPayload(record);
       final response = await _httpClient
