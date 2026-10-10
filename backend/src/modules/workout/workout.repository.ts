@@ -278,10 +278,11 @@ export class WorkoutRepository {
   public clientsList: { id: string; name: string; email: string; status: string }[] = [];
 
   constructor() {
-    this.seedDefaultSessions();
+    // Production clean: No demo workout sessions seeded
   }
 
   private seedDefaultSessions() {
+    return;
     // In-memory baseline for immediate synchronous availability
     const pushAId = 'ws_push_a_01';
     const pushA: StoredWorkoutSession = {
@@ -676,85 +677,7 @@ export class WorkoutRepository {
   }
 
   public async ensureDatabaseSeeded(): Promise<void> {
-    if (this.isInitialized) return;
-    this.isInitialized = true;
-    try {
-      const defaultSessionIds = ['ws_push_a_01', 'ws_pull_a_02', 'ws_legs_a_03'];
-      for (const id of defaultSessionIds) {
-        const session = this.sessions.get(id);
-        if (!session) continue;
-        const existing = await prisma.workoutSession.findUnique({
-          where: { id: session.id },
-        });
-        if (!existing) {
-          await prisma.workoutSession.create({
-            data: {
-              id: session.id,
-              title: session.title,
-              workoutType: session.workoutType,
-              targetMuscleGroup: session.targetMuscleGroup,
-              difficulty: session.difficulty,
-              estimatedDurationMinutes: session.estimatedDurationMinutes,
-              description: session.description,
-              isActive: session.isActive,
-              startDate: session.startDate ? new Date(session.startDate) : new Date(),
-              endDate: session.endDate ? new Date(session.endDate) : null,
-              recurringSchedule: session.recurringSchedule,
-              availabilityType: session.availabilityType,
-              createdById: session.createdById,
-              exercises: {
-                create: session.exercises.map((ex, idx) => ({
-                  exerciseId: ex.exerciseId,
-                  exerciseName: ex.exerciseName,
-                  category: ex.category,
-                  orderIndex: ex.orderIndex ?? idx,
-                  supersetTag: ex.supersetTag,
-                  numberOfSets: ex.numberOfSets,
-                  targetReps: ex.targetReps,
-                  targetWeight: ex.targetWeight,
-                  restSeconds: ex.restSeconds,
-                  targetRir: ex.targetRir,
-                  targetRpe: ex.targetRpe,
-                  tempo: ex.tempo,
-                  setType: ex.setType,
-                  exerciseNotes: ex.exerciseNotes,
-                  adminInstruction: ex.adminInstruction,
-                  setTemplates: {
-                    create: Array.from({ length: ex.numberOfSets }, (_, setIdx) => ({
-                      setNumber: setIdx + 1,
-                      setType: ex.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
-                      targetWeight: ex.targetWeight,
-                      targetRepsMin: 8,
-                      targetRepsMax: 12,
-                      targetRir: ex.targetRir ?? 2,
-                      targetRpe: ex.targetRpe ?? 8.0,
-                      tempo: ex.tempo,
-                    })),
-                  },
-                })),
-              },
-            },
-          });
-        }
-
-        const existingAssign = await prisma.workoutAssignment.findFirst({
-          where: { sessionId: id, clientId: null },
-        });
-        if (!existingAssign) {
-          await prisma.workoutAssignment.create({
-            data: {
-              sessionId: id,
-              clientId: null,
-              isRecommended: false,
-              assignedById: 'admin_alex_stone',
-              active: true,
-            },
-          });
-        }
-      }
-    } catch (e: any) {
-      console.warn('[WorkoutRepository] Database seed check note:', e?.message);
-    }
+    return;
   }
 
   private async resolveUserId(idOrClientId: string): Promise<string> {
@@ -779,7 +702,6 @@ export class WorkoutRepository {
   // --- Admin Session Operations ---
   async getAllSessions(): Promise<StoredWorkoutSession[]> {
     try {
-      await this.ensureDatabaseSeeded();
       const sessions = await prisma.workoutSession.findMany({
         include: {
           exercises: {
@@ -789,13 +711,11 @@ export class WorkoutRepository {
         },
         orderBy: { createdAt: 'desc' },
       });
-      if (sessions.length > 0) {
-        return sessions.map(mapPrismaSessionToStored);
-      }
+      return sessions.map(mapPrismaSessionToStored);
     } catch (e) {
       console.warn('[WorkoutRepository] Failed to fetch sessions from DB, using cache:', e);
+      return Array.from(this.sessions.values());
     }
-    return Array.from(this.sessions.values());
   }
 
   private resolveSessionCandidateIds(id: string): string[] {
@@ -1275,7 +1195,6 @@ export class WorkoutRepository {
     recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null;
     available: StoredWorkoutSession[];
   }> {
-    await this.ensureDatabaseSeeded();
     const resolvedUserId = await this.resolveUserId(clientId);
 
     try {

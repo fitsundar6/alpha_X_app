@@ -636,7 +636,11 @@ class ActivityRepository extends ChangeNotifier {
       });
 
       final validToken = await AuthService().getValidToken();
-      final token = validToken.isNotEmpty ? validToken : 'alpha_x_mock_token_for_client';
+      final token = validToken.isNotEmpty ? validToken : AuthService().currentToken;
+      if (token.isEmpty) {
+        debugPrint('[ActivityRepository] No auth token available for sync. Kept in offline queue.');
+        return;
+      }
 
       final response = await _httpClient
           .post(

@@ -336,10 +336,9 @@ if (!isTestRun && !isVercel && isDirectRun) {
 
       const exRes = await exerciseService.seedDatabase();
       const foodRes = await foodService.seedDatabase();
-      await workoutRepository.ensureDatabaseSeeded();
       console.log(`✔ PostgreSQL Database ready (Exercises: ${exRes.total}, Foods: ${foodRes.total})`);
     } catch (e) {
-      console.warn('Startup database auto-seed notice:', e);
+      console.warn('Startup database reference seed notice:', e);
     }
 
     // ── Proactive AI Coach Push Notification Schedulers ───────────────────

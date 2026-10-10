@@ -437,8 +437,8 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
 
       final draftDietPlan = _convertProposalToDietPlan(proposal);
       final clientMap = {
-        'id': clientId ?? 'client_marcus_vance',
-        'clientId': clientId ?? 'client_marcus_vance',
+        'id': clientId ?? '',
+        'clientId': clientId ?? '',
         'name': proposal.clientName ?? _selectedClientName,
       };
 

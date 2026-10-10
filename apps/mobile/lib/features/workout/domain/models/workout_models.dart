@@ -1127,6 +1127,22 @@ class WorkoutSession {
     ];
   }
 
+  factory WorkoutSession.empty() {
+    return WorkoutSession(
+      id: '',
+      title: '',
+      workoutType: 'General',
+      targetMuscleGroup: '',
+      difficulty: 'Intermediate',
+      estimatedDurationMinutes: 0,
+      exercises: const [],
+      isActive: false,
+    );
+  }
+
+  bool get isEmpty => id.isEmpty;
+  bool get isNotEmpty => id.isNotEmpty;
+
   String get focus => targetMuscleGroup;
 
   double get totalVolume => exercises.fold(0.0, (acc, ex) => acc + ex.totalExerciseVolume);
