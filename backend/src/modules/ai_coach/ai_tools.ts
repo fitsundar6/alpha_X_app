@@ -1,5 +1,5 @@
 import { prisma } from '../../config/prisma';
-import { getTodayISTDateString } from '../../utils/istDate';
+import { getTodayISTDateString, getTodayISTWeekday, getWeekdayFromDayName, getISTDateForWeekday } from '../../utils/istDate';
 
 export interface DataCompletenessReport {
   scorePercentage: number;
@@ -1074,93 +1074,6 @@ export class AiTools {
       const scheduledDate = options?.scheduledDate || getTodayISTDateString();
       const assignmentType = options?.assignmentType || 'INDIVIDUAL';
 
-      // Collect exercises from payload.exercises or payload.weeklySchedule
-      let exercisesList: any[] = [];
-      if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
-        exercisesList = payload.exercises;
-      } else if (Array.isArray(payload.weeklySchedule)) {
-        for (const day of payload.weeklySchedule) {
-          if (Array.isArray(day.exercises)) {
-            for (const ex of day.exercises) {
-              exercisesList.push({
-                ...ex,
-                notes: ex.notes || `Day: ${day.day || ''} - ${day.sessionTitle || day.focus || ''}`,
-              });
-            }
-          }
-        }
-      }
-
-      // If still empty, ensure exercises are never empty
-      if (exercisesList.length === 0) {
-        exercisesList = [
-          { exerciseName: 'Barbell Bench Press', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
-          { exerciseName: 'Incline Dumbbell Press', sets: 3, targetReps: '10-12', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
-          { exerciseName: 'Barbell Bent Over Row', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Back' },
-        ];
-      }
-
-      let muscleGroup = payload.targetMuscleGroup;
-      if (!muscleGroup && Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
-        muscleGroup = payload.weeklySchedule[0].targetMuscleGroup;
-      }
-      if (!muscleGroup) muscleGroup = 'Full Body';
-
-      // Create Workout Session
-      const session = await prisma.workoutSession.create({
-        data: {
-          title: payload.title || payload.planTitle || proposal.title || 'AI Optimized Training Session',
-          workoutType: payload.workoutType || 'Hypertrophy',
-          targetMuscleGroup: muscleGroup,
-          difficulty: payload.difficulty || 'Intermediate',
-          estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 50,
-          description: payload.description || payload.summary || proposal.summary || 'Custom tailored by Alpha X AI Coach with Admin approval.',
-          createdById: adminId,
-          isActive: true,
-          availabilityType: assignmentType,
-        },
-      });
-
-      // Add Exercises and Set Templates
-      for (let i = 0; i < exercisesList.length; i++) {
-        const ex = exercisesList[i];
-        const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
-        const sessionExercise = await prisma.workoutSessionExercise.create({
-          data: {
-            sessionId: session.id,
-            exerciseId: ex.exerciseId || `ex_custom_${i}`,
-            exerciseName: exerciseName,
-            category: ex.category || 'Strength',
-            orderIndex: i,
-            numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
-            targetReps: String(ex.targetReps || ex.reps || '8-12'),
-            targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
-            restSeconds: Number(ex.restSeconds || ex.rest) || 90,
-            targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
-            targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
-            tempo: ex.tempo || '3-1-1-0',
-            adminInstruction: ex.notes || ex.adminInstruction || null,
-          },
-        });
-
-        // Create set templates
-        const numSets = Number(ex.sets || ex.numberOfSets) || 3;
-        for (let s = 1; s <= numSets; s++) {
-          await prisma.workoutSetTemplate.create({
-            data: {
-              sessionExerciseId: sessionExercise.id,
-              setNumber: s,
-              setType: 'WORKING',
-              targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
-              targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
-              targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
-              targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
-              targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
-            },
-          });
-        }
-      }
-
       // Resolve target client User IDs based on assignmentType
       let targetUserIds: string[] = [];
 
@@ -1215,33 +1128,183 @@ export class AiTools {
         }
       }
 
-      // Generate or link client-specific assignments without mixing client data
-      for (const targetUserId of targetUserIds) {
-        await prisma.workoutAssignment.updateMany({
-          where: { clientId: targetUserId, active: true },
-          data: { active: false },
-        });
+      // Check if this proposal represents a multi-day weekly split (e.g. PPL x 2, Arnold, Bro Split)
+      const isMultiDaySplit = Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 1;
 
-        const existingAssign = await prisma.workoutAssignment.findFirst({
-          where: {
-            sessionId: session.id,
-            clientId: targetUserId,
-            scheduledDate,
+      if (isMultiDaySplit) {
+        // Deactivate existing active assignments for target clients once before applying the new split
+        for (const targetUserId of targetUserIds) {
+          await prisma.workoutAssignment.updateMany({
+            where: { clientId: targetUserId, active: true },
+            data: { active: false },
+          });
+        }
+
+        const baseTitle = payload.title || payload.planTitle || proposal.title || 'Weekly Split Protocol';
+        const todayWeekday = getTodayISTWeekday();
+
+        // Create a distinct WorkoutSession for EACH day of the weekly split
+        for (let dayIdx = 0; dayIdx < payload.weeklySchedule.length; dayIdx++) {
+          const day = payload.weeklySchedule[dayIdx];
+          const dayName = day.day || day.dayName || day.weekday || 'Monday';
+          const sessionTitle = day.sessionTitle || day.title || `${baseTitle} — ${dayName}`;
+          const targetMuscleGroup = day.targetMuscleGroup || day.focus || 'Full Body';
+          const workoutType = day.workoutType || payload.workoutType || 'Hypertrophy';
+          const estimatedDurationMinutes = Number(day.estimatedDurationMinutes) || Number(payload.estimatedDurationMinutes) || 50;
+          const dayExercises: any[] = Array.isArray(day.exercises) ? day.exercises : [];
+
+          // Compute scheduled date for this weekday in IST
+          const weekdayNum = getWeekdayFromDayName(dayName);
+          const dayScheduledDate = getISTDateForWeekday(weekdayNum);
+          const isToday = weekdayNum === todayWeekday;
+
+          // Create the dedicated WorkoutSession for this day
+          const session = await prisma.workoutSession.create({
+            data: {
+              title: sessionTitle,
+              workoutType,
+              targetMuscleGroup,
+              difficulty: payload.difficulty || 'Intermediate',
+              estimatedDurationMinutes,
+              description: day.description || `${sessionTitle} (${targetMuscleGroup}) — Part of ${baseTitle} weekly split.`,
+              recurringSchedule: dayName,
+              createdById: adminId,
+              isActive: true,
+              availabilityType: assignmentType,
+            },
+          });
+
+          // Add ONLY this day's exercises to this session
+          for (let i = 0; i < dayExercises.length; i++) {
+            const ex = dayExercises[i];
+            const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
+            const sessionExercise = await prisma.workoutSessionExercise.create({
+              data: {
+                sessionId: session.id,
+                exerciseId: ex.exerciseId || `ex_${dayIdx}_${i}`,
+                exerciseName,
+                category: ex.category || workoutType || 'Strength',
+                orderIndex: i,
+                numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+                targetReps: String(ex.targetReps || ex.reps || '8-12'),
+                targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+                restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+                targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+                targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+                tempo: ex.tempo || '3-1-1-0',
+                adminInstruction: ex.notes || ex.adminInstruction || null,
+              },
+            });
+
+            const numSets = Number(ex.sets || ex.numberOfSets) || 3;
+            for (let s = 1; s <= numSets; s++) {
+              await prisma.workoutSetTemplate.create({
+                data: {
+                  sessionExerciseId: sessionExercise.id,
+                  setNumber: s,
+                  setType: 'WORKING',
+                  targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+                  targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
+                  targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
+                  targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+                  targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+                },
+              });
+            }
+          }
+
+          // Assign this session to all target clients
+          for (const targetUserId of targetUserIds) {
+            await prisma.workoutAssignment.create({
+              data: {
+                sessionId: session.id,
+                clientId: targetUserId,
+                assignedById: adminId,
+                isRecommended: isToday || dayIdx === 0,
+                active: true,
+                scheduledDate: dayScheduledDate,
+                status: 'ASSIGNED',
+              },
+            });
+          }
+        }
+      } else {
+        // Single-session / legacy plan handling (existing behavior)
+        let exercisesList: any[] = [];
+        if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
+          exercisesList = payload.exercises;
+        } else if (Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
+          exercisesList = payload.weeklySchedule[0].exercises || [];
+        }
+
+        if (exercisesList.length === 0) {
+          exercisesList = [
+            { exerciseName: 'Barbell Bench Press', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
+            { exerciseName: 'Incline Dumbbell Press', sets: 3, targetReps: '10-12', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
+            { exerciseName: 'Barbell Bent Over Row', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Back' },
+          ];
+        }
+
+        let muscleGroup = payload.targetMuscleGroup || 'Full Body';
+
+        const session = await prisma.workoutSession.create({
+          data: {
+            title: payload.title || payload.planTitle || proposal.title || 'AI Optimized Training Session',
+            workoutType: payload.workoutType || 'Hypertrophy',
+            targetMuscleGroup: muscleGroup,
+            difficulty: payload.difficulty || 'Intermediate',
+            estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 50,
+            description: payload.description || payload.summary || proposal.summary || 'Custom tailored by Alpha X AI Coach with Admin approval.',
+            createdById: adminId,
+            isActive: true,
+            availabilityType: assignmentType,
           },
         });
 
-        if (existingAssign) {
-          await prisma.workoutAssignment.update({
-            where: { id: existingAssign.id },
+        for (let i = 0; i < exercisesList.length; i++) {
+          const ex = exercisesList[i];
+          const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
+          const sessionExercise = await prisma.workoutSessionExercise.create({
             data: {
-              active: true,
-              isRecommended: true,
-              assignedById: adminId,
-              assignedAt: new Date(),
-              status: 'ASSIGNED',
+              sessionId: session.id,
+              exerciseId: ex.exerciseId || `ex_custom_${i}`,
+              exerciseName,
+              category: ex.category || 'Strength',
+              orderIndex: i,
+              numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+              targetReps: String(ex.targetReps || ex.reps || '8-12'),
+              targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+              restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+              targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+              targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+              tempo: ex.tempo || '3-1-1-0',
+              adminInstruction: ex.notes || ex.adminInstruction || null,
             },
           });
-        } else {
+
+          const numSets = Number(ex.sets || ex.numberOfSets) || 3;
+          for (let s = 1; s <= numSets; s++) {
+            await prisma.workoutSetTemplate.create({
+              data: {
+                sessionExerciseId: sessionExercise.id,
+                setNumber: s,
+                setType: 'WORKING',
+                targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+                targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
+                targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
+                targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+                targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+              },
+            });
+          }
+        }
+
+        for (const targetUserId of targetUserIds) {
+          await prisma.workoutAssignment.updateMany({
+            where: { clientId: targetUserId, active: true },
+            data: { active: false },
+          });
+
           await prisma.workoutAssignment.create({
             data: {
               sessionId: session.id,

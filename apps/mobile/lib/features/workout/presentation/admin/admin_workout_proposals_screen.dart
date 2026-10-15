@@ -679,9 +679,12 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
                         children: [
                           Row(
                             children: [
-                              Text(
-                                clientName,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              Flexible(
+                                child: Text(
+                                  clientName,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               const SizedBox(width: 6),
                               Container(
@@ -773,7 +776,10 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
                           _pill(Icons.water_drop, '${water}L Water'),
                         ]
                       : [
-                          _pill(Icons.fitness_center, '${exercises.length} Exercises'),
+                          if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty)
+                            _pill(Icons.calendar_view_week, '${(payload['weeklySchedule'] as List).length} Days Split')
+                          else
+                            _pill(Icons.fitness_center, '${exercises.length} Exercises'),
                           _pill(Icons.category, workoutType),
                           _pill(Icons.accessibility_new, targetGroup),
                           _pill(Icons.timer_outlined, '~${duration}m'),
@@ -852,6 +858,73 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
                                 ),
                             ],
                           ),
+                  ),
+                ] else if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_view_week, size: 14, color: Colors.lightBlueAccent),
+                            const SizedBox(width: 6),
+                            Text(
+                              'WEEKLY SPLIT: ${(payload['weeklySchedule'] as List).length} WORKOUT DAYS',
+                              style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ...(payload['weeklySchedule'] as List).map((d) {
+                          final dayMap = d is Map ? d : {};
+                          final dayName = dayMap['day'] ?? dayMap['dayName'] ?? dayMap['weekday'] ?? 'Day';
+                          final title = dayMap['sessionTitle'] ?? dayMap['title'] ?? 'Session';
+                          final dEx = (dayMap['exercises'] as List?) ?? [];
+                          final splitCat = dayMap['splitCategory'] ?? dayMap['category'] ?? '';
+                          final color = getSplitBadgeColor(splitCat.toString());
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: color.withOpacity(0.5)),
+                                  ),
+                                  child: Text(
+                                    dayName.toString(),
+                                    style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    title.toString(),
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  '${dEx.length} exercises',
+                                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 ] else if (exercises.isNotEmpty) ...[
                   const SizedBox(height: 10),
@@ -979,6 +1052,18 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
   }
 }
 
+Color getSplitBadgeColor(String cat) {
+  final lower = cat.toLowerCase();
+  if (lower.contains('push')) return Colors.orangeAccent;
+  if (lower.contains('pull')) return Colors.cyanAccent;
+  if (lower.contains('leg')) return Colors.lightGreenAccent;
+  if (lower.contains('upper')) return Colors.amberAccent;
+  if (lower.contains('lower')) return Colors.purpleAccent;
+  return AppColors.primaryRed;
+}
+
+typedef WorkoutProposalDetailSheet = _ProposalDetailSheet;
+
 /// Bottom Sheet for In-depth Proposal Inspection and Inline Editing.
 class _ProposalDetailSheet extends StatefulWidget {
   final AiProposal proposal;
@@ -1004,6 +1089,8 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
   late TextEditingController _durationController;
 
   late List<Map<String, dynamic>> _editableExercises;
+  late List<Map<String, dynamic>> _editableDays;
+  bool _isMultiDay = false;
   bool _isSaving = false;
   bool _isDirty = false;
 
@@ -1018,18 +1105,31 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     _targetMuscleController = TextEditingController(text: payload['targetMuscleGroup']?.toString() ?? 'Full Body');
     _durationController = TextEditingController(text: payload['estimatedDurationMinutes']?.toString() ?? '45');
 
-    // Extract exercises
     _editableExercises = [];
-    if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
-      for (final ex in (payload['exercises'] as List)) {
-        if (ex is Map) _editableExercises.add(Map<String, dynamic>.from(ex));
-      }
-    } else if (payload['weeklySchedule'] is List) {
+    _editableDays = [];
+
+    if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) {
+      _isMultiDay = true;
       for (final day in (payload['weeklySchedule'] as List)) {
-        if (day is Map && day['exercises'] is List) {
-          for (final ex in (day['exercises'] as List)) {
-            if (ex is Map) _editableExercises.add(Map<String, dynamic>.from(ex));
+        if (day is Map) {
+          final dayMap = Map<String, dynamic>.from(day);
+          final dayExList = <Map<String, dynamic>>[];
+          if (dayMap['exercises'] is List) {
+            for (final ex in (dayMap['exercises'] as List)) {
+              if (ex is Map) {
+                dayExList.add(Map<String, dynamic>.from(ex));
+              }
+            }
           }
+          dayMap['exercises'] = dayExList;
+          _editableDays.add(dayMap);
+        }
+      }
+    } else {
+      _isMultiDay = false;
+      if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
+        for (final ex in (payload['exercises'] as List)) {
+          if (ex is Map) _editableExercises.add(Map<String, dynamic>.from(ex));
         }
       }
     }
@@ -1052,7 +1152,21 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     updatedPayload['summary'] = _summaryController.text.trim();
     updatedPayload['targetMuscleGroup'] = _targetMuscleController.text.trim();
     updatedPayload['estimatedDurationMinutes'] = int.tryParse(_durationController.text.trim()) ?? 45;
-    updatedPayload['exercises'] = _editableExercises;
+
+    if (_isMultiDay) {
+      updatedPayload['weeklySchedule'] = _editableDays;
+      final flattened = <Map<String, dynamic>>[];
+      for (final day in _editableDays) {
+        if (day['exercises'] is List) {
+          for (final ex in (day['exercises'] as List)) {
+            if (ex is Map) flattened.add(Map<String, dynamic>.from(ex));
+          }
+        }
+      }
+      updatedPayload['exercises'] = flattened;
+    } else {
+      updatedPayload['exercises'] = _editableExercises;
+    }
 
     final ok = await widget.aiCoachRepository.editProposal(widget.proposal.id, updatedPayload);
     if (!mounted) return;
@@ -1100,6 +1214,34 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
   void _removeExercise(int index) {
     setState(() {
       _editableExercises.removeAt(index);
+      _isDirty = true;
+    });
+  }
+
+  void _addExerciseToDay(int dayIdx) {
+    setState(() {
+      final day = _editableDays[dayIdx];
+      final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+      dayExList.add({
+        'exerciseId': 'ex_custom_${DateTime.now().millisecondsSinceEpoch}',
+        'exerciseName': 'New Exercise',
+        'sets': 3,
+        'targetReps': '8-12',
+        'targetWeight': 20.0,
+        'restSeconds': 90,
+        'targetRir': 2,
+        'category': day['workoutType'] ?? 'Strength',
+        'notes': '',
+      });
+      _isDirty = true;
+    });
+  }
+
+  void _removeExerciseFromDay(int dayIdx, int exIdx) {
+    setState(() {
+      final day = _editableDays[dayIdx];
+      final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+      dayExList.removeAt(exIdx);
       _isDirty = true;
     });
   }
@@ -1245,32 +1387,74 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                 ),
                 const SizedBox(height: 20),
 
-                // Exercises Section Header
-                Row(
-                  children: [
-                    const Icon(Icons.fitness_center, size: 18, color: AppColors.primaryRed),
-                    const SizedBox(width: 8),
-                    Text(
-                      'PRESCRIBED EXERCISES (${_editableExercises.length})',
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                if (_isMultiDay) ...[
+                  // Multi-Day Split Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.3)),
                     ),
-                    const Spacer(),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Exercise', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      onPressed: _addExercise,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_view_week, color: Colors.lightBlueAccent, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'WEEKLY SPLIT SCHEDULE (${_editableDays.length} WORKOUT DAYS)',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Each day is a distinct workout session with dedicated exercises scheduled for that weekday.',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                  ),
 
-                // Exercises List
-                ..._editableExercises.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final ex = entry.value;
-                  return _buildExerciseEditCard(idx, ex);
-                }),
+                  // Separate workout-day cards
+                  ..._editableDays.asMap().entries.map((dayEntry) {
+                    final dayIdx = dayEntry.key;
+                    final day = dayEntry.value;
+                    return _buildWorkoutDayCard(dayIdx, day);
+                  }),
+                ] else ...[
+                  // Exercises Section Header
+                  Row(
+                    children: [
+                      const Icon(Icons.fitness_center, size: 18, color: AppColors.primaryRed),
+                      const SizedBox(width: 8),
+                      Text(
+                        'PRESCRIBED EXERCISES (${_editableExercises.length})',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Exercise', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: _addExercise,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Exercises List
+                  ..._editableExercises.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final ex = entry.value;
+                    return _buildExerciseEditCard(idx, ex);
+                  }),
+                ],
               ],
             ),
           ),
@@ -1323,6 +1507,216 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                   ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkoutDayCard(int dayIdx, Map<String, dynamic> day) {
+    final dayName = day['day'] ?? day['dayName'] ?? day['weekday'] ?? 'Day ${dayIdx + 1}';
+    final sessionTitle = day['sessionTitle'] ?? day['title'] ?? 'Session';
+    final splitCat = day['splitCategory'] ?? day['category'] ?? (sessionTitle.toString().contains('Pull') ? 'Pull' : (sessionTitle.toString().contains('Leg') ? 'Legs' : 'Push'));
+    final targetMuscles = day['targetMuscleGroup'] ?? (day['targetMuscles'] is List ? (day['targetMuscles'] as List).join(', ') : 'Full Body');
+    final duration = day['estimatedDurationMinutes'] ?? 50;
+    final exercises = (day['exercises'] as List<Map<String, dynamic>>?) ?? [];
+    final splitColor = getSplitBadgeColor(splitCat.toString());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: splitColor.withOpacity(0.4), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Day Card Header
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: splitColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: splitColor),
+                      ),
+                      child: Text(
+                        dayName.toString(),
+                        style: TextStyle(color: splitColor, fontSize: 11, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        splitCat.toString().toUpperCase(),
+                        style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.timer_outlined, size: 12, color: AppColors.textTertiary),
+                          const SizedBox(width: 4),
+                          Text('~${duration}m', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  sessionTitle.toString(),
+                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.accessibility_new, size: 12, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Target: $targetMuscles',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Day Exercises List Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 6),
+            child: Row(
+              children: [
+                const Icon(Icons.fitness_center, size: 14, color: AppColors.primaryRed),
+                const SizedBox(width: 6),
+                Text(
+                  'EXERCISES (${exercises.length})',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: splitColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('Add Exercise', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () => _addExerciseToDay(dayIdx),
+                ),
+              ],
+            ),
+          ),
+
+          // Day Exercises
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: Column(
+              children: exercises.asMap().entries.map((exEntry) {
+                final exIdx = exEntry.key;
+                final ex = exEntry.value;
+                return _buildExerciseEditCardForDay(dayIdx, exIdx, ex);
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExerciseEditCardForDay(int dayIdx, int exIdx, Map<String, dynamic> ex) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('${exIdx + 1}.', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: ex['exerciseName']?.toString() ?? ex['name']?.toString() ?? '',
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 2),
+                    border: InputBorder.none,
+                    hintText: 'Exercise name...',
+                    hintStyle: TextStyle(color: AppColors.textTertiary),
+                  ),
+                  onChanged: (val) {
+                    ex['exerciseName'] = val;
+                    setState(() => _isDirty = true);
+                  },
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => _removeExerciseFromDay(dayIdx, exIdx),
+              ),
+            ],
+          ),
+          const Divider(color: AppColors.border, height: 12),
+          Row(
+            children: [
+              _numericField('Sets', ex['sets']?.toString() ?? '3', (v) {
+                ex['sets'] = int.tryParse(v) ?? 3;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _textField('Reps', ex['targetReps']?.toString() ?? ex['reps']?.toString() ?? '8-12', (v) {
+                ex['targetReps'] = v;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _numericField('Weight (kg)', ex['targetWeight']?.toString() ?? ex['weight']?.toString() ?? '20', (v) {
+                ex['targetWeight'] = double.tryParse(v) ?? 20.0;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _numericField('Rest (s)', ex['restSeconds']?.toString() ?? ex['rest']?.toString() ?? '90', (v) {
+                ex['restSeconds'] = int.tryParse(v) ?? 90;
+                setState(() => _isDirty = true);
+              }),
+            ],
           ),
         ],
       ),

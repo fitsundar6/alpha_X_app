@@ -782,6 +782,33 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
       weekdaySchedule: workoutConfig?.weekdaySchedule,
     });
 
+    // Enforce reasonable, configurable per-session exercise count target based on client level
+    let targetExercisesPerSession = Number(workoutConfig?.targetExercisesPerSession || workoutConfig?.exercisesPerSession);
+    if (!targetExercisesPerSession || targetExercisesPerSession < 3 || targetExercisesPerSession > 9) {
+      const expLower = experience.toLowerCase();
+      if (expLower.includes('beginner') || expLower.includes('novice')) {
+        targetExercisesPerSession = 5; // 5 exercises per session for beginners (5–7 range)
+      } else if (expLower.includes('advanced') || expLower.includes('elite')) {
+        targetExercisesPerSession = 6; // 6–7 exercises for advanced
+      } else {
+        targetExercisesPerSession = 5; // 5–6 exercises for intermediate
+      }
+    }
+
+    const resolveSplitCategory = (title: string, muscleGroup: string, splitKey: string): string => {
+      const combined = `${title} ${muscleGroup} ${splitKey}`.toLowerCase();
+      if (combined.includes('push')) return 'Push';
+      if (combined.includes('pull')) return 'Pull';
+      if (combined.includes('leg') || combined.includes('quad') || combined.includes('hamstring') || combined.includes('squat')) return 'Legs';
+      if (combined.includes('upper')) return 'Upper';
+      if (combined.includes('lower')) return 'Lower';
+      if (combined.includes('chest')) return 'Chest';
+      if (combined.includes('back')) return 'Back';
+      if (combined.includes('shoulder')) return 'Shoulders';
+      if (combined.includes('arm')) return 'Arms';
+      return 'Full Body';
+    };
+
     // For each day, retrieve library-verified exercises
     const weeklySchedule: Array<any> = [];
     let dayIdx = 0;
@@ -804,30 +831,51 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
           clientProfileId: profileId,
           fitnessLevel: experience,
           injuryAreas: injuryExclusions,
-          count: d.recommendedExercisesCount || 4,
+          count: targetExercisesPerSession,
           variationSeed: dayIdx++,
           primaryBodyParts: d.primaryBodyParts,
           allowedBodyParts: d.allowedBodyParts,
         }
       );
 
+      const splitCategory = resolveSplitCategory(d.sessionTitle, d.targetMuscleGroup, splitTemplate.key);
+      const dayId = `day_${dayIdx}_${d.dayName.toLowerCase().slice(0, 3)}_${splitCategory.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+
       weeklySchedule.push({
+        id: dayId,
+        dayId,
         day: d.dayName,
+        dayName: d.dayName,
+        weekday: d.dayName,
+        splitCategory,
+        category: splitCategory,
         sessionTitle: d.sessionTitle,
-        workoutType: d.workoutType,
+        title: d.sessionTitle,
+        workoutType: d.workoutType || 'Hypertrophy',
         targetMuscleGroup: d.targetMuscleGroup,
-        estimatedDurationMinutes: d.estimatedDurationMinutes,
-        exercises: dayExercises.map((e) => ({
+        targetMuscles: d.primaryBodyParts || [d.targetMuscleGroup],
+        estimatedDurationMinutes: d.estimatedDurationMinutes || sessionDuration,
+        recommendedExercisesCount: dayExercises.length,
+        exercises: dayExercises.map((e, eIdx) => ({
           exerciseId: e.id,
           name: e.name,
           exerciseName: e.name,
           category: e.category,
           bodyPart: e.bodyPart,
+          orderIndex: eIdx,
           sets: experience.toLowerCase() === 'advanced' ? 4 : 3,
+          numberOfSets: experience.toLowerCase() === 'advanced' ? 4 : 3,
           reps: experience.toLowerCase() === 'advanced' ? '6-8' : (primaryGoal.toLowerCase().includes('strength') ? '5-6' : '8-10'),
+          targetReps: experience.toLowerCase() === 'advanced' ? '6-8' : (primaryGoal.toLowerCase().includes('strength') ? '5-6' : '8-10'),
           restSeconds: primaryGoal.toLowerCase().includes('strength') ? 120 : 90,
           weight: experience.toLowerCase() === 'advanced' ? 75.0 : 50.0,
+          targetWeight: experience.toLowerCase() === 'advanced' ? 75.0 : 50.0,
+          targetRir: 2,
+          targetRpe: 8.0,
+          tempo: '3-1-1-0',
           notes: 'Tempo 3-1-1-0. Prioritize strict range of motion and form.',
+          adminInstruction: 'Tempo 3-1-1-0. Prioritize strict range of motion and form.',
+          day: d.dayName,
         })),
       });
     }

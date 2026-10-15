@@ -18,17 +18,40 @@ export interface ProposeWorkoutPlanInput {
   reason: string;                 // Why this plan suits the client
   summary: string;                // 1-2 sentence overview for admin
   weeklySchedule: {
+    id?: string;
+    dayId?: string;
     day: string;                  // "Monday", "Wednesday", etc.
+    dayName?: string;
+    weekday?: string;
     sessionTitle: string;         // "Upper Body Strength"
+    title?: string;
+    splitCategory?: string;
+    category?: string;
     workoutType: string;          // "Strength" | "Hypertrophy" | "Cardio" etc.
     targetMuscleGroup: string;    // "Chest · Triceps · Shoulders"
+    targetMuscles?: string[];
     estimatedDurationMinutes: number;
+    recommendedExercisesCount?: number;
     exercises: Array<{
+      exerciseId?: string;
       name: string;
+      exerciseName?: string;
+      category?: string;
+      bodyPart?: string;
+      orderIndex?: number;
       sets: number;
+      numberOfSets?: number;
       reps: string;               // "8-12" or "15" or "30 sec"
+      targetReps?: string;
+      weight?: number | null;
+      targetWeight?: number | null;
       restSeconds: number;
+      targetRir?: number;
+      targetRpe?: number;
+      tempo?: string;
       notes?: string;             // Coaching cues
+      adminInstruction?: string;
+      day?: string;
     }>;
   }[];
 }
@@ -301,24 +324,58 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
 
     const validatedExercises = validation.validatedExercises;
 
-    // Update weekly schedule exercises with validated items
+    // Update weekly schedule exercises with validated items while preserving day structure
     let validatedIdx = 0;
-    const validatedWeeklySchedule = args.weeklySchedule.map((day) => ({
-      ...day,
-      workoutType: day.workoutType || 'Hypertrophy',
-      targetMuscleGroup: day.targetMuscleGroup || (splitResult.isMultiDayTemplate ? (day.sessionTitle || 'Full Body') : splitResult.targetMuscleGroup),
-      exercises: (day.exercises || []).map((ex: any) => {
-        const v = validatedExercises[validatedIdx++];
-        return {
-          ...ex,
-          exerciseId: v ? v.exerciseId : ex.exerciseId,
-          name: v ? v.name : ex.name,
-          category: v ? v.category : ex.category,
-          bodyPart: v ? v.bodyPart : ex.bodyPart,
-        };
-      }),
-    }));
+    const validatedWeeklySchedule = args.weeklySchedule.map((day, dIdx) => {
+      const dayId = day.id || day.dayId || `day_${dIdx + 1}`;
+      const dayName = day.day || day.dayName || day.weekday || `Day ${dIdx + 1}`;
+      const splitCat = day.splitCategory || day.category || (day.sessionTitle && day.sessionTitle.includes('Pull') ? 'Pull' : (day.sessionTitle && day.sessionTitle.includes('Leg') ? 'Legs' : 'Push'));
 
+      return {
+        ...day,
+        id: dayId,
+        dayId,
+        day: dayName,
+        dayName,
+        weekday: dayName,
+        splitCategory: splitCat,
+        category: splitCat,
+        sessionTitle: day.sessionTitle || day.title || `${splitCat} Day`,
+        title: day.sessionTitle || day.title || `${splitCat} Day`,
+        workoutType: day.workoutType || 'Hypertrophy',
+        targetMuscleGroup: day.targetMuscleGroup || (splitResult.isMultiDayTemplate ? (day.sessionTitle || 'Full Body') : splitResult.targetMuscleGroup),
+        targetMuscles: day.targetMuscles || [day.targetMuscleGroup || 'Full Body'],
+        estimatedDurationMinutes: Number(day.estimatedDurationMinutes) || 50,
+        recommendedExercisesCount: (day.exercises || []).length,
+        exercises: (day.exercises || []).map((ex: any, exIdx: number) => {
+          const v = validatedExercises[validatedIdx++];
+          return {
+            ...ex,
+            exerciseId: v ? v.exerciseId : ex.exerciseId,
+            name: v ? v.name : ex.name,
+            exerciseName: v ? v.name : (ex.exerciseName || ex.name),
+            category: v ? v.category : (ex.category || day.workoutType || 'Strength'),
+            bodyPart: v ? v.bodyPart : ex.bodyPart,
+            orderIndex: ex.orderIndex !== undefined ? ex.orderIndex : exIdx,
+            sets: Number(ex.sets || ex.numberOfSets) || 3,
+            numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+            reps: String(ex.reps || ex.targetReps || '8-10'),
+            targetReps: String(ex.targetReps || ex.reps || '8-10'),
+            weight: ex.weight !== undefined ? Number(ex.weight) : (ex.targetWeight !== undefined ? Number(ex.targetWeight) : null),
+            targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+            restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+            targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+            targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+            tempo: ex.tempo || '3-1-1-0',
+            notes: ex.notes || ex.adminInstruction || null,
+            adminInstruction: ex.adminInstruction || ex.notes || null,
+            day: dayName,
+          };
+        }),
+      };
+    });
+
+    const isMultiDaySplit = validatedWeeklySchedule.length > 1;
     const proposedPayload = {
       title: args.planTitle,
       planTitle: args.planTitle,
@@ -327,8 +384,10 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
       difficulty: 'Intermediate',
       estimatedDurationMinutes: Number(validatedWeeklySchedule[0]?.estimatedDurationMinutes) || 50,
       description: args.summary,
-      exercises: validatedExercises,
+      isMultiDaySplit,
+      totalDays: validatedWeeklySchedule.length,
       weeklySchedule: validatedWeeklySchedule,
+      exercises: validatedExercises,
       generatedAt: new Date().toISOString(),
       generatedByAdminId: context.adminId,
     };
