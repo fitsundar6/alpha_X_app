@@ -1447,94 +1447,99 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  leading: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.primaryRed,
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
-                    child: (photoUrl == null || photoUrl.isEmpty)
-                        ? Text(
-                            (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
-                            style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w900),
-                          )
-                        : null,
-                  ),
-                  title: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          client['name'] ?? 'Athlete',
-                          style: GoogleFonts.poppins(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
-                        ),
-                        child: Text(
-                          isOnboarded ? 'Active' : 'Pending',
-                          style: GoogleFonts.poppins(
-                            color: isOnboarded ? AppColors.success : Colors.orangeAccent,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Row(
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    leading: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.primaryRed,
+                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                      child: (photoUrl == null || photoUrl.isEmpty)
+                          ? Text(
+                              (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
+                              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w900),
+                            )
+                          : null,
+                    ),
+                    title: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                        Flexible(
                           child: Text(
-                            displayClientId,
-                            style: const TextStyle(
-                              color: AppColors.primaryRed,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              fontFamily: 'monospace',
+                            client['name'] ?? 'Athlete',
+                            style: GoogleFonts.poppins(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
+                          ),
                           child: Text(
-                            client['email'] ?? '',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
+                            isOnboarded ? 'Active' : 'Pending',
+                            style: GoogleFonts.poppins(
+                              color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        joinDate,
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryRed.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              displayClientId,
+                              style: const TextStyle(
+                                color: AppColors.primaryRed,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              client['email'] ?? '',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
-                    ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          joinDate,
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+                      ],
+                    ),
+                    onTap: () => _showClientProfileModal(context, client),
                   ),
-                  onTap: () => _showClientProfileModal(context, client),
                 ),
               );
             }),

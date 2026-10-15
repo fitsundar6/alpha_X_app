@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
 

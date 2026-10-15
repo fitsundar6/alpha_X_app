@@ -12,7 +12,8 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 class _TestHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context);
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
   }
 }
 

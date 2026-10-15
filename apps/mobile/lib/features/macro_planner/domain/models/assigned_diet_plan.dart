@@ -499,7 +499,7 @@ class AssignedDietPlan {
       planName: json['planName'] as String? ?? 'Assigned Nutrition Plan',
       version: (json['version'] as num?)?.toInt() ?? 1,
       assignedById: json['assignedById'] as String?,
-      assignedByName: json['assignedByName'] as String? ?? 'Trainer Alex Stone',
+      assignedByName: json['assignedByName'] as String? ?? 'Master Coach',
       startDate: json['startDate'] != null ? DateTime.tryParse(json['startDate'] as String) : null,
       endDate: json['endDate'] != null ? DateTime.tryParse(json['endDate'] as String) : null,
       dailyCalories: (json['dailyCalories'] as num?)?.toDouble() ?? 2000.0,

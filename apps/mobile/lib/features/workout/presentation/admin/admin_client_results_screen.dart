@@ -483,7 +483,7 @@ class _AdminClientResultsScreenState extends State<AdminClientResultsScreen> {
     await showDialog(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (sbCtx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.surfaceCard,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
