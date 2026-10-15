@@ -8,6 +8,7 @@ import {
   assignSessionSchema,
   createWorkoutRecordSchema,
   setCompletionSchema,
+  unlockSessionSchema,
 } from './workout.validation';
 
 export class WorkoutController {
@@ -271,6 +272,7 @@ export class WorkoutController {
       clientIds: parsed.data.clientIds,
       individualClientId: parsed.data.individualClientId,
       isRecommended: parsed.data.isRecommended,
+      scheduledDate: parsed.data.scheduledDate,
       assignedById: req.user!.id,
     });
 
@@ -281,6 +283,86 @@ export class WorkoutController {
       `Assigned workout session "${id}" (${parsed.data.assignmentType}) to ${assignments.length} client target(s)`,
       { sessionId: id, assignmentType: parsed.data.assignmentType, assignedCount: assignments.length }
     );
+  }
+
+  async unlockSession(req: Request, res: Response): Promise<void> {
+    const parsed = unlockSessionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const errorMsg = parsed.error.errors.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
+      sendError(
+        res,
+        'VALIDATION_ERROR',
+        `Unlock session validation failed: ${errorMsg}`,
+        HttpStatus.BAD_REQUEST,
+        parsed.error.errors.map((e) => ({ field: e.path.join('.'), message: e.message })),
+        parsed.error,
+        { activity: 'Unlock Workout Session' }
+      );
+      return;
+    }
+
+    const adminId = req.user!.id;
+    let sessionId = (req.params.id as string) || parsed.data.sessionId || null;
+    let clientId = parsed.data.clientId || '';
+    let scheduledDate = parsed.data.scheduledDate || null;
+    const recordId = parsed.data.recordId || null;
+
+    if (recordId) {
+      const rec = await workoutService.getWorkoutRecordById(recordId, clientId || adminId);
+      if (rec) {
+        clientId = clientId || rec.clientId;
+        sessionId = sessionId || rec.sessionId || null;
+        scheduledDate = scheduledDate || rec.scheduledDate || null;
+      }
+    }
+
+    if (!clientId && !sessionId && !recordId) {
+      sendError(
+        res,
+        'VALIDATION_ERROR',
+        'Either clientId, sessionId, or recordId must be provided to unlock session',
+        HttpStatus.BAD_REQUEST,
+        undefined,
+        undefined,
+        { activity: 'Unlock Workout Session' }
+      );
+      return;
+    }
+
+    try {
+      const result = await workoutService.unlockSession(adminId, {
+        recordId,
+        sessionId,
+        assignmentId: parsed.data.assignmentId,
+        clientId: clientId || adminId,
+        scheduledDate,
+        reason: parsed.data.reason,
+      });
+
+      sendSuccess(
+        res,
+        result,
+        HttpStatus.OK,
+        result.message,
+        {
+          clientId,
+          sessionId,
+          recordId,
+          reason: parsed.data.reason,
+          unlockedAt: result.unlockedAt,
+        }
+      );
+    } catch (err: any) {
+      sendError(
+        res,
+        'DATABASE_ERROR',
+        err?.message || 'Failed to unlock workout session',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        undefined,
+        err,
+        { activity: 'Unlock Workout Session' }
+      );
+    }
   }
 
   async unassign(req: Request, res: Response): Promise<void> {
@@ -442,6 +524,21 @@ export class WorkoutController {
         }
       );
     } catch (err: any) {
+      if (err?.message && err.message.includes('SESSION_LOCKED')) {
+        sendError(
+          res,
+          'SESSION_LOCKED',
+          err.message,
+          HttpStatus.LOCKED,
+          undefined,
+          err,
+          {
+            activity: 'Record Completed Workout',
+            explanation: 'The session has been completed and locked. Modifications are forbidden unless unlocked by an administrator.',
+          }
+        );
+        return;
+      }
       sendError(
         res,
         'DATABASE_ERROR',
@@ -529,6 +626,21 @@ export class WorkoutController {
         `Updated set ${result.setNumber} (isCompleted: ${result.isCompleted}) for exercise "${result.exerciseId}"`
       );
     } catch (err: any) {
+      if (err?.message && err.message.includes('SESSION_LOCKED')) {
+        sendError(
+          res,
+          'SESSION_LOCKED',
+          err.message,
+          HttpStatus.LOCKED,
+          undefined,
+          err,
+          {
+            activity: 'Toggle Set Completion',
+            explanation: 'Cannot modify set: workout session is completed and locked.',
+          }
+        );
+        return;
+      }
       sendError(
         res,
         'DATABASE_ERROR',

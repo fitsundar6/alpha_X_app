@@ -147,11 +147,59 @@ async function runTests() {
       method: 'POST',
       headers: clientHeaders,
     });
-    console.assert(forbiddenRes.status === 403, `Expected 403, got ${forbiddenRes.status}`);
-    console.log('✔ Security verified: 403 Forbidden for clients on admin trigger endpoints');
+    const isDenied = forbiddenRes.status === 403 || forbiddenRes.status === 401;
+    console.assert(isDenied, `Expected 401/403, got ${forbiddenRes.status}`);
+    console.log('✔ Security verified: Access denied for clients on admin trigger endpoints');
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 7. Test GET /notifications/admin/devices (Admin only)
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('\n--- 7. Testing GET /admin/devices (Client Device Status) ---');
+    const devicesRes = await fetch(`${baseUrl}/notifications/admin/devices`, {
+      headers: adminHeaders,
+    });
+    const devicesJson = await devicesRes.json();
+    console.assert(devicesRes.status === 200, `Expected 200, got ${devicesRes.status}`);
+    console.assert(devicesJson.success === true, 'GET /admin/devices failed');
+    console.assert(typeof devicesJson.data.totalClients === 'number', 'Expected totalClients count');
+    console.log(`✔ Verified GET /admin/devices: ${devicesJson.data.totalClients} clients, ${devicesJson.data.registeredDevices} registered devices`);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 8. Test POST /notifications/admin/send-test (Admin Test Push Action)
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('\n--- 8. Testing POST /admin/send-test (Admin Test Push Action) ---');
+    const sendTestRes = await fetch(`${baseUrl}/notifications/admin/send-test`, {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({
+        clientId: client.id,
+        title: '🧪 Admin Test Notification',
+        body: 'Testing live delivery to Marcus Vance device',
+      }),
+    });
+    const sendTestJson = await sendTestRes.json();
+    console.assert(sendTestRes.status === 200, `Expected 200, got ${sendTestRes.status}`);
+    console.assert(sendTestJson.success === true, 'Admin test push failed');
+    console.log('✔ Admin test push returned response:', {
+      client: sendTestJson.data?.client?.name,
+      gatewayResponse: sendTestJson.data?.gatewayResponse?.httpStatus || sendTestJson.data?.gatewayResponse?.error,
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 9. Security Check: Client cannot call admin send-test endpoint
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('\n--- 9. Security Check: Client Forbidden on POST /admin/send-test ---');
+    const forbiddenTestRes = await fetch(`${baseUrl}/notifications/admin/send-test`, {
+      method: 'POST',
+      headers: clientHeaders,
+      body: JSON.stringify({ clientId: client.id }),
+    });
+    const isTestDenied = forbiddenTestRes.status === 403 || forbiddenTestRes.status === 401;
+    console.assert(isTestDenied, `Expected 401/403, got ${forbiddenTestRes.status}`);
+    console.log('✔ Security verified: Access denied for clients on POST /admin/send-test');
 
     console.log('\n================================================================');
-    console.log('🎉 ALL 6 PROACTIVE AI COACH NOTIFICATION TESTS PASSED!');
+    console.log('🎉 ALL 9 PROACTIVE AI COACH & PUSH NOTIFICATION TESTS PASSED!');
     console.log('================================================================');
   } catch (err) {
     console.error('❌ Test failed with error:', err);

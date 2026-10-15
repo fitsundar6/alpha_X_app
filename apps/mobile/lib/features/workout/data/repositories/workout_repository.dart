@@ -9,6 +9,7 @@ import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'package:alpha_x_gym/features/exercise/domain/models/exercise_model.dart';
 import 'package:alpha_x_gym/features/exercise/data/repositories/exercise_repository.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
+import 'package:alpha_x_gym/core/utils/ist_date_utils.dart';
 
 class WorkoutAssignmentData {
   final String id;
@@ -16,6 +17,11 @@ class WorkoutAssignmentData {
   final String? clientId; // null means ALL clients
   final bool isRecommended;
   final DateTime assignedAt;
+  final String? scheduledDate;
+  final bool isLocked;
+  final String status;
+  final DateTime? unlockedAt;
+  final String? unlockReason;
 
   WorkoutAssignmentData({
     required this.id,
@@ -23,6 +29,11 @@ class WorkoutAssignmentData {
     this.clientId,
     this.isRecommended = false,
     DateTime? assignedAt,
+    this.scheduledDate,
+    this.isLocked = false,
+    this.status = 'ASSIGNED',
+    this.unlockedAt,
+    this.unlockReason,
   }) : assignedAt = assignedAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -31,6 +42,11 @@ class WorkoutAssignmentData {
     'clientId': clientId,
     'isRecommended': isRecommended,
     'assignedAt': assignedAt.toIso8601String(),
+    'scheduledDate': scheduledDate,
+    'isLocked': isLocked,
+    'status': status,
+    'unlockedAt': unlockedAt?.toIso8601String(),
+    'unlockReason': unlockReason,
   };
 
   factory WorkoutAssignmentData.fromJson(Map<String, dynamic> json) => WorkoutAssignmentData(
@@ -39,8 +55,14 @@ class WorkoutAssignmentData {
     clientId: json['clientId'] as String?,
     isRecommended: json['isRecommended'] as bool? ?? false,
     assignedAt: json['assignedAt'] != null ? DateTime.tryParse(json['assignedAt'] as String) : null,
+    scheduledDate: json['scheduledDate'] as String?,
+    isLocked: json['isLocked'] as bool? ?? false,
+    status: json['status'] as String? ?? 'ASSIGNED',
+    unlockedAt: json['unlockedAt'] != null ? DateTime.tryParse(json['unlockedAt'] as String) : null,
+    unlockReason: json['unlockReason'] as String?,
   );
 }
+
 
 class WorkoutRepository extends ChangeNotifier {
   static const String _storageKeySessions = 'alpha_x_workout_sessions';
@@ -117,6 +139,7 @@ class WorkoutRepository extends ChangeNotifier {
   bool get hasActiveSavedSession {
     if (!_hasRestoredActiveSession) return false;
     if (_activeSession.isCompleted) return false;
+    if (_activeSession.isLocked) return false;
     if (_activeSession.status == 'COMPLETED' || _activeSession.status == 'ABANDONED') return false;
     final currentUid = AuthService().currentUserId;
     if (currentUid.isNotEmpty &&
@@ -130,6 +153,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   /// Adds an exercise dynamically to the currently active workout session.
   void addExerciseToActiveSession(WorkoutExercise exercise) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises)..add(exercise);
     _activeSession = _activeSession.copyWith(exercises: updatedExercises);
     final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
@@ -1162,6 +1186,7 @@ class WorkoutRepository extends ChangeNotifier {
     List<String>? clientIds,
     String? individualClientId,
     bool isRecommended = false,
+    String? scheduledDate,
   }) async {
     if (isRecommended) {
       // Clear previous recommendations for the matching target
@@ -1173,6 +1198,9 @@ class WorkoutRepository extends ChangeNotifier {
             sessionId: a.sessionId,
             clientId: a.clientId,
             isRecommended: false,
+            scheduledDate: a.scheduledDate,
+            isLocked: a.isLocked,
+            status: a.status,
           );
         } else if (assignmentType == 'INDIVIDUAL' && a.clientId == individualClientId) {
           _assignments[i] = WorkoutAssignmentData(
@@ -1180,6 +1208,9 @@ class WorkoutRepository extends ChangeNotifier {
             sessionId: a.sessionId,
             clientId: a.clientId,
             isRecommended: false,
+            scheduledDate: a.scheduledDate,
+            isLocked: a.isLocked,
+            status: a.status,
           );
         }
       }
@@ -1193,6 +1224,7 @@ class WorkoutRepository extends ChangeNotifier {
           sessionId: sessionId,
           clientId: null,
           isRecommended: isRecommended,
+          scheduledDate: scheduledDate,
         ),
       );
     } else if (assignmentType == 'INDIVIDUAL' && individualClientId != null) {
@@ -1203,6 +1235,7 @@ class WorkoutRepository extends ChangeNotifier {
           sessionId: sessionId,
           clientId: individualClientId,
           isRecommended: isRecommended,
+          scheduledDate: scheduledDate,
         ),
       );
     } else if (assignmentType == 'SELECTED' && clientIds != null) {
@@ -1214,6 +1247,7 @@ class WorkoutRepository extends ChangeNotifier {
             sessionId: sessionId,
             clientId: cId,
             isRecommended: isRecommended,
+            scheduledDate: scheduledDate,
           ),
         );
       }
@@ -1232,6 +1266,7 @@ class WorkoutRepository extends ChangeNotifier {
         'clientIds': clientIds ?? [],
         'individualClientId': individualClientId,
         'isRecommended': isRecommended,
+        'scheduledDate': scheduledDate,
       });
 
       var response = await _httpClient.post(
@@ -1466,24 +1501,86 @@ class WorkoutRepository extends ChangeNotifier {
   List<WorkoutSession> getAuthorizedSessionsForClient(String clientId) {
     if (clientId.isEmpty) return [];
 
+    final todayIST = IstDateUtils.getTodayISTString();
     final clientAssignments = _assignments.where((a) => a.clientId == clientId).toList();
-    if (clientAssignments.isNotEmpty) {
-      final authorizedSessionIds = clientAssignments.map((a) => a.sessionId).toSet();
-      return _sessions
-          .where((s) => s.isActive && authorizedSessionIds.contains(s.id))
-          .map((s) => s.copyWith(assignedClientId: clientId, assignedWorkoutId: s.id))
-          .toList();
+    if (clientAssignments.isEmpty) return [];
+
+    final List<WorkoutSession> result = [];
+
+    for (final assignment in clientAssignments) {
+      final session = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
+      if (session == null) continue;
+
+      // Filter by IST date schedule
+      final isScheduled = IstDateUtils.isSessionScheduledForDate(
+        recurringSchedule: session.recurringSchedule,
+        trainingDays: session.trainingDays,
+        sessionStartDate: session.startDate,
+        sessionEndDate: session.endDate,
+        assignmentScheduledDate: assignment.scheduledDate,
+        assignmentAssignedAt: assignment.assignedAt,
+        targetDateIST: todayIST,
+      );
+
+      if (!isScheduled) continue;
+
+      // Check if session is completed & locked in history for todayIST
+      final todayRecord = _workoutHistory.where((r) {
+        if (r.clientId != clientId) return false;
+        if (r.sessionId != session.id) return false;
+        final recordDate = r.scheduledDate ?? IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt);
+        return recordDate == todayIST && r.isCompleted;
+      }).firstOrNull;
+
+      final bool isLockedToday = todayRecord != null && todayRecord.isLocked;
+      final String sessionStatus = isLockedToday
+          ? 'COMPLETED'
+          : (todayRecord != null ? 'IN_PROGRESS' : assignment.status);
+
+      // Clean fresh sets for new scheduled session occurrence
+      final exercises = isLockedToday && todayRecord != null
+          ? todayRecord.exercises
+          : session.exercises.map((ex) {
+              return ex.copyWith(
+                isSkipped: false,
+                skipReason: null,
+                clientNote: null,
+                sets: ex.sets.map((s) => s.copyWith(
+                  isCompleted: false,
+                  completedAt: null,
+                )).toList(),
+              );
+            }).toList();
+
+      result.add(
+        session.copyWith(
+          assignedClientId: clientId,
+          assignedWorkoutId: session.id,
+          assignmentId: assignment.id,
+          isRecommended: assignment.isRecommended,
+          scheduledDate: todayIST,
+          isLocked: isLockedToday,
+          status: sessionStatus,
+          lockedAt: isLockedToday ? (todayRecord?.lockedAt ?? todayRecord?.completedAt) : null,
+          unlockedAt: todayRecord?.unlockedAt ?? assignment.unlockedAt,
+          unlockReason: todayRecord?.unlockReason ?? assignment.unlockReason,
+          exercises: exercises,
+        ),
+      );
     }
 
-    return [];
+    return result;
   }
 
   WorkoutSession? getTodaySessionForClient(String clientId) {
     if (clientId.isEmpty) return null;
+    final todayIST = IstDateUtils.getTodayISTString();
 
-    // 1. If user already has an active IN_PROGRESS session, return that active session
+    // 1. If user already has an active IN_PROGRESS session that is NOT locked and matches today, return that active session
     if (hasActiveSavedSession &&
         _activeSession.status == 'IN_PROGRESS' &&
+        !_activeSession.isLocked &&
+        (_activeSession.scheduledDate == null || _activeSession.scheduledDate == todayIST) &&
         (_activeSession.assignedClientId == clientId || _activeSession.assignedClientId == null)) {
       return _activeSession;
     }
@@ -1491,33 +1588,37 @@ class WorkoutRepository extends ChangeNotifier {
     final authorized = getAuthorizedSessionsForClient(clientId);
     if (authorized.isEmpty) return null;
 
-    final todayWeekday = DateTime.now().weekday; // 1 = Mon ... 7 = Sun
-
-    // 2. Check weekly schedule mapping for authorized sessions
-    for (final s in authorized) {
-      if (s.weeklySchedule != null &&
-          s.weeklySchedule!.dayOfWeekSessionId.containsKey(todayWeekday)) {
-        final targetId = s.weeklySchedule!.dayOfWeekSessionId[todayWeekday];
-        if (targetId != null && targetId == s.id) {
-          return s;
-        }
-      }
-      if (s.trainingDays.contains(todayWeekday)) {
-        return s;
-      }
-    }
-
-    // 3. Recommended session for this client
-    final rec = getRecommendedSessionForClient(clientId);
+    // 2. Recommended session for this client
+    final rec = authorized.where((s) => s.isRecommended).firstOrNull;
     if (rec != null) return rec;
 
-    // 4. First authorized session assigned to this client
+    // 3. First authorized session assigned to this client
     return authorized.first;
   }
 
   // --- Client Workout Execution ---
   void startSession(WorkoutSession session, {String? clientId}) {
+    if (session.isLocked || session.status == 'COMPLETED') {
+      debugPrint('[WorkoutRepository] Cannot start a locked or completed session.');
+      return;
+    }
+
     final targetClientId = clientId ?? session.assignedClientId ?? AuthService().currentUserId;
+    final todayIST = session.scheduledDate ?? IstDateUtils.getTodayISTString();
+
+    // Check if already completed and locked in history for today
+    final alreadyCompletedToday = _workoutHistory.any((r) {
+      if (r.clientId != targetClientId) return false;
+      if (r.sessionId != session.id) return false;
+      final recordDate = r.scheduledDate ?? IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt);
+      return recordDate == todayIST && r.isCompleted && r.isLocked;
+    });
+
+    if (alreadyCompletedToday) {
+      debugPrint('[WorkoutRepository] Session already completed and locked for today.');
+      return;
+    }
+
     _currentSessionSwaps.clear();
     final now = DateTime.now();
 
@@ -1527,6 +1628,8 @@ class WorkoutRepository extends ChangeNotifier {
       assignedClientId: targetClientId,
       assignedWorkoutId: session.assignedWorkoutId ?? session.id,
       status: 'IN_PROGRESS',
+      scheduledDate: todayIST,
+      isLocked: false,
       workoutDate: now,
       startedAt: now,
       completedAt: null,
@@ -1573,6 +1676,7 @@ class WorkoutRepository extends ChangeNotifier {
     double? rpe,
     int? rir,
   }) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     if (exerciseIndex >= _activeSession.exercises.length) return;
     final exercise = _activeSession.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return;
@@ -1600,6 +1704,7 @@ class WorkoutRepository extends ChangeNotifier {
     required int exerciseIndex,
     required int setIndex,
   }) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return null;
     if (exerciseIndex >= _activeSession.exercises.length) return null;
     final exercise = _activeSession.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return null;
@@ -1651,6 +1756,7 @@ class WorkoutRepository extends ChangeNotifier {
     required int exerciseIndex,
     required int setIndex,
   }) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     if (exerciseIndex >= _activeSession.exercises.length) return;
     final exercise = _activeSession.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return;
@@ -1685,6 +1791,7 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   void skipExercise(int exerciseIndex, {String? reason}) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     if (exerciseIndex >= _activeSession.exercises.length) return;
     final exercise = _activeSession.exercises[exerciseIndex];
 
@@ -1702,6 +1809,7 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   void updateExerciseNote(int exerciseIndex, String note) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     if (exerciseIndex >= _activeSession.exercises.length) return;
     final exercise = _activeSession.exercises[exerciseIndex];
 
@@ -1715,6 +1823,7 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   void addSet(int exerciseIndex, {SetType setType = SetType.working}) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
     if (exerciseIndex >= _activeSession.exercises.length) return;
     final exercise = _activeSession.exercises[exerciseIndex];
     final nextSetNumber = exercise.sets.length + 1;
@@ -1746,6 +1855,7 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   bool deleteSet(int exerciseIndex, int setIndex) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
     if (exerciseIndex >= _activeSession.exercises.length) return false;
     final exercise = _activeSession.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return false;
@@ -1768,6 +1878,7 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   bool swapExercise(int exerciseIndex, String newExerciseId) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
     if (exerciseIndex >= _activeSession.exercises.length) return false;
 
     // Check client swap permissions
@@ -1827,6 +1938,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   WorkoutRecord completeWorkout({String? notes, int? durationSeconds, String? authToken}) {
     final now = DateTime.now();
+    final todayIST = _activeSession.scheduledDate ?? IstDateUtils.getTodayISTString();
     final duration = durationSeconds ??
         now.difference(_activeSession.startedAt).inSeconds.clamp(60, 10800);
 
@@ -1834,6 +1946,10 @@ class WorkoutRepository extends ChangeNotifier {
       isCompleted: true,
       completedAt: now,
       durationSeconds: duration,
+      isLocked: true,
+      lockedAt: now,
+      status: 'COMPLETED',
+      scheduledDate: todayIST,
     );
 
     // Calculate aggregated stats
@@ -1870,7 +1986,7 @@ class WorkoutRepository extends ChangeNotifier {
 
     final currentUserId = AuthService().currentUserId.isNotEmpty
         ? AuthService().currentUserId
-        : AuthService().currentClientId;
+        : (_activeSession.assignedClientId ?? AuthService().currentClientId);
 
     final record = WorkoutRecord(
       id: 'rec_${DateTime.now().millisecondsSinceEpoch}',
@@ -1892,12 +2008,15 @@ class WorkoutRepository extends ChangeNotifier {
       exercises: List.from(_activeSession.exercises),
       exerciseSwaps: List.from(_currentSessionSwaps),
       planVersion: _activeSession.planVersion,
+      scheduledDate: todayIST,
+      isLocked: true,
+      lockedAt: now,
     );
 
     _currentSessionSwaps.clear();
     _hasRestoredActiveSession = false;
     _activeSessionSavedAt = null;
-    discardActiveSession();
+    discardActiveSession(userId: currentUserId);
     _workoutHistory.insert(0, record);
     _saveToLocalStorage();
     notifyListeners();
@@ -1913,6 +2032,107 @@ class WorkoutRepository extends ChangeNotifier {
     syncWorkoutRecordToBackend(record, authToken: authToken);
 
     return record;
+  }
+
+  /// Admin unlocks a completed workout session with audit trail and optional session reopening.
+  Future<bool> unlockSession({
+    required String recordId,
+    required String adminId,
+    required String reason,
+    bool reopenSession = true,
+  }) async {
+    final now = DateTime.now();
+
+    // 1. Find record in history
+    final idx = _workoutHistory.indexWhere((r) => r.id == recordId);
+    if (idx != -1) {
+      final oldRecord = _workoutHistory[idx];
+      final unlockedRecord = oldRecord.copyWith(
+        isLocked: false,
+        unlockedAt: now,
+        unlockedById: adminId,
+        unlockReason: reason,
+      );
+      _workoutHistory[idx] = unlockedRecord;
+
+      // 2. Also update matching assignment in _assignments if present
+      for (int i = 0; i < _assignments.length; i++) {
+        final a = _assignments[i];
+        if (a.sessionId == oldRecord.sessionId &&
+            (a.clientId == null || a.clientId == oldRecord.clientId)) {
+          _assignments[i] = WorkoutAssignmentData(
+            id: a.id,
+            sessionId: a.sessionId,
+            clientId: a.clientId,
+            isRecommended: a.isRecommended,
+            assignedAt: a.assignedAt,
+            scheduledDate: a.scheduledDate,
+            isLocked: false,
+            status: 'IN_PROGRESS',
+            unlockedAt: now,
+            unlockReason: reason,
+          );
+        }
+      }
+
+      // 3. Reopen active session if requested
+      if (reopenSession) {
+        _activeSession = WorkoutSession(
+          id: oldRecord.sessionId ?? 'session_${oldRecord.id}',
+          title: oldRecord.sessionTitle,
+          workoutType: oldRecord.workoutType,
+          targetMuscleGroup: oldRecord.targetMuscleGroup,
+          startedAt: oldRecord.startedAt,
+          durationSeconds: oldRecord.durationSeconds,
+          assignedClientId: oldRecord.clientId,
+          assignedWorkoutId: oldRecord.sessionId,
+          status: 'IN_PROGRESS',
+          scheduledDate: oldRecord.scheduledDate ?? IstDateUtils.toISTDateString(oldRecord.startedAt),
+          isLocked: false,
+          isCompleted: false,
+          unlockedAt: now,
+          unlockedById: adminId,
+          unlockReason: reason,
+          exercises: oldRecord.exercises.map((e) => e.copyWith(
+            sets: e.sets.map((s) => s.copyWith()).toList(),
+          )).toList(),
+        );
+        _hasRestoredActiveSession = true;
+        _activeSessionSavedAt = now;
+        await saveActiveSessionToLocalStorage(userId: oldRecord.clientId);
+      }
+
+      _saveToLocalStorage();
+      notifyListeners();
+    }
+
+    // 4. Sync with backend API
+    try {
+      final token = await AuthService().getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/admin/unlock-session');
+      final payload = jsonEncode({
+        'recordId': recordId,
+        'reason': reason,
+        'adminId': adminId,
+      });
+
+      final response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to sync unlockSession to backend: $e');
+    }
+
+    return idx != -1;
   }
 
   // --- Historical Performance & PR Database ---
@@ -2406,8 +2626,22 @@ class WorkoutRepository extends ChangeNotifier {
       if (activeRaw != null && activeRaw.isNotEmpty) {
         final activeMap = jsonDecode(activeRaw) as Map<String, dynamic>;
         final restored = WorkoutSession.fromJson(activeMap);
+        final todayIST = IstDateUtils.getTodayISTString();
+
+        final sessionDate = restored.scheduledDate ?? IstDateUtils.toISTDateString(restored.startedAt);
+        final isForToday = sessionDate.isEmpty || sessionDate == todayIST;
+
+        final isCompletedInHistory = _workoutHistory.any((r) =>
+            r.clientId == clientId &&
+            r.sessionId == restored.id &&
+            (r.scheduledDate == todayIST || IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt) == todayIST) &&
+            r.isCompleted);
+
         final age = DateTime.now().difference(restored.startedAt);
         if (!restored.isCompleted &&
+            !restored.isLocked &&
+            !isCompletedInHistory &&
+            isForToday &&
             (restored.status == 'IN_PROGRESS' || restored.status == 'NOT_STARTED') &&
             age.inHours < 24) {
           _activeSession = restored;
@@ -2417,6 +2651,9 @@ class WorkoutRepository extends ChangeNotifier {
             _activeSessionSavedAt = DateTime.tryParse(tsStr);
           }
           notifyListeners();
+        } else {
+          // If the session was from yesterday, completed, or locked, clean it up so it is never accidentally reopened
+          await discardActiveSession(userId: clientId);
         }
       }
     } catch (e) {
@@ -2467,10 +2704,12 @@ class WorkoutRepository extends ChangeNotifier {
       await prefs.remove(_storageKeyActiveSessionTimestamp);
       await prefs.remove(_storageKeyActiveSessionDuration);
 
-      _hasRestoredActiveSession = false;
-      _activeSessionSavedAt = null;
-      _currentSessionSwaps.clear();
-      notifyListeners();
+      if (_activeSession.status != 'IN_PROGRESS') {
+        _hasRestoredActiveSession = false;
+        _activeSessionSavedAt = null;
+        _currentSessionSwaps.clear();
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('[WorkoutRepository] Failed to discard active session: $e');
     }
@@ -2560,6 +2799,7 @@ class WorkoutRepository extends ChangeNotifier {
         'actualReps': actualReps,
         'actualRpe': actualRpe,
         'actualRir': actualRir,
+        'scheduledDate': _activeSession.scheduledDate ?? IstDateUtils.getTodayISTString(),
       };
 
       final response = await _httpClient
@@ -2671,6 +2911,8 @@ class WorkoutRepository extends ChangeNotifier {
       'sessionId': record.sessionId,
       'sessionTitle': record.sessionTitle.isNotEmpty ? record.sessionTitle : 'Workout Session',
       'workoutType': _normalizeWorkoutType(record.workoutType),
+      'scheduledDate': record.scheduledDate ?? IstDateUtils.toISTDateString(record.completedAt ?? record.startedAt),
+      'isLocked': record.isLocked,
       'startedAt': record.startedAt.toUtc().toIso8601String(),
       'completedAt': (record.completedAt ?? DateTime.now()).toUtc().toIso8601String(),
       'durationSeconds': record.durationSeconds,
@@ -2682,36 +2924,65 @@ class WorkoutRepository extends ChangeNotifier {
       'isCompleted': record.isCompleted,
       'personalRecords': record.personalRecords.map((p) => p.toJson()).toList(),
       'notes': record.notes,
-      'exerciseRecords': record.exercises.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final ex = entry.value;
-        return {
-          'exerciseId': ex.exerciseId,
-          'exerciseName': ex.exerciseName,
-          'orderIndex': idx,
-          'supersetTag': ex.supersetTag,
-          'isSkipped': ex.isSkipped,
-          'skipReason': ex.skipReason,
-          'clientNote': ex.clientNote,
-          'adminNote': ex.trainerNote.isNotEmpty ? ex.trainerNote : null,
-          'sets': ex.sets.map((s) {
-            return {
-              'setNumber': s.setNumber,
-              'setType': _mapSetType(s.setType),
-              'targetReps': s.targetRepsDisplay,
-              'targetWeight': s.targetWeight > 0 ? s.targetWeight : null,
-              'actualWeight': s.actualWeight ?? (s.isCompleted ? s.targetWeight : null),
-              'actualReps': s.actualReps ?? (s.isCompleted ? s.targetRepsMin : null),
-              'actualRir': s.actualRir,
-              'actualRpe': s.actualRpe,
-              'tempo': s.tempo.isNotEmpty ? s.tempo : null,
-              'isCompleted': s.isCompleted,
-              'completedAt': s.completedAt?.toUtc().toIso8601String(),
-              'notes': s.notes,
-            };
-          }).toList(),
-        };
-      }).toList(),
+      'exerciseRecords': record.exercises.isEmpty
+          ? [
+              {
+                'exerciseId': 'ex_general_session',
+                'exerciseName': record.sessionTitle.isNotEmpty ? record.sessionTitle : 'General Training Activity',
+                'orderIndex': 0,
+                'supersetTag': null,
+                'isSkipped': false,
+                'skipReason': null,
+                'clientNote': record.notes,
+                'adminNote': null,
+                'sets': [
+                  {
+                    'setNumber': 1,
+                    'setType': 'Working',
+                    'targetReps': '1',
+                    'targetWeight': null,
+                    'actualWeight': null,
+                    'actualReps': 1,
+                    'actualRir': null,
+                    'actualRpe': null,
+                    'tempo': null,
+                    'isCompleted': true,
+                    'completedAt': (record.completedAt ?? DateTime.now()).toUtc().toIso8601String(),
+                    'notes': 'Session recorded',
+                  }
+                ],
+              }
+            ]
+          : record.exercises.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final ex = entry.value;
+              return {
+                'exerciseId': ex.exerciseId,
+                'exerciseName': ex.exerciseName,
+                'orderIndex': idx,
+                'supersetTag': ex.supersetTag,
+                'isSkipped': ex.isSkipped,
+                'skipReason': ex.skipReason,
+                'clientNote': ex.clientNote,
+                'adminNote': ex.trainerNote.isNotEmpty ? ex.trainerNote : null,
+                'sets': ex.sets.map((s) {
+                  return {
+                    'setNumber': s.setNumber,
+                    'setType': _mapSetType(s.setType),
+                    'targetReps': s.targetRepsDisplay,
+                    'targetWeight': s.targetWeight > 0 ? s.targetWeight : null,
+                    'actualWeight': s.actualWeight ?? (s.isCompleted ? s.targetWeight : null),
+                    'actualReps': s.actualReps ?? (s.isCompleted ? s.targetRepsMin : null),
+                    'actualRir': s.actualRir,
+                    'actualRpe': s.actualRpe,
+                    'tempo': s.tempo.isNotEmpty ? s.tempo : null,
+                    'isCompleted': s.isCompleted,
+                    'completedAt': s.completedAt?.toUtc().toIso8601String(),
+                    'notes': s.notes,
+                  };
+                }).toList(),
+              };
+            }).toList(),
     };
   }
 
@@ -2771,5 +3042,80 @@ class WorkoutRepository extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> updateOwnName(String newName) async {
+    try {
+      final token = await AuthService().getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/client/me/profile');
+      final res = await _httpClient.patch(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'name': newName}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final currentProfile = Map<String, dynamic>.from(AuthService().clientProfile);
+        currentProfile['name'] = newName;
+        AuthService().updateLocalProfile(currentProfile);
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to update own name: $e');
+    }
+    if (_isTestEnvironment) {
+      final currentProfile = Map<String, dynamic>.from(AuthService().clientProfile);
+      currentProfile['name'] = newName;
+      AuthService().updateLocalProfile(currentProfile);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateClientProfile(String clientId, Map<String, dynamic> payload) async {
+    try {
+      final token = await AuthService().getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/clients/$clientId/profile');
+      final res = await _httpClient.patch(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final idx = _clients.indexWhere((c) => c['id'] == clientId || c['clientId'] == clientId);
+        if (idx != -1) {
+          final updated = Map<String, String>.from(_clients[idx]);
+          payload.forEach((k, v) {
+            if (v != null) updated[k] = v.toString();
+          });
+          _clients[idx] = updated;
+        }
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] Failed to update client profile: $e');
+    }
+    if (_isTestEnvironment) {
+      final idx = _clients.indexWhere((c) => c['id'] == clientId || c['clientId'] == clientId);
+      if (idx != -1) {
+        final updated = Map<String, String>.from(_clients[idx]);
+        payload.forEach((k, v) {
+          if (v != null) updated[k] = v.toString();
+        });
+        _clients[idx] = updated;
+      }
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
 
 }

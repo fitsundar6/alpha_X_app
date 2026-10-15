@@ -40,10 +40,25 @@ class AdminAiProposalReviewDialog extends StatefulWidget {
   }
 
   @override
-  State<AdminAiProposalReviewDialog> createState() => _AdminAiProposalReviewDialogState();
+  State<AdminAiProposalReviewDialog> createState() =>
+      _AdminAiProposalReviewDialogState();
 }
 
-class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialog> {
+class _AdminAiProposalReviewDialogState
+    extends State<AdminAiProposalReviewDialog> {
+  final Set<int> _expandedMealIndices = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.proposal.payload;
+    if (p['meals'] is List) {
+      for (var i = 0; i < (p['meals'] as List).length; i++) {
+        _expandedMealIndices.add(i);
+      }
+    }
+  }
+
   Color _getStatusColor(AiProposalStatus status) {
     switch (status) {
       case AiProposalStatus.approved:
@@ -75,7 +90,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceCard,
-        title: const Text('Confirm Plan Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Confirm Plan Assignment',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'Are you sure you want to approve this AI ${widget.proposal.type.name.toUpperCase()} proposal and assign it to the athlete as their active plan?',
           style: const TextStyle(color: AppColors.textSecondary),
@@ -83,7 +101,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCEL', style: TextStyle(color: AppColors.textTertiary)),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: AppColors.textTertiary),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -95,7 +116,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
               Navigator.of(context).pop(); // close review sheet
               widget.onAccept();
             },
-            child: const Text('ACCEPT & ASSIGN', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'ACCEPT & ASSIGN',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -103,12 +127,20 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
   }
 
   void _confirmReject() {
-    final reasonController = TextEditingController(text: 'Adjustments required before assignment');
+    final reasonController = TextEditingController(
+      text: 'Adjustments required before assignment',
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceCard,
-        title: const Text('Reject AI Proposal', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Reject AI Proposal',
+          style: TextStyle(
+            color: AppColors.primaryRed,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,7 +157,9 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
               decoration: InputDecoration(
                 filled: true,
                 fillColor: AppColors.surfaceElevated,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 hintText: 'Reason for rejection...',
                 hintStyle: const TextStyle(color: AppColors.textTertiary),
               ),
@@ -135,7 +169,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCEL', style: TextStyle(color: AppColors.textTertiary)),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: AppColors.textTertiary),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -148,7 +185,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
               Navigator.of(context).pop(); // close review sheet
               widget.onReject(reason.isEmpty ? null : reason);
             },
-            child: const Text('REJECT PROPOSAL', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'REJECT PROPOSAL',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -165,14 +205,13 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
     final isWorkout = proposal.type == AiProposalType.workout;
     final isDiet = proposal.type == AiProposalType.diet;
 
-    final athleteName = proposal.clientName ??
+    final athleteName =
+        proposal.clientName ??
         payload['clientName'] ??
         payload['workoutPlan']?['clientName'] ??
         'Athlete';
 
-    final clientId = proposal.clientId ??
-        payload['clientId'] ??
-        'AXG';
+    final clientId = proposal.clientId ?? payload['clientId'] ?? 'AXG';
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.88,
@@ -207,28 +246,50 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: statusColor.withOpacity(0.4)),
+                              border: Border.all(
+                                color: statusColor.withOpacity(0.4),
+                              ),
                             ),
                             child: Text(
                               statusLabel,
-                              style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.8,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            isWorkout ? '🏋️ AI WORKOUT PLAN' : (isDiet ? '🥗 AI DIET PLAN' : '📈 AI PROGRESSION'),
-                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold),
+                            isWorkout
+                                ? '🏋️ AI WORKOUT PLAN'
+                                : (isDiet
+                                      ? '🥗 AI DIET PLAN'
+                                      : '📈 AI PROGRESSION'),
+                            style: const TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
                         proposal.title,
-                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -267,7 +328,10 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                           color: AppColors.primaryRed.withOpacity(0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.person, color: AppColors.primaryRed),
+                        child: const Icon(
+                          Icons.person,
+                          color: AppColors.primaryRed,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -276,12 +340,19 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                           children: [
                             Text(
                               athleteName,
-                              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'ID: $clientId',
-                              style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -298,25 +369,42 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                   decoration: BoxDecoration(
                     color: AppColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.3)),
+                    border: Border.all(
+                      color: Colors.lightBlueAccent.withOpacity(0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.psychology_outlined, color: Colors.lightBlueAccent, size: 18),
+                          Icon(
+                            Icons.psychology_outlined,
+                            color: Colors.lightBlueAccent,
+                            size: 18,
+                          ),
                           SizedBox(width: 6),
                           Text(
                             'AI ANALYSIS & REASONING',
-                            style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                            style: TextStyle(
+                              color: Colors.lightBlueAccent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        proposal.reason.isNotEmpty ? proposal.reason : proposal.summary,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                        proposal.reason.isNotEmpty
+                            ? proposal.reason
+                            : proposal.summary,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -327,12 +415,20 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.shield_outlined, color: AppColors.warningYellow, size: 14),
+                            Icon(
+                              Icons.shield_outlined,
+                              color: AppColors.warningYellow,
+                              size: 14,
+                            ),
                             SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'AI NEVER directly assigns plans. Admin approval required for activation.',
-                                style: TextStyle(color: AppColors.warningYellow, fontSize: 11, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  color: AppColors.warningYellow,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -345,9 +441,12 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                 const SizedBox(height: 18),
 
                 // Specific Breakdown (Workout or Diet)
-                if (isWorkout) _buildWorkoutBreakdown(payload)
-                else if (isDiet) _buildDietBreakdown(payload)
-                else _buildGeneralBreakdown(payload),
+                if (isWorkout)
+                  _buildWorkoutBreakdown(payload)
+                else if (isDiet)
+                  _buildDietBreakdown(payload)
+                else
+                  _buildGeneralBreakdown(payload),
 
                 const SizedBox(height: 20),
               ],
@@ -363,7 +462,9 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
             ),
             child: SafeArea(
               top: false,
-              child: proposal.status == AiProposalStatus.pending || proposal.status == AiProposalStatus.edited
+              child:
+                  proposal.status == AiProposalStatus.pending ||
+                      proposal.status == AiProposalStatus.edited
                   ? Row(
                       children: [
                         // 1. REJECT
@@ -371,12 +472,28 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                           flex: 1,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+                              side: const BorderSide(
+                                color: AppColors.primaryRed,
+                                width: 1.5,
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
-                            icon: const Icon(Icons.close, color: AppColors.primaryRed, size: 18),
-                            label: const Text('REJECT', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                            icon: const Icon(
+                              Icons.close,
+                              color: AppColors.primaryRed,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'REJECT',
+                              style: TextStyle(
+                                color: AppColors.primaryRed,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                             onPressed: _confirmReject,
                           ),
                         ),
@@ -387,12 +504,28 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                           flex: 1,
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white54, width: 1.5),
+                              side: const BorderSide(
+                                color: Colors.white54,
+                                width: 1.5,
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
-                            icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 18),
-                            label: const Text('EDIT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'EDIT',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                             onPressed: () {
                               Navigator.of(context).pop(); // close sheet
                               widget.onEdit();
@@ -409,10 +542,21 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                               backgroundColor: AppColors.statusGreen,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
-                            icon: const Icon(Icons.check_circle_outline, size: 18),
-                            label: const Text('ACCEPT & ASSIGN', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'ACCEPT & ASSIGN',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                             onPressed: _confirmAccept,
                           ),
                         ),
@@ -429,7 +573,11 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                         proposal.status == AiProposalStatus.approved
                             ? '✔ Activated in athlete\'s active plan system.'
                             : '✖ Proposal closed without altering athlete\'s active plan.',
-                        style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -443,9 +591,17 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
   Widget _buildWorkoutBreakdown(Map<String, dynamic> payload) {
     // Parse exercises from payload
     List<dynamic> exercises = [];
-    if (payload['exercises'] is List) {
+    if (payload['exercises'] is List &&
+        (payload['exercises'] as List).isNotEmpty) {
       exercises = payload['exercises'] as List;
-    } else if (payload['workoutPlan']?['sessions'] is List && (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
+    } else if (payload['weeklySchedule'] is List) {
+      for (final day in (payload['weeklySchedule'] as List)) {
+        if (day is Map && day['exercises'] is List) {
+          exercises.addAll(day['exercises'] as List);
+        }
+      }
+    } else if (payload['workoutPlan']?['sessions'] is List &&
+        (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
       final firstSession = (payload['workoutPlan']['sessions'] as List).first;
       if (firstSession['exercises'] is List) {
         exercises = firstSession['exercises'] as List;
@@ -460,11 +616,20 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
           children: [
             const Text(
               'PROPOSED WORKOUT STRUCTURE',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+              style: TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+              ),
             ),
             Text(
               '${exercises.length} Exercises',
-              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -496,18 +661,29 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                     Expanded(
                       child: Text(
                         name,
-                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryRed.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         '$sets sets × $reps reps',
-                        style: const TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: AppColors.primaryRed,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -528,7 +704,11 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
                   const SizedBox(height: 6),
                   Text(
                     'Notes: $notes',
-                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontStyle: FontStyle.italic),
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ],
@@ -540,17 +720,36 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
   }
 
   Widget _buildDietBreakdown(Map<String, dynamic> payload) {
-    final calories = payload['dailyCalories'] ?? 2000;
-    final protein = payload['protein'] ?? 150;
-    final carbs = payload['carbohydrates'] ?? 200;
-    final fat = payload['fat'] ?? 60;
-    final fiber = payload['fiber'] ?? 30;
-    final water = payload['waterTargetLiters'] ?? 3.5;
+    final calories =
+        payload['dailyCalories'] ??
+        payload['calories'] ??
+        payload['targetCalories'] ??
+        2000;
+    final protein =
+        payload['protein'] ??
+        payload['proteinGrams'] ??
+        payload['targetProtein'] ??
+        150;
+    final carbs =
+        payload['carbohydrates'] ??
+        payload['carbGrams'] ??
+        payload['carbs'] ??
+        payload['targetCarbs'] ??
+        200;
+    final fat =
+        payload['fat'] ?? payload['fatGrams'] ?? payload['targetFat'] ?? 60;
+    final fiber = payload['fiber'] ?? payload['fiberGrams'] ?? 30;
+    final water =
+        payload['waterTargetLiters'] ??
+        payload['targetWaterLiters'] ??
+        payload['waterLiters'] ??
+        3.5;
 
     List<dynamic> meals = [];
     if (payload['meals'] is List) {
       meals = payload['meals'] as List;
     }
+    final isMacroOnly = payload['planKind'] == 'MACRO_ONLY' || meals.isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -568,26 +767,71 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
             children: [
               const Text(
                 'DAILY TARGET NUTRITION',
-                style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                style: TextStyle(
+                  color: AppColors.primaryRed,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: _buildMacroStat('CALORIES', '$calories', 'kcal', AppColors.primaryRed)),
+                  Expanded(
+                    child: _buildMacroStat(
+                      'CALORIES',
+                      '$calories',
+                      'kcal',
+                      AppColors.primaryRed,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Expanded(child: _buildMacroStat('PROTEIN', '${protein}g', '', AppColors.accentRed)),
+                  Expanded(
+                    child: _buildMacroStat(
+                      'PROTEIN',
+                      '${protein}g',
+                      '',
+                      AppColors.accentRed,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Expanded(child: _buildMacroStat('CARBS', '${carbs}g', '', AppColors.info)),
+                  Expanded(
+                    child: _buildMacroStat(
+                      'CARBS',
+                      '${carbs}g',
+                      '',
+                      AppColors.info,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Expanded(child: _buildMacroStat('FAT', '${fat}g', '', AppColors.gold)),
+                  Expanded(
+                    child: _buildMacroStat(
+                      'FAT',
+                      '${fat}g',
+                      '',
+                      AppColors.gold,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Fiber Target: ${fiber}g', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                  Text('Water: ${water}L/day', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                  Text(
+                    'Fiber Target: ${fiber}g',
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
+                  Text(
+                    'Water: ${water}L/day',
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -596,19 +840,84 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
 
         const SizedBox(height: 14),
 
-        const Text(
-          'PRESCRIBED MEALS',
-          style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
-        ),
-        const SizedBox(height: 8),
+        if (isMacroOnly)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.lightBlueAccent.withOpacity(0.3),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.tune, color: Colors.lightBlueAccent, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FLEXIBLE MACRO-ONLY TARGET PROTOCOL',
+                        style: TextStyle(
+                          color: Colors.lightBlueAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'This plan prescribes daily calorie and macronutrient targets. The athlete hits these targets with flexible food choices without fixed meal schedules.',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          const Text(
+            'PRESCRIBED MEALS',
+            style: TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
 
-        ...meals.map((m) {
+        ...meals.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final m = entry.value;
           final mealType = m['mealType'] ?? m['name'] ?? 'Meal';
+          final timing = m['timing']?.toString() ?? '';
+          final mealNotes = m['notes']?.toString();
           final items = (m['items'] ?? m['foods'] ?? []) as List;
+          final isExpanded = _expandedMealIndices.contains(idx);
+
+          // Calculate per-meal nutrition totals
+          num mealCal = 0;
+          num mealPro = 0;
+          num mealCarbs = 0;
+          num mealFat = 0;
+          for (final it in items) {
+            if (it is Map) {
+              mealCal += (it['calories'] as num?) ?? 0;
+              mealPro += (it['protein'] as num?) ?? 0;
+              mealCarbs += ((it['carbs'] ?? it['carbohydrates']) as num?) ?? 0;
+              mealFat += (it['fat'] as num?) ?? 0;
+            }
+          }
 
           return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               color: AppColors.surfaceCard,
               borderRadius: BorderRadius.circular(10),
@@ -617,46 +926,205 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      mealType.toString().toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      '${items.length} items',
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ...items.map((it) {
-                  final fName = it['foodName'] ?? it['name'] ?? 'Food';
-                  final qty = it['quantity'] ?? 1;
-                  final unit = it['unit'] ?? 'g';
-                  final cal = it['calories'] ?? 0;
-                  final pro = it['protein'] ?? 0;
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
+                // Expandable Meal Card Header
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedMealIndices.remove(idx);
+                      } else {
+                        _expandedMealIndices.add(idx);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(
-                            '• $fName ($qty $unit)',
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    mealType.toString().toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  if (timing.isNotEmpty) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surfaceElevated,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Text(
+                                        timing,
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${mealCal.round()} kcal • P:${mealPro.round()}g C:${mealCarbs.round()}g F:${mealFat.round()}g • ${items.length} foods',
+                                style: const TextStyle(
+                                  color: Colors.tealAccent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          '$cal kcal • ${pro}g P',
-                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.bold),
+                        Icon(
+                          isExpanded ? Icons.expand_less : Icons.expand_more,
+                          color: AppColors.textSecondary,
+                          size: 20,
                         ),
                       ],
                     ),
-                  );
-                }),
+                  ),
+                ),
+
+                if (isExpanded) ...[
+                  const Divider(color: AppColors.border, height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (mealNotes != null && mealNotes.trim().isNotEmpty) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppColors.warningYellow),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    mealNotes,
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        ...items.map((it) {
+                          final fName = it['foodName'] ?? it['name'] ?? 'Food';
+                          final qty = it['quantity'] ?? 1;
+                          final unit = it['unit'] ?? 'g';
+                          final cal = it['calories'] ?? 0;
+                          final pro = it['protein'] ?? 0;
+                          final carbs = it['carbs'] ?? it['carbohydrates'] ?? 0;
+                          final fat = it['fat'] ?? 0;
+                          final foodNotes = it['notes']?.toString();
+                          final subs = (it['substitutions'] ?? it['substitute'])?.toString();
+
+                          final macroSub = '$cal kcal • ${pro}g P • ${carbs}g C • ${fat}g F';
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.borderSubtle),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '• $fName',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryRed.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '$qty $unit',
+                                        style: const TextStyle(
+                                          color: AppColors.primaryRed,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  macroSub,
+                                  style: const TextStyle(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (foodNotes != null && foodNotes.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Prep: $foodNotes',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 10,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                                if (subs != null && subs.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Substitutions: $subs',
+                                    style: const TextStyle(
+                                      color: Colors.tealAccent,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           );
@@ -689,7 +1157,11 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
       ),
       child: Text(
         '$label: $value',
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -703,9 +1175,23 @@ class _AdminAiProposalReviewDialogState extends State<AdminAiProposalReviewDialo
       ),
       child: Column(
         children: [
-          Text(label, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

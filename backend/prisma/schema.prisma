@@ -400,11 +400,19 @@ model WorkoutAssignment {
   isRecommended Boolean        @default(false)
   assignedById  String
   assignedAt    DateTime       @default(now())
+  scheduledDate String? // yyyy-MM-dd in IST
   active        Boolean        @default(true)
+  status        String         @default("ASSIGNED") // ASSIGNED, IN_PROGRESS, COMPLETED, LOCKED
+  completedAt   DateTime?
+  isLocked      Boolean        @default(false)
+  lockedAt      DateTime?
+  unlockedAt    DateTime?
+  unlockedById  String?
+  unlockReason  String?
 
-  @@unique([sessionId, clientId], name: "session_client_assignment_unique")
   @@index([sessionId])
   @@index([clientId])
+  @@index([scheduledDate])
   @@map("workout_assignments")
 }
 
@@ -414,6 +422,7 @@ model WorkoutRecord {
   client              User            @relation("ClientWorkoutRecords", fields: [clientId], references: [id], onDelete: Cascade)
   sessionId           String?
   session             WorkoutSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  assignmentId        String?
   sessionTitle        String
   workoutType         String
   startedAt           DateTime
@@ -425,6 +434,12 @@ model WorkoutRecord {
   averageRpe          Float?
   averageRir          Float?
   isCompleted         Boolean         @default(false)
+  isLocked            Boolean         @default(false)
+  lockedAt            DateTime?
+  unlockedAt          DateTime?
+  unlockedById        String?
+  unlockReason        String?
+  scheduledDate       String? // yyyy-MM-dd in IST
   personalRecordsJson String? // JSON serialized PR list
   notes               String?
   createdAt           DateTime        @default(now())
@@ -434,6 +449,8 @@ model WorkoutRecord {
 
   @@index([clientId])
   @@index([sessionId])
+  @@index([assignmentId])
+  @@index([scheduledDate])
   @@map("workout_records")
 }
 

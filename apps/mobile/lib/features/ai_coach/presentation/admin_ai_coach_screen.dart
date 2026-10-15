@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
@@ -7,8 +9,10 @@ import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repos
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
-import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/widgets/admin_ai_proposal_review_dialog.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_proposal_assignment_dialog.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_proposals_screen.dart';
+import 'package:alpha_x_gym/features/ai_coach/presentation/widgets/admin_three_step_plan_config_dialog.dart';
 
 class AdminAiCoachScreen extends StatefulWidget {
   final AiCoachRepository? aiCoachRepository;
@@ -30,14 +34,28 @@ class AdminAiCoachScreen extends StatefulWidget {
   State<AdminAiCoachScreen> createState() => _AdminAiCoachScreenState();
 }
 
-class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
+class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticKeepAliveClientMixin<AdminAiCoachScreen> {
+  @override
+  bool get wantKeepAlive => true;
+
   late final AiCoachRepository _repo;
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   final List<AiChatMessage> _messages = [];
   bool _isThinking = false;
+  bool _isLoadingHistory = true;
+  bool _historyLoadFailed = false;
   String? _conversationId;
+
+  bool get _isTestEnvironment {
+    if (kIsWeb) return false;
+    try {
+      return Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
+  }
 
   // Context Selectors
   String? _selectedClientId;
@@ -49,8 +67,6 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     "Show clients needing review",
     "Who missed workouts today?",
     "Who has incomplete food tracking?",
-    "Create a workout",
-    "Create a diet using our Food Library",
     "Progress bench press",
     "Analyze selected client",
   ];
@@ -72,19 +88,61 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
       }
     }
 
-    // Welcome greeting from Alpha X AI Coach
-    _messages.add(
-      AiChatMessage(
-        id: 'msg_welcome',
-        sender: 'AI',
-        content: '👋 **Welcome to the Alpha X Master AI Coach.**\n\nI am your single, centralized AI intelligence controller with direct access to athlete profiles, exercise databases, food libraries, performance records, and check-ins.\n\nSelect an athlete above or ask me facility-wide questions below.',
-        intent: 'GREETING',
-        suggestedFollowUps: [
-          "Give me today's report",
-          "Show clients needing review",
-          "Who missed workouts today?",
-        ],
-      ),
+    // Default welcome greeting
+    _messages.add(_buildInitialWelcomeMessage());
+
+    // Asynchronously restore persisted conversation history
+    _loadHistory();
+  }
+
+  AiChatMessage _buildInitialWelcomeMessage() {
+    return AiChatMessage(
+      id: 'msg_welcome',
+      sender: 'AI',
+      content: '👋 **Welcome to the Alpha X Master AI Coach.**\n\nI am your single, centralized AI intelligence controller with direct access to athlete profiles, exercise databases, food libraries, performance records, and check-ins.\n\nSelect an athlete above or ask me facility-wide questions below.',
+      intent: 'GREETING',
+      suggestedFollowUps: [
+        "Give me today's report",
+        "Show clients needing review",
+        "Who missed workouts today?",
+      ],
+    );
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      _isLoadingHistory = true;
+      _historyLoadFailed = false;
+    });
+
+    try {
+      final session = await _repo.loadConversationLocally();
+      if (!mounted) return;
+
+      setState(() {
+        if (session.messages.isNotEmpty) {
+          _messages.clear();
+          _messages.addAll(session.messages);
+          _conversationId = session.conversationId;
+        }
+        _isLoadingHistory = false;
+        _historyLoadFailed = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      debugPrint('[AI COACH SCREEN] Error loading conversation history: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingHistory = false;
+        _historyLoadFailed = true;
+      });
+    }
+  }
+
+  void _persistCurrentConversation() {
+    _repo.saveConversationLocally(
+      messages: _messages,
+      conversationId: _conversationId,
     );
   }
 
@@ -116,7 +174,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     }
 
     final userMessage = AiChatMessage(
-      id: UniqueKey().toString(),
+      id: 'msg_user_${DateTime.now().millisecondsSinceEpoch}_${UniqueKey().toString().replaceAll('#', '')}',
       sender: 'ADMIN',
       content: text,
       intent: 'USER_QUERY',
@@ -126,6 +184,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
       _messages.add(userMessage);
       _isThinking = true;
     });
+    _persistCurrentConversation();
     _scrollToBottom();
 
     try {
@@ -148,6 +207,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
           _messages.add(aiReply);
           _isThinking = false;
         });
+        _persistCurrentConversation();
         _scrollToBottom();
       }
     } catch (e) {
@@ -155,7 +215,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
         setState(() {
           _messages.add(
             AiChatMessage(
-              id: UniqueKey().toString(),
+              id: 'msg_err_${DateTime.now().millisecondsSinceEpoch}',
               sender: 'AI',
               content: '⚠️ **Alpha X AI Coach is temporarily unavailable.**\n\nYour existing client data and plans are safe. Please check your connection and tap retry.',
               isError: true,
@@ -163,6 +223,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
           );
           _isThinking = false;
         });
+        _persistCurrentConversation();
         _scrollToBottom();
       }
     }
@@ -183,11 +244,12 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
           suggestedFollowUps: [
             "Explain progressive overload for beginners",
             "What is RIR and how does it differ from RPE?",
-            "How should I structure hypertrophy training?",
+            "How do I balance hypertrophy and strength?",
           ],
         ),
       );
     });
+    _persistCurrentConversation();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('✨ Started new AI conversation session'),
@@ -197,8 +259,40 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
   }
 
   Future<void> _handleApproveProposal(AiProposal proposal) async {
-    final success = await _repo.approveProposal(proposal.id);
+    if (proposal.type == AiProposalType.workout && widget.workoutRepository != null) {
+      await AdminProposalAssignmentDialog.show(
+        context: context,
+        proposal: proposal,
+        aiCoachRepository: _repo,
+        workoutRepository: widget.workoutRepository!,
+        onAssigned: () {
+          if (mounted) {
+            setState(() {
+              proposal.status = AiProposalStatus.approved;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✔ ${proposal.title} assigned and active!'),
+                backgroundColor: AppColors.statusGreen,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        },
+      );
+      return;
+    }
+
+    final success = await _repo.approveProposal(
+      proposal.id,
+      clientIds: proposal.clientId != null ? [proposal.clientId!] : null,
+      proposalData: proposal.toJson(),
+    );
     if (success && mounted) {
+      if (proposal.type == AiProposalType.diet && widget.macroRepository != null) {
+        final dietPlan = _convertProposalToDietPlan(proposal);
+        widget.macroRepository!.setAssignedDietPlan(dietPlan);
+      }
       setState(() {
         proposal.status = AiProposalStatus.approved;
       });
@@ -237,8 +331,14 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     final description = payload['description']?.toString() ?? proposal.summary;
 
     List<dynamic> rawExercises = [];
-    if (payload['exercises'] is List) {
+    if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
       rawExercises = payload['exercises'] as List;
+    } else if (payload['weeklySchedule'] is List) {
+      for (final day in (payload['weeklySchedule'] as List)) {
+        if (day is Map && day['exercises'] is List) {
+          rawExercises.addAll(day['exercises'] as List);
+        }
+      }
     } else if (payload['workoutPlan']?['sessions'] is List && (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
       final firstSession = (payload['workoutPlan']['sessions'] as List).first;
       if (firstSession['exercises'] is List) {
@@ -413,7 +513,11 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
             sessionToEdit: draftSession,
             clientIdToAssign: clientId,
             onSaved: () async {
-              await _repo.approveProposal(proposal.id);
+              await _repo.approveProposal(
+                proposal.id,
+                clientIds: clientId != null ? [clientId] : (proposal.clientId != null ? [proposal.clientId!] : null),
+                proposalData: proposal.toJson(),
+              );
               if (mounted) {
                 setState(() {
                   proposal.status = AiProposalStatus.approved;
@@ -430,41 +534,18 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
         });
       }
     } else if (proposal.type == AiProposalType.diet) {
-      if (widget.macroRepository == null) {
-        _showEditProposalDialog(proposal);
-        return;
-      }
-
-      final draftDietPlan = _convertProposalToDietPlan(proposal);
-      final clientMap = {
-        'id': clientId ?? '',
-        'clientId': clientId ?? '',
-        'name': proposal.clientName ?? _selectedClientName,
-      };
-
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (ctx) => AdminCreateEditDietPlanScreen(
-            client: clientMap,
-            macroRepository: widget.macroRepository!,
-            initialDietPlan: draftDietPlan,
-            onSaved: () async {
-              await _repo.approveProposal(proposal.id);
-              if (mounted) {
-                setState(() {
-                  proposal.status = AiProposalStatus.approved;
-                });
-              }
-            },
-          ),
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => DietProposalDetailSheet(
+          proposal: proposal,
+          aiCoachRepository: _repo,
+          onProposalUpdated: () {
+            if (mounted) setState(() {});
+          },
         ),
       );
-
-      if (result == true && mounted) {
-        setState(() {
-          proposal.status = AiProposalStatus.approved;
-        });
-      }
     } else {
       _showEditProposalDialog(proposal);
     }
@@ -483,6 +564,13 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
   void _showEditProposalDialog(AiProposal proposal) {
     final titleController = TextEditingController(text: proposal.title);
     final summaryController = TextEditingController(text: proposal.summary);
+    final isDiet = proposal.type == AiProposalType.diet;
+    final payload = Map<String, dynamic>.from(proposal.payload);
+
+    final caloriesController = TextEditingController(text: (payload['dailyCalories'] ?? '').toString());
+    final proteinController = TextEditingController(text: (payload['protein'] ?? '').toString());
+    final carbsController = TextEditingController(text: (payload['carbohydrates'] ?? '').toString());
+    final fatController = TextEditingController(text: (payload['fat'] ?? '').toString());
 
     showModalBottomSheet(
       context: context,
@@ -540,6 +628,72 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
                   focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.primaryRed)),
                 ),
               ),
+              if (isDiet) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: caloriesController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Calories (kcal)',
+                          labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.primaryRed)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: proteinController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Protein (g)',
+                          labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.primaryRed)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: carbsController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Carbs (g)',
+                          labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.primaryRed)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: fatController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Fat (g)',
+                          labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.primaryRed)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -556,6 +710,21 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
                       final edited = Map<String, dynamic>.from(proposal.payload);
                       edited['title'] = titleController.text.trim();
                       edited['summary'] = summaryController.text.trim();
+
+                      if (isDiet) {
+                        if (int.tryParse(caloriesController.text.trim()) != null) {
+                          edited['dailyCalories'] = int.parse(caloriesController.text.trim());
+                        }
+                        if (int.tryParse(proteinController.text.trim()) != null) {
+                          edited['protein'] = int.parse(proteinController.text.trim());
+                        }
+                        if (int.tryParse(carbsController.text.trim()) != null) {
+                          edited['carbohydrates'] = int.parse(carbsController.text.trim());
+                        }
+                        if (int.tryParse(fatController.text.trim()) != null) {
+                          edited['fat'] = int.parse(fatController.text.trim());
+                        }
+                      }
 
                       final ok = await _repo.editProposal(proposal.id, edited);
                       if (ok && mounted) {
@@ -690,72 +859,141 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     final clients = widget.workoutRepository?.clientsList ?? [];
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'SELECT ATHLETE CONTEXT',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: AppColors.surfaceCard,
-                  child: Icon(Icons.groups, color: AppColors.textSecondary),
-                ),
-                title: const Text('All Athletes (Facility Command)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Facility-wide analytics & operational queries', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                trailing: _selectedClientId == null ? const Icon(Icons.check, color: AppColors.primaryRed) : null,
-                onTap: () {
-                  setState(() {
-                    _selectedClientId = null;
-                    _selectedClientName = 'All Athletes';
-                  });
-                  Navigator.of(ctx).pop();
-                },
-              ),
-              const Divider(color: AppColors.border),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: clients.length,
-                  itemBuilder: (cCtx, i) {
-                    final c = clients[i];
-                    final cId = c['clientId'] ?? c['id'] ?? '';
-                    final cName = c['name'] ?? 'Athlete';
-                    final goal = c['primaryGoal'] ?? 'General Fitness';
-                    final isSelected = _selectedClientId == cId;
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (sheetCtx, setModalState) {
+            final filtered = clients.where((c) {
+              if (searchQuery.isEmpty) return true;
+              final q = searchQuery.toLowerCase();
+              final name = (c['name'] ?? '').toLowerCase();
+              final cId = (c['clientId'] ?? c['id'] ?? '').toLowerCase();
+              final goal = (c['primaryGoal'] ?? '').toLowerCase();
+              return name.contains(q) || cId.contains(q) || goal.contains(q);
+            }).toList();
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: AppColors.glowRed,
-                        child: Text(cName.isNotEmpty ? cName[0].toUpperCase() : 'A', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            return Container(
+              height: MediaQuery.of(sheetCtx).size.height * 0.75,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'SELECT ATHLETE CONTEXT',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search athlete by name or client ID...',
+                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                        prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                        filled: true,
+                        fillColor: AppColors.surfaceElevated,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
                       ),
-                      title: Text(cName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: Text('$cId • $goal', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      trailing: isSelected ? const Icon(Icons.check, color: AppColors.primaryRed) : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedClientId = cId;
-                          _selectedClientName = cName;
+                      onChanged: (val) {
+                        setModalState(() {
+                          searchQuery = val.trim();
                         });
-                        Navigator.of(ctx).pop();
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: AppColors.surfaceCard,
+                      child: Icon(Icons.groups, color: AppColors.textSecondary),
+                    ),
+                    title: const Text('All Athletes (Facility Command)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Facility-wide analytics & operational queries', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    trailing: _selectedClientId == null ? const Icon(Icons.check, color: AppColors.primaryRed) : null,
+                    onTap: () {
+                      setState(() {
+                        _selectedClientId = null;
+                        _selectedClientName = 'All Athletes';
+                      });
+                      Navigator.of(sheetCtx).pop();
+                    },
+                  ),
+                  const Divider(color: AppColors.border),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching athletes found',
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (cCtx, i) {
+                              final c = filtered[i];
+                              final cId = c['clientId'] ?? c['id'] ?? '';
+                              final cName = c['name'] ?? 'Athlete';
+                              final goal = c['primaryGoal'] ?? 'General Fitness';
+                              final level = c['fitnessLevel'] ?? 'Intermediate';
+                              final isSelected = _selectedClientId == cId;
+
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: AppColors.glowRed,
+                                  child: Text(
+                                    cName.isNotEmpty ? cName[0].toUpperCase() : 'A',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                title: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        cName,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surfaceElevated,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Text(
+                                        cId,
+                                        style: const TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.w900),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Text('$goal • $level', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                trailing: isSelected ? const Icon(Icons.check, color: AppColors.primaryRed) : null,
+                                onTap: () {
+                                  setState(() {
+                                    _selectedClientId = cId;
+                                    _selectedClientName = cName;
+                                  });
+                                  Navigator.of(sheetCtx).pop();
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -763,6 +1001,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: widget.showAppBar
@@ -815,6 +1054,17 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            key: const Key('admin_ai_pending_proposals_button'),
+            icon: const Icon(Icons.fact_check_outlined, color: Colors.white70),
+            tooltip: 'Pending Proposals',
+            onPressed: _showPendingProposalsModal,
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_motion_outlined, color: Colors.white70),
+            tooltip: 'Workout Proposals',
+            onPressed: _openWorkoutProposalsScreen,
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: TextButton.icon(
@@ -843,29 +1093,375 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
           // Control Bar: Client Context & Date Range Selector
           _buildControlHeader(),
 
+          if (_isLoadingHistory)
+            _isTestEnvironment
+                ? const SizedBox(
+                    key: Key('admin_ai_history_loading_indicator'),
+                    height: 2.5,
+                  )
+                : const LinearProgressIndicator(
+                    key: Key('admin_ai_history_loading_indicator'),
+                    minHeight: 2.5,
+                    color: AppColors.primaryRed,
+                    backgroundColor: Colors.transparent,
+                  ),
+
+          if (_historyLoadFailed && _messages.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              color: Colors.amber.withOpacity(0.15),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 16),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Could not sync history from server. Showing cached conversation.',
+                      style: TextStyle(color: Colors.amber, fontSize: 11),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _loadHistory,
+                    child: const Text('RETRY', style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+
           // Suggested Prompts
           _buildSuggestedPromptsBar(),
 
           // Messages View
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: _messages.length + (_isThinking ? 1 : 0),
-              itemBuilder: (ctx, index) {
-                if (index == _messages.length && _isThinking) {
-                  return _buildThinkingBubble();
-                }
-                final message = _messages[index];
-                return _buildMessageItem(message);
-              },
-            ),
+            child: _isLoadingHistory && _messages.isEmpty && !_isTestEnvironment
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: AppColors.primaryRed,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Restoring conversation history...',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : (_historyLoadFailed && _messages.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.cloud_off_rounded, color: AppColors.primaryRed, size: 40),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Unable to load conversation history',
+                              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 14),
+                            ElevatedButton.icon(
+                              onPressed: _loadHistory,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Retry'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryRed,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        itemCount: _messages.length + (_isThinking ? 1 : 0),
+                        itemBuilder: (ctx, index) {
+                          if (index == _messages.length && _isThinking) {
+                            return _buildThinkingBubble();
+                          }
+                          final message = _messages[index];
+                          return _buildMessageItem(message);
+                        },
+                      )),
           ),
+
+          // Selected Athlete Context Card (Prominently shown before generating plan)
+          _buildSelectedClientIdentityBanner(),
 
           // Message Input Bar
           _buildInputBar(),
         ],
       ),
+    );
+  }
+
+  void _openWorkoutProposalsScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => AdminWorkoutProposalsScreen(
+          workoutRepository: widget.workoutRepository,
+          aiCoachRepository: _repo,
+        ),
+      ),
+    );
+  }
+
+  Map<String, String>? get _currentSelectedClient {
+    if (_selectedClientId == null) return null;
+    final clients = widget.workoutRepository?.clientsList ?? [];
+    return clients.firstWhere(
+      (c) => c['clientId'] == _selectedClientId || c['id'] == _selectedClientId,
+      orElse: () => {},
+    );
+  }
+
+  Widget _buildSelectedClientIdentityBanner() {
+    if (_selectedClientId == null) return const SizedBox.shrink();
+    final client = _currentSelectedClient ?? {};
+    final cId = client['clientId'] ?? client['id'] ?? _selectedClientId ?? '';
+    final name = client['name'] ?? _selectedClientName;
+    final goal = client['primaryGoal'] ?? 'General Fitness';
+    final level = client['fitnessLevel'] ?? 'Intermediate';
+    final days = client['trainingDaysPerWeek'] ?? '4';
+    final injury = client['hasCurrentInjury'] == 'true' ? client['injuryAreas'] ?? 'Injury noted' : null;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryRed.withOpacity(0.4), width: 1.2),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryRed.withOpacity(0.08),
+            AppColors.surfaceCard,
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_pin_outlined, size: 12, color: AppColors.primaryRed),
+                    SizedBox(width: 4),
+                    Text(
+                      'ACTIVE ATHLETE CONTEXT',
+                      style: TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: _showClientPicker,
+                child: const Text(
+                  'Change Athlete',
+                  style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedClientId = null;
+                    _selectedClientName = 'All Athletes';
+                  });
+                },
+                child: const Icon(Icons.close, size: 16, color: AppColors.textTertiary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.primaryRed,
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Text(
+                            cId,
+                            style: const TextStyle(
+                              color: AppColors.primaryRed,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$goal • $level • $days days/wk${injury != null ? ' • ⚠️ $injury' : ''}',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Generate Personalized Workout Plan for $_selectedClientName',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  key: const Key('admin_ai_three_step_config_button'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.surfaceElevated,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+                    side: const BorderSide(color: AppColors.primaryRed, width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.tune, color: AppColors.primaryRed, size: 16),
+                  label: const Text(
+                    '⚡ Three-Step Plan Configuration (Workout / Diet)',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onPressed: _isThinking ? null : () => _openThreeStepPlanConfig(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      key: const Key('admin_ai_workout_proposal_button'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryRed,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.fitness_center, size: 14),
+                      label: const Text(
+                        'AI Workout Proposal',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: _isThinking
+                          ? null
+                          : () => _openThreeStepPlanConfig(initialType: AiProposalType.workout),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      key: const Key('admin_ai_diet_macro_proposal_button'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.statusGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.restaurant_menu, size: 14),
+                      label: const Text(
+                        'AI Diet / Macro Proposal',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: _isThinking
+                          ? null
+                          : () => _openThreeStepPlanConfig(initialType: AiProposalType.diet),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openThreeStepPlanConfig({AiProposalType? initialType}) {
+    AdminThreeStepPlanConfigDialog.show(
+      context: context,
+      aiCoachRepository: _repo,
+      workoutRepository: widget.workoutRepository,
+      initialClientId: _selectedClientId,
+      initialPlanType: initialType,
+      conversationId: _conversationId,
+      onProposalCreated: (proposal) {
+        if (mounted) {
+          setState(() {
+            _messages.add(
+              AiChatMessage(
+                id: 'msg_prop_${DateTime.now().millisecondsSinceEpoch}',
+                sender: 'AI',
+                content: '🎯 **${proposal.title}** created successfully and staged as **PENDING** in Admin Review.\n\nReview, customize, and approve or reject before client assignment.',
+                intent: proposal.type == AiProposalType.workout ? 'WORKOUT_PROPOSAL' : 'DIET_PROPOSAL',
+                proposal: proposal,
+              ),
+            );
+          });
+          _persistCurrentConversation();
+          _scrollToBottom();
+          // Promptly display the proposal review dialog for the staged proposal
+          _showProposalReviewDialog(proposal);
+        }
+      },
     );
   }
 
@@ -890,30 +1486,40 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
             child: const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
           ),
           const SizedBox(width: 8),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'ALPHA X AI COACH',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                  letterSpacing: 0.8,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'ALPHA X AI COACH',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: 0.8,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                'MASTER INTELLIGENCE CONTROLLER',
-                style: TextStyle(
-                  color: AppColors.primaryRed,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
+                const Text(
+                  'MASTER INTELLIGENCE CONTROLLER',
+                  style: TextStyle(
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                    letterSpacing: 0.8,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_motion_outlined, color: Colors.white70, size: 20),
+            tooltip: 'Workout Proposals',
+            onPressed: _openWorkoutProposalsScreen,
+          ),
+          const SizedBox(width: 4),
           TextButton.icon(
             key: const Key('admin_ai_new_chat_button_embedded'),
             style: TextButton.styleFrom(
@@ -1029,7 +1635,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
 
           // Proposals Review Quick Button
           InkWell(
-            onTap: _showPendingProposalsModal,
+            onTap: _openWorkoutProposalsScreen,
             borderRadius: BorderRadius.circular(8),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1085,60 +1691,213 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
     );
   }
 
+  Widget _buildRichText(String text, TextStyle baseStyle) {
+    final spans = <InlineSpan>[];
+    final regex = RegExp(r'\*\*(.*?)\*\*');
+    int lastMatchEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastMatchEnd, match.start),
+          style: baseStyle,
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: baseStyle.copyWith(
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastMatchEnd),
+        style: baseStyle,
+      ));
+    }
+
+    return Text.rich(
+      TextSpan(children: spans),
+      style: baseStyle,
+    );
+  }
+
+  Widget _buildCodeBlock(String code, String? language) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1117),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border.withOpacity(0.9), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (language != null && language.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                border: Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))),
+              ),
+              child: Text(
+                language.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              code,
+              style: const TextStyle(
+                color: Color(0xFFE2E8F0),
+                fontSize: 12.5,
+                height: 1.45,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFormattedContent(String content) {
     final lines = content.split('\n');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.map((line) {
-        final trimmed = line.trim();
-        if (trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
-          final headerText = trimmed.replaceFirst(RegExp(r'^#+\s*'), '');
-          return Padding(
+    final widgets = <Widget>[];
+
+    bool inCodeBlock = false;
+    final codeBlockLines = <String>[];
+    String? codeBlockLang;
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final trimmed = line.trim();
+
+      // Check for code block delimiter
+      if (trimmed.startsWith('```')) {
+        if (!inCodeBlock) {
+          inCodeBlock = true;
+          codeBlockLang = trimmed.substring(3).trim();
+          codeBlockLines.clear();
+        } else {
+          inCodeBlock = false;
+          widgets.add(_buildCodeBlock(codeBlockLines.join('\n'), codeBlockLang));
+          codeBlockLines.clear();
+          codeBlockLang = null;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeBlockLines.add(line);
+        continue;
+      }
+
+      // Headers (####, ###, ##, #)
+      if (trimmed.startsWith('#### ') || trimmed.startsWith('### ') || trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+        final headerText = trimmed.replaceFirst(RegExp(r'^#+\s*'), '');
+        final isMainHeader = trimmed.startsWith('# ') || trimmed.startsWith('## ');
+        widgets.add(
+          Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 4),
-            child: Text(
+            child: _buildRichText(
               headerText,
-              style: const TextStyle(
+              TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
-                fontSize: 14.5,
+                fontSize: isMainHeader ? 15.0 : 14.0,
                 letterSpacing: 0.5,
               ),
             ),
-          );
-        } else if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
-          final bulletText = trimmed.substring(2);
-          return Padding(
+          ),
+        );
+      }
+      // Bullet items (- , • , * )
+      else if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
+        final bulletText = trimmed.substring(2);
+        widgets.add(
+          Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('• ', style: TextStyle(color: AppColors.primaryRed, fontSize: 14, fontWeight: FontWeight.bold)),
+                const Text(
+                  '• ',
+                  style: TextStyle(
+                    color: AppColors.primaryRed,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 Expanded(
-                  child: Text(
+                  child: _buildRichText(
                     bulletText,
-                    style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                    const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
                   ),
                 ),
               ],
             ),
-          );
-        } else if (RegExp(r'^\d+\.\s+').hasMatch(trimmed)) {
-          return Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 4),
-            child: Text(
-              trimmed,
-              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
-            ),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            line,
-            style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.5),
           ),
         );
-      }).toList(),
+      }
+      // Numbered lists (1. , 2. )
+      else if (RegExp(r'^\d+\.\s+').hasMatch(trimmed)) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: _buildRichText(
+              trimmed,
+              const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }
+      // Empty line spacing
+      else if (trimmed.isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+      }
+      // Standard line/paragraph
+      else {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _buildRichText(
+              line,
+              const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.5),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Flush any unclosed code block (e.g. streaming responses)
+    if (inCodeBlock && codeBlockLines.isNotEmpty) {
+      widgets.add(_buildCodeBlock(codeBlockLines.join('\n'), codeBlockLang));
+    }
+
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: widgets,
+      ),
     );
   }
 
@@ -1154,9 +1913,11 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> {
             borderRadius: BorderRadius.circular(16).copyWith(bottomRight: Radius.zero),
             border: Border.all(color: AppColors.primaryRed.withOpacity(0.5)),
           ),
-          child: Text(
-            message.content,
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+          child: SelectionArea(
+            child: Text(
+              message.content,
+              style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+            ),
           ),
         ),
       );

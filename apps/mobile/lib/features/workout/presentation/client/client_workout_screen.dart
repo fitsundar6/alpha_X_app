@@ -703,40 +703,60 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 ],
                 const SizedBox(height: 18),
 
-                // Lime Pill Start Button
+                // Start or Completed & Locked Button
                 Container(
                   width: double.infinity,
                   height: 52,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentLime.withOpacity(0.35),
-                        blurRadius: 18,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    boxShadow: session.isLocked
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: accentLime.withOpacity(0.35),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accentLime,
-                      foregroundColor: AppColors.onPrimary, // #0A0B0D dark text on lime
+                      backgroundColor: session.isLocked ? colors.surfaceElevated : accentLime,
+                      foregroundColor: session.isLocked ? colors.textSecondary : AppColors.onPrimary, // #0A0B0D dark text on lime
                       shape: const StadiumBorder(),
                       elevation: 0,
                     ),
                     onPressed: () {
                       AlphaXHaptics.tap();
+                      if (session.isLocked) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Today\'s workout has been completed and locked. It will automatically unlock on your next scheduled day.',
+                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            backgroundColor: colors.surfaceCard,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                        return;
+                      }
                       _openSessionOverview(session);
                     },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.play_arrow_rounded, color: AppColors.onPrimary, size: 22),
+                        Icon(
+                          session.isLocked ? Icons.lock_rounded : Icons.play_arrow_rounded,
+                          color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          'START WORKOUT',
+                          session.isLocked ? 'COMPLETED & LOCKED' : 'START WORKOUT',
                           style: GoogleFonts.poppins(
-                            color: AppColors.onPrimary,
+                            color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
                             fontSize: 14,
@@ -802,6 +822,32 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     ],
                   ),
                 ),
+                if (session.isLocked)
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.gold.withOpacity(0.6)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.lock_rounded, size: 10, color: AppColors.gold),
+                        const SizedBox(width: 4),
+                        Text(
+                          'COMPLETED',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.gold,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -846,37 +892,57 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentLime.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: session.isLocked
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: accentLime.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                 ),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: accentLime,
-                    foregroundColor: AppColors.onPrimary,
+                    backgroundColor: session.isLocked ? colors.surfaceElevated : accentLime,
+                    foregroundColor: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     shape: const StadiumBorder(),
                   ),
                   onPressed: () {
                     AlphaXHaptics.tap();
+                    if (session.isLocked) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Workout session completed for today. It will unlock on the next scheduled day.',
+                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          backgroundColor: colors.surfaceCard,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                      return;
+                    }
                     _openSessionOverview(session);
                   },
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.play_arrow_rounded, color: AppColors.onPrimary, size: 18),
+                      Icon(
+                        session.isLocked ? Icons.lock_rounded : Icons.play_arrow_rounded,
+                        color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
+                        size: 16,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        'Start',
+                        session.isLocked ? 'Completed' : 'Start',
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
-                          color: AppColors.onPrimary,
+                          color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
                         ),
                       ),
                     ],

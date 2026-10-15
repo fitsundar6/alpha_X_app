@@ -5,14 +5,21 @@ import { aiTools } from './modules/ai_coach/ai_tools';
 async function runTests() {
   console.log('=== STARTING AI PLAN PROPOSAL WORKFLOW VERIFICATION ===\n');
 
-  // 1. Target real client: Marcus Vance
-  const targetUser = await prisma.user.findFirst({
-    where: { role: 'CLIENT', name: { contains: 'Marcus Vance' } },
+  // 1. Target real client (e.g. Ajay or first client with profile)
+  let targetUser = await prisma.user.findFirst({
+    where: { role: 'CLIENT', name: { contains: 'Ajay' }, clientProfile: { isNot: null } },
     include: { clientProfile: true },
   });
 
   if (!targetUser) {
-    throw new Error('Target test client Marcus Vance not found in database.');
+    targetUser = await prisma.user.findFirst({
+      where: { role: 'CLIENT', clientProfile: { isNot: null } },
+      include: { clientProfile: true },
+    });
+  }
+
+  if (!targetUser) {
+    throw new Error('Target test client not found in database.');
   }
 
   const clientId = targetUser.clientProfile?.clientId || targetUser.id;

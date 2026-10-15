@@ -15,6 +15,7 @@ export * from './get_client_steps_history';
 export * from './get_assigned_workout';
 export * from './propose_workout_plan';
 export * from './propose_diet_plan';
+export * from './search_exercise_library';
 
 import { searchClientsTool } from './search_clients';
 import { getClientProfileTool } from './get_client_profile';
@@ -27,6 +28,7 @@ import { getClientStepsHistoryTool } from './get_client_steps_history';
 import { getAssignedWorkoutTool } from './get_assigned_workout';
 import { proposeWorkoutPlanTool } from './propose_workout_plan';
 import { proposeDietPlanTool } from './propose_diet_plan';
+import { searchExerciseLibraryTool } from './search_exercise_library';
 
 export const CLIENT_DATA_TOOLS = [
   searchClientsTool,
@@ -38,6 +40,7 @@ export const CLIENT_DATA_TOOLS = [
   getClientCheckInsTool,
   getClientStepsHistoryTool,
   getAssignedWorkoutTool,
+  searchExerciseLibraryTool,
   proposeWorkoutPlanTool,
   proposeDietPlanTool,
 ];

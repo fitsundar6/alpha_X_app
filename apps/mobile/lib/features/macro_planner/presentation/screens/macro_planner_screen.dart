@@ -1108,14 +1108,28 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    meal.name.toUpperCase(),
-                                    style: TextStyle(
-                                      color: colors.textPrimary,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 13,
-                                      letterSpacing: 0.8,
-                                    ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        meal.name.toUpperCase(),
+                                        style: TextStyle(
+                                          color: colors.textPrimary,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 13,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${meal.totalCalories.round()} kcal • P:${meal.totalProtein.round()}g C:${meal.totalCarbs.round()}g F:${meal.totalFat.round()}g',
+                                        style: TextStyle(
+                                          color: colors.textSecondary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   if (meal.timing.isNotEmpty)
                                     Container(
@@ -1139,6 +1153,17 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                     ),
                                 ],
                               ),
+                              if (meal.notes != null && meal.notes!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Coach Note: ${meal.notes}',
+                                  style: TextStyle(
+                                    color: colors.textTertiary,
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                               if (meal.items.isEmpty) ...[
                                 const SizedBox(height: 8),
                                 Text('No specific foods listed.', style: TextStyle(color: colors.textTertiary, fontSize: 12)),
@@ -1182,6 +1207,28 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                                                 '${item.calories.round()} kcal • P:${item.protein.round()}g C:${item.carbs.round()}g F:${item.fat.round()}g',
                                                 style: TextStyle(color: colors.textSecondary, fontSize: 11),
                                               ),
+                                              if (item.notes != null && item.notes!.trim().isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Prep: ${item.notes}',
+                                                  style: TextStyle(
+                                                    color: colors.textTertiary,
+                                                    fontSize: 10,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                ),
+                                              ],
+                                              if (item.substitutions != null && item.substitutions!.trim().isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Substitutions: ${item.substitutions}',
+                                                  style: TextStyle(
+                                                    color: colors.primary,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),

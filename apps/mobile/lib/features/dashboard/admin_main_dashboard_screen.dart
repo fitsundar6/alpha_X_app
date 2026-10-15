@@ -6,6 +6,7 @@ import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_sessions_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_proposals_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
@@ -59,6 +60,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   late final WeeklyProgressRepository _weeklyProgressRepo;
   late final AiCoachRepository _aiCoachRepo;
   late final Future<AiDailySummary> _aiSummaryFuture;
+  AdminAiCoachScreen? _cachedAiCoachScreen;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _clientSearchController = TextEditingController();
   String _clientSearchQuery = '';
@@ -365,7 +367,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   Widget _buildCurrentTab() {
     switch (_selectedIndex) {
       case 0:
-        return AdminAiCoachScreen(
+        return _cachedAiCoachScreen ??= AdminAiCoachScreen(
           aiCoachRepository: _aiCoachRepo,
           workoutRepository: widget.workoutRepository,
           macroRepository: widget.macroRepository,
@@ -1649,7 +1651,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   Widget _buildWorkoutCommandTab() {
     final colors = ClientThemeColors.of(context);
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           Container(
@@ -1671,9 +1673,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       ),
                       labelColor: Colors.white,
                       unselectedLabelColor: colors.textSecondary,
-                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 12),
+                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11),
                       tabs: const [
                         Tab(text: '🏋️ SESSIONS'),
+                        Tab(text: '🤖 AI PROPOSALS'),
                         Tab(text: '📅 ASSIGNMENTS'),
                       ],
                     ),
@@ -1706,6 +1709,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               children: [
                 AdminWorkoutSessionsScreen(
                   workoutRepository: widget.workoutRepository,
+                  showAppBar: false,
+                ),
+                AdminWorkoutProposalsScreen(
+                  workoutRepository: widget.workoutRepository,
+                  aiCoachRepository: _aiCoachRepo,
                   showAppBar: false,
                 ),
                 _buildAssignmentsTab(),

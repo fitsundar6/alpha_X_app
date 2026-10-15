@@ -20,6 +20,16 @@ class ClientSessionOverviewScreen extends StatelessWidget {
 
   Future<void> _startWorkout(BuildContext context) async {
     final colors = ClientThemeColors.of(context);
+    if (session.isLocked || session.status == 'COMPLETED') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This workout session is completed and locked for today. It will unlock on the next scheduled day.'),
+          backgroundColor: AppColors.surfaceCard,
+        ),
+      );
+      return;
+    }
+
     if (workoutRepository.hasActiveSavedSession) {
       final active = workoutRepository.activeSession;
       final isSameSession = active.id == session.id;
@@ -383,11 +393,18 @@ class ClientSessionOverviewScreen extends StatelessWidget {
             title: session.title,
             subtitle: '${session.targetMuscleGroup.toUpperCase()} • ~${session.estimatedDurationMinutes} MIN',
             height: 220,
-            action: AlphaXButton(
-              label: isSameActiveSession ? 'RESUME WORKOUT' : 'START WORKOUT',
-              icon: isSameActiveSession ? Icons.restore_rounded : Icons.play_arrow_rounded,
-              onPressed: () => _startWorkout(context),
-            ),
+            action: (session.isLocked || session.status == 'COMPLETED')
+                ? AlphaXButton(
+                    label: 'COMPLETED & LOCKED',
+                    icon: Icons.lock_rounded,
+                    variant: AlphaXButtonVariant.secondary,
+                    onPressed: () => _startWorkout(context),
+                  )
+                : AlphaXButton(
+                    label: isSameActiveSession ? 'RESUME WORKOUT' : 'START WORKOUT',
+                    icon: isSameActiveSession ? Icons.restore_rounded : Icons.play_arrow_rounded,
+                    onPressed: () => _startWorkout(context),
+                  ),
           ),
           const SizedBox(height: 16),
 

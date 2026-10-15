@@ -50,6 +50,7 @@ export const assignSessionSchema = z.object({
   clientIds: z.array(z.string()).optional().default([]),
   individualClientId: z.string().optional().nullable(),
   isRecommended: z.boolean().default(false),
+  scheduledDate: z.string().optional().nullable(), // yyyy-MM-dd in IST
 });
 
 export const workoutSetRecordSchema = z.object({
@@ -81,6 +82,7 @@ export const workoutExerciseRecordSchema = z.object({
 
 export const createWorkoutRecordSchema = z.object({
   sessionId: z.string().optional().nullable(),
+  assignmentId: z.string().optional().nullable(),
   sessionTitle: z.string().min(1),
   workoutType: z.string().default('Strength'),
   startedAt: z.string().datetime(),
@@ -92,9 +94,10 @@ export const createWorkoutRecordSchema = z.object({
   averageRpe: z.number().optional().nullable(),
   averageRir: z.number().optional().nullable(),
   isCompleted: z.boolean().default(true),
+  scheduledDate: z.string().optional().nullable(),
   personalRecords: z.array(z.any()).optional().default([]),
   notes: z.string().optional().nullable(),
-  exerciseRecords: z.array(workoutExerciseRecordSchema).min(1),
+  exerciseRecords: z.array(workoutExerciseRecordSchema).default([]),
 });
 
 export const setCompletionSchema = z.object({
@@ -107,4 +110,15 @@ export const setCompletionSchema = z.object({
   actualRir: z.coerce.number().int().min(0).max(10).optional().nullable(),
   actualRpe: z.coerce.number().min(0).max(10).optional().nullable(),
   tempo: z.string().optional().nullable(),
+  scheduledDate: z.string().optional().nullable(),
 });
+
+export const unlockSessionSchema = z.object({
+  recordId: z.string().optional().nullable(),
+  sessionId: z.string().optional().nullable(),
+  assignmentId: z.string().optional().nullable(),
+  clientId: z.string().optional().nullable(),
+  scheduledDate: z.string().optional().nullable(),
+  reason: z.string().min(1, 'Reason for unlocking is required'),
+});
+

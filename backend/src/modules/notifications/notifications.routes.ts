@@ -17,6 +17,7 @@ import { prisma } from '../../config/prisma';
 import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { aiNotificationEngine } from './ai_notifications.service';
+import { oneSignalService } from './onesignal.service';
 
 const router = Router();
 
@@ -144,6 +145,162 @@ router.post('/admin/simulate-post-workout', requireAuth, requireAdmin, async (re
     sendSuccess(res, { dispatched, simulatedRecord }, HttpStatus.OK);
   } catch (err: any) {
     sendError(res, 'SIMULATION_ERROR', err?.message || 'Failed to simulate post workout push', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+/**
+ * POST /admin/send-test (Admin only)
+ * Secure test action: sends a real push notification to a selected client device
+ * and returns the actual push gateway/FCM error response.
+ */
+router.post('/admin/send-test', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { clientId, playerId, title, body } = req.body;
+
+  const pushTitle = title || '⚡ Alpha X Test Notification';
+  const pushBody = body || 'This is a test notification from Alpha X Gym Admin.';
+
+  try {
+    // 1. If explicit playerId is provided, dispatch directly
+    if (playerId && typeof playerId === 'string') {
+      const result = await oneSignalService.sendToPlayer(playerId, {
+        title: pushTitle,
+        body: pushBody,
+        data: { type: 'admin_test', timestamp: new Date().toISOString() },
+      });
+      sendSuccess(res, { target: playerId, ...result }, HttpStatus.OK);
+      return;
+    }
+
+    // 2. Otherwise locate the target client user in the database
+    if (!clientId) {
+      sendError(res, 'VALIDATION_ERROR', 'clientId or playerId is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: clientId },
+          { clientProfile: { clientId: clientId } },
+          { email: clientId },
+        ],
+      },
+      include: {
+        clientProfile: true,
+      },
+    });
+
+    if (!user) {
+      sendError(res, 'NOT_FOUND', `Client "${clientId}" not found`, HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    if (!user.notificationsEnabled) {
+      sendError(res, 'OPTED_OUT', `Client "${user.name}" has opted out of notifications`, HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (!user.oneSignalPlayerId) {
+      sendError(
+        res,
+        'DEVICE_NOT_REGISTERED',
+        `Client "${user.name}" has no registered device token in database. The client must log into the mobile app to automatically register their device.`,
+        HttpStatus.BAD_REQUEST,
+        [
+          { field: 'oneSignalPlayerId', message: 'No registered push device token for client' },
+        ]
+      );
+      return;
+    }
+
+    // 3. Dispatch real push notification via OneSignal
+    const result = await oneSignalService.sendToPlayer(user.oneSignalPlayerId, {
+      title: pushTitle,
+      body: pushBody,
+      data: {
+        type: 'admin_test',
+        clientId: user.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    // 4. Record in in-app notification center table
+    if (user.clientProfile?.id) {
+      await prisma.notification.create({
+        data: {
+          clientProfileId: user.clientProfile.id,
+          clientId: user.clientProfile.clientId || null,
+          title: pushTitle,
+          message: pushBody,
+          type: 'SYSTEM',
+          category: 'ANNOUNCEMENT',
+          source: 'ADMIN',
+          triggerRule: 'ADMIN_TEST_PUSH',
+          sentStatus: result.success ? 'SENT' : 'FAILED',
+          metadataJson: JSON.stringify({
+            playerId: user.oneSignalPlayerId,
+            result,
+          }),
+        },
+      });
+    }
+
+    sendSuccess(res, {
+      client: {
+        id: user.id,
+        clientId: user.clientProfile?.clientId,
+        name: user.name,
+        email: user.email,
+        oneSignalPlayerId: user.oneSignalPlayerId,
+      },
+      gatewayResponse: result,
+    }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'DISPATCH_ERROR', err?.message || 'Failed to send test push notification', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * GET /admin/devices (Admin only)
+ * Lists all clients and their push notification token registration status.
+ */
+router.get('/admin/devices', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const clients = await prisma.user.findMany({
+      where: { role: 'CLIENT' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        oneSignalPlayerId: true,
+        notificationsEnabled: true,
+        createdAt: true,
+        clientProfile: {
+          select: {
+            clientId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const summary = {
+      totalClients: clients.length,
+      registeredDevices: clients.filter((c) => c.oneSignalPlayerId !== null).length,
+      unregisteredDevices: clients.filter((c) => c.oneSignalPlayerId === null).length,
+      clients: clients.map((c) => ({
+        id: c.id,
+        clientId: c.clientProfile?.clientId || 'PENDING',
+        name: c.name,
+        email: c.email,
+        hasDeviceToken: Boolean(c.oneSignalPlayerId),
+        oneSignalPlayerId: c.oneSignalPlayerId,
+        notificationsEnabled: c.notificationsEnabled,
+      })),
+    };
+
+    sendSuccess(res, summary, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'FETCH_ERROR', err?.message || 'Failed to list client devices', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
 

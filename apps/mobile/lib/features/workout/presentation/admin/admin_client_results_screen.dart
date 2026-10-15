@@ -194,6 +194,43 @@ class _AdminClientResultsScreenState extends State<AdminClientResultsScreen> {
                 style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
               ),
             ),
+            if (record.isLocked) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.gold, width: 0.8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_rounded, size: 10, color: AppColors.gold),
+                    SizedBox(width: 3),
+                    Text('LOCKED', style: TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ),
+            ] else if (record.unlockedAt != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.green, width: 0.8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_open_rounded, size: 10, color: Colors.green),
+                    SizedBox(width: 3),
+                    Text('UNLOCKED', style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
         subtitle: Padding(
@@ -224,6 +261,74 @@ class _AdminClientResultsScreenState extends State<AdminClientResultsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(color: AppColors.border),
+                // Lock & Unlock Management Card
+                if (record.isLocked) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_rounded, color: AppColors.gold, size: 20),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Session Locked & Completed',
+                                style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 13),
+                              ),
+                              Text(
+                                'Client cannot modify sets, reps, or weights.',
+                                style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gold,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.lock_open_rounded, size: 14),
+                          label: const Text('Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                          onPressed: () => _showUnlockDialog(record),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (record.unlockedAt != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_open_rounded, color: Colors.green, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Session Unlocked. Reason: "${record.unlockReason ?? 'Admin approval'}"',
+                            style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (record.notes != null && record.notes!.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
@@ -367,6 +472,155 @@ class _AdminClientResultsScreenState extends State<AdminClientResultsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showUnlockDialog(WorkoutRecord record) async {
+    final reasonController = TextEditingController();
+    bool reopenSession = true;
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.lock_open_rounded, color: AppColors.gold, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Unlock Session',
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to release and unlock "${record.sessionTitle}"?',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.gold.withOpacity(0.3)),
+                ),
+                child: const Text(
+                  'Audit notice: All unlock operations are recorded with your Admin ID, reason, and UTC/IST timestamp.',
+                  style: TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Reason for Unlock *',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Correcting mistakenly logged bench press weight',
+                  hintStyle: const TextStyle(color: AppColors.textDisabled, fontSize: 12),
+                  filled: true,
+                  fillColor: AppColors.surfaceElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.gold)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Checkbox(
+                    value: reopenSession,
+                    activeColor: AppColors.gold,
+                    checkColor: Colors.black,
+                    onChanged: (val) => setDialogState(() => reopenSession = val ?? true),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Reopen as active workout for client',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter an unlock reason for audit purposes.'),
+                      backgroundColor: AppColors.primaryRed,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogCtx);
+                try {
+                  await widget.workoutRepository.unlockSession(
+                    recordId: record.id,
+                    adminId: 'admin_1',
+                    reason: reason,
+                    reopenSession: reopenSession,
+                  );
+                  if (mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Session "${record.sessionTitle}" unlocked successfully.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to unlock session: $e'),
+                        backgroundColor: AppColors.primaryRed,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Confirm Unlock', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
       ),
     );
   }

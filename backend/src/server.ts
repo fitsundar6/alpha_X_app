@@ -46,6 +46,7 @@ import { foodService } from './modules/food/food.service';
 import { adminRoutes } from './modules/admin/admin.routes';
 import { clientRoutes } from './modules/client/client.routes';
 import { foodPhotoRoutes } from './modules/food/food.photo.routes';
+import { transformationPhotoRoutes } from './modules/automation/transformation_photo.routes';
 import { automationRoutes } from './modules/automation/automation.routes';
 import { aiCoachRoutes } from './modules/ai_coach/ai_coach.routes';
 import { geminiReliability } from './modules/ai_coach/gemini.reliability';
@@ -241,6 +242,10 @@ app.use('/api/foods', foodRoutes);
 // Confirmed Meal Photos & Secure Streaming Routes
 app.use('/api/v1/food-photos', foodPhotoRoutes);
 app.use('/api/food-photos', foodPhotoRoutes);
+
+// Athlete Transformation Photos & Comparison Streaming Routes
+app.use('/api/v1/transformation-photos', transformationPhotoRoutes);
+app.use('/api/transformation-photos', transformationPhotoRoutes);
 
 // Master Administrator Operations & Authentication (requireAdmin)
 app.use('/api/admin', adminRoutes);

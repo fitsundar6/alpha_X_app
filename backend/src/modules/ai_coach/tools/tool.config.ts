@@ -16,8 +16,8 @@ export interface ToolSystemConfig {
 
 export const DEFAULT_TOOL_CONFIG: ToolSystemConfig = {
   maxToolCallsPerRequest: 3,
-  toolTimeoutMs: 8000,
-  maxResultCharacters: 4000,
+  toolTimeoutMs: 20000,
+  maxResultCharacters: 16000,
   allowWriteTools: false, // Phase 5: WRITE tools strictly disabled at code level
 };
 

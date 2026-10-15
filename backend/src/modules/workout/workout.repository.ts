@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma';
+import { getTodayISTDateString, toISTDateString, isSessionScheduledForDate } from '../../utils/istDate';
 
 export interface StoredSessionExercise {
   id: string;
@@ -41,6 +42,11 @@ export interface StoredWorkoutSession {
   createdById?: string;
   createdAt: string;
   updatedAt: string;
+  scheduledDate?: string | null;
+  isLocked?: boolean;
+  lockedAt?: string | null;
+  status?: string;
+  assignmentId?: string | null;
   exercises: StoredSessionExercise[];
 }
 
@@ -51,7 +57,15 @@ export interface StoredWorkoutAssignment {
   isRecommended: boolean;
   assignedById: string;
   assignedAt: string;
+  scheduledDate?: string | null;
   active: boolean;
+  status?: string;
+  completedAt?: string | null;
+  isLocked?: boolean;
+  lockedAt?: string | null;
+  unlockedAt?: string | null;
+  unlockedById?: string | null;
+  unlockReason?: string | null;
 }
 
 export interface StoredWorkoutSetRecord {
@@ -85,6 +99,7 @@ export interface StoredWorkoutRecord {
   id: string;
   clientId: string;
   sessionId?: string | null;
+  assignmentId?: string | null;
   sessionTitle: string;
   workoutType: string;
   startedAt: string;
@@ -96,6 +111,12 @@ export interface StoredWorkoutRecord {
   averageRpe?: number | null;
   averageRir?: number | null;
   isCompleted: boolean;
+  isLocked?: boolean;
+  lockedAt?: string | null;
+  unlockedAt?: string | null;
+  unlockedById?: string | null;
+  unlockReason?: string | null;
+  scheduledDate?: string | null;
   personalRecords: any[];
   notes?: string | null;
   createdAt: string;
@@ -120,6 +141,11 @@ function mapPrismaSessionToStored(s: any): StoredWorkoutSession {
     createdById: s.createdById,
     createdAt: s.createdAt ? s.createdAt.toISOString() : new Date().toISOString(),
     updatedAt: s.updatedAt ? s.updatedAt.toISOString() : new Date().toISOString(),
+    scheduledDate: s.scheduledDate || null,
+    isLocked: s.isLocked ?? false,
+    lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
+    status: s.status || 'ASSIGNED',
+    assignmentId: s.assignmentId || null,
     exercises: (s.exercises || []).map((ex: any) => {
       const numSets = Number(ex.numberOfSets) || (Array.isArray(ex.setTemplates) && ex.setTemplates.length > 0 ? ex.setTemplates.length : (Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets.length : (Number(ex.setCount) || 3)));
       let setsList: any[] = [];
@@ -206,7 +232,15 @@ function mapPrismaAssignmentToStored(a: any): StoredWorkoutAssignment {
     isRecommended: a.isRecommended,
     assignedById: a.assignedById,
     assignedAt: a.assignedAt ? a.assignedAt.toISOString() : new Date().toISOString(),
+    scheduledDate: a.scheduledDate || toISTDateString(a.assignedAt),
     active: a.active,
+    status: a.status || (a.isLocked ? 'LOCKED' : a.completedAt ? 'COMPLETED' : 'ASSIGNED'),
+    completedAt: a.completedAt ? a.completedAt.toISOString() : null,
+    isLocked: a.isLocked ?? false,
+    lockedAt: a.lockedAt ? a.lockedAt.toISOString() : null,
+    unlockedAt: a.unlockedAt ? a.unlockedAt.toISOString() : null,
+    unlockedById: a.unlockedById ?? null,
+    unlockReason: a.unlockReason ?? null,
   };
 }
 
@@ -215,6 +249,7 @@ function mapPrismaRecordToStored(r: any): StoredWorkoutRecord {
     id: r.id,
     clientId: r.clientId,
     sessionId: r.sessionId,
+    assignmentId: r.assignmentId ?? null,
     sessionTitle: r.sessionTitle,
     workoutType: r.workoutType,
     startedAt: r.startedAt ? r.startedAt.toISOString() : new Date().toISOString(),
@@ -226,6 +261,12 @@ function mapPrismaRecordToStored(r: any): StoredWorkoutRecord {
     averageRpe: r.averageRpe,
     averageRir: r.averageRir,
     isCompleted: r.isCompleted,
+    isLocked: r.isLocked ?? (r.isCompleted ? true : false),
+    lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
+    unlockedAt: r.unlockedAt ? r.unlockedAt.toISOString() : null,
+    unlockedById: r.unlockedById ?? null,
+    unlockReason: r.unlockReason ?? null,
+    scheduledDate: r.scheduledDate || toISTDateString(r.startedAt),
     personalRecords: r.personalRecordsJson ? JSON.parse(r.personalRecordsJson) : [],
     notes: r.notes,
     createdAt: r.createdAt ? r.createdAt.toISOString() : new Date().toISOString(),
@@ -273,6 +314,7 @@ export class WorkoutRepository {
     completedAt?: string | null;
   }> = new Map();
   private isInitialized = false;
+  private activeSaveLocks: Map<string, Promise<StoredWorkoutRecord>> = new Map();
 
   // Real registered clients are queried dynamically from PostgreSQL via workoutService.getClientsList()
   public clientsList: { id: string; name: string; email: string; status: string }[] = [];
@@ -1075,11 +1117,13 @@ export class WorkoutRepository {
     clientIds?: string[];
     individualClientId?: string | null;
     isRecommended?: boolean;
+    scheduledDate?: string | null;
     assignedById: string;
   }): Promise<StoredWorkoutAssignment[]> {
-    const { sessionId, assignmentType, clientIds = [], individualClientId, isRecommended = false, assignedById } = params;
+    const { sessionId, assignmentType, clientIds = [], individualClientId, isRecommended = false, scheduledDate: inputScheduledDate, assignedById } = params;
     const results: StoredWorkoutAssignment[] = [];
     const now = new Date().toISOString();
+    const scheduledDate = inputScheduledDate || getTodayISTDateString();
 
     // 1. Resolve author user id
     let resolvedAdminId = assignedById;
@@ -1121,7 +1165,7 @@ export class WorkoutRepository {
 
     // 4. Persist to PostgreSQL via Prisma & update in-memory cache
     for (const targetId of targetUserIds) {
-      const inMemoryKey = `assign_${sessionId}_${targetId || 'all'}`;
+      const inMemoryKey = `assign_${sessionId}_${targetId || 'all'}_${scheduledDate}`;
       const memAssignment: StoredWorkoutAssignment = {
         id: inMemoryKey,
         sessionId,
@@ -1129,13 +1173,23 @@ export class WorkoutRepository {
         isRecommended,
         assignedById: resolvedAdminId,
         assignedAt: now,
+        scheduledDate,
         active: true,
+        status: 'ASSIGNED',
+        isLocked: false,
       };
       this.assignments.set(inMemoryKey, memAssignment);
 
       try {
         const existing = await prisma.workoutAssignment.findFirst({
-          where: { sessionId, clientId: targetId },
+          where: {
+            sessionId,
+            clientId: targetId,
+            OR: [
+              { scheduledDate },
+              { scheduledDate: null },
+            ],
+          },
         });
 
         let saved;
@@ -1147,6 +1201,11 @@ export class WorkoutRepository {
               assignedById: resolvedAdminId,
               active: true,
               assignedAt: new Date(),
+              scheduledDate,
+              status: 'ASSIGNED',
+              isLocked: false,
+              completedAt: null,
+              lockedAt: null,
             },
           });
         } else {
@@ -1157,6 +1216,9 @@ export class WorkoutRepository {
               isRecommended,
               assignedById: resolvedAdminId,
               active: true,
+              scheduledDate,
+              status: 'ASSIGNED',
+              isLocked: false,
             },
           });
         }
@@ -1190,15 +1252,16 @@ export class WorkoutRepository {
     }
   }
 
-  // --- Client Operations (Strictly Scoped) ---
+  // --- Client Operations (Strictly Scoped by Date & Auth) ---
   async getClientAuthorizedSessions(clientId: string): Promise<{
     recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null;
-    available: StoredWorkoutSession[];
+    available: (StoredWorkoutSession & { isRecommended: boolean })[];
   }> {
     const resolvedUserId = await this.resolveUserId(clientId);
+    const todayIST = getTodayISTDateString();
 
     try {
-      // 1. Query client-specific assignments first
+      // 1. Query client-specific assignments
       const clientSpecificAssignments = await prisma.workoutAssignment.findMany({
         where: {
           clientId: resolvedUserId,
@@ -1220,19 +1283,44 @@ export class WorkoutRepository {
         ],
       });
 
-      if (clientSpecificAssignments.length > 0) {
-        const available: (StoredWorkoutSession & { isRecommended: boolean })[] = [];
-        for (const a of clientSpecificAssignments) {
+      // Filter assignments scheduled for TODAY in IST
+      const todayAssignments = clientSpecificAssignments.filter((a) => {
+        if (!a.session || !a.session.isActive) return false;
+        return isSessionScheduledForDate(a.session, a, todayIST);
+      });
+
+      if (todayAssignments.length > 0) {
+        const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string })[] = [];
+        for (const a of todayAssignments) {
           if (a.session && a.session.isActive) {
+            const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
+
+            // Check if this specific workout session has been completed & locked for TODAY in IST
+            const lockedRecord = await prisma.workoutRecord.findFirst({
+              where: {
+                clientId: resolvedUserId,
+                sessionId: { in: candidateIds },
+                scheduledDate: todayIST,
+                isCompleted: true,
+              },
+            });
+
+            const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
+            const statusForToday = lockedRecord ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS') : (a.status || 'ASSIGNED');
+
             available.push({
               ...mapPrismaSessionToStored(a.session),
+              scheduledDate: todayIST,
+              assignmentId: a.id,
+              isLocked: isLockedForToday,
+              status: statusForToday,
+              lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
               isRecommended: a.isRecommended,
             });
           }
         }
 
         if (available.length > 0) {
-          // If a session is marked recommended, use it; otherwise use the most recently assigned session
           const recItem = available.find((s) => s.isRecommended) || available[0];
           return this.applyActiveSetOverlays({
             recommended: recItem ? { ...recItem, isRecommended: true } : null,
@@ -1241,8 +1329,7 @@ export class WorkoutRepository {
         }
       }
 
-      // 2. If NO client-specific assignments exist, check if there are explicit ALL assignments
-      // but DO NOT set recommended unless explicitly designated
+      // 2. If NO client-specific assignments match today, check ALL (global) assignments for TODAY in IST
       const allAssignments = await prisma.workoutAssignment.findMany({
         where: {
           clientId: null,
@@ -1261,17 +1348,39 @@ export class WorkoutRepository {
         orderBy: { assignedAt: 'desc' },
       });
 
-      if (allAssignments.length > 0) {
+      const todayAllAssignments = allAssignments.filter((a) => {
+        if (!a.session || !a.session.isActive) return false;
+        return isSessionScheduledForDate(a.session, a, todayIST);
+      });
+
+      if (todayAllAssignments.length > 0) {
         const available: (StoredWorkoutSession & { isRecommended: boolean })[] = [];
-        for (const a of allAssignments) {
+        for (const a of todayAllAssignments) {
           if (a.session && a.session.isActive) {
+            const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
+            const lockedRecord = await prisma.workoutRecord.findFirst({
+              where: {
+                clientId: resolvedUserId,
+                sessionId: { in: candidateIds },
+                scheduledDate: todayIST,
+                isCompleted: true,
+              },
+            });
+
+            const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
+            const statusForToday = lockedRecord ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS') : (a.status || 'ASSIGNED');
+
             available.push({
               ...mapPrismaSessionToStored(a.session),
+              scheduledDate: todayIST,
+              assignmentId: a.id,
+              isLocked: isLockedForToday,
+              status: statusForToday,
+              lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
               isRecommended: false,
             });
           }
         }
-        // If client has NO assigned workout, recommended MUST be null so the empty state is shown
         return this.applyActiveSetOverlays({
           recommended: null,
           available,
@@ -1286,10 +1395,15 @@ export class WorkoutRepository {
       console.warn('[WorkoutRepository] Failed to query client sessions from DB, falling back to cache:', e?.message);
     }
 
-    // In-memory fallback: strictly prioritize client-specific assignments
+    // In-memory fallback: strictly prioritize assignments matching today in IST
     const activeSessions = Array.from(this.sessions.values()).filter((s) => s.isActive);
     const clientSpecificAssignments = Array.from(this.assignments.values())
-      .filter((a) => a.active && (a.clientId === resolvedUserId || a.clientId === clientId))
+      .filter((a) => {
+        if (!a.active || (a.clientId !== resolvedUserId && a.clientId !== clientId)) return false;
+        const session = this.sessions.get(a.sessionId);
+        if (!session || !session.isActive) return false;
+        return isSessionScheduledForDate(session, a, todayIST);
+      })
       .sort((a, b) => {
         if (a.isRecommended && !b.isRecommended) return -1;
         if (!a.isRecommended && b.isRecommended) return 1;
@@ -1302,8 +1416,24 @@ export class WorkoutRepository {
         .filter((s) => authorizedSessionIds.has(s.id))
         .map((s) => {
           const assign = clientSpecificAssignments.find((a) => a.sessionId === s.id);
+          const candidateIds = this.resolveSessionCandidateIds(s.id);
+          const memLockedRecord = Array.from(this.records.values()).find(
+            (r) => candidateIds.includes(r.sessionId || '') &&
+                   (r.clientId === resolvedUserId || r.clientId === clientId) &&
+                   r.scheduledDate === todayIST &&
+                   r.isCompleted &&
+                   r.isLocked
+          );
+
+          const isLockedForToday = memLockedRecord?.isLocked ?? (assign?.isLocked && !assign?.unlockedAt);
+          const statusForToday = memLockedRecord ? 'COMPLETED' : (assign?.status || 'ASSIGNED');
+
           return {
             ...s,
+            scheduledDate: todayIST,
+            assignmentId: assign?.id,
+            isLocked: isLockedForToday ?? false,
+            status: statusForToday,
             isRecommended: assign?.isRecommended ?? false,
           };
         });
@@ -1409,106 +1539,169 @@ export class WorkoutRepository {
 
   async saveWorkoutRecord(clientId: string, data: Omit<StoredWorkoutRecord, 'id' | 'clientId' | 'createdAt' | 'updatedAt'>): Promise<StoredWorkoutRecord> {
     const resolvedUserId = await this.resolveUserId(clientId);
-    const id = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date().toISOString();
+    const scheduledDate = data.scheduledDate || getTodayISTDateString();
+    const candidateIds = data.sessionId ? this.resolveSessionCandidateIds(data.sessionId) : [];
+    const lockKey = `${resolvedUserId}_${data.sessionId || 'session'}_${scheduledDate}`;
 
-    const memRecord: StoredWorkoutRecord = {
-      ...data,
-      id,
-      clientId: resolvedUserId,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.records.set(id, memRecord);
+    // Concurrency protection: prevent duplicate concurrent saves / double taps
+    if (this.activeSaveLocks.has(lockKey)) {
+      return await this.activeSaveLocks.get(lockKey)!;
+    }
 
-    try {
-      const created = await prisma.workoutRecord.create({
-        data: {
-          clientId: resolvedUserId,
-          sessionId: data.sessionId || null,
-          sessionTitle: data.sessionTitle,
-          workoutType: data.workoutType,
-          startedAt: data.startedAt ? new Date(data.startedAt) : new Date(),
-          completedAt: data.completedAt ? new Date(data.completedAt) : new Date(),
-          durationSeconds: data.durationSeconds || 0,
-          totalVolume: data.totalVolume || 0,
-          completedSetsCount: data.completedSetsCount || 0,
-          skippedSetsCount: data.skippedSetsCount || 0,
-          averageRpe: data.averageRpe,
-          averageRir: data.averageRir,
-          isCompleted: data.isCompleted ?? true,
-          personalRecordsJson: data.personalRecords ? JSON.stringify(data.personalRecords) : null,
-          notes: data.notes || null,
-          exerciseRecords: {
-            create: (data.exerciseRecords || []).map((er: any, idx: number) => ({
-              exerciseId: er.exerciseId,
-              exerciseName: er.exerciseName,
-              orderIndex: er.orderIndex ?? idx,
-              supersetTag: er.supersetTag || null,
-              isSkipped: er.isSkipped || false,
-              skipReason: er.skipReason || null,
-              clientNote: er.clientNote || null,
-              adminNote: er.adminNote || null,
-              setRecords: {
-                create: (er.sets || []).map((sr: any) => ({
-                  setNumber: sr.setNumber,
-                  setType: sr.setType || 'WORKING',
-                  targetReps: sr.targetReps || null,
-                  targetWeight: sr.targetWeight || null,
-                  actualWeight: sr.actualWeight || null,
-                  actualReps: sr.actualReps || null,
-                  actualRir: sr.actualRir || null,
-                  actualRpe: sr.actualRpe || null,
-                  tempo: sr.tempo || null,
-                  isCompleted: sr.isCompleted ?? true,
-                  completedAt: sr.completedAt ? new Date(sr.completedAt) : null,
-                  notes: sr.notes || null,
-                })),
-              },
-            })),
-          },
-        },
-        include: {
-          exerciseRecords: {
-            include: { setRecords: true },
-            orderBy: { orderIndex: 'asc' },
-          },
-        },
-      });
-      if (data.sessionId) {
-        const candidateIds = this.resolveSessionCandidateIds(data.sessionId);
+    const saveExecution = (async () => {
+      // 1. Check if session is already completed & locked for this specific scheduledDate
+      if (candidateIds.length > 0) {
         try {
-          await prisma.workoutRecord.deleteMany({
+          const existingLocked = await prisma.workoutRecord.findFirst({
             where: {
               clientId: resolvedUserId,
               sessionId: { in: candidateIds },
-              isCompleted: false,
+              scheduledDate,
+              isCompleted: true,
             },
           });
-        } catch (_) {}
-        for (const sid of candidateIds) {
-          const prefix = `${resolvedUserId}_${sid}_`;
-          for (const k of Array.from(this.activeSetRecords.keys())) {
-            if (k.startsWith(prefix)) {
-              this.activeSetRecords.delete(k);
+          if (existingLocked && existingLocked.isLocked) {
+            throw new Error(`SESSION_LOCKED: Workout session has already been completed and locked for ${scheduledDate}.`);
+          }
+        } catch (err: any) {
+          if (err.message && err.message.includes('SESSION_LOCKED')) {
+            throw err;
+          }
+        }
+
+        const memExistingLocked = Array.from(this.records.values()).find(
+          (r) => candidateIds.includes(r.sessionId || '') &&
+                 (r.clientId === resolvedUserId || r.clientId === clientId) &&
+                 r.scheduledDate === scheduledDate &&
+                 r.isCompleted &&
+                 r.isLocked
+        );
+        if (memExistingLocked) {
+          throw new Error(`SESSION_LOCKED: Workout session has already been completed and locked for ${scheduledDate}.`);
+        }
+      }
+
+      const id = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const now = new Date().toISOString();
+
+      const memRecord: StoredWorkoutRecord = {
+        ...data,
+        id,
+        clientId: resolvedUserId,
+        isCompleted: data.isCompleted ?? true,
+        isLocked: true,
+        lockedAt: now,
+        scheduledDate,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.records.set(id, memRecord);
+
+      try {
+        const created = await prisma.workoutRecord.create({
+          data: {
+            clientId: resolvedUserId,
+            sessionId: data.sessionId || null,
+            assignmentId: data.assignmentId || null,
+            sessionTitle: data.sessionTitle,
+            workoutType: data.workoutType,
+            startedAt: data.startedAt ? new Date(data.startedAt) : new Date(),
+            completedAt: data.completedAt ? new Date(data.completedAt) : new Date(),
+            durationSeconds: data.durationSeconds || 0,
+            totalVolume: data.totalVolume || 0,
+            completedSetsCount: data.completedSetsCount || 0,
+            skippedSetsCount: data.skippedSetsCount || 0,
+            averageRpe: data.averageRpe,
+            averageRir: data.averageRir,
+            isCompleted: data.isCompleted ?? true,
+            isLocked: true,
+            lockedAt: new Date(),
+            scheduledDate,
+            personalRecordsJson: data.personalRecords ? JSON.stringify(data.personalRecords) : null,
+            notes: data.notes || null,
+            exerciseRecords: {
+              create: (data.exerciseRecords || []).map((er: any, idx: number) => ({
+                exerciseId: er.exerciseId,
+                exerciseName: er.exerciseName,
+                orderIndex: er.orderIndex ?? idx,
+                supersetTag: er.supersetTag || null,
+                isSkipped: er.isSkipped || false,
+                skipReason: er.skipReason || null,
+                clientNote: er.clientNote || null,
+                adminNote: er.adminNote || null,
+                setRecords: {
+                  create: (er.sets || []).map((sr: any) => ({
+                    setNumber: sr.setNumber,
+                    setType: sr.setType || 'WORKING',
+                    targetReps: sr.targetReps || null,
+                    targetWeight: sr.targetWeight || null,
+                    actualWeight: sr.actualWeight || null,
+                    actualReps: sr.actualReps || null,
+                    actualRir: sr.actualRir || null,
+                    actualRpe: sr.actualRpe || null,
+                    tempo: sr.tempo || null,
+                    isCompleted: sr.isCompleted ?? true,
+                    completedAt: sr.completedAt ? new Date(sr.completedAt) : null,
+                    notes: sr.notes || null,
+                  })),
+                },
+              })),
+            },
+          },
+          include: {
+            exerciseRecords: {
+              include: { setRecords: true },
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        });
+
+        if (data.sessionId) {
+          // Delete any incomplete in-progress records for this session
+          try {
+            await prisma.workoutRecord.deleteMany({
+              where: {
+                clientId: resolvedUserId,
+                sessionId: { in: candidateIds },
+                isCompleted: false,
+              },
+            });
+          } catch (_) {}
+
+          // Clear in-memory active set records
+          for (const sid of candidateIds) {
+            const prefix = `${resolvedUserId}_${sid}_`;
+            for (const k of Array.from(this.activeSetRecords.keys())) {
+              if (k.startsWith(prefix)) {
+                this.activeSetRecords.delete(k);
+              }
             }
           }
         }
-      }
-      return mapPrismaRecordToStored(created);
-    } catch (e: any) {
-      if (data.sessionId) {
-        const candidateIds = this.resolveSessionCandidateIds(data.sessionId);
-        for (const sid of candidateIds) {
-          const prefix = `${resolvedUserId}_${sid}_`;
-          for (const k of Array.from(this.activeSetRecords.keys())) {
-            if (k.startsWith(prefix)) {
-              this.activeSetRecords.delete(k);
+        return mapPrismaRecordToStored(created);
+      } catch (e: any) {
+        if (e.message && e.message.includes('SESSION_LOCKED')) {
+          throw e;
+        }
+        if (data.sessionId) {
+          for (const sid of candidateIds) {
+            const prefix = `${resolvedUserId}_${sid}_`;
+            for (const k of Array.from(this.activeSetRecords.keys())) {
+              if (k.startsWith(prefix)) {
+                this.activeSetRecords.delete(k);
+              }
             }
           }
         }
+        return memRecord;
       }
-      return memRecord;
+    })();
+
+    this.activeSaveLocks.set(lockKey, saveExecution);
+    try {
+      return await saveExecution;
+    } finally {
+      this.activeSaveLocks.delete(lockKey);
     }
   }
 
@@ -1568,6 +1761,7 @@ export class WorkoutRepository {
       actualRir?: number | null;
       actualRpe?: number | null;
       tempo?: string | null;
+      scheduledDate?: string | null;
     }
   ): Promise<{
     sessionId: string;
@@ -1584,11 +1778,104 @@ export class WorkoutRepository {
     const resolvedUserId = await this.resolveUserId(clientId);
     const candidateIds = this.resolveSessionCandidateIds(sessionId);
     const resolvedSessionId = candidateIds[0] || sessionId;
+    const todayIST = getTodayISTDateString();
+    const targetDate = (payload as any).scheduledDate || todayIST;
+
+    // Check if session for targetDate (or historical completed occurrence) is locked in database
+    try {
+      let lockedRecord = await prisma.workoutRecord.findFirst({
+        where: {
+          clientId: resolvedUserId,
+          sessionId: { in: candidateIds },
+          scheduledDate: targetDate,
+          isCompleted: true,
+          isLocked: true,
+        },
+      });
+
+      // If no lock for todayIST, check most recent completed record for this session
+      if (!lockedRecord && !(payload as any).scheduledDate) {
+        const recentRecord = await prisma.workoutRecord.findFirst({
+          where: {
+            clientId: resolvedUserId,
+            sessionId: { in: candidateIds },
+            isCompleted: true,
+            isLocked: true,
+          },
+          orderBy: { completedAt: 'desc' },
+        });
+
+        if (recentRecord && recentRecord.scheduledDate) {
+          const session = await this.getSessionById(resolvedSessionId);
+          const assignment = await prisma.workoutAssignment.findFirst({
+            where: { clientId: resolvedUserId, sessionId: { in: candidateIds }, active: true },
+          });
+          const isTodayScheduled = isSessionScheduledForDate(session || {}, assignment || {}, todayIST);
+          // Only block if today is NOT a newly scheduled recurring occurrence of this session!
+          if (!isTodayScheduled || recentRecord.scheduledDate === todayIST) {
+            lockedRecord = recentRecord;
+          }
+        }
+      }
+
+      if (lockedRecord) {
+        throw new Error('SESSION_LOCKED: Workout session is completed and locked. Modifications are forbidden unless unlocked by an administrator.');
+      }
+
+      const lockedAssignment = await prisma.workoutAssignment.findFirst({
+        where: {
+          clientId: resolvedUserId,
+          sessionId: { in: candidateIds },
+          isLocked: true,
+          unlockedAt: null,
+        },
+      });
+      if (lockedAssignment && lockedAssignment.scheduledDate === targetDate) {
+        throw new Error('SESSION_LOCKED: Workout session is completed and locked. Modifications are forbidden unless unlocked by an administrator.');
+      }
+    } catch (e: any) {
+      if (e.message && e.message.includes('SESSION_LOCKED')) {
+        throw e;
+      }
+    }
+
+    // In-memory check for offline/test environments
+    let memLockedRecord = Array.from(this.records.values()).find(
+      (r) => candidateIds.includes(r.sessionId || '') &&
+             (r.clientId === resolvedUserId || r.clientId === clientId) &&
+             r.scheduledDate === targetDate &&
+             r.isCompleted &&
+             r.isLocked
+    );
+
+    if (!memLockedRecord && !(payload as any).scheduledDate) {
+      const recentMem = Array.from(this.records.values())
+        .filter((r) => candidateIds.includes(r.sessionId || '') &&
+                       (r.clientId === resolvedUserId || r.clientId === clientId) &&
+                       r.isCompleted &&
+                       r.isLocked)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+
+      if (recentMem && recentMem.scheduledDate) {
+        const memSession = this.sessions.get(resolvedSessionId);
+        const memAssign = Array.from(this.assignments.values()).find(
+          (a) => candidateIds.includes(a.sessionId) && (a.clientId === resolvedUserId || a.clientId === clientId) && a.active
+        );
+        const isTodayScheduled = isSessionScheduledForDate(memSession || {}, memAssign || {}, todayIST);
+        if (!isTodayScheduled || recentMem.scheduledDate === todayIST) {
+          memLockedRecord = recentMem;
+        }
+      }
+    }
+
+    if (memLockedRecord) {
+      throw new Error('SESSION_LOCKED: Workout session is completed and locked. Modifications are forbidden unless unlocked by an administrator.');
+    }
 
     // 1. In-memory update for instant availability and test support
     const completedAtStr = payload.isCompleted ? new Date().toISOString() : null;
     for (const sid of candidateIds) {
-      const key = `${resolvedUserId}_${sid}_${payload.exerciseId}_${payload.setNumber}`;
+      const key = `${resolvedUserId}_${sid}_${targetDate}_${payload.exerciseId}_${payload.setNumber}`;
       this.activeSetRecords.set(key, {
         sessionId: sid,
         exerciseId: payload.exerciseId,
@@ -1618,12 +1905,13 @@ export class WorkoutRepository {
       });
 
       if (dbUser) {
-        // Find or create in-progress workout record
+        // Find or create in-progress workout record strictly for targetDate
         let activeRecord = await prisma.workoutRecord.findFirst({
           where: {
             clientId: resolvedUserId,
             sessionId: { in: candidateIds },
             isCompleted: false,
+            scheduledDate: targetDate,
           },
           include: {
             exerciseRecords: {
@@ -1641,6 +1929,8 @@ export class WorkoutRepository {
               workoutType: session?.workoutType || 'Strength',
               startedAt: new Date(),
               isCompleted: false,
+              isLocked: false,
+              scheduledDate: targetDate,
             },
             include: {
               exerciseRecords: {
@@ -1654,72 +1944,75 @@ export class WorkoutRepository {
         let exRecord = activeRecord.exerciseRecords.find(
           (e) => e.exerciseId === payload.exerciseId || e.exerciseName === sessionEx?.exerciseName
         );
-      if (!exRecord) {
-        exRecord = await prisma.workoutExerciseRecord.create({
-          data: {
-            recordId: activeRecord.id,
-            exerciseId: payload.exerciseId,
-            exerciseName: sessionEx?.exerciseName || payload.exerciseId,
-            orderIndex: sessionEx?.orderIndex ?? activeRecord.exerciseRecords.length,
-            supersetTag: sessionEx?.supersetTag || null,
-          },
-          include: { setRecords: true },
-        });
-      }
+        if (!exRecord) {
+          exRecord = await prisma.workoutExerciseRecord.create({
+            data: {
+              recordId: activeRecord.id,
+              exerciseId: payload.exerciseId,
+              exerciseName: sessionEx?.exerciseName || payload.exerciseId,
+              orderIndex: sessionEx?.orderIndex ?? activeRecord.exerciseRecords.length,
+              supersetTag: sessionEx?.supersetTag || null,
+            },
+            include: { setRecords: true },
+          });
+        }
 
-      // Find or upsert set record
-      let setRecord = exRecord.setRecords?.find((s) => s.setNumber === payload.setNumber);
-      if (setRecord) {
-        await prisma.workoutSetRecord.update({
-          where: { id: setRecord.id },
-          data: {
-            isCompleted: payload.isCompleted,
-            completedAt: payload.isCompleted ? new Date() : null,
-            actualWeight: payload.actualWeight !== undefined ? payload.actualWeight : setRecord.actualWeight,
-            actualReps: payload.actualReps !== undefined ? payload.actualReps : setRecord.actualReps,
-            actualRir: payload.actualRir !== undefined ? payload.actualRir : setRecord.actualRir,
-            actualRpe: payload.actualRpe !== undefined ? payload.actualRpe : setRecord.actualRpe,
-            tempo: payload.tempo || setRecord.tempo,
+        // Find or upsert set record
+        let setRecord = exRecord.setRecords?.find((s) => s.setNumber === payload.setNumber);
+        if (setRecord) {
+          await prisma.workoutSetRecord.update({
+            where: { id: setRecord.id },
+            data: {
+              isCompleted: payload.isCompleted,
+              completedAt: payload.isCompleted ? new Date() : null,
+              actualWeight: payload.actualWeight !== undefined ? payload.actualWeight : setRecord.actualWeight,
+              actualReps: payload.actualReps !== undefined ? payload.actualReps : setRecord.actualReps,
+              actualRir: payload.actualRir !== undefined ? payload.actualRir : setRecord.actualRir,
+              actualRpe: payload.actualRpe !== undefined ? payload.actualRpe : setRecord.actualRpe,
+              tempo: payload.tempo || setRecord.tempo,
+            },
+          });
+        } else {
+          await prisma.workoutSetRecord.create({
+            data: {
+              exerciseRecordId: exRecord.id,
+              setNumber: payload.setNumber,
+              setType: sessionEx?.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
+              isCompleted: payload.isCompleted,
+              completedAt: payload.isCompleted ? new Date() : null,
+              actualWeight: payload.actualWeight ?? null,
+              actualReps: payload.actualReps ?? null,
+              actualRir: payload.actualRir ?? null,
+              actualRpe: payload.actualRpe ?? null,
+              tempo: payload.tempo || null,
+            },
+          });
+        }
+
+        // Re-query set counts
+        totalCompletedSetsCount = await prisma.workoutSetRecord.count({
+          where: {
+            exerciseRecord: { recordId: activeRecord.id },
+            isCompleted: true,
           },
         });
-      } else {
-        await prisma.workoutSetRecord.create({
-          data: {
+
+        exerciseCompletedCount = await prisma.workoutSetRecord.count({
+          where: {
             exerciseRecordId: exRecord.id,
-            setNumber: payload.setNumber,
-            setType: sessionEx?.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
-            isCompleted: payload.isCompleted,
-            completedAt: payload.isCompleted ? new Date() : null,
-            actualWeight: payload.actualWeight ?? null,
-            actualReps: payload.actualReps ?? null,
-            actualRir: payload.actualRir ?? null,
-            actualRpe: payload.actualRpe ?? null,
-            tempo: payload.tempo || null,
+            isCompleted: true,
           },
         });
-      }
 
-      // Re-query set counts
-      totalCompletedSetsCount = await prisma.workoutSetRecord.count({
-        where: {
-          exerciseRecord: { recordId: activeRecord.id },
-          isCompleted: true,
-        },
-      });
-
-      exerciseCompletedCount = await prisma.workoutSetRecord.count({
-        where: {
-          exerciseRecordId: exRecord.id,
-          isCompleted: true,
-        },
-      });
-
-      await prisma.workoutRecord.update({
-        where: { id: activeRecord.id },
-        data: { completedSetsCount: totalCompletedSetsCount },
-      });
+        await prisma.workoutRecord.update({
+          where: { id: activeRecord.id },
+          data: { completedSetsCount: totalCompletedSetsCount },
+        });
       }
     } catch (dbErr: any) {
+      if (dbErr.message && dbErr.message.includes('SESSION_LOCKED')) {
+        throw dbErr;
+      }
       console.warn('[WorkoutRepository] DB notice during saveSetCompletion:', dbErr?.message);
     }
 
@@ -1755,9 +2048,128 @@ export class WorkoutRepository {
     };
   }
 
+  // --- Admin Unlock / Reopen Session Operation ---
+  async unlockSession(
+    adminId: string,
+    params: {
+      recordId?: string | null;
+      sessionId?: string | null;
+      assignmentId?: string | null;
+      clientId: string;
+      scheduledDate?: string | null;
+      reason: string;
+    }
+  ): Promise<{ success: boolean; message: string; unlockedAt: string; adminId: string; reason: string }> {
+    const resolvedAdminId = await this.resolveUserId(adminId);
+    const resolvedClientId = await this.resolveUserId(params.clientId);
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const candidateIds = params.sessionId ? this.resolveSessionCandidateIds(params.sessionId) : [];
+
+    // 1. Update DB assignments
+    try {
+      const assignmentWhere: any = {
+        clientId: resolvedClientId,
+      };
+      if (params.assignmentId) {
+        assignmentWhere.id = params.assignmentId;
+      } else if (candidateIds.length > 0) {
+        assignmentWhere.sessionId = { in: candidateIds };
+      }
+
+      await prisma.workoutAssignment.updateMany({
+        where: assignmentWhere,
+        data: {
+          isLocked: false,
+          status: 'IN_PROGRESS',
+          unlockedAt: now,
+          unlockedById: resolvedAdminId,
+          unlockReason: params.reason,
+        },
+      });
+
+      // 2. Update DB workout records
+      if (params.recordId) {
+        await prisma.workoutRecord.update({
+          where: { id: params.recordId },
+          data: {
+            isLocked: false,
+            unlockedAt: now,
+            unlockedById: resolvedAdminId,
+            unlockReason: params.reason,
+          },
+        });
+      }
+
+      const recordWhere: any = {
+        clientId: resolvedClientId,
+      };
+      if (candidateIds.length > 0) {
+        recordWhere.sessionId = { in: candidateIds };
+      }
+      if (params.scheduledDate) {
+        recordWhere.scheduledDate = params.scheduledDate;
+      }
+      await prisma.workoutRecord.updateMany({
+        where: recordWhere,
+        data: {
+          isLocked: false,
+          unlockedAt: now,
+          unlockedById: resolvedAdminId,
+          unlockReason: params.reason,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[WorkoutRepository] DB notice during unlockSession:', err?.message);
+    }
+
+    // 3. Update in-memory assignments and records
+    for (const a of this.assignments.values()) {
+      if (
+        (a.clientId === resolvedClientId || a.clientId === params.clientId) &&
+        (params.assignmentId ? a.id === params.assignmentId : (params.sessionId ? candidateIds.includes(a.sessionId) : true))
+      ) {
+        a.isLocked = false;
+        a.status = 'IN_PROGRESS';
+        a.unlockedAt = nowIso;
+        a.unlockedById = resolvedAdminId;
+        a.unlockReason = params.reason;
+      }
+    }
+
+    if (params.recordId && this.records.has(params.recordId)) {
+      const r = this.records.get(params.recordId)!;
+      r.isLocked = false;
+      r.unlockedAt = nowIso;
+      r.unlockedById = resolvedAdminId;
+      r.unlockReason = params.reason;
+    }
+
+    for (const r of this.records.values()) {
+      if (
+        (r.clientId === resolvedClientId || r.clientId === params.clientId) &&
+        (params.sessionId ? candidateIds.includes(r.sessionId || '') : true)
+      ) {
+        r.isLocked = false;
+        r.unlockedAt = nowIso;
+        r.unlockedById = resolvedAdminId;
+        r.unlockReason = params.reason;
+      }
+    }
+
+    return {
+      success: true,
+      message: `Workout session successfully unlocked by administrator for client "${params.clientId}".`,
+      unlockedAt: nowIso,
+      adminId: resolvedAdminId,
+      reason: params.reason,
+    };
+  }
+
   async getActiveSetCompletions(clientId: string, sessionId: string): Promise<any[]> {
     const resolvedUserId = await this.resolveUserId(clientId);
     const candidateIds = this.resolveSessionCandidateIds(sessionId);
+    const todayIST = getTodayISTDateString();
 
     try {
       const activeRecord = await prisma.workoutRecord.findFirst({
@@ -1765,6 +2177,7 @@ export class WorkoutRepository {
           clientId: resolvedUserId,
           sessionId: { in: candidateIds },
           isCompleted: false,
+          scheduledDate: todayIST,
         },
         include: {
           exerciseRecords: {
@@ -1793,12 +2206,13 @@ export class WorkoutRepository {
       }
     } catch (_) {}
 
-    // In-memory fallback
+    // In-memory fallback: strictly scoped to todayIST
     const results: any[] = [];
     for (const sid of candidateIds) {
-      const prefix = `${resolvedUserId}_${sid}_`;
+      const prefixWithDate = `${resolvedUserId}_${sid}_${todayIST}_`;
+      const prefixLegacy = `${resolvedUserId}_${sid}_`;
       for (const [k, v] of this.activeSetRecords.entries()) {
-        if (k.startsWith(prefix)) {
+        if (k.startsWith(prefixWithDate) || (k.startsWith(prefixLegacy) && !k.includes('_202'))) {
           results.push(v);
         }
       }
@@ -1845,18 +2259,19 @@ export class WorkoutRepository {
     };
   }
 
-  private async applyActiveSetOverlays(
-    result: { recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null; available: StoredWorkoutSession[] },
+  private async applyActiveSetOverlays<T extends StoredWorkoutSession>(
+    result: { recommended: (T & { isRecommended: boolean }) | null; available: T[] },
     clientId: string
-  ): Promise<{ recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null; available: StoredWorkoutSession[] }> {
-    const overlaidAvailable: StoredWorkoutSession[] = [];
+  ): Promise<{ recommended: (T & { isRecommended: boolean }) | null; available: T[] }> {
+    const overlaidAvailable: T[] = [];
     for (const s of result.available) {
-      overlaidAvailable.push(await this.overlayActiveSetsOnSession(s, clientId));
+      const overlaid = await this.overlayActiveSetsOnSession(s, clientId);
+      overlaidAvailable.push({ ...s, ...overlaid });
     }
-    let overlaidRec: (StoredWorkoutSession & { isRecommended: boolean }) | null = null;
+    let overlaidRec: (T & { isRecommended: boolean }) | null = null;
     if (result.recommended) {
       const baseRec = await this.overlayActiveSetsOnSession(result.recommended, clientId);
-      overlaidRec = { ...baseRec, isRecommended: result.recommended.isRecommended };
+      overlaidRec = { ...result.recommended, ...baseRec, isRecommended: result.recommended.isRecommended };
     }
     return {
       recommended: overlaidRec,

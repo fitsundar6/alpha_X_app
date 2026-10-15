@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/utils/ist_date_utils.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 
@@ -22,6 +23,7 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
   final Set<String> _selectedClientIds = {};
   String? _individualClientId;
   bool _isRecommended = false;
+  late String _scheduledDate;
 
   @override
   void initState() {
@@ -47,6 +49,7 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
     } else {
       _isRecommended = widget.session.isRecommended;
     }
+    _scheduledDate = widget.session.scheduledDate ?? IstDateUtils.getTodayISTString();
   }
 
   bool _isSaving = false;
@@ -76,6 +79,7 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
       clientIds: _selectedClientIds.toList(),
       individualClientId: _individualClientId,
       isRecommended: _isRecommended,
+      scheduledDate: _scheduledDate,
     );
 
     if (!mounted) return;
@@ -235,6 +239,55 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
               ],
 
               const Divider(color: AppColors.border, height: 24),
+
+              // Scheduled Date (IST) Selector Tile
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded, size: 18, color: AppColors.gold),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Scheduled Date (IST)', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                          Text(
+                            _scheduledDate == IstDateUtils.getTodayISTString()
+                                ? '$_scheduledDate (Today in IST)'
+                                : _scheduledDate,
+                            style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.tryParse(_scheduledDate) ?? now,
+                          firstDate: now.subtract(const Duration(days: 30)),
+                          lastDate: now.add(const Duration(days: 90)),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _scheduledDate = IstDateUtils.toISTDateString(picked);
+                          });
+                        }
+                      },
+                      child: const Text('Change Date', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
 
               // Recommended toggle
               SwitchListTile(

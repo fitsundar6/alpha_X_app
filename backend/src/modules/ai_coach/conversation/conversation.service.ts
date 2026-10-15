@@ -10,6 +10,7 @@ import {
 } from './conversation.types';
 import { IConversationStore, conversationStore } from './conversation.store';
 import { conversationConfig } from './conversation.config';
+import { prisma } from '../../../config/prisma';
 
 export class ConversationService {
   private store: IConversationStore;
@@ -123,6 +124,47 @@ export class ConversationService {
 
     conversation.messages.push(userMsg, aiMsg);
     this.store.save(conversation);
+
+    // Asynchronously persist conversation and messages to database
+    try {
+      if ((prisma as any).aIConversation?.upsert) {
+        (prisma as any).aIConversation.upsert({
+          where: { id: conversation.id },
+          create: {
+            id: conversation.id,
+            adminId: conversation.adminId,
+            title: userContent.slice(0, 40) || 'Alpha X AI Session',
+            activeClientId: conversation.verifiedClient?.clientId || null,
+          },
+          update: {
+            updatedAt: new Date(),
+            activeClientId: conversation.verifiedClient?.clientId || null,
+          },
+        }).then(() => {
+          if ((prisma as any).aIMessage?.createMany) {
+            (prisma as any).aIMessage.createMany({
+              data: [
+                {
+                  id: userMsg.id,
+                  conversationId: conversation.id,
+                  sender: 'ADMIN',
+                  content: userContent,
+                  intent: 'USER_QUERY',
+                },
+                {
+                  id: aiMsg.id,
+                  conversationId: conversation.id,
+                  sender: 'AI',
+                  content: assistantContent,
+                  intent: meta?.intent || (meta?.proposal ? 'WORKOUT_PROPOSAL' : 'GENERAL'),
+                  metadataJson: meta ? JSON.stringify(meta) : null,
+                },
+              ],
+            }).catch((err: any) => console.error('[DB SYNC aIMessage ERROR]', err));
+          }
+        }).catch((err: any) => console.error('[DB SYNC aIConversation ERROR]', err));
+      }
+    } catch (_) {}
   }
 
   /**

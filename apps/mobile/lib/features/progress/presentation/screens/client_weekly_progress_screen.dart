@@ -1198,13 +1198,29 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
           SizedBox(
             height: 120,
             width: double.infinity,
-            child: photoUrl != null && photoUrl.startsWith('http')
-                ? Image.network(
-                    photoUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _buildNoPhotoPlaceholder(),
-                  )
-                : _buildNoPhotoPlaceholder(),
+            child: () {
+              final resolvedUrl = AppConstants.resolveImageUrl(photoUrl, authToken: AuthService().token);
+              if (resolvedUrl.isNotEmpty) {
+                return Image.network(
+                  resolvedUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => _buildNoPhotoPlaceholder(),
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: AlphaXColors.surfaceElevated,
+                      alignment: Alignment.center,
+                      child: const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AlphaXColors.redAccent),
+                      ),
+                    );
+                  },
+                );
+              }
+              return _buildNoPhotoPlaceholder();
+            }(),
           ),
         ],
       ),

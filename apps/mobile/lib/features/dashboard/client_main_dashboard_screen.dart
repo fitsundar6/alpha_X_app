@@ -29,6 +29,7 @@ import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
+import 'package:alpha_x_gym/features/profile/client_edit_profile_screen.dart';
 
 
 class ClientMainDashboardScreen extends StatefulWidget {
@@ -2044,16 +2045,18 @@ class ClientProfileSubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeService = ClientThemeService();
     final colors = ClientThemeColors.of(context);
-    final userName = AuthService().currentUserName;
-    final userEmail = AuthService().currentUserEmail;
-    final userId = AuthService().currentUserId;
-    final clientProfile = AuthService().clientProfile;
     final completedWorkoutsCount = workoutRepository.clientHistory.length;
 
     return ListenableBuilder(
-      listenable: themeService,
+      listenable: Listenable.merge([themeService, AuthService()]),
       builder: (context, _) {
         final currentMode = themeService.themeMode;
+        final auth = AuthService();
+        final userName = auth.currentUserName;
+        final userEmail = auth.currentUserEmail;
+        final userId = auth.currentUserId;
+        final clientProfile = auth.clientProfile;
+        final photoUrl = auth.currentUserPhotoUrl ?? clientProfile['photoUrl']?.toString();
         return Scaffold(
           backgroundColor: colors.background,
           appBar: AppBar(
@@ -2069,6 +2072,31 @@ class ClientProfileSubScreen extends StatelessWidget {
                 letterSpacing: 1.1,
               ),
             ),
+            actions: [
+              TextButton.icon(
+                onPressed: () async {
+                  final updated = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => ClientEditProfileScreen(
+                        workoutRepository: workoutRepository,
+                      ),
+                    ),
+                  );
+                  if (updated == true) {
+                    (context as Element).markNeedsBuild();
+                  }
+                },
+                icon: Icon(Icons.edit_outlined, size: 17, color: colors.primaryRed),
+                label: Text(
+                  'EDIT',
+                  style: TextStyle(
+                    color: colors.primaryRed,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
           ),
           body: ListView(
             padding: const EdgeInsets.all(16),
@@ -2130,15 +2158,20 @@ class ClientProfileSubScreen extends StatelessWidget {
                       child: CircleAvatar(
                         radius: 36,
                         backgroundColor: colors.primaryRed,
-                        child: Text(
-                          userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: AppColors.onPrimary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 26,
-                          ),
-                        ),
+                        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty && photoUrl.startsWith('http'))
+                            ? NetworkImage(photoUrl)
+                            : null,
+                        child: (photoUrl == null || photoUrl.isEmpty || !photoUrl.startsWith('http'))
+                            ? Text(
+                                userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: AppColors.onPrimary,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 26,
+                                ),
+                              )
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -2334,9 +2367,13 @@ class ClientProfileSubScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _infoRow('Primary Goal', clientProfile['fitnessGoal'] ?? clientProfile['goal'] ?? 'Not set', colors),
+                      if (auth.currentUserPhone != null && auth.currentUserPhone!.isNotEmpty) ...[
+                        _infoRow('Phone', auth.currentUserPhone!, colors),
+                        Divider(color: colors.border, height: 16),
+                      ],
+                      _infoRow('Primary Goal', clientProfile['primaryGoal'] ?? clientProfile['fitnessGoal'] ?? clientProfile['goal'] ?? 'Not set', colors),
                       Divider(color: colors.border, height: 16),
-                      _infoRow('Experience Level', clientProfile['experienceLevel'] ?? clientProfile['level'] ?? 'Not set', colors),
+                      _infoRow('Fitness Level', clientProfile['fitnessLevel'] ?? clientProfile['experienceLevel'] ?? clientProfile['level'] ?? 'Not set', colors),
                       Divider(color: colors.border, height: 16),
                       _infoRow('Activity Level', clientProfile['activityLevel'] ?? 'Moderate', colors),
                     ],
@@ -2344,6 +2381,65 @@ class ClientProfileSubScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
               ],
+
+              // Edit Profile Action
+              GestureDetector(
+                onTap: () async {
+                  final updated = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => ClientEditProfileScreen(
+                        workoutRepository: workoutRepository,
+                      ),
+                    ),
+                  );
+                  if (updated == true) {
+                    (context as Element).markNeedsBuild();
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.primaryRed.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: colors.primaryRed.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.edit_outlined, color: colors.primaryRed, size: 20),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Edit My Profile',
+                              style: TextStyle(
+                                color: colors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Update name, phone, fitness goals and more',
+                              style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios, size: 14, color: colors.textTertiary),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
 
               // Sign Out Action
               ListTile(

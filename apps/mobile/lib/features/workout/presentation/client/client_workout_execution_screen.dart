@@ -294,6 +294,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     required int setIndex,
   }) {
     final session = widget.workoutRepository.activeSession;
+    if (session.isLocked) return;
     if (exerciseIndex >= session.exercises.length) return;
     final exercise = session.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return;
@@ -321,6 +322,16 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     required int setIndex,
   }) {
     final session = widget.workoutRepository.activeSession;
+    if (session.isLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This workout is completed and locked. Edits are disabled unless unlocked by Admin.'),
+          backgroundColor: AppColors.gold,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     if (exerciseIndex >= session.exercises.length) return;
     final exercise = session.exercises[exerciseIndex];
     if (setIndex >= exercise.sets.length) return;
@@ -492,6 +503,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
   // --- Add Set to Exercise ---
   void _handleAddSet(int exerciseIndex) {
+    if (widget.workoutRepository.activeSession.isLocked) return;
     HapticFeedback.lightImpact();
     widget.workoutRepository.addSet(exerciseIndex);
     _initAllSetControllers();
@@ -500,6 +512,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
   // --- Swap Exercise ---
   Future<void> _handleSwapExercise(int exerciseIndex) async {
+    if (widget.workoutRepository.activeSession.isLocked) return;
     final session = widget.workoutRepository.activeSession;
     if (exerciseIndex >= session.exercises.length) return;
     final exercise = session.exercises[exerciseIndex];
@@ -527,6 +540,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
   // --- Add Exercise to Workout ---
   Future<void> _handleAddExercise() async {
+    if (widget.workoutRepository.activeSession.isLocked) return;
     final selected = await ExercisePickerDialog.show(
       context,
     );
@@ -860,6 +874,29 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               // 1. WORKOUT TOP BAR (Matches reference screenshot IMG_3853 / IMG_3854)
               _buildWorkoutTopBar(colors, isDark),
 
+              // Locked Warning Banner if session is completed and locked
+              if (session.isLocked)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withOpacity(0.18),
+                    border: Border(bottom: BorderSide(color: AppColors.gold.withOpacity(0.4))),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock_rounded, color: AppColors.gold, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'SESSION LOCKED 🔒 - This workout has been completed and locked. Data cannot be edited unless unlocked by Admin.',
+                          style: TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // 2. WORKOUT TITLE & PROGRESS HEADER
               _buildWorkoutHeader(session, completedExercises, totalExercises, progressPercent, colors),
 
@@ -885,7 +922,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                     const SizedBox(height: 12),
 
                     // 4. ADD EXERCISE BUTTON (Controlled by session permissions)
-                    if (session.permissions.allowAddExercise)
+                    if (session.permissions.allowAddExercise && !session.isLocked)
                       Container(
                         width: double.infinity,
                         height: 52,
@@ -998,25 +1035,50 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               ),
               const SizedBox(width: 10),
 
-              // Finish Button Pill (Amber / Yellow button matching screenshot)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFB800), // Vibrant amber/yellow matching reference
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: _showFinishConfirmation,
-                child: const Text(
-                  'Finish',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                    letterSpacing: 0.3,
+              // Finish Button Pill or LOCKED badge
+              if (widget.workoutRepository.activeSession.isLocked)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.gold),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 13, color: AppColors.gold),
+                      SizedBox(width: 5),
+                      Text(
+                        'LOCKED',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: AppColors.gold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFB800), // Vibrant amber/yellow matching reference
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                  onPressed: _showFinishConfirmation,
+                  child: const Text(
+                    'Finish',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ],
@@ -1351,39 +1413,41 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Row(
                 children: [
-                  // + Add Set
-                  GestureDetector(
-                    onTap: () => _handleAddSet(exerciseIndex),
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Add Set',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
-                        ),
-                      ],
+                  if (!widget.workoutRepository.activeSession.isLocked) ...[
+                    // + Add Set
+                    GestureDetector(
+                      onTap: () => _handleAddSet(exerciseIndex),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Add Set',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
+                    const SizedBox(width: 14),
 
-                  // Swap Exercise
-                  GestureDetector(
-                    onTap: () => _handleSwapExercise(exerciseIndex),
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      children: [
-                        Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Swap',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
-                        ),
-                      ],
+                    // Swap Exercise
+                    GestureDetector(
+                      onTap: () => _handleSwapExercise(exerciseIndex),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Swap',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
+                    const SizedBox(width: 14),
+                  ],
 
                   // Rest Timer Pill
                   GestureDetector(
@@ -1610,7 +1674,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               controller: weightCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.center,
-              enabled: !isCompleted,
+              enabled: !isCompleted && !widget.workoutRepository.activeSession.isLocked,
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -1645,7 +1709,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               controller: repsCtrl,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              enabled: !isCompleted,
+              enabled: !isCompleted && !widget.workoutRepository.activeSession.isLocked,
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,

@@ -15,6 +15,11 @@ import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_scree
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_assign_session_dialog.dart';
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_meal_photo_viewer_dialog.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:alpha_x_gym/core/auth/auth_service.dart';
+import 'package:alpha_x_gym/core/constants/app_constants.dart';
+import 'package:alpha_x_gym/features/profile/admin_edit_client_profile_screen.dart';
 
 /// Reconstructed Alpha X Admin Client Hub
 /// Provides instant access to the THREE CORE AREAS for an individual athlete:
@@ -319,6 +324,147 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
     );
   }
 
+  void _openEditClientProfile() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminEditClientProfileScreen(
+          client: _clientData,
+          workoutRepository: widget.workoutRepository,
+        ),
+      ),
+    );
+    if (updated == true && mounted) {
+      // Reload the live profile so all displayed data is up-to-date
+      _loadLiveProfile();
+      AppAutoRefreshService.instance.triggerImmediateSync(
+        reason: 'Admin edited client profile',
+      );
+    }
+  }
+
+  Future<void> _sendTestPushNotification() async {
+    final titleController = TextEditingController(text: '⚡ Alpha X Coach Alert');
+    final bodyController = TextEditingController(text: 'Hydration and training reminder from your coach.');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: AppColors.primaryRed, size: 22),
+            const SizedBox(width: 8),
+            Text(
+              'Test Push Notification',
+              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Send a live push notification to $_clientName ($_displayId).',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                labelStyle: TextStyle(color: AppColors.textSecondary),
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: bodyController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Message Body',
+                labelStyle: TextStyle(color: AppColors.textSecondary),
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('SEND PUSH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final token = await AuthService().getValidToken();
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/send-test');
+      final res = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'clientId': _clientId,
+          'title': titleController.text.trim(),
+          'body': bodyController.text.trim(),
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+
+      if (res.statusCode == 200 && data['success'] == true) {
+        final gateway = data['data']?['gatewayResponse'];
+        final isSuccess = gateway?['success'] == true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isSuccess
+                  ? '✔ Push notification dispatched successfully!'
+                  : 'Gateway response: ${gateway?['error'] ?? 'Delivery skipped'}',
+            ),
+            backgroundColor: isSuccess ? AppColors.success : AppColors.warning,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        final msg = data['error']?['message'] ?? 'Failed to send test push';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Network error: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = ClientThemeColors.of(context);
@@ -415,7 +561,9 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
             icon: Icon(Icons.more_vert, color: colors.textSecondary),
             color: colors.surfaceCard,
             onSelected: (val) {
-              if (val == 'progress') {
+              if (val == 'edit_profile') {
+                _openEditClientProfile();
+              } else if (val == 'progress') {
                 if (widget.weeklyProgressRepository != null) {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -435,6 +583,8 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                     ),
                   ),
                 );
+              } else if (val == 'test_push') {
+                _sendTestPushNotification();
               } else if (val == 'refresh') {
                 _loadLiveProfile();
                 _loadWorkoutHistory();
@@ -442,6 +592,27 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'edit_profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 18, color: AppColors.primaryRed),
+                    SizedBox(width: 10),
+                    Text('Edit Client Profile', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_push',
+                child: Row(
+                  children: [
+                    Icon(Icons.notifications_active_outlined, size: 18, color: Colors.greenAccent),
+                    SizedBox(width: 10),
+                    Text('Send Test Push Notification', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'progress',
                 child: Row(
@@ -571,6 +742,20 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: colors.primary.withOpacity(0.6)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primaryRed),
+              label: const Text('EDIT CLIENT PROFILE', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.w900)),
+              onPressed: _openEditClientProfile,
+            ),
+          ),
           const SizedBox(height: 16),
 
           // 1. Biometrics & Identity Card
@@ -602,6 +787,79 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
               _buildDataRow('Training Days', '$daysPerWeek days / week'),
               _buildDataRow('Preferred Days', preferredDays),
               _buildDataRow('Training Time', trainingTimePref),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 2.5 Athlete Before & After Transformation Progress Card
+          _buildCard(
+            colors: colors,
+            title: 'BEFORE & AFTER TRANSFORMATION',
+            icon: Icons.compare_arrows_rounded,
+            trailing: TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 14, color: AppColors.gold),
+              label: const Text('OPEN GALLERY', style: TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ClientTransformationTimelineScreen(
+                      adminTargetClientId: _clientId,
+                      athleteName: _clientName,
+                    ),
+                  ),
+                );
+              },
+            ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: AppColors.gold, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Compare Baseline vs Protocol Milestones',
+                            style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 12),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Inspect front, side, and back physique photos, weight changes, waist delta, and protocol progress.',
+                            style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryRed,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ClientTransformationTimelineScreen(
+                              adminTargetClientId: _clientId,
+                              athleteName: _clientName,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('COMPARE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1475,6 +1733,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
     required String title,
     required IconData icon,
     required List<Widget> children,
+    Widget? trailing,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1490,15 +1749,18 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
             children: [
               Icon(icon, size: 18, color: colors.primary),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: colors.textTertiary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    color: colors.textTertiary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                  ),
                 ),
               ),
+              ?trailing,
             ],
           ),
           const SizedBox(height: 12),

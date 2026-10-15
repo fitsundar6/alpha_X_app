@@ -783,6 +783,31 @@ class AlphaXTools:
                 user_id = profile_row["userId"] if profile_row else None
 
                 if user_id:
+                    # Determine title and target muscle group
+                    w_title = payload.get("title") or payload.get("planTitle") or proposal.get("title") or "AI Optimized Training Session"
+                    w_muscle = payload.get("targetMuscleGroup")
+                    if not w_muscle and isinstance(payload.get("weeklySchedule"), list) and len(payload["weeklySchedule"]) > 0:
+                        w_muscle = payload["weeklySchedule"][0].get("targetMuscleGroup")
+                    if not w_muscle:
+                        w_muscle = "Full Body"
+
+                    # Collect exercises from payload.exercises or weeklySchedule
+                    exercises = payload.get("exercises") or []
+                    if not exercises and isinstance(payload.get("weeklySchedule"), list):
+                        for day in payload["weeklySchedule"]:
+                            if isinstance(day, dict) and isinstance(day.get("exercises"), list):
+                                for ex in day["exercises"]:
+                                    ex_copy = dict(ex)
+                                    ex_copy["notes"] = ex.get("notes") or f"Day: {day.get('day', '')} - {day.get('sessionTitle', '')}"
+                                    exercises.append(ex_copy)
+
+                    if not exercises:
+                        exercises = [
+                            {"exerciseName": "Barbell Bench Press", "sets": 3, "targetReps": "8-10", "category": "Chest", "targetRpe": 8.0, "targetRir": 2, "restSeconds": 90},
+                            {"exerciseName": "Incline Dumbbell Press", "sets": 3, "targetReps": "10-12", "category": "Chest", "targetRpe": 8.0, "targetRir": 2, "restSeconds": 90},
+                            {"exerciseName": "Bent Over Barbell Row", "sets": 3, "targetReps": "8-10", "category": "Back", "targetRpe": 8.0, "targetRir": 2, "restSeconds": 90},
+                        ]
+
                     # Create WorkoutSession
                     cur.execute("""
                         INSERT INTO workout_sessions (
@@ -795,9 +820,9 @@ class AlphaXTools:
                             TRUE, 'INDIVIDUAL'
                         ) RETURNING id;
                     """, {
-                        "title": payload.get("title") or "AI Optimized Training Session",
+                        "title": w_title,
                         "type": payload.get("workoutType") or "Hypertrophy",
-                        "muscle": payload.get("targetMuscleGroup") or "Full Body",
+                        "muscle": w_muscle,
                         "diff": payload.get("difficulty") or "Intermediate",
                         "duration": int(payload.get("estimatedDurationMinutes", 50)),
                         "desc": payload.get("description") or "Custom tailored by Alpha X AI Coach with Admin approval.",
@@ -806,7 +831,6 @@ class AlphaXTools:
                     session_id = cur.fetchone()["id"]
 
                     # Insert exercises
-                    exercises = payload.get("exercises", [])
                     for i, ex in enumerate(exercises):
                         cur.execute("""
                             INSERT INTO workout_session_exercises (
