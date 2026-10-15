@@ -103,6 +103,37 @@ export function parseWeekdaysFromScheduleString(scheduleStr?: string | null): nu
 }
 
 /**
+ * Resolves day name (e.g. "Monday", "tue", "Day 1") to ISO weekday number (1=Mon ... 7=Sun).
+ */
+export function getWeekdayFromDayName(dayName?: string | null): number {
+  if (!dayName) return 1;
+  const s = dayName.toLowerCase();
+  if (s.includes('mon')) return 1;
+  if (s.includes('tue')) return 2;
+  if (s.includes('wed')) return 3;
+  if (s.includes('thu')) return 4;
+  if (s.includes('fri')) return 5;
+  if (s.includes('sat')) return 6;
+  if (s.includes('sun')) return 7;
+  const m = s.match(/day\s*(\d+)/i);
+  if (m) {
+    const num = parseInt(m[1], 10);
+    if (num >= 1 && num <= 7) return num;
+  }
+  return 1;
+}
+
+/**
+ * Returns the IST date string (yyyy-MM-dd) for a given target weekday (1=Mon ... 7=Sun)
+ * relative to the current IST week.
+ */
+export function getISTDateForWeekday(targetWeekday: number): string {
+  const todayWeekday = getTodayISTWeekday();
+  const diff = targetWeekday - todayWeekday;
+  return getOffsetISTDateString(diff);
+}
+
+/**
  * Determines whether a workout session and assignment are scheduled for a specific date in IST.
  * Respects recurring weekdays, start dates, and specific scheduled dates.
  */

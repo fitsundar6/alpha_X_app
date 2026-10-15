@@ -652,6 +652,29 @@ class _AdminProposalAssignmentDialogState extends State<AdminProposalAssignmentD
               ],
             ),
           ),
+          if (widget.proposal.payload['weeklySchedule'] is List && (widget.proposal.payload['weeklySchedule'] as List).isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orangeAccent.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_view_week, color: Colors.orangeAccent, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Weekly Split Protocol: ${(widget.proposal.payload['weeklySchedule'] as List).length} separate workout days (Push A, Pull A, Legs A, ...) assigned to their scheduled weekdays with dedicated 5–7 exercises per session.',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           // Recipient List

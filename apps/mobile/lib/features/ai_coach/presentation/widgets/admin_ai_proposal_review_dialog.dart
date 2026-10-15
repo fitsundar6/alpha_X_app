@@ -588,18 +588,181 @@ class _AdminAiProposalReviewDialogState
     );
   }
 
+  Color _getSplitColor(String cat) {
+    final lower = cat.toLowerCase();
+    if (lower.contains('push')) return Colors.orangeAccent;
+    if (lower.contains('pull')) return Colors.cyanAccent;
+    if (lower.contains('leg')) return Colors.lightGreenAccent;
+    if (lower.contains('upper')) return Colors.amberAccent;
+    if (lower.contains('lower')) return Colors.purpleAccent;
+    return AppColors.primaryRed;
+  }
+
   Widget _buildWorkoutBreakdown(Map<String, dynamic> payload) {
+    // If weeklySchedule is present and non-empty, render separate days
+    if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) {
+      final days = payload['weeklySchedule'] as List;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'WEEKLY SPLIT SCHEDULE',
+                style: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Text(
+                '${days.length} Workout Days',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...days.asMap().entries.map((entry) {
+            final dIdx = entry.key;
+            final day = entry.value is Map ? entry.value as Map : {};
+            final dayName = day['day'] ?? day['dayName'] ?? day['weekday'] ?? 'Day ${dIdx + 1}';
+            final sessionTitle = day['sessionTitle'] ?? day['title'] ?? 'Session';
+            final splitCat = day['splitCategory'] ?? day['category'] ?? (sessionTitle.toString().contains('Pull') ? 'Pull' : (sessionTitle.toString().contains('Leg') ? 'Legs' : 'Push'));
+            final targetMuscleGroup = day['targetMuscleGroup'] ?? (day['targetMuscles'] is List ? (day['targetMuscles'] as List).join(', ') : 'Full Body');
+            final duration = day['estimatedDurationMinutes'] ?? 50;
+            final dayExercises = (day['exercises'] as List?) ?? [];
+            final splitColor = _getSplitColor(splitCat.toString());
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: splitColor.withOpacity(0.4), width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: splitColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: splitColor),
+                        ),
+                        child: Text(
+                          dayName.toString(),
+                          style: TextStyle(
+                            color: splitColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Text(
+                          splitCat.toString().toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          sessionTitle.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${dayExercises.length} ex · ~${duration}m',
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Target: $targetMuscleGroup',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  ),
+                  const Divider(color: AppColors.border, height: 16),
+                  ...dayExercises.map((e) {
+                    final name = e['exerciseName'] ?? e['name'] ?? 'Exercise';
+                    final sets = e['sets'] ?? (e['setList'] as List?)?.length ?? 3;
+                    final reps = e['targetReps'] ?? e['reps'] ?? '8-10';
+                    final weight = e['targetWeight'] ?? e['weight'] ?? 0;
+                    final rest = e['restSeconds'] ?? e['rest'] ?? 90;
+                    final notes = e['notes'] ?? e['adminInstruction'] ?? '';
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.fitness_center, size: 14, color: AppColors.primaryRed),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name.toString(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                                if (notes.toString().isNotEmpty)
+                                  Text(
+                                    notes.toString(),
+                                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '$sets × $reps • ${weight > 0 ? '${weight}kg • ' : ''}${rest}s rest',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          }),
+        ],
+      );
+    }
+
     // Parse exercises from payload
     List<dynamic> exercises = [];
     if (payload['exercises'] is List &&
         (payload['exercises'] as List).isNotEmpty) {
       exercises = payload['exercises'] as List;
-    } else if (payload['weeklySchedule'] is List) {
-      for (final day in (payload['weeklySchedule'] as List)) {
-        if (day is Map && day['exercises'] is List) {
-          exercises.addAll(day['exercises'] as List);
-        }
-      }
     } else if (payload['workoutPlan']?['sessions'] is List &&
         (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
       final firstSession = (payload['workoutPlan']['sessions'] as List).first;
