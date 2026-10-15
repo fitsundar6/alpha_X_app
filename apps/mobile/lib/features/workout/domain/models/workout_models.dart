@@ -1057,6 +1057,13 @@ class WorkoutSession {
   final String status; // 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'ABANDONED'
   final int currentExerciseIndex;
   final DateTime? workoutDate;
+  final String? scheduledDate; // yyyy-MM-dd in IST
+  final String? assignmentId;
+  final bool isLocked;
+  final DateTime? lockedAt;
+  final DateTime? unlockedAt;
+  final String? unlockedById;
+  final String? unlockReason;
 
   String? get userId => assignedClientId;
 
@@ -1093,6 +1100,13 @@ class WorkoutSession {
     this.status = 'NOT_STARTED',
     this.currentExerciseIndex = 0,
     this.workoutDate,
+    this.scheduledDate,
+    this.assignmentId,
+    this.isLocked = false,
+    this.lockedAt,
+    this.unlockedAt,
+    this.unlockedById,
+    this.unlockReason,
   })  : targetMuscleGroup = targetMuscleGroup ?? focus ?? 'Full Body',
         startedAt = startedAt ?? DateTime.now(),
         sections = sections ?? _defaultSections(),
@@ -1198,6 +1212,13 @@ class WorkoutSession {
     String? status,
     int? currentExerciseIndex,
     DateTime? workoutDate,
+    String? scheduledDate,
+    String? assignmentId,
+    bool? isLocked,
+    DateTime? lockedAt,
+    DateTime? unlockedAt,
+    String? unlockedById,
+    String? unlockReason,
   }) {
     return WorkoutSession(
       id: id ?? this.id,
@@ -1231,6 +1252,13 @@ class WorkoutSession {
       status: status ?? this.status,
       currentExerciseIndex: currentExerciseIndex ?? this.currentExerciseIndex,
       workoutDate: workoutDate ?? this.workoutDate,
+      scheduledDate: scheduledDate ?? this.scheduledDate,
+      assignmentId: assignmentId ?? this.assignmentId,
+      isLocked: isLocked ?? this.isLocked,
+      lockedAt: lockedAt ?? this.lockedAt,
+      unlockedAt: unlockedAt ?? this.unlockedAt,
+      unlockedById: unlockedById ?? this.unlockedById,
+      unlockReason: unlockReason ?? this.unlockReason,
     );
   }
 
@@ -1268,6 +1296,13 @@ class WorkoutSession {
       'status': status,
       'currentExerciseIndex': currentExerciseIndex,
       'workoutDate': workoutDate?.toIso8601String(),
+      'scheduledDate': scheduledDate,
+      'assignmentId': assignmentId,
+      'isLocked': isLocked,
+      'lockedAt': lockedAt?.toIso8601String(),
+      'unlockedAt': unlockedAt?.toIso8601String(),
+      'unlockedById': unlockedById,
+      'unlockReason': unlockReason,
     };
   }
 
@@ -1325,6 +1360,13 @@ class WorkoutSession {
       status: json['status'] as String? ?? ((json['isCompleted'] as bool? ?? false) ? 'COMPLETED' : 'NOT_STARTED'),
       currentExerciseIndex: json['currentExerciseIndex'] as int? ?? 0,
       workoutDate: json['workoutDate'] != null ? DateTime.tryParse(json['workoutDate'] as String) : null,
+      scheduledDate: json['scheduledDate'] as String?,
+      assignmentId: json['assignmentId'] as String?,
+      isLocked: json['isLocked'] as bool? ?? false,
+      lockedAt: json['lockedAt'] != null ? DateTime.tryParse(json['lockedAt'] as String) : null,
+      unlockedAt: json['unlockedAt'] != null ? DateTime.tryParse(json['unlockedAt'] as String) : null,
+      unlockedById: json['unlockedById'] as String?,
+      unlockReason: json['unlockReason'] as String?,
     );
   }
 }
@@ -1351,6 +1393,13 @@ class WorkoutRecord {
   final List<WorkoutExercise> exercises;
   final List<ExerciseSwapRecord> exerciseSwaps;
   final WorkoutPlanVersion? planVersion;
+  final String? assignmentId;
+  final String? scheduledDate;
+  final bool isLocked;
+  final DateTime? lockedAt;
+  final DateTime? unlockedAt;
+  final String? unlockedById;
+  final String? unlockReason;
 
   const WorkoutRecord({
     required this.id,
@@ -1373,6 +1422,13 @@ class WorkoutRecord {
     required this.exercises,
     this.exerciseSwaps = const [],
     this.planVersion,
+    this.assignmentId,
+    this.scheduledDate,
+    this.isLocked = true,
+    this.lockedAt,
+    this.unlockedAt,
+    this.unlockedById,
+    this.unlockReason,
   });
 
   String get durationDisplay {
@@ -1406,6 +1462,13 @@ class WorkoutRecord {
       'exercises': exercises.map((e) => e.toJson()).toList(),
       'exerciseSwaps': exerciseSwaps.map((s) => s.toJson()).toList(),
       'planVersion': planVersion?.toJson(),
+      'assignmentId': assignmentId,
+      'scheduledDate': scheduledDate,
+      'isLocked': isLocked,
+      'lockedAt': lockedAt?.toIso8601String(),
+      'unlockedAt': unlockedAt?.toIso8601String(),
+      'unlockedById': unlockedById,
+      'unlockReason': unlockReason,
     };
   }
 
@@ -1444,6 +1507,73 @@ class WorkoutRecord {
       planVersion: json['planVersion'] != null
           ? WorkoutPlanVersion.fromJson(json['planVersion'] as Map<String, dynamic>)
           : null,
+      assignmentId: json['assignmentId'] as String?,
+      scheduledDate: json['scheduledDate'] as String?,
+      isLocked: json['isLocked'] as bool? ?? true,
+      lockedAt: json['lockedAt'] != null ? DateTime.tryParse(json['lockedAt'] as String) : null,
+      unlockedAt: json['unlockedAt'] != null ? DateTime.tryParse(json['unlockedAt'] as String) : null,
+      unlockedById: json['unlockedById'] as String?,
+      unlockReason: json['unlockReason'] as String?,
+    );
+  }
+
+  WorkoutRecord copyWith({
+    String? id,
+    String? clientId,
+    String? sessionId,
+    String? sessionTitle,
+    String? workoutType,
+    String? targetMuscleGroup,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    int? durationSeconds,
+    double? totalVolume,
+    int? completedSetsCount,
+    int? skippedSetsCount,
+    double? averageRpe,
+    double? averageRir,
+    bool? isCompleted,
+    List<PersonalRecord>? personalRecords,
+    String? notes,
+    List<WorkoutExercise>? exercises,
+    List<ExerciseSwapRecord>? exerciseSwaps,
+    WorkoutPlanVersion? planVersion,
+    String? assignmentId,
+    String? scheduledDate,
+    bool? isLocked,
+    DateTime? lockedAt,
+    DateTime? unlockedAt,
+    String? unlockedById,
+    String? unlockReason,
+  }) {
+    return WorkoutRecord(
+      id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
+      sessionId: sessionId ?? this.sessionId,
+      sessionTitle: sessionTitle ?? this.sessionTitle,
+      workoutType: workoutType ?? this.workoutType,
+      targetMuscleGroup: targetMuscleGroup ?? this.targetMuscleGroup,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      totalVolume: totalVolume ?? this.totalVolume,
+      completedSetsCount: completedSetsCount ?? this.completedSetsCount,
+      skippedSetsCount: skippedSetsCount ?? this.skippedSetsCount,
+      averageRpe: averageRpe ?? this.averageRpe,
+      averageRir: averageRir ?? this.averageRir,
+      isCompleted: isCompleted ?? this.isCompleted,
+      personalRecords: personalRecords ?? this.personalRecords,
+      notes: notes ?? this.notes,
+      exercises: exercises ?? this.exercises,
+      exerciseSwaps: exerciseSwaps ?? this.exerciseSwaps,
+      planVersion: planVersion ?? this.planVersion,
+      assignmentId: assignmentId ?? this.assignmentId,
+      scheduledDate: scheduledDate ?? this.scheduledDate,
+      isLocked: isLocked ?? this.isLocked,
+      lockedAt: lockedAt ?? this.lockedAt,
+      unlockedAt: unlockedAt ?? this.unlockedAt,
+      unlockedById: unlockedById ?? this.unlockedById,
+      unlockReason: unlockReason ?? this.unlockReason,
     );
   }
 }

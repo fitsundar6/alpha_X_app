@@ -9,6 +9,7 @@ import { toolRegistry, ToolRegistry } from './tool.registry';
 import { validateToolPermission } from './tool.permissions';
 import { toolValidator, ToolValidationService } from './tool.validation';
 import { toolConfig } from './tool.config';
+import { logServerError } from '../../../utils/serverLogger';
 
 export interface ToolAuditLogEntry {
   requestId: string;
@@ -72,12 +73,13 @@ export class ToolExecutor {
       };
     }
 
+    const safeArgs = { ...(rawArgs || {}) };
+
     try {
       // 2. Permission & WRITE Protection Validation
       validateToolPermission(tool, context);
 
       // 2b. Phase 7: Safe Client Context Binding & Pronoun Resolution
-      const safeArgs = { ...(rawArgs || {}) };
       const pronouns = ['he', 'she', 'they', 'him', 'her', 'his', 'their', 'the client', 'this client', 'this member', 'current', 'client'];
 
       // Bind verified client context to 'clientId' field (standard read tools)
@@ -129,6 +131,40 @@ export class ToolExecutor {
 
       const latencyMs = Date.now() - startTime;
 
+      // Check if tool handler returned a structured failure
+      if (rawResult && typeof rawResult === 'object' && rawResult.success === false) {
+        const failureMessage = rawResult.message || rawResult.error || 'Tool operation failed';
+        logServerError({
+          requestId: context.requestId,
+          activity: `Tool Execution: ${tool.name}`,
+          errorMessage: failureMessage,
+          errorCode: rawResult.error || 'TOOL_OPERATION_FAILED',
+          clientId: context.verifiedClient?.clientId || safeArgs?.clientIdentifier || safeArgs?.clientId,
+          details: { toolName: tool.name, conversationId: context.conversationId, adminId: context.adminId },
+          receivedPayload: safeArgs,
+        });
+
+        this.logAudit({
+          requestId: context.requestId,
+          conversationId: context.conversationId,
+          adminId: context.adminId,
+          toolName: tool.name,
+          category: tool.category,
+          permission: tool.permission,
+          status: 'FAILED',
+          latencyMs,
+          errorMessage: failureMessage,
+        });
+
+        return {
+          success: false,
+          error: failureMessage,
+          data: sanitizedData,
+          toolName: tool.name,
+          latencyMs,
+        };
+      }
+
       this.logAudit({
         requestId: context.requestId,
         conversationId: context.conversationId,
@@ -147,9 +183,20 @@ export class ToolExecutor {
         latencyMs,
       };
     } catch (err: any) {
+      console.error(`[ALPHA X TOOL EXECUTOR] Execution error in tool '${tool.name}':`, err);
       const latencyMs = Date.now() - startTime;
       const isTimeout = err instanceof ToolTimeoutError;
       const clientFacingError = this.sanitizeErrorMessage(err);
+
+      logServerError({
+        requestId: context.requestId,
+        activity: `Tool Execution Error: ${tool.name}`,
+        error: err,
+        errorMessage: err?.message || String(err),
+        clientId: context.verifiedClient?.clientId || safeArgs?.clientIdentifier || safeArgs?.clientId,
+        details: { toolName: tool.name, conversationId: context.conversationId, adminId: context.adminId },
+        receivedPayload: safeArgs,
+      });
 
       this.logAudit({
         requestId: context.requestId,
@@ -211,19 +258,36 @@ export class ToolExecutor {
   private sanitizeErrorMessage(err: any): string {
     const msg = err?.message || String(err);
 
-    // If it's a known domain error, preserve message
+    // If it's a known domain or validation error, preserve message
     if (
       msg.includes('Validation failed') ||
       msg.includes('Permission denied') ||
       msg.includes('WRITE tools are strictly disabled') ||
       msg.includes('timed out') ||
-      msg.includes('not registered')
+      msg.includes('not registered') ||
+      msg.includes('required') ||
+      msg.includes('not found') ||
+      msg.includes('Invalid') ||
+      msg.includes('CLIENT_NOT_FOUND') ||
+      msg.includes('MULTIPLE_CLIENTS_FOUND') ||
+      msg.includes('VALIDATION_ERROR')
     ) {
       return msg;
     }
 
+    // Prisma and database errors: safe, useful domain error
+    if (msg.includes('Prisma') || msg.includes('constraint') || msg.includes('database')) {
+      if (msg.includes('Unique constraint failed')) {
+        return 'A plan proposal with this title already exists in pending proposals.';
+      }
+      if (msg.includes('Foreign key constraint')) {
+        return 'Referenced conversation or athlete record does not exist in the database.';
+      }
+      return 'Database operation failed while processing proposal.';
+    }
+
     // Default safe fallback without server secrets or SQL
-    return 'Tool execution encountered an unexpected internal error';
+    return `Tool execution failed: ${msg.replace(/C:\\[^\s]+/g, '').substring(0, 150).trim() || 'Internal processing error'}`;
   }
 
   /**

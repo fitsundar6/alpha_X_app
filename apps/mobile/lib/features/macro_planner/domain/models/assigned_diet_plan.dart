@@ -21,6 +21,8 @@ class PrescribedFoodItem {
   final double? baseCarbs;
   final double? baseFat;
   final double? baseFiber;
+  final String? notes;
+  final String? substitutions;
 
   const PrescribedFoodItem({
     this.foodId,
@@ -41,6 +43,8 @@ class PrescribedFoodItem {
     this.baseCarbs,
     this.baseFat,
     this.baseFiber,
+    this.notes,
+    this.substitutions,
   });
 
   String get quantityDisplay => quantity % 1 == 0 ? quantity.toInt().toString() : quantity.toStringAsFixed(1);
@@ -303,10 +307,12 @@ class PrescribedFoodItem {
     'baseCarbs': baseCarbs,
     'baseFat': baseFat,
     'baseFiber': baseFiber,
+    'notes': notes,
+    'substitutions': substitutions,
   };
 
   factory PrescribedFoodItem.fromJson(Map<String, dynamic> json) {
-    final name = json['name'] as String? ?? 'Food';
+    final name = (json['name'] ?? json['foodName']) as String? ?? 'Food';
     double qty = 1.0;
     if (json['quantity'] is num) {
       qty = (json['quantity'] as num).toDouble();
@@ -323,6 +329,8 @@ class PrescribedFoodItem {
     final crb = ((json['carbs'] ?? json['carbohydrates']) as num?)?.toDouble() ?? 0.0;
     final ft = (json['fat'] as num?)?.toDouble() ?? 0.0;
     final fib = (json['fiber'] as num?)?.toDouble() ?? 0.0;
+    final notes = json['notes'] as String?;
+    final subs = (json['substitutions'] ?? json['substitute']) as String?;
 
     final srvDisplay = (json['servingDisplay'] as String?) ??
         formatServingDisplay(quantity: qty, unit: unitStr, servings: srv);
@@ -346,6 +354,8 @@ class PrescribedFoodItem {
       baseCarbs: (json['baseCarbs'] as num?)?.toDouble(),
       baseFat: (json['baseFat'] as num?)?.toDouble(),
       baseFiber: (json['baseFiber'] as num?)?.toDouble(),
+      notes: notes,
+      substitutions: subs,
     );
   }
 }

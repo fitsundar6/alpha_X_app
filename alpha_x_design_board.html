@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ALPHA X GYM — Ultra-Premium Mobile UI/UX Design Board</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap"
+    rel="stylesheet">
   <style>
     /* ==========================================================================
        ALPHA X GYM — LUXURY HIGH-PERFORMANCE DESIGN SYSTEM TOKENS
@@ -63,7 +66,7 @@
       min-height: 100vh;
       overflow-x: hidden;
       font-variant-numeric: tabular-nums;
-      background-image: 
+      background-image:
         radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 60%),
         radial-gradient(circle at 10% 40%, rgba(212, 175, 55, 0.04) 0%, transparent 45%),
         linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
@@ -155,7 +158,8 @@
       gap: 6px;
     }
 
-    .nav-pill:hover, .nav-pill.active {
+    .nav-pill:hover,
+    .nav-pill.active {
       background: var(--surface-slate);
       border-color: var(--gold-primary);
       color: var(--text-primary);
@@ -297,7 +301,7 @@
       background: var(--bg-deep-black);
       border-radius: var(--radius-phone);
       border: 3px solid #282828;
-      box-shadow: 
+      box-shadow:
         0 25px 60px rgba(0, 0, 0, 0.8),
         0 0 0 1px rgba(255, 255, 255, 0.08),
         inset 0 0 0 2px rgba(0, 0, 0, 0.9);
@@ -310,7 +314,7 @@
     }
 
     .phone-mockup:hover {
-      box-shadow: 
+      box-shadow:
         0 30px 80px rgba(0, 0, 0, 0.9),
         0 0 35px rgba(212, 175, 55, 0.15),
         0 0 0 1px var(--border-gold);
@@ -401,7 +405,8 @@
       text-transform: uppercase;
     }
 
-    .badge-active, .badge-success {
+    .badge-active,
+    .badge-success {
       background: var(--color-success-bg);
       color: var(--color-success);
       border: 1px solid rgba(34, 197, 94, 0.3);
@@ -423,8 +428,17 @@
     }
 
     @keyframes pulseDot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.4;
+        transform: scale(0.85);
+      }
     }
 
     /* Floating Glassmorphic Dock */
@@ -482,7 +496,7 @@
       padding: 50px 16px 36px;
       text-align: center;
       position: relative;
-      background-image: 
+      background-image:
         radial-gradient(circle at 50% 30%, rgba(212, 175, 55, 0.18) 0%, transparent 65%),
         radial-gradient(circle at 50% 80%, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
     }
@@ -497,15 +511,20 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 
+      box-shadow:
         0 0 40px rgba(212, 175, 55, 0.35),
         inset 0 0 20px rgba(212, 175, 55, 0.15);
       animation: floatLogo 4s ease-in-out infinite alternate;
     }
 
     @keyframes floatLogo {
-      0% { transform: translateY(0); }
-      100% { transform: translateY(-8px); }
+      0% {
+        transform: translateY(0);
+      }
+
+      100% {
+        transform: translateY(-8px);
+      }
     }
 
     .splash-emblem svg {
@@ -560,9 +579,17 @@
     }
 
     @keyframes progressPulse {
-      0% { width: 25%; }
-      50% { width: 85%; }
-      100% { width: 72%; }
+      0% {
+        width: 25%;
+      }
+
+      50% {
+        width: 85%;
+      }
+
+      100% {
+        width: 72%;
+      }
     }
 
     /* ==========================================================================
@@ -650,7 +677,10 @@
     .hero-athlete-card::before {
       content: '';
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       background: linear-gradient(135deg, rgba(0, 0, 0, 0.75) 0%, rgba(10, 10, 10, 0.92) 100%);
       z-index: 1;
     }
@@ -1048,9 +1078,20 @@
       border-radius: 3px;
     }
 
-    .fill-protein { width: 58%; background: var(--gold-gradient); }
-    .fill-carbs { width: 29%; background: #3B82F6; }
-    .fill-fats { width: 13%; background: #F59E0B; }
+    .fill-protein {
+      width: 58%;
+      background: var(--gold-gradient);
+    }
+
+    .fill-carbs {
+      width: 29%;
+      background: #3B82F6;
+    }
+
+    .fill-fats {
+      width: 13%;
+      background: #F59E0B;
+    }
 
     .meal-feed-item {
       background: var(--surface-charcoal);
@@ -1071,7 +1112,7 @@
       height: 170px;
       border-radius: 18px;
       background: linear-gradient(180deg, rgba(20, 20, 20, 0.4) 0%, rgba(10, 10, 10, 0.95) 100%),
-                  radial-gradient(circle at center, #2e2615 0%, #111 80%);
+        radial-gradient(circle at center, #2e2615 0%, #111 80%);
       border: 1px solid var(--border-gold);
       display: flex;
       align-items: flex-end;
@@ -1385,7 +1426,7 @@
       border: 1px solid var(--border-gold);
       border-radius: 24px;
       padding: 16px;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.8), var(--gold-glow-subtle);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), var(--gold-glow-subtle);
       overflow: hidden;
     }
 
@@ -1422,6 +1463,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <!-- SVG DEFS FOR METALLIC GOLD GRADIENTS -->
@@ -1458,7 +1500,10 @@
       <a href="#designSystem" class="nav-pill">Design System & UI Kit</a>
       <a href="#overviewMockup" class="nav-pill">Presentation Specimen</a>
       <button class="btn-gold" onclick="copyTokens()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+        </svg>
         Copy Color Tokens
       </button>
     </div>
@@ -1469,7 +1514,9 @@
     <div class="manifesto-badge">OLED Optimized • Luxury Athletic Dark Mode</div>
     <h2 class="manifesto-title">Precision High-Performance Coaching <span>Refined in Metallic Gold.</span></h2>
     <p class="manifesto-desc">
-      Engineered for elite athlete focus. Deep black background (#0A0A0A) eliminates eye fatigue, charcoal glassmorphic surfaces (#151515) separate information layers with 1px razor-thin borders, and metallic gold accents (#D4AF37) celebrate physical milestones and daily wins.
+      Engineered for elite athlete focus. Deep black background (#0A0A0A) eliminates eye fatigue, charcoal glassmorphic
+      surfaces (#151515) separate information layers with 1px razor-thin borders, and metallic gold accents (#D4AF37)
+      celebrate physical milestones and daily wins.
     </p>
   </section>
 
@@ -1490,8 +1537,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content" style="padding: 0;">
@@ -1511,7 +1563,9 @@
                 <div class="splash-progress-track">
                   <div class="splash-progress-bar"></div>
                 </div>
-                <span style="font-size: 10px; color: var(--gold-light); font-weight: 600; letter-spacing: 1px;">INITIALIZING ATHLETE HUB...</span>
+                <span
+                  style="font-size: 10px; color: var(--gold-light); font-weight: 600; letter-spacing: 1px;">INITIALIZING
+                  ATHLETE HUB...</span>
               </div>
             </div>
           </div>
@@ -1531,8 +1585,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -1540,7 +1599,9 @@
             <div class="home-header">
               <div class="user-profile-badge">
                 <div class="avatar-ring">
-                  <div class="avatar-img" style="display:flex;align-items:center;justify-content:center;background:var(--gold-gradient);color:#0A0A0A;font-weight:800;font-size:14px;">S</div>
+                  <div class="avatar-img"
+                    style="display:flex;align-items:center;justify-content:center;background:var(--gold-gradient);color:#0A0A0A;font-weight:800;font-size:14px;">
+                    S</div>
                 </div>
                 <div>
                   <div class="greeting-text">Good Morning,</div>
@@ -1548,7 +1609,10 @@
                 </div>
               </div>
               <div class="bell-btn">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
               </div>
             </div>
 
@@ -1567,21 +1631,29 @@
             <div class="quick-pills">
               <div class="action-pill">
                 <div class="action-pill-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                      d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z" />
+                  </svg>
                 </div>
                 <div class="action-pill-label">Workout</div>
                 <div class="action-pill-sub">Strength</div>
               </div>
               <div class="action-pill">
                 <div class="action-pill-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                      d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2zm0-10h2v8h-2z" />
+                  </svg>
                 </div>
                 <div class="action-pill-label">Nutrition</div>
                 <div class="action-pill-sub">Fuel</div>
               </div>
               <div class="action-pill">
                 <div class="action-pill-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                  </svg>
                 </div>
                 <div class="action-pill-label">Progress</div>
                 <div class="action-pill-sub">Growth</div>
@@ -1596,30 +1668,45 @@
                 <p>45 min • 6 exercises</p>
               </div>
               <div class="routine-chevron">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
             </div>
 
             <!-- Floating Nav Dock -->
             <div class="floating-dock">
               <div class="dock-item active">
-                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <svg viewBox="0 0 24 24">
+                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                </svg>
                 <span>Home</span>
               </div>
               <div class="dock-item">
-                <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg>
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z" />
+                </svg>
                 <span>Workout</span>
               </div>
               <div class="dock-item">
-                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z" />
+                </svg>
                 <span>Nutrition</span>
               </div>
               <div class="dock-item">
-                <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                <svg viewBox="0 0 24 24">
+                  <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                </svg>
                 <span>Progress</span>
               </div>
               <div class="dock-item">
-                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
                 <span>Profile</span>
               </div>
             </div>
@@ -1640,8 +1727,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -1667,7 +1759,9 @@
                   <div class="exercise-sets-badge">4 sets • 8-10 reps • 80 kg</div>
                 </div>
                 <div class="check-toggle checked">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
 
@@ -1678,7 +1772,9 @@
                   <div class="exercise-sets-badge">3 sets • 10-12 reps • 28 kg</div>
                 </div>
                 <div class="check-toggle checked">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
 
@@ -1689,7 +1785,9 @@
                   <div class="exercise-sets-badge">3 sets • 10-12 reps • 22 kg</div>
                 </div>
                 <div class="check-toggle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
 
@@ -1700,7 +1798,9 @@
                   <div class="exercise-sets-badge">4 sets • 12-15 reps • 12 kg</div>
                 </div>
                 <div class="check-toggle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
 
@@ -1711,7 +1811,9 @@
                   <div class="exercise-sets-badge">3 sets • 12-15 reps • 35 kg</div>
                 </div>
                 <div class="check-toggle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
 
@@ -1722,13 +1824,16 @@
                   <div class="exercise-sets-badge">3 sets • 12 reps • 26 kg</div>
                 </div>
                 <div class="check-toggle">
-                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
             </div>
 
             <!-- Bottom Action Button -->
-            <button class="btn-gold" style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
+            <button class="btn-gold"
+              style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
               Complete Workout
             </button>
           </div>
@@ -1748,8 +1853,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -1772,16 +1882,20 @@
 
               <!-- Smooth Gold Spline SVG Curve -->
               <svg class="spline-svg" viewBox="0 0 300 120">
-                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22 L 290,120 L 10,120 Z" fill="url(#chartGrad)"/>
-                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22" fill="none" stroke="url(#goldGradHeader)" stroke-width="3" stroke-linecap="round"/>
+                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22 L 290,120 L 10,120 Z"
+                  fill="url(#chartGrad)" />
+                <path d="M 10,95 Q 60,88 100,75 T 180,50 T 250,38 T 290,22" fill="none" stroke="url(#goldGradHeader)"
+                  stroke-width="3" stroke-linecap="round" />
                 <!-- Anchor Points -->
-                <circle cx="10" cy="95" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
-                <circle cx="100" cy="75" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
-                <circle cx="180" cy="50" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
-                <circle cx="250" cy="38" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2"/>
-                <circle cx="290" cy="22" r="5" fill="#D4AF37" stroke="#FFFFFF" stroke-width="2" style="filter: drop-shadow(0 0 6px #D4AF37);"/>
+                <circle cx="10" cy="95" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2" />
+                <circle cx="100" cy="75" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2" />
+                <circle cx="180" cy="50" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2" />
+                <circle cx="250" cy="38" r="4" fill="#0A0A0A" stroke="#D4AF37" stroke-width="2" />
+                <circle cx="290" cy="22" r="5" fill="#D4AF37" stroke="#FFFFFF" stroke-width="2"
+                  style="filter: drop-shadow(0 0 6px #D4AF37);" />
               </svg>
-              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px;">
+              <div
+                style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px;">
                 <span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span><span>Today</span>
               </div>
             </div>
@@ -1842,8 +1956,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -1857,8 +1976,10 @@
             <!-- Calorie Gauge Ring -->
             <div class="gauge-wrapper">
               <svg class="gauge-svg" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="42" fill="none" stroke="#1E1E1E" stroke-width="8"/>
-                <circle cx="50" cy="50" r="42" fill="none" stroke="url(#goldGradHeader)" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="68" stroke-linecap="round" style="filter: drop-shadow(0 0 8px rgba(212,175,55,0.4));"/>
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#1E1E1E" stroke-width="8" />
+                <circle cx="50" cy="50" r="42" fill="none" stroke="url(#goldGradHeader)" stroke-width="8"
+                  stroke-dasharray="264" stroke-dashoffset="68" stroke-linecap="round"
+                  style="filter: drop-shadow(0 0 8px rgba(212,175,55,0.4));" />
               </svg>
               <div class="gauge-center-text">
                 <div class="gauge-cals">1,850</div>
@@ -1934,8 +2055,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -1950,13 +2076,16 @@
 
             <!-- Macro Overview Badges -->
             <div style="display:flex; gap:8px; margin-bottom:16px;">
-              <div class="badge" style="background:#1E1E1E; color:var(--gold-light); border:1px solid var(--border-gold); flex:1; justify-content:center; padding:8px 4px;">
+              <div class="badge"
+                style="background:#1E1E1E; color:var(--gold-light); border:1px solid var(--border-gold); flex:1; justify-content:center; padding:8px 4px;">
                 Protein 45g
               </div>
-              <div class="badge" style="background:#1E1E1E; color:#60A5FA; border:1px solid rgba(96,165,250,0.3); flex:1; justify-content:center; padding:8px 4px;">
+              <div class="badge"
+                style="background:#1E1E1E; color:#60A5FA; border:1px solid rgba(96,165,250,0.3); flex:1; justify-content:center; padding:8px 4px;">
                 Carbs 60g
               </div>
-              <div class="badge" style="background:#1E1E1E; color:#FBBF24; border:1px solid rgba(251,191,36,0.3); flex:1; justify-content:center; padding:8px 4px;">
+              <div class="badge"
+                style="background:#1E1E1E; color:#FBBF24; border:1px solid rgba(251,191,36,0.3); flex:1; justify-content:center; padding:8px 4px;">
                 Fats 15g
               </div>
             </div>
@@ -1979,7 +2108,8 @@
             </div>
 
             <!-- Bottom Action -->
-            <button class="btn-gold" style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
+            <button class="btn-gold"
+              style="width: 100%; justify-content: center; padding: 14px; font-size: 13px; font-weight: 800; border-radius: 16px;">
               Add to Meal Log
             </button>
           </div>
@@ -1999,8 +2129,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -2012,7 +2147,8 @@
             </div>
 
             <!-- Mini Weight Progression -->
-            <div class="ax-card" style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+            <div class="ax-card"
+              style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div class="micro-label">CURRENT WEIGHT</div>
                 <div style="font-size:20px; font-weight:800;">82.0 kg</div>
@@ -2088,8 +2224,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -2127,7 +2268,10 @@
 
             <!-- Search Bar -->
             <div class="search-input-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
               <input type="text" placeholder="Search clients..." readonly value="Search clients...">
             </div>
 
@@ -2191,11 +2335,24 @@
 
             <!-- Floating Admin Dock -->
             <div class="floating-dock">
-              <div class="dock-item active"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg><span>Admin</span></div>
-              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 3s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg><span>Clients</span></div>
-              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg><span>Plans</span></div>
-              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg><span>Messages</span></div>
-              <div class="dock-item"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg><span>Settings</span></div>
+              <div class="dock-item active"><svg viewBox="0 0 24 24">
+                  <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                </svg><span>Admin</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24">
+                  <path
+                    d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 3s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                </svg><span>Clients</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24">
+                  <path
+                    d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+                </svg><span>Plans</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24">
+                  <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                </svg><span>Messages</span></div>
+              <div class="dock-item"><svg viewBox="0 0 24 24">
+                  <path
+                    d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg><span>Settings</span></div>
             </div>
           </div>
         </div>
@@ -2214,8 +2371,13 @@
             <span>9:41</span>
             <div class="dynamic-island"></div>
             <div class="status-icons">
-              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/></svg>
-              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 4h-3V2h-4v2H7v18h10V4z"/></svg>
+              <svg width="14" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.28 19.53 10.6 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9z" />
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 4h-3V2h-4v2H7v18h10V4z" />
+              </svg>
             </div>
           </div>
           <div class="phone-content">
@@ -2230,42 +2392,68 @@
             <div class="settings-menu-list">
               <div class="settings-menu-item">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
                   <span>Profile Information</span>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
 
               <div class="settings-menu-item">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                  </svg>
                   <span>My Progress & Logs</span>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
 
               <div class="settings-menu-item">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
                   <span>My Assigned Plan</span>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
 
               <div class="settings-menu-item">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
                   <span>App Settings</span>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
 
               <div class="settings-menu-item">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
                   <span>Help & Support</span>
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
               </div>
             </div>
 
@@ -2274,7 +2462,9 @@
               <svg width="70" height="70" viewBox="0 0 24 24" fill="#D4AF37">
                 <path d="M12 2L2 22h4.5l2-4.5h7l2 4.5H22L12 2zm0 6l2.5 5.5h-5L12 8z" />
               </svg>
-              <div style="font-size:10px; font-weight:800; letter-spacing:2px; color:var(--text-muted); margin-top:6px;">ALPHA-X ATHLETIC SYSTEMS</div>
+              <div
+                style="font-size:10px; font-weight:800; letter-spacing:2px; color:var(--text-muted); margin-top:6px;">
+                ALPHA-X ATHLETIC SYSTEMS</div>
             </div>
           </div>
         </div>
@@ -2293,9 +2483,11 @@
           <span class="manifesto-badge" style="margin-bottom:4px;">RENDERED PRESENTATION BOARD SPECIMEN</span>
           <h3 style="font-size:18px; font-weight:800;">Ultra-High Definition Overview</h3>
         </div>
-        <span style="font-size:12px; color:var(--gold-primary); font-weight:600;">Figma / Dribbble Showcase Master</span>
+        <span style="font-size:12px; color:var(--gold-primary); font-weight:600;">Figma / Dribbble Showcase
+          Master</span>
       </div>
-      <img src="alpha_x_design_board_preview.jpg" alt="ALPHA X GYM Ultra-Premium Design Board" onerror="this.style.display='none'">
+      <img src="alpha_x_design_board_preview.jpg" alt="ALPHA X GYM Ultra-Premium Design Board"
+        onerror="this.style.display='none'">
     </div>
   </section>
 
@@ -2309,7 +2501,8 @@
         <h2 style="font-size:22px; font-weight:800; margin-top:4px;">10. Design System & UI Elements Specification</h2>
       </div>
       <div style="font-size:12px; color:var(--text-muted);">
-        Typeface: <strong style="color:#FFF;">Poppins</strong> • Figures: <strong style="color:var(--gold-light);">Tabular Numeric</strong>
+        Typeface: <strong style="color:#FFF;">Poppins</strong> • Figures: <strong
+          style="color:var(--gold-light);">Tabular Numeric</strong>
       </div>
     </div>
 
@@ -2334,7 +2527,9 @@
             <span class="swatch-hex">#1E1E1E</span>
           </div>
           <div class="color-swatch-item">
-            <div class="swatch-circle" style="background:linear-gradient(135deg, #F5E6B3, #D4AF37, #AA820A); box-shadow:0 0 14px rgba(212,175,55,0.4);"></div>
+            <div class="swatch-circle"
+              style="background:linear-gradient(135deg, #F5E6B3, #D4AF37, #AA820A); box-shadow:0 0 14px rgba(212,175,55,0.4);">
+            </div>
             <span class="swatch-label">Gold Grad</span>
             <span class="swatch-hex">#D4AF37</span>
           </div>
@@ -2374,7 +2569,8 @@
       <!-- 2. Typography Specimen -->
       <div>
         <h4 class="micro-label" style="font-size:11px; margin-bottom:12px;">TYPOGRAPHY SPECIMEN (POPPINS)</h4>
-        <div style="background:var(--surface-slate); border-radius:16px; padding:18px; border:1px solid var(--border-thin);">
+        <div
+          style="background:var(--surface-slate); border-radius:16px; padding:18px; border:1px solid var(--border-thin);">
           <div style="font-size:28px; font-weight:800; line-height:1.2; margin-bottom:4px;">
             Aa Bb Cc 123
           </div>
@@ -2383,9 +2579,12 @@
           </div>
           <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
             <div><strong style="color:var(--gold-light);">Headline Bold (800):</strong> Train Strong. Move Better.</div>
-            <div><strong style="color:var(--text-primary);">Subhead SemiBold (600):</strong> Upper Body (Push) • 45 min</div>
-            <div><strong style="color:var(--text-secondary);">Body Regular (400):</strong> High performance athletic tracking.</div>
-            <div style="letter-spacing:0.8px; font-size:10px; color:var(--gold-primary); text-transform:uppercase; font-weight:700;">
+            <div><strong style="color:var(--text-primary);">Subhead SemiBold (600):</strong> Upper Body (Push) • 45 min
+            </div>
+            <div><strong style="color:var(--text-secondary);">Body Regular (400):</strong> High performance athletic
+              tracking.</div>
+            <div
+              style="letter-spacing:0.8px; font-size:10px; color:var(--gold-primary); text-transform:uppercase; font-weight:700;">
               MICRO-LABEL (+8% TRACKING): DISCIPLINE BUILDS RESULTS
             </div>
           </div>
@@ -2403,7 +2602,9 @@
           <div style="display:flex; gap:8px; align-items:center;">
             <span class="badge badge-active"><span class="live-dot"></span> Active Client</span>
             <span class="badge badge-gold">Coach Prescribed</span>
-            <span class="badge" style="background:var(--color-warning-bg); color:var(--color-warning); border:1px solid rgba(245,158,11,0.3);">Check-In Due</span>
+            <span class="badge"
+              style="background:var(--color-warning-bg); color:var(--color-warning); border:1px solid rgba(245,158,11,0.3);">Check-In
+              Due</span>
           </div>
           <div class="segmented-switch" style="max-width:240px;">
             <div class="segmented-btn active">Option A</div>
@@ -2449,4 +2650,5 @@ font-family: 'Poppins', sans-serif;`;
     }
   </script>
 </body>
+
 </html>

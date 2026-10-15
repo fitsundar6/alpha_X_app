@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,7 +34,7 @@ import 'features/progress/presentation/screens/client_weekly_progress_screen.dar
 import 'features/progress/presentation/screens/admin_weekly_progress_screen.dart';
 import 'features/notifications/data/repositories/notification_repository.dart';
 import 'core/services/app_auto_refresh_service.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'core/services/push_notification_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'features/workout_summary/screens/workout_summary_demo_screen.dart';
 
@@ -49,18 +49,8 @@ void main() async {
     GoogleFonts.config.allowRuntimeFetching = false;
   }
 
-  // OneSignal Push Notifications — Admin-triggered, client-received
-  // Only initialize on native mobile platforms (not web, Windows, macOS, Linux)
-  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-    OneSignal.initialize('56c1791b-aa5e-4042-8fba-e370433b8055');
-    // Request permission (shows iOS/Android system permission dialog)
-    OneSignal.Notifications.requestPermission(true);
-
-    // Auto-refresh immediately when an admin push notification is received
-    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-      AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
-    });
-  }
+  // OneSignal Push Notifications — Centralized Lifecycle & Token Sync
+  unawaited(PushNotificationService.instance.initialize());
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
   debugPrint('====================================================');

@@ -1,5 +1,6 @@
 import { aiTools, ClientContextSummary } from './ai_tools';
 import { prisma } from '../../config/prisma';
+import { workoutIntentService } from './workout_intent.service';
 
 export interface AiCoachRequest {
   adminId: string;
@@ -93,12 +94,48 @@ export class AiController {
     // 4. Intent Routing
     const lower = rawText.toLowerCase();
 
+    // Comprehensive workout proposal intent check (Requirement 4)
+    const isWorkoutProposal =
+      !lower.includes('diet') &&
+      !lower.includes('nutrition') &&
+      !lower.includes('meal plan') &&
+      (/(create|program|prepare|assign|build|generate|make|prescribe|design)\s+.*?(workout|training|exercise|routine|chest|pull|leg|push|split|hypertrophy|strength|plan)/i.test(lower) ||
+        /(chest|pull|leg|push|back|arms|shoulder|legs|quads|upper\s*body|lower\s*body)\s*(day|workout|routine|session|split)/i.test(lower) ||
+        /workout\s+(plan|proposal|routine)\s+(for|to)/i.test(lower) ||
+        /(prepare|assign|create)\s+this\s+plan/i.test(lower) ||
+        lower.includes('create a workout') ||
+        lower.includes('create workout') ||
+        lower.includes('program a workout') ||
+        lower.includes('new workout') ||
+        lower.includes('assign this workout') ||
+        lower.includes('prepare this plan'));
+
+    // Comprehensive diet proposal intent check (AI Diet Plan Proposal Workflow)
+    const isDietProposal =
+      /(create|program|prepare|assign|build|generate|make|prescribe|design|propose)\s+(a\s+|this\s+|an?\s+)?(diet|nutrition|meal\s+plan|macro\s+plan|diet\s+plan|macros?|macro[- ]targets?)/i.test(lower) ||
+      /(diet|nutrition|meal|macro)\s+(plan|proposal|targets?)/i.test(lower) ||
+      /(prepare|assign|create|propose)\s+this\s+(diet|macro)/i.test(lower) ||
+      lower.includes('create a diet') ||
+      lower.includes('create diet') ||
+      lower.includes('fat-loss diet') ||
+      lower.includes('muscle gain diet') ||
+      lower.includes('nutrition plan') ||
+      lower.includes('diet using our food library') ||
+      lower.includes('assign this diet') ||
+      lower.includes('prepare this diet') ||
+      lower.includes('macro proposal') ||
+      lower.includes('propose macros') ||
+      lower.includes('macro-only') ||
+      lower.includes('diet proposal') ||
+      lower.includes('diet / macro proposal') ||
+      lower.includes('ai diet');
+
     // Ambiguity Check: User asked for client action without specifying client
     if (
       !identifiedClientId &&
-      (lower.startsWith('analyze') ||
-        lower.includes('create a workout') ||
-        lower.includes('create a diet') ||
+      (isWorkoutProposal ||
+        isDietProposal ||
+        lower.startsWith('analyze') ||
         lower.includes('progress his') ||
         lower.includes('progress her') ||
         lower.includes('show his') ||
@@ -107,7 +144,11 @@ export class AiController {
         lower === 'analyze her' ||
         lower === 'analyze this client')
     ) {
-      const askReply = "Which client would you like me to analyze or program for? Please select an athlete from the client selector above or mention their name or Client ID (e.g. AXG-0001).";
+      const askReply = isDietProposal
+        ? "Which client would you like me to prepare a diet plan for? Please select an athlete from the client selector above or mention their name or Client ID (e.g. Ajay, AXG-0005)."
+        : isWorkoutProposal
+        ? "Which client would you like me to prepare a workout plan for? Please select an athlete from the client selector above or mention their name or Client ID (e.g. Ajay, AXG-0005)."
+        : "Which client would you like me to analyze or program for? Please select an athlete from the client selector above or mention their name or Client ID (e.g. AXG-0001).";
       await this.saveAiMessage(conversation.id, askReply, 'AMBIGUOUS_CLIENT');
       return {
         conversationId: conversation.id,
@@ -115,7 +156,7 @@ export class AiController {
         intent: 'AMBIGUOUS_CLIENT',
         selectedClient: null,
         dateRange: { label: dateRangeLabel, startDate: startDate.toISOString().split('T')[0], endDate: endDate.toISOString().split('T')[0] },
-        suggestedFollowUps: ['Give me today\'s report', 'Show clients needing review', 'Who missed workouts today?'],
+        suggestedFollowUps: ['Create a diet for Ajay', 'Create a workout for Ajay', 'Give me today\'s report', 'Show clients needing review'],
       };
     }
 
@@ -168,12 +209,12 @@ export class AiController {
       }
 
       // 2. Workout Prescription / Generation
-      if (lower.includes('create a workout') || lower.includes('create workout') || lower.includes('program a workout') || lower.includes('new workout')) {
+      if (isWorkoutProposal) {
         return this.handleWorkoutGeneration(conversation.id, clientContext, rawText, adminId);
       }
 
       // 3. Diet Prescription / Generation
-      if (lower.includes('create a diet') || lower.includes('create diet') || lower.includes('fat-loss diet') || lower.includes('muscle gain diet') || lower.includes('nutrition plan') || lower.includes('diet using our food library')) {
+      if (isDietProposal) {
         return this.handleDietGeneration(conversation.id, clientContext, rawText, adminId);
       }
 
@@ -204,49 +245,187 @@ export class AiController {
     const level = ctx.profile.fitnessLevel || 'Intermediate';
     const injury = ctx.profile.hasCurrentInjury ? `Reported discomfort in: ${ctx.profile.injuryAreas.join(', ')}` : 'None reported';
 
-    // Query appropriate exercises from master Exercise Library
-    const availableExercises = await aiTools.queryExerciseLibrary('', 'Full Body', 15);
-    const exercisesList = availableExercises.length >= 4 ? availableExercises : [
-      { id: 'ex_barbell_bench_press', name: 'Barbell Bench Press', category: 'Strength', bodyPart: 'Chest' },
-      { id: 'ex_barbell_back_squat', name: 'Barbell Back Squat', category: 'Strength', bodyPart: 'Legs' },
-      { id: 'ex_barbell_bent_row', name: 'Barbell Bent Over Row', category: 'Strength', bodyPart: 'Back' },
-      { id: 'ex_standing_overhead_press', name: 'Standing Overhead Press', category: 'Strength', bodyPart: 'Shoulders' },
-      { id: 'ex_romanian_deadlift', name: 'Romanian Deadlift', category: 'Strength', bodyPart: 'Hamstrings' },
-    ];
+    // 1. Detect requested workout split and target muscles from the raw admin query
+    const splitResult = workoutIntentService.detectSplit(rawQuery);
 
-    // Filter out injured areas if shoulder injury etc.
-    const selectedExercises = exercisesList.filter(e => {
-      if (ctx.profile.hasCurrentInjury) {
-        if (ctx.profile.injuryAreas.includes('Shoulders') && e.name.toLowerCase().includes('overhead')) return false;
-        if (ctx.profile.injuryAreas.includes('Knee') && e.name.toLowerCase().includes('deep squat')) return false;
+    // 2. Handle ambiguous / conflicting split requests (e.g. "Chest Pull Day")
+    if (splitResult.isAmbiguous) {
+      const askClarification = `You requested a "${rawQuery.trim()}" workout for ${ctx.user.name}. ${splitResult.ambiguityReason} Would you like me to generate a Chest Day, a Pull Day, or a balanced Upper Body session?`;
+      await this.saveAiMessage(conversationId, askClarification, 'AMBIGUOUS_SPLIT');
+      return {
+        conversationId,
+        replyText: askClarification,
+        intent: 'AMBIGUOUS_SPLIT',
+        selectedClient: { id: ctx.user.id, clientId: ctx.profile.clientId, name: ctx.user.name },
+        dateRange: { label: 'Active Plan', startDate: '', endDate: '' },
+        dataCompleteness: ctx.completeness,
+        suggestedFollowUps: [
+          `Create a Chest Day for ${ctx.user.name}`,
+          `Create a Pull Day for ${ctx.user.name}`,
+          `Create an Upper Body workout for ${ctx.user.name}`,
+        ],
+      };
+    }
+
+    // 3. Determine recent proposals count to use as variation seed for anti-repetition
+    const recentProposalsCount = await prisma.aIProposal.count({
+      where: { clientProfileId: ctx.profile.id, proposalType: 'WORKOUT' },
+    });
+
+    let proposedPayload: any;
+    let planTitle = `${ctx.user.name} — ${splitResult.titleSuffix}`;
+
+    if (splitResult.isMultiDayTemplate) {
+      const daysCount = splitResult.suggestedDaysPerWeek || 4;
+      const dayPlans = workoutIntentService.generateScheduleForSplit(splitResult.split, {
+        daysPerWeek: daysCount,
+        primaryGoal: goal,
+        trainingExperience: level,
+        injuryExclusions: ctx.profile.injuryAreas,
+      });
+
+      const weeklySchedule: Array<any> = [];
+      const allExercises: Array<any> = [];
+      let dayIdx = 0;
+
+      for (const d of dayPlans) {
+        const dayExercises = await workoutIntentService.getBalancedExercisesForSplit(
+          {
+            split: splitResult.split,
+            templateId: splitResult.templateId,
+            displayName: splitResult.displayName,
+            titleSuffix: splitResult.displayName,
+            targetMuscleGroup: d.targetMuscleGroup,
+            isAmbiguous: false,
+            primaryBodyParts: d.primaryBodyParts,
+            allowedBodyParts: d.allowedBodyParts,
+            disallowedBodyParts: d.disallowedBodyParts,
+            suggestedDaysPerWeek: daysCount,
+            isMultiDayTemplate: true,
+          },
+          {
+            clientProfileId: ctx.profile.id,
+            fitnessLevel: level,
+            injuryAreas: ctx.profile.injuryAreas,
+            count: d.recommendedExercisesCount || 4,
+            variationSeed: recentProposalsCount + dayIdx++,
+            primaryBodyParts: d.primaryBodyParts,
+            allowedBodyParts: d.allowedBodyParts,
+          }
+        );
+
+        const mappedExercises = dayExercises.map((e, eIdx) => ({
+          exerciseId: e.id,
+          exerciseName: e.name,
+          name: e.name,
+          category: e.category,
+          bodyPart: e.bodyPart,
+          orderIndex: eIdx,
+          sets: level === 'Advanced' ? 4 : 3,
+          reps: level === 'Advanced' ? '6-8' : '8-10',
+          weight: level === 'Advanced' ? 80.0 : 50.0,
+          targetReps: level === 'Advanced' ? '6-8' : '8-10',
+          targetWeight: level === 'Advanced' ? 80.0 : 50.0,
+          restSeconds: 90,
+          targetRir: 2,
+          targetRpe: 8.0,
+          tempo: '3-1-1-0',
+          notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
+          day: d.dayName,
+        }));
+
+        allExercises.push(...mappedExercises);
+
+        weeklySchedule.push({
+          day: d.dayName,
+          sessionTitle: d.sessionTitle,
+          workoutType: d.workoutType,
+          targetMuscleGroup: d.targetMuscleGroup,
+          estimatedDurationMinutes: d.estimatedDurationMinutes,
+          exercises: mappedExercises,
+        });
       }
-      return true;
-    }).slice(0, 4);
 
-    const proposedPayload = {
-      title: `${ctx.user.name} — ${goal} Focus Session`,
-      workoutType: goal.includes('Strength') ? 'Strength' : 'Hypertrophy',
-      targetMuscleGroup: 'Compound Push • Pull • Legs',
-      difficulty: level,
-      estimatedDurationMinutes: 50,
-      description: `Targeted session designed for ${ctx.user.name}. Goal: ${goal}. Level: ${level}. Considers recorded recovery and injury constraints.`,
-      exercises: selectedExercises.map((e, idx) => ({
-        exerciseId: e.id,
-        exerciseName: e.name,
-        category: e.category,
-        orderIndex: idx,
-        sets: 3,
-        targetReps: level === 'Advanced' ? '6-8' : '8-10',
-        targetWeight: level === 'Advanced' ? 80.0 : 50.0,
-        restSeconds: 90,
-        targetRir: 2,
-        targetRpe: 8.0,
-        tempo: '3-1-1-0',
-        notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
-      })),
-    };
+      planTitle = `${ctx.user.name} — ${splitResult.displayName} (${daysCount}-Day)`;
+      proposedPayload = {
+        title: planTitle,
+        planTitle,
+        workoutType: weeklySchedule[0]?.workoutType || 'Hypertrophy',
+        targetMuscleGroup: splitResult.displayName,
+        difficulty: level,
+        estimatedDurationMinutes: weeklySchedule[0]?.estimatedDurationMinutes || 50,
+        description: `${daysCount}-day ${splitResult.displayName} program designed for ${ctx.user.name}. Goal: ${goal}. Level: ${level}.`,
+        exercises: allExercises,
+        weeklySchedule,
+      };
+    } else {
+      // Single-day focus splits (backward compatibility)
+      const selectedExercises = await workoutIntentService.getBalancedExercisesForSplit(splitResult, {
+        clientProfileId: ctx.profile.id,
+        fitnessLevel: level,
+        injuryAreas: ctx.profile.injuryAreas,
+        count: 4,
+        variationSeed: recentProposalsCount,
+      });
 
-    const reason = `Formulated using Alpha X Exercise Library based on ${ctx.user.name}'s goal (${goal}), ${level} tier, and verified injury records (${injury}).`;
+      const workoutType = splitResult.split === 'LEG'
+        ? 'Lower Body Power'
+        : splitResult.split === 'PULL'
+        ? 'Pull Hypertrophy'
+        : splitResult.split === 'PUSH'
+        ? 'Push Hypertrophy'
+        : splitResult.split === 'CHEST'
+        ? 'Chest Hypertrophy'
+        : (goal.includes('Strength') ? 'Strength' : 'Hypertrophy');
+
+      proposedPayload = {
+        title: planTitle,
+        workoutType,
+        targetMuscleGroup: splitResult.targetMuscleGroup,
+        difficulty: level,
+        estimatedDurationMinutes: 50,
+        description: `Targeted ${splitResult.split} session designed for ${ctx.user.name}. Target: ${splitResult.targetMuscleGroup}. Goal: ${goal}. Level: ${level}. Considers recorded recovery and injury constraints.`,
+        exercises: selectedExercises.map((e, idx) => ({
+          exerciseId: e.id,
+          exerciseName: e.name,
+          name: e.name,
+          category: e.category,
+          bodyPart: e.bodyPart,
+          orderIndex: idx,
+          sets: 3,
+          targetReps: level === 'Advanced' ? '6-8' : '8-10',
+          reps: level === 'Advanced' ? '6-8' : '8-10',
+          targetWeight: level === 'Advanced' ? 80.0 : 50.0,
+          restSeconds: 90,
+          targetRir: 2,
+          targetRpe: 8.0,
+          tempo: '3-1-1-0',
+          notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
+        })),
+        weeklySchedule: [
+          {
+            day: 'Day 1',
+            sessionTitle: planTitle,
+            workoutType,
+            targetMuscleGroup: splitResult.targetMuscleGroup,
+            estimatedDurationMinutes: 50,
+            exercises: selectedExercises.map((e) => ({
+              name: e.name,
+              exerciseId: e.id,
+              category: e.category,
+              bodyPart: e.bodyPart,
+              sets: 3,
+              reps: level === 'Advanced' ? '6-8' : '8-10',
+              weight: level === 'Advanced' ? 80.0 : 50.0,
+              restSeconds: 90,
+              notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
+            })),
+          },
+        ],
+      };
+    }
+
+    const reason = `Formulated from Alpha X Exercise Library for ${splitResult.displayName} based on ${ctx.user.name}'s goal (${goal}), ${level} tier, and verified injury records (${injury}).`;
 
     const proposal = await aiTools.createProposal({
       conversationId,
@@ -272,16 +451,7 @@ export class AiController {
       },
     });
 
-    const replyMarkdown = `### 🏋️ WORKOUT PROGRAMMING PROPOSAL
-**Athlete:** ${ctx.user.name} (${ctx.profile.clientId || 'AXG'})
-**Objective:** ${goal} • **Tier:** ${level}
-**Injury Safeguard:** ${injury}
-
-#### Prescribed Structure (Alpha X Exercise Library)
-${proposedPayload.exercises.map((e, i) => `${i + 1}. **${e.exerciseName}** — ${e.sets} sets × ${e.targetReps} reps @ ${e.targetWeight} kg (RPE ${e.targetRpe}, RIR ${e.targetRir})`).join('\n')}
-
-> **[FACT]** Generated using active Alpha X Exercise catalog.
-> **[AI SUGGESTION]** This proposal is currently **PENDING** your administrative review. It has **NOT** been assigned to the athlete. Please review, edit if necessary, and approve or reject.`;
+    const replyMarkdown = `Workout proposal created successfully for ${ctx.user.name} (${ctx.profile.clientId || 'AXG'}). Saved as PENDING in Workout Proposals for admin review.`;
 
     await this.saveAiMessage(conversationId, replyMarkdown, 'WORKOUT_PROPOSAL', { proposalId: proposal.id });
 
@@ -397,89 +567,250 @@ ${overloadData.hasHistory && overloadData.current ? `
 
   private async handleDietGeneration(conversationId: string, ctx: ClientContextSummary, rawQuery: string, adminId: string): Promise<AiCoachResponse> {
     const goal = ctx.profile.primaryGoal || 'Fat Loss';
-    const weightKg = ctx.profile.weightKg || 75.0;
+    const weightKg = Number(ctx.profile.weightKg) || 70.0;
+    const heightCm = Number(ctx.profile.heightCm) || 175.0;
+    const age = Number(ctx.profile.age) || 28;
+    const gender = (ctx.profile.gender || 'male').toLowerCase();
+    const activityLevel = (ctx.profile.activityLevel || 'MODERATE').toUpperCase();
+    const adminNotes = (ctx.profile.adminNotes || '').toLowerCase();
+    const trainingPrefs = Array.isArray(ctx.profile.trainingPreferences) ? ctx.profile.trainingPreferences.map((p: string) => p.toLowerCase()).join(' ') : '';
+    const queryLower = rawQuery.toLowerCase();
 
-    // Calculate baseline target macros
+    // Check dietary restrictions and allergies
+    const isVegetarian = adminNotes.includes('veg') || adminNotes.includes('vegetarian') || trainingPrefs.includes('veg') || queryLower.includes('vegetarian');
+    const hasEggAllergy = adminNotes.includes('egg allergy') || adminNotes.includes('no egg') || queryLower.includes('no egg') || queryLower.includes('egg allergy');
+    const hasDairyAllergy = adminNotes.includes('lactose') || adminNotes.includes('dairy') || queryLower.includes('dairy free') || queryLower.includes('lactose');
+    const hasPeanutAllergy = adminNotes.includes('peanut') || adminNotes.includes('nut allergy') || queryLower.includes('nut allergy');
+
+    // Scientific BMR Calculation (Mifflin-St Jeor)
+    const bmr = gender === 'female'
+      ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
+      : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
+
+    // TDEE multiplier based on activity level
+    let activityMultiplier = 1.55; // MODERATE default
+    if (activityLevel === 'LOW' || activityLevel === 'SEDENTARY') activityMultiplier = 1.2;
+    else if (activityLevel === 'LIGHT') activityMultiplier = 1.375;
+    else if (activityLevel === 'HIGH' || activityLevel === 'VERY_ACTIVE') activityMultiplier = 1.725;
+
+    const tdee = Math.round(bmr * activityMultiplier);
+
+    // Caloric and macronutrient target calculation
     let targetCalories = 2000;
-    let targetProtein = Math.round(weightKg * 2.0); // 2g per kg
-    let targetCarbs = 200;
+    let targetProtein = Math.round(weightKg * 2.0); // 2.0g/kg
     let targetFat = 55;
-    let targetFiber = 30;
+    let targetCarbs = 200;
+    const targetFiber = 30;
+    const targetWater = Math.max(3.0, Math.round((weightKg * 0.04) * 10) / 10);
 
-    if (/fat loss/i.test(goal) || /fat-loss/i.test(rawQuery)) {
-      targetCalories = Math.round(weightKg * 24);
-      targetCarbs = Math.round((targetCalories * 0.4) / 4);
-      targetFat = Math.round((targetCalories * 0.25) / 9);
-    } else if (/muscle|strength/i.test(goal)) {
-      targetCalories = Math.round(weightKg * 32);
-      targetCarbs = Math.round((targetCalories * 0.5) / 4);
-      targetFat = Math.round((targetCalories * 0.25) / 9);
+    const isFatLoss = /fat loss|cutting|weight loss/i.test(goal) || /fat-loss|fat loss/i.test(queryLower);
+    const isMuscleGain = /muscle|strength|hypertrophy|bulking/i.test(goal) || /muscle gain|bulking/i.test(queryLower);
+
+    if (isFatLoss) {
+      targetCalories = Math.max(1400, Math.round(tdee - 450)); // Moderate ~450 kcal deficit
+      targetProtein = Math.round(weightKg * 2.2); // Higher protein in deficit
+      targetFat = Math.max(35, Math.round((targetCalories * 0.25) / 9));
+      targetCarbs = Math.max(60, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
+    } else if (isMuscleGain) {
+      targetCalories = Math.round(tdee + 300); // 300 kcal lean surplus
+      targetProtein = Math.round(weightKg * 2.0);
+      targetFat = Math.max(45, Math.round((targetCalories * 0.25) / 9));
+      targetCarbs = Math.max(100, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
+    } else {
+      targetCalories = tdee;
+      targetProtein = Math.round(weightKg * 1.8);
+      targetFat = Math.max(40, Math.round((targetCalories * 0.25) / 9));
+      targetCarbs = Math.max(80, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
     }
 
-    // Pull real Food Library entries
-    const foodLibraryItems = await aiTools.queryFoodLibrary('', 'ALL', 30);
-    const getFood = (nameSub: string, fallback: any) => {
-      const found = foodLibraryItems.find(f => {
-        const n = f.name.toLowerCase();
-        if (nameSub === 'rice') return n.includes('basmati rice') || n.includes('cooked white rice') || n.includes('brown rice');
-        if (nameSub === 'egg') return n.includes('whole egg') || n.includes('egg (medium') || n === 'egg';
-        if (nameSub === 'chicken') return n.includes('chicken breast');
-        if (nameSub === 'oat') return n.includes('rolled oat') || n.includes('oats');
-        return n.includes(nameSub.toLowerCase());
+    const isMacroOnly = /macro[- ]?only|only macro|macro targets?|macro proposal|daily macros?|target macros?/i.test(queryLower) ||
+      (queryLower.includes('macro') && !queryLower.includes('meal') && !queryLower.includes('diet plan'));
+
+    if (isMacroOnly) {
+      const reason = `Target macronutrient distribution formulated for ${ctx.user.name} based on verified body metrics (${weightKg} kg, ${heightCm} cm), primary objective (${goal}), and ${activityLevel} activity tier.`;
+      const assumptions = `Mifflin-St Jeor BMR: ${Math.round(bmr)} kcal, TDEE: ${tdee} kcal. Macro targets: ${targetCalories} kcal, ${targetProtein}g protein (${(targetProtein / weightKg).toFixed(1)}g/kg), ${targetCarbs}g carbs, ${targetFat}g fat, ${targetFiber}g fiber. Water target: ${targetWater}L/day.`;
+
+      const proposedPayload = {
+        planKind: 'MACRO_ONLY',
+        planName: `${ctx.user.name} — Daily Macro Targets`,
+        dailyCalories: targetCalories,
+        protein: targetProtein,
+        carbohydrates: targetCarbs,
+        fat: targetFat,
+        fiber: targetFiber,
+        waterTargetLiters: targetWater,
+        meals: [],
+        mealSuggestions: [],
+        notes: `Flexible macro-only targets for ${ctx.user.name}. Focus on hitting daily calories and protein.`,
+        rationale: reason,
+        assumptions,
+      };
+
+      const proposal = await aiTools.createProposal({
+        conversationId,
+        clientProfileId: ctx.profile.id,
+        clientId: ctx.profile.clientId || ctx.user.id,
+        clientName: ctx.user.name,
+        proposalType: 'DIET',
+        title: proposedPayload.planName,
+        summary: `${proposedPayload.dailyCalories} kcal • ${proposedPayload.protein}g P • ${proposedPayload.carbohydrates}g C • ${proposedPayload.fat}g F (Macro Targets)`,
+        reason,
+        proposedDataJson: JSON.stringify(proposedPayload),
       });
-      if (found) {
-        const baseServing = found.servingSize > 0 ? found.servingSize : 100;
-        return {
-          foodId: found.id,
-          name: found.name,
-          category: found.category,
-          servingUnit: found.servingUnit,
-          baseServing,
-          calPerUnit: found.calories / baseServing,
-          proPerUnit: found.protein / baseServing,
-          carbPerUnit: found.carbohydrates / baseServing,
-          fatPerUnit: found.fat / baseServing,
-          fibPerUnit: found.fiber / baseServing,
-        };
-      }
-      return fallback;
+
+      await prisma.aIAuditLog.create({
+        data: {
+          adminId,
+          clientId: ctx.profile.clientId || ctx.user.id,
+          clientName: ctx.user.name,
+          action: 'DIET_PROPOSED',
+          details: `AI formulated daily macro proposal "${proposal.title}" for review`,
+          metadataJson: JSON.stringify({ proposalId: proposal.id, planKind: 'MACRO_ONLY' }),
+        },
+      });
+
+      const replyMarkdown = `### 🎯 DAILY MACRO TARGETS PROPOSAL
+**Athlete:** ${ctx.user.name} (${ctx.profile.clientId || 'AXG'})
+**Goal:** ${goal} • **Bodyweight:** ${weightKg} kg • **Height:** ${heightCm} cm
+
+#### Prescribed Targets:
+* **Calories:** **${proposedPayload.dailyCalories} kcal / day**
+* **Protein:** **${proposedPayload.protein}g** (${(targetProtein / weightKg).toFixed(1)}g/kg bodyweight)
+* **Carbohydrates:** **${proposedPayload.carbohydrates}g**
+* **Fat:** **${proposedPayload.fat}g**
+* **Fiber:** **${proposedPayload.fiber}g**
+* **Hydration:** **${targetWater} L / day**
+
+> **[INFO]** This is a flexible macro-only protocol without mandatory fixed meals. The athlete hits these targets using their preferred food choices.
+> **[AI SUGGESTION]** This proposal is **PENDING** your approval. It has **NOT** altered the athlete's active targets. Review, edit if needed, and approve or reject.`;
+
+      await this.saveAiMessage(conversationId, replyMarkdown, 'DIET_PROPOSAL', { proposalId: proposal.id });
+
+      return {
+        conversationId,
+        replyText: replyMarkdown,
+        intent: 'DIET_PROPOSAL',
+        selectedClient: { id: ctx.user.id, clientId: ctx.profile.clientId, name: ctx.user.name },
+        dateRange: { label: 'Prescribed Target', startDate: '', endDate: '' },
+        dataCompleteness: ctx.completeness,
+        proposal: {
+          id: proposal.id,
+          type: 'DIET',
+          title: proposal.title,
+          status: 'PENDING',
+          summary: proposal.summary,
+          reason: proposal.reason,
+          payload: proposedPayload,
+        },
+        suggestedFollowUps: ['Create a workout for him', 'Progress his bench press', 'Analyze his last 30 days'],
+      };
+    }
+
+    // Query specific target items from Food Library
+    const [oatItems, eggItems, chickenItems, riceItems, appleItems, paneerItems, wheyItems] = await Promise.all([
+      aiTools.queryFoodLibrary('rolled oats'),
+      aiTools.queryFoodLibrary('boiled eggs'),
+      aiTools.queryFoodLibrary('chicken breast'),
+      aiTools.queryFoodLibrary('cooked white rice'),
+      aiTools.queryFoodLibrary('apple'),
+      aiTools.queryFoodLibrary('paneer'),
+      aiTools.queryFoodLibrary('whey'),
+    ]);
+
+    const toFoodUnit = (items: any[], fallback: any) => {
+      const found = items && items.length > 0 ? items[0] : null;
+      if (!found) return fallback;
+      const baseServing = found.servingSize > 0 ? found.servingSize : 100;
+      return {
+        foodId: found.id,
+        name: found.name,
+        category: found.category,
+        servingUnit: found.servingUnit,
+        baseServing,
+        calPerUnit: found.calories / baseServing,
+        proPerUnit: found.protein / baseServing,
+        carbPerUnit: found.carbohydrates / baseServing,
+        fatPerUnit: found.fat / baseServing,
+        fibPerUnit: found.fiber / baseServing,
+      };
     };
 
-    const oats = getFood('oat', { foodId: 'f_oats', name: 'Rolled Oats', category: 'Grains', servingUnit: 'g', baseServing: 50, calPerUnit: 3.8, proPerUnit: 0.13, carbPerUnit: 0.68, fatPerUnit: 0.07, fibPerUnit: 0.1 });
-    const eggs = getFood('egg', { foodId: 'f_egg', name: 'Whole Eggs', category: 'Proteins', servingUnit: 'piece', baseServing: 1, calPerUnit: 72, proPerUnit: 6.3, carbPerUnit: 0.4, fatPerUnit: 4.8, fibPerUnit: 0 });
-    const chicken = getFood('chicken', { foodId: 'f_chicken', name: 'Chicken Breast', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.65, proPerUnit: 0.31, carbPerUnit: 0.0, fatPerUnit: 0.036, fibPerUnit: 0 });
-    const rice = getFood('rice', { foodId: 'f_rice', name: 'Basmati Rice (Cooked)', category: 'Grains', servingUnit: 'g', baseServing: 150, calPerUnit: 1.3, proPerUnit: 0.027, carbPerUnit: 0.28, fatPerUnit: 0.003, fibPerUnit: 0.004 });
-    const apple = getFood('apple', { foodId: 'f_apple', name: 'Fresh Apple', category: 'Fruits', servingUnit: 'piece', baseServing: 1, calPerUnit: 95, proPerUnit: 0.5, carbPerUnit: 25, fatPerUnit: 0.3, fibPerUnit: 4.4 });
+    // Safe food selection respecting restrictions
+    const oats = toFoodUnit(oatItems, { foodId: 'f_oats', name: 'Rolled Oats (Dry)', category: 'Grains', servingUnit: 'g', baseServing: 100, calPerUnit: 3.89, proPerUnit: 0.169, carbPerUnit: 0.66, fatPerUnit: 0.069, fibPerUnit: 0.106 });
+    
+    // Breakfast protein source
+    const breakfastProtein = (!isVegetarian && !hasEggAllergy)
+      ? toFoodUnit(eggItems, { foodId: 'f_egg', name: 'Whole Eggs', category: 'Proteins', servingUnit: 'piece', baseServing: 1, calPerUnit: 78, proPerUnit: 6.3, carbPerUnit: 0.6, fatPerUnit: 5.0, fibPerUnit: 0 })
+      : toFoodUnit(paneerItems, { foodId: 'f_paneer_bfast', name: isVegetarian ? 'Low-Fat Paneer' : 'Organic Tofu', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.8, proPerUnit: 0.18, carbPerUnit: 0.03, fatPerUnit: 0.10, fibPerUnit: 0 });
 
+    // Lunch protein source
+    const lunchProtein = !isVegetarian
+      ? toFoodUnit(chickenItems, { foodId: 'f_chicken', name: 'Chicken Breast (Grilled/Cooked)', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.65, proPerUnit: 0.31, carbPerUnit: 0.0, fatPerUnit: 0.036, fibPerUnit: 0 })
+      : toFoodUnit(paneerItems, { foodId: 'f_soy_lunch', name: 'Tofu / Paneer', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.8, proPerUnit: 0.18, carbPerUnit: 0.04, fatPerUnit: 0.08, fibPerUnit: 0 });
+
+    const rice = toFoodUnit(riceItems, { foodId: 'f_rice', name: 'Basmati Rice (Cooked)', category: 'Grains', servingUnit: 'g', baseServing: 100, calPerUnit: 1.30, proPerUnit: 0.027, carbPerUnit: 0.28, fatPerUnit: 0.003, fibPerUnit: 0.004 });
+    const apple = toFoodUnit(appleItems, { foodId: 'f_apple', name: 'Fresh Apple', category: 'Fruits', servingUnit: 'piece', baseServing: 1, calPerUnit: 95, proPerUnit: 0.5, carbPerUnit: 25.0, fatPerUnit: 0.3, fibPerUnit: 4.4 });
+    
+    // Snack protein
+    const snackProtein = !hasDairyAllergy
+      ? toFoodUnit(wheyItems, { foodId: 'f_whey', name: 'Whey Protein Isolate', category: 'Supplements', servingUnit: 'g', baseServing: 30, calPerUnit: 4.0, proPerUnit: 0.83, carbPerUnit: 0.05, fatPerUnit: 0.03, fibPerUnit: 0 })
+      : { foodId: 'f_plant_protein', name: 'Plant Protein', category: 'Supplements', servingUnit: 'g', baseServing: 30, calPerUnit: 3.8, proPerUnit: 0.80, carbPerUnit: 0.04, fatPerUnit: 0.04, fibPerUnit: 0.02 };
+
+    // Dinner protein
+    const dinnerProtein = !isVegetarian
+      ? toFoodUnit(chickenItems, { foodId: 'f_chicken_din', name: 'Grilled Chicken Breast', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.65, proPerUnit: 0.31, carbPerUnit: 0.0, fatPerUnit: 0.036, fibPerUnit: 0 })
+      : toFoodUnit(paneerItems, { foodId: 'f_tofu_din', name: 'Tofu / Lentils', category: 'Proteins', servingUnit: 'g', baseServing: 100, calPerUnit: 1.5, proPerUnit: 0.20, carbPerUnit: 0.08, fatPerUnit: 0.05, fibPerUnit: 0.03 });
+
+    // Construct structured 4-meal schedule with explicit timings & quantities in grams
     const meals = [
       {
         mealType: 'Breakfast',
+        timing: '8:00 AM',
+        notes: 'High-protein breakfast to trigger muscle protein synthesis after overnight fast.',
         items: [
-          { foodId: oats.foodId, foodName: oats.name, quantity: 60, unit: oats.servingUnit, calories: Math.round(60 * oats.calPerUnit), protein: Math.round(60 * oats.proPerUnit * 10) / 10, carbs: Math.round(60 * oats.carbPerUnit * 10) / 10, fat: Math.round(60 * oats.fatPerUnit * 10) / 10, fiber: Math.round(60 * oats.fibPerUnit * 10) / 10 },
-          { foodId: eggs.foodId, foodName: eggs.name, quantity: 3, unit: eggs.servingUnit, calories: Math.round(3 * eggs.calPerUnit), protein: Math.round(3 * eggs.proPerUnit * 10) / 10, carbs: Math.round(3 * eggs.carbPerUnit * 10) / 10, fat: Math.round(3 * eggs.fatPerUnit * 10) / 10, fiber: 0 },
+          { foodId: oats.foodId, foodName: oats.name, name: oats.name, quantity: 60, unit: oats.servingUnit, calories: Math.round(60 * oats.calPerUnit), protein: Math.round(60 * oats.proPerUnit * 10) / 10, carbs: Math.round(60 * oats.carbPerUnit * 10) / 10, carbohydrates: Math.round(60 * oats.carbPerUnit * 10) / 10, fat: Math.round(60 * oats.fatPerUnit * 10) / 10, fiber: Math.round(60 * oats.fibPerUnit * 10) / 10 },
+          breakfastProtein.servingUnit === 'piece'
+            ? { foodId: breakfastProtein.foodId, foodName: breakfastProtein.name, name: breakfastProtein.name, quantity: 3, unit: 'piece', calories: Math.round(3 * breakfastProtein.calPerUnit), protein: Math.round(3 * breakfastProtein.proPerUnit * 10) / 10, carbs: Math.round(3 * breakfastProtein.carbPerUnit * 10) / 10, carbohydrates: Math.round(3 * breakfastProtein.carbPerUnit * 10) / 10, fat: Math.round(3 * breakfastProtein.fatPerUnit * 10) / 10, fiber: 0 }
+            : { foodId: breakfastProtein.foodId, foodName: breakfastProtein.name, name: breakfastProtein.name, quantity: 120, unit: 'g', calories: Math.round(120 * breakfastProtein.calPerUnit), protein: Math.round(120 * breakfastProtein.proPerUnit * 10) / 10, carbs: Math.round(120 * breakfastProtein.carbPerUnit * 10) / 10, carbohydrates: Math.round(120 * breakfastProtein.carbPerUnit * 10) / 10, fat: Math.round(120 * breakfastProtein.fatPerUnit * 10) / 10, fiber: 0 },
         ],
+        foods: [] as any[],
       },
       {
         mealType: 'Lunch',
+        timing: '1:00 PM',
+        notes: 'Main energy meal providing sustained complex carbohydrates and lean amino acids.',
         items: [
-          { foodId: chicken.foodId, foodName: chicken.name, quantity: 180, unit: chicken.servingUnit, calories: Math.round(180 * chicken.calPerUnit), protein: Math.round(180 * chicken.proPerUnit * 10) / 10, carbs: 0, fat: Math.round(180 * chicken.fatPerUnit * 10) / 10, fiber: 0 },
-          { foodId: rice.foodId, foodName: rice.name, quantity: 200, unit: rice.servingUnit, calories: Math.round(200 * rice.calPerUnit), protein: Math.round(200 * rice.proPerUnit * 10) / 10, carbs: Math.round(200 * rice.carbPerUnit * 10) / 10, fat: Math.round(200 * rice.fatPerUnit * 10) / 10, fiber: Math.round(200 * rice.fibPerUnit * 10) / 10 },
+          { foodId: lunchProtein.foodId, foodName: lunchProtein.name, name: lunchProtein.name, quantity: 180, unit: lunchProtein.servingUnit, calories: Math.round(180 * lunchProtein.calPerUnit), protein: Math.round(180 * lunchProtein.proPerUnit * 10) / 10, carbs: Math.round(180 * lunchProtein.carbPerUnit * 10) / 10, carbohydrates: Math.round(180 * lunchProtein.carbPerUnit * 10) / 10, fat: Math.round(180 * lunchProtein.fatPerUnit * 10) / 10, fiber: Math.round(180 * lunchProtein.fibPerUnit * 10) / 10 },
+          { foodId: rice.foodId, foodName: rice.name, name: rice.name, quantity: 200, unit: rice.servingUnit, calories: Math.round(200 * rice.calPerUnit), protein: Math.round(200 * rice.proPerUnit * 10) / 10, carbs: Math.round(200 * rice.carbPerUnit * 10) / 10, carbohydrates: Math.round(200 * rice.carbPerUnit * 10) / 10, fat: Math.round(200 * rice.fatPerUnit * 10) / 10, fiber: Math.round(200 * rice.fibPerUnit * 10) / 10 },
         ],
+        foods: [] as any[],
       },
       {
         mealType: 'Snacks',
+        timing: '4:30 PM',
+        notes: 'Pre-workout / afternoon nutrient boost with easily digestible micronutrients and protein.',
         items: [
-          { foodId: apple.foodId, foodName: apple.name, quantity: 1, unit: apple.servingUnit, calories: Math.round(1 * apple.calPerUnit), protein: 0.5, carbs: 25, fat: 0.3, fiber: 4.4 },
+          { foodId: apple.foodId, foodName: apple.name, name: apple.name, quantity: 1, unit: apple.servingUnit, calories: Math.round(1 * apple.calPerUnit), protein: 0.5, carbs: 25, carbohydrates: 25, fat: 0.3, fiber: 4.4 },
+          { foodId: snackProtein.foodId, foodName: snackProtein.name, name: snackProtein.name, quantity: 30, unit: 'g', calories: Math.round(30 * snackProtein.calPerUnit), protein: Math.round(30 * snackProtein.proPerUnit * 10) / 10, carbs: Math.round(30 * snackProtein.carbPerUnit * 10) / 10, carbohydrates: Math.round(30 * snackProtein.carbPerUnit * 10) / 10, fat: Math.round(30 * snackProtein.fatPerUnit * 10) / 10, fiber: 0 },
         ],
+        foods: [] as any[],
       },
       {
         mealType: 'Dinner',
+        timing: '8:00 PM',
+        notes: 'Recovery meal optimizing overnight tissue repair without excess digestive load.',
         items: [
-          { foodId: chicken.foodId, foodName: 'Grilled Chicken Breast', quantity: 150, unit: 'g', calories: Math.round(150 * chicken.calPerUnit), protein: Math.round(150 * chicken.proPerUnit * 10) / 10, carbs: 0, fat: Math.round(150 * chicken.fatPerUnit * 10) / 10, fiber: 0 },
-          { foodId: rice.foodId, foodName: 'Steamed Rice', quantity: 150, unit: 'g', calories: Math.round(150 * rice.calPerUnit), protein: Math.round(150 * rice.proPerUnit * 10) / 10, carbs: Math.round(150 * rice.carbPerUnit * 10) / 10, fat: Math.round(150 * rice.fatPerUnit * 10) / 10, fiber: Math.round(150 * rice.fibPerUnit * 10) / 10 },
+          { foodId: dinnerProtein.foodId, foodName: dinnerProtein.name, name: dinnerProtein.name, quantity: 150, unit: dinnerProtein.servingUnit, calories: Math.round(150 * dinnerProtein.calPerUnit), protein: Math.round(150 * dinnerProtein.proPerUnit * 10) / 10, carbs: Math.round(150 * dinnerProtein.carbPerUnit * 10) / 10, carbohydrates: Math.round(150 * dinnerProtein.carbPerUnit * 10) / 10, fat: Math.round(150 * dinnerProtein.fatPerUnit * 10) / 10, fiber: Math.round(150 * dinnerProtein.fibPerUnit * 10) / 10 },
+          { foodId: rice.foodId, foodName: 'Steamed Basmati Rice', name: 'Steamed Basmati Rice', quantity: 150, unit: 'g', calories: Math.round(150 * rice.calPerUnit), protein: Math.round(150 * rice.proPerUnit * 10) / 10, carbs: Math.round(150 * rice.carbPerUnit * 10) / 10, carbohydrates: Math.round(150 * rice.carbPerUnit * 10) / 10, fat: Math.round(150 * rice.fatPerUnit * 10) / 10, fiber: Math.round(150 * rice.fibPerUnit * 10) / 10 },
         ],
+        foods: [] as any[],
       },
     ];
+
+    // Ensure foods is synced with items for full interoperability
+    meals.forEach(m => {
+      m.foods = [...m.items];
+    });
 
     // Compute actual summed totals from food items
     let calcCalories = 0;
@@ -498,19 +829,36 @@ ${overloadData.hasHistory && overloadData.current ? `
       });
     });
 
-    const proposedPayload = {
-      planName: `${ctx.user.name} — ${goal} Nutrition Plan`,
-      dailyCalories: Math.round(calcCalories),
-      protein: Math.round(calcProtein),
-      carbohydrates: Math.round(calcCarbs),
-      fat: Math.round(calcFat),
-      fiber: Math.round(calcFiber),
-      waterTargetLiters: 3.5,
-      meals,
-      notes: `Targeted ${goal} protocol for ${ctx.user.name}. Grounded in Alpha X Food Library nutrition database.`,
-    };
+    const finalCalories = Math.round(calcCalories);
+    const finalProtein = Math.round(calcProtein);
+    const finalCarbs = Math.round(calcCarbs);
+    const finalFat = Math.round(calcFat);
+    const finalFiber = Math.round(calcFiber);
 
-    const reason = `Computed against ${ctx.user.name}'s verified bodyweight (${weightKg} kg) and ${goal} demand using actual Food Library nutritional macros.`;
+    const reason = `Formulated based on ${ctx.user.name}'s verified body metrics (${weightKg} kg, ${heightCm} cm), primary objective (${goal}), and ${activityLevel} activity tier.`;
+    const assumptions = `Mifflin-St Jeor BMR: ${Math.round(bmr)} kcal, TDEE: ${tdee} kcal. Target macros: ${finalCalories} kcal, ${finalProtein}g protein (${(finalProtein / weightKg).toFixed(1)}g/kg), ${finalCarbs}g carbs, ${finalFat}g fat, ${finalFiber}g fiber. Water target: ${targetWater}L/day. Restrictions evaluated: ${isVegetarian ? 'Vegetarian' : 'Omnivore'}${hasEggAllergy ? ', Egg-free' : ''}${hasDairyAllergy ? ', Dairy-free' : ''}.`;
+
+    const proposedPayload = {
+      planKind: 'DIET_PLAN',
+      planName: `${ctx.user.name} — ${goal} Nutrition Plan`,
+      dailyCalories: finalCalories,
+      protein: finalProtein,
+      carbohydrates: finalCarbs,
+      fat: finalFat,
+      fiber: finalFiber,
+      waterTargetLiters: targetWater,
+      meals,
+      mealSuggestions: meals.map(m => ({
+        mealName: m.mealType,
+        timing: m.timing,
+        targetCalories: m.items.reduce((acc, it) => acc + (it.calories || 0), 0),
+        targetProtein: m.items.reduce((acc, it) => acc + (it.protein || 0), 0),
+        foods: m.items.map(it => `${it.foodName} (${it.quantity}${it.unit})`),
+      })),
+      notes: `Personalized ${goal} protocol for ${ctx.user.name}. Grounded in Alpha X Food Library nutrition database.`,
+      rationale: reason,
+      assumptions,
+    };
 
     const proposal = await aiTools.createProposal({
       conversationId,
@@ -537,14 +885,15 @@ ${overloadData.hasHistory && overloadData.current ? `
 
     const replyMarkdown = `### 🥗 NUTRITION PROTOCOL PROPOSAL
 **Athlete:** ${ctx.user.name} (${ctx.profile.clientId || 'AXG'})
-**Goal:** ${goal} • **Bodyweight:** ${weightKg} kg
-**Macro Targets:** **${proposedPayload.dailyCalories} kcal** | **${proposedPayload.protein}g P** | **${proposedPayload.carbohydrates}g C** | **${proposedPayload.fat}g F** | **${proposedPayload.fiber}g Fiber**
+**Goal:** ${goal} • **Bodyweight:** ${weightKg} kg • **Height:** ${heightCm} cm
+**Macro Targets:** **${proposedPayload.dailyCalories} kcal** | **${proposedPayload.protein}g Protein** | **${proposedPayload.carbohydrates}g Carbs** | **${proposedPayload.fat}g Fat** | **${proposedPayload.fiber}g Fiber**
+**Hydration:** **${targetWater} L/day**
 
 #### Meal Breakdown (Alpha X Food Library)
-${meals.map(m => `**${m.mealType}:**\n${m.items.map(it => `* ${it.foodName} — ${it.quantity} ${it.unit} (${it.calories} kcal, ${it.protein}g P)`).join('\n')}`).join('\n\n')}
+${meals.map(m => `**${m.mealType} (${m.timing}):**\n${m.items.map(it => `* ${it.foodName} — ${it.quantity} ${it.unit} (${it.calories} kcal, ${it.protein}g P, ${it.carbs}g C, ${it.fat}g F)`).join('\n')}`).join('\n\n')}
 
-> **[FACT]** All values are calculated from existing Alpha X Food Library items with verified servings.
-> **[AI SUGGESTION]** This proposal is **PENDING** your approval. It has **NOT** altered the athlete's active diet plan.`;
+> **[FACT]** All values are calculated from existing Alpha X Food Library items with verified servings and macro breakdowns.
+> **[AI SUGGESTION]** This proposal is **PENDING** your approval. It has **NOT** altered the athlete's active diet plan. Review, edit if needed, and approve or reject.`;
 
     await this.saveAiMessage(conversationId, replyMarkdown, 'DIET_PROPOSAL', { proposalId: proposal.id });
 

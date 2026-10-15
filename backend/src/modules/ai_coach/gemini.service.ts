@@ -14,6 +14,7 @@ import {
   toolConfig,
   ToolExecutionContext,
 } from './tools';
+import { prisma } from '../../config/prisma';
 
 export interface GeminiChatOptions {
   message: string;
@@ -44,6 +45,7 @@ export interface GeminiChatResult {
   toolsInvokedCount?: number;
   toolsInvokedNames?: string[];
   verifiedClient?: VerifiedClientContext | null;
+  proposal?: any;
 }
 
 export class GeminiService {
@@ -51,13 +53,13 @@ export class GeminiService {
   public get promptVersion(): string {
     return GeminiService.PROMPT_VERSION;
   }
-  // Primary: gemini-flash-lite-latest (fastest GA workhorse, active free quota, supports tool calling)
-  // Fallbacks: gemini-2.5-flash, gemini-2.5-flash-lite, gemini-3.5-flash, gemini-3.6-flash, gemini-3.8-flash
-  private static readonly DEFAULT_MODEL = 'gemini-flash-lite-latest';
+  // Primary: gemini-3.5-flash (fast GA workhorse, active free quota, supports tool calling)
+  // Fallbacks: gemini-flash-lite-latest, gemini-flash-latest, gemini-3.8-flash
+  private static readonly DEFAULT_MODEL = 'gemini-3.5-flash';
   private static readonly FALLBACK_MODELS = [
+    'gemini-flash-lite-latest',
     'gemini-flash-latest',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
+    'gemini-3.8-flash',
   ];
   private static readonly MAX_RETRIES = 3;
   private static readonly DEFAULT_TIMEOUT_MS = 45000;
@@ -209,12 +211,15 @@ export class GeminiService {
         model: targetModel,
         promptVersion: ALPHA_X_AI_PROMPT_VERSION,
         latencyMs,
-        intent: 'FITNESS_QUERY',
-        suggestedFollowUps: [
-          'What is RIR and how is it useful?',
-          'Explain progressive overload for beginners',
-          'How much protein should an athlete consume daily?',
-        ],
+        intent: response.proposal ? (response.proposal.type === 'DIET' ? 'DIET_PROPOSAL' : 'WORKOUT_PROPOSAL') : 'FITNESS_QUERY',
+        proposal: response.proposal || null,
+        suggestedFollowUps: response.proposal
+          ? ['Review this proposal', 'Edit target exercises', 'Show clients needing review']
+          : [
+              'What is RIR and how is it useful?',
+              'Explain progressive overload for beginners',
+              'How much protein should an athlete consume daily?',
+            ],
         knowledgeRetrievalEnabled: isRAGEnabled,
         retrievedKnowledgeCount: retrievedCount,
         retrievedKnowledgeIds: retrievedDocIds,
@@ -277,10 +282,10 @@ export class GeminiService {
     history?: FormattedHistoryMessage[],
     context?: ToolExecutionContext,
     toolsEnabled: boolean = true
-  ): Promise<{ text: string; toolsInvokedCount: number; toolsInvokedNames: string[] }> {
+  ): Promise<{ text: string; toolsInvokedCount: number; toolsInvokedNames: string[]; proposal?: any }> {
     let timeoutHandle: NodeJS.Timeout;
 
-    const timeoutPromise = new Promise<{ text: string; toolsInvokedCount: number; toolsInvokedNames: string[] }>((_, reject) => {
+    const timeoutPromise = new Promise<{ text: string; toolsInvokedCount: number; toolsInvokedNames: string[]; proposal?: any }>((_, reject) => {
       timeoutHandle = setTimeout(() => {
         reject(new Error(`Gemini API request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
@@ -314,6 +319,8 @@ export class GeminiService {
 
     const toolsInvokedNames: string[] = [];
     let toolCallsExecuted = 0;
+    let executedProposal: any = null;
+    let lastProposalError: string | null = null;
 
     const callPromise = (async () => {
       console.log(`[DEBUG GEMINI] Gemini request: convId="${context?.conversationId || 'none'}", model="${modelName}", prompt="${prompt.substring(0, 100)}"`);
@@ -365,6 +372,35 @@ export class GeminiService {
           // Execute tool securely through ToolExecutor
           const toolResult = await toolExecutor.executeTool(call.name, call.args, context);
           console.log(`[DEBUG GEMINI] Tool result for ${call.name}: success=${toolResult.success}, hasData=${toolResult.data !== undefined}`);
+
+          if (call.name === 'propose_workout_plan' || call.name === 'propose_diet_plan') {
+            if (toolResult.success && toolResult.data?.success !== false) {
+              if (toolResult.data?.proposal) {
+                executedProposal = toolResult.data.proposal;
+              } else if (toolResult.data?.proposalId) {
+                try {
+                  const propDb = await prisma.aIProposal.findUnique({ where: { id: toolResult.data.proposalId } });
+                  if (propDb) {
+                    let proposedData: any = {};
+                    try { proposedData = JSON.parse(propDb.finalDataJson || propDb.proposedDataJson); } catch {}
+                    executedProposal = {
+                      id: propDb.id,
+                      clientId: propDb.clientId || propDb.clientProfileId,
+                      clientName: propDb.clientName,
+                      type: propDb.proposalType,
+                      title: propDb.title,
+                      summary: propDb.summary,
+                      reason: propDb.reason,
+                      status: propDb.status,
+                      payload: proposedData,
+                    };
+                  }
+                } catch (_) {}
+              }
+            } else {
+              lastProposalError = toolResult.error || toolResult.data?.message || 'Proposal validation or database error';
+            }
+          }
 
           functionResponseParts.push({
             functionResponse: {
@@ -428,11 +464,28 @@ export class GeminiService {
         }
       }
 
+      if (executedProposal) {
+        if (executedProposal.type === 'WORKOUT' || toolsInvokedNames.includes('propose_workout_plan')) {
+          finalText = `Workout proposal created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Workout Proposals for admin review.`;
+        } else if (executedProposal.type === 'DIET' || toolsInvokedNames.includes('propose_diet_plan')) {
+          const isMacroOnly = executedProposal.payload?.planKind === 'MACRO_ONLY' || executedProposal.payload?.isMacroOnly;
+          const planLabel = isMacroOnly ? 'Macro-only proposal' : 'Diet plan proposal with structured meals';
+          finalText = `${planLabel} created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Admin Review.`;
+        }
+      } else {
+        if (toolsInvokedNames.includes('propose_workout_plan')) {
+          finalText = `Failed to create workout proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please verify the client identity and retry.`;
+        } else if (toolsInvokedNames.includes('propose_diet_plan')) {
+          finalText = `Failed to create diet proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please address the missing required details (such as meal items and quantities) and retry.`;
+        }
+      }
+
       console.log(`[DEBUG GEMINI] Gemini final response: toolsCount=${toolsInvokedNames.length}, length=${finalText.length}, preview="${finalText.substring(0, 100)}..."`);
       return {
         text: finalText,
         toolsInvokedCount: toolsInvokedNames.length,
         toolsInvokedNames,
+        proposal: executedProposal,
       };
     })();
 

@@ -59,9 +59,21 @@ export class WorkoutService {
     clientIds?: string[];
     individualClientId?: string | null;
     isRecommended?: boolean;
+    scheduledDate?: string | null;
     assignedById: string;
   }): Promise<StoredWorkoutAssignment[]> {
     return workoutRepository.assignSession(params);
+  }
+
+  async unlockSession(adminId: string, params: {
+    recordId?: string | null;
+    sessionId?: string | null;
+    assignmentId?: string | null;
+    clientId: string;
+    scheduledDate?: string | null;
+    reason: string;
+  }) {
+    return workoutRepository.unlockSession(adminId, params);
   }
 
   async unassign(assignmentId: string): Promise<boolean> {

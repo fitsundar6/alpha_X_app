@@ -11,6 +11,10 @@ import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { env } from '../../config/environment';
 import { clientSummaryService } from './client_summary.service';
+import { workoutIntentService } from './workout_intent.service';
+import { proposeWorkoutPlanTool } from './tools/definitions/client/propose_workout_plan';
+import { proposeDietPlanTool } from './tools/definitions/client/propose_diet_plan';
+import { clientDataService } from './tools/definitions/client/client_data.service';
 
 const router = Router();
 
@@ -184,8 +188,10 @@ router.post('/chat', async (req: Request, res: Response) => {
         requestId: geminiResult.requestId,
         model: geminiResult.model,
         promptVersion: geminiResult.promptVersion,
-        latencyMs: geminiResult.latencyMs,
-        intent: geminiResult.intent,
+        intent: geminiResult.proposal
+          ? (geminiResult.proposal.type === 'DIET' ? 'DIET_PROPOSAL' : 'WORKOUT_PROPOSAL')
+          : geminiResult.intent,
+        proposal: geminiResult.proposal || null,
         suggestedFollowUps: geminiResult.suggestedFollowUps,
         knowledgeRetrievalEnabled: geminiResult.knowledgeRetrievalEnabled,
         retrievedKnowledgeCount: geminiResult.retrievedKnowledgeCount,
@@ -462,19 +468,29 @@ router.get('/proposals', async (req: Request, res: Response) => {
  */
 router.post('/proposals/:id/approve', async (req: Request, res: Response) => {
   const proposalId = String(req.params.id);
+  const { assignmentType, clientIds, scheduledDate, proposalData, proposal: inlineProposal } = req.body || {};
 
   try {
     const adminUser = (req as any).user || {};
     const adminId = adminUser.id || 'admin_alex_stone';
     const adminName = adminUser.name || 'Admin Alex';
 
-    const approved = await aiTools.approveProposal(proposalId, adminId, adminName);
+    const approved = await aiTools.approveProposal(proposalId, adminId, adminName, {
+      assignmentType,
+      clientIds,
+      scheduledDate,
+      proposalData: proposalData || inlineProposal,
+    });
     sendSuccess(res, {
       message: `Proposal approved successfully. Active plan updated for client.`,
       proposal: approved,
     }, HttpStatus.OK);
   } catch (err: any) {
     console.error('[AI COACH APPROVE PROPOSAL ERROR]', err);
+    if (err.message && err.message.includes('Proposal not found')) {
+      sendError(res, 'NOT_FOUND', err.message, HttpStatus.NOT_FOUND);
+      return;
+    }
     sendError(res, 'INTERNAL_ERROR', err.message || 'Failed to approve proposal', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
@@ -503,10 +519,10 @@ router.post('/proposals/:id/reject', async (req: Request, res: Response) => {
 });
 
 /**
- * PUT /api/v1/admin/ai-coach/proposals/:id/edit
+ * PUT / POST /api/v1/admin/ai-coach/proposals/:id/edit
  * Saves Admin modifications to an AI proposal prior to approval.
  */
-router.put('/proposals/:id/edit', async (req: Request, res: Response) => {
+const handleEditProposal = async (req: Request, res: Response) => {
   const proposalId = String(req.params.id);
   const { editedPayload } = req.body;
 
@@ -528,7 +544,10 @@ router.put('/proposals/:id/edit', async (req: Request, res: Response) => {
     console.error('[AI COACH EDIT PROPOSAL ERROR]', err);
     sendError(res, 'INTERNAL_ERROR', err.message || 'Failed to edit proposal', HttpStatus.INTERNAL_SERVER_ERROR);
   }
-});
+};
+
+router.put('/proposals/:id/edit', handleEditProposal);
+router.post('/proposals/:id/edit', handleEditProposal);
 
 /**
  * GET /api/v1/admin/ai-coach/history
@@ -655,5 +674,331 @@ router.get('/health', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/v1/admin/ai-coach/split-templates
+ * Returns all 20 supported workout split configuration templates.
+ */
+router.get('/split-templates', (req: Request, res: Response) => {
+  const templates = workoutIntentService.getSplitTemplates();
+  sendSuccess(res, {
+    templates: templates.map(t => ({
+      key: t.key,
+      id: t.id,
+      displayName: t.displayName,
+      category: t.category,
+      description: t.description,
+      defaultDaysPerWeek: t.defaultDaysPerWeek,
+      minDays: t.minDays,
+      maxDays: t.maxDays,
+      sensibleDaysOptions: t.sensibleDaysOptions,
+    })),
+    total: templates.length,
+  }, HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/admin/ai-coach/proposals/generate
+ * Three-Step Plan Configuration Generator:
+ * Generates and validates a genuine database-backed proposal staged as PENDING for admin review.
+ */
+export const handleGenerateProposal = async (req: Request, res: Response): Promise<void> => {
+  const {
+    clientIdentifier,
+    planType,
+    conversationId,
+    workoutConfig,
+    dietConfig,
+  } = req.body;
+
+  if (!clientIdentifier || typeof clientIdentifier !== 'string' || !clientIdentifier.trim()) {
+    sendError(res, 'VALIDATION_ERROR', 'clientIdentifier is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  if (planType !== 'WORKOUT' && planType !== 'DIET') {
+    sendError(res, 'VALIDATION_ERROR', 'planType must be WORKOUT or DIET', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  // 1. Resolve client
+  const resolved = await clientDataService.resolveClient(clientIdentifier.trim());
+  if (resolved.status !== 'FOUND' || !resolved.client) {
+    sendError(
+      res,
+      resolved.status === 'AMBIGUOUS' ? 'MULTIPLE_CLIENTS_FOUND' : 'CLIENT_NOT_FOUND',
+      resolved.message || `Client "${clientIdentifier}" not found`,
+      HttpStatus.NOT_FOUND
+    );
+    return;
+  }
+
+  const { profileId, clientId, name } = resolved.client;
+  const adminUser = (req as any).user || {};
+  const adminId = adminUser.id || 'admin_alex_stone';
+  const effectiveConvId = conversationId || `conv_gen_${Date.now()}`;
+
+  // Read full client profile
+  const clientProfile = await prisma.clientProfile.findUnique({
+    where: { id: profileId },
+    include: { user: true },
+  });
+
+  if (planType === 'WORKOUT') {
+    const splitKeyOrId = workoutConfig?.splitKey || workoutConfig?.splitId || workoutConfig?.splitName || 'full_body';
+    const splitTemplate = workoutIntentService.getSplitTemplate(splitKeyOrId) || workoutIntentService.getSplitTemplates()[0];
+    const daysPerWeek = Number(workoutConfig?.daysPerWeek) || splitTemplate.defaultDaysPerWeek;
+    const primaryGoal = workoutConfig?.primaryGoal || clientProfile?.primaryGoal || 'Hypertrophy';
+    const experience = workoutConfig?.trainingExperience || clientProfile?.fitnessLevel || 'Intermediate';
+    const sessionDuration = Number(workoutConfig?.sessionDurationMinutes) || 50;
+    const focusMuscles = Array.isArray(workoutConfig?.focusMuscles) ? workoutConfig.focusMuscles : [];
+    const weakPoints = Array.isArray(workoutConfig?.weakPoints) ? workoutConfig.weakPoints : [];
+    const injuryExclusions = Array.isArray(workoutConfig?.injuryExclusions) ? workoutConfig.injuryExclusions : (clientProfile?.injuryAreas || []);
+
+    // Generate schedule days according to split configuration template
+    const dayPlans = splitTemplate.generateSchedule({
+      daysPerWeek,
+      primaryGoal,
+      trainingExperience: experience,
+      sessionDurationMinutes: sessionDuration,
+      focusMuscles,
+      weakPoints,
+      equipment: workoutConfig?.equipment,
+      injuryExclusions,
+      weekdaySchedule: workoutConfig?.weekdaySchedule,
+    });
+
+    // For each day, retrieve library-verified exercises
+    const weeklySchedule: Array<any> = [];
+    let dayIdx = 0;
+    for (const d of dayPlans) {
+      const dayExercises = await workoutIntentService.getBalancedExercisesForSplit(
+        {
+          split: splitTemplate.key,
+          templateId: splitTemplate.id,
+          displayName: splitTemplate.displayName,
+          titleSuffix: splitTemplate.displayName,
+          targetMuscleGroup: d.targetMuscleGroup,
+          isAmbiguous: false,
+          primaryBodyParts: d.primaryBodyParts,
+          allowedBodyParts: d.allowedBodyParts,
+          disallowedBodyParts: d.disallowedBodyParts,
+          suggestedDaysPerWeek: daysPerWeek,
+          isMultiDayTemplate: true,
+        },
+        {
+          clientProfileId: profileId,
+          fitnessLevel: experience,
+          injuryAreas: injuryExclusions,
+          count: d.recommendedExercisesCount || 4,
+          variationSeed: dayIdx++,
+          primaryBodyParts: d.primaryBodyParts,
+          allowedBodyParts: d.allowedBodyParts,
+        }
+      );
+
+      weeklySchedule.push({
+        day: d.dayName,
+        sessionTitle: d.sessionTitle,
+        workoutType: d.workoutType,
+        targetMuscleGroup: d.targetMuscleGroup,
+        estimatedDurationMinutes: d.estimatedDurationMinutes,
+        exercises: dayExercises.map((e) => ({
+          exerciseId: e.id,
+          name: e.name,
+          exerciseName: e.name,
+          category: e.category,
+          bodyPart: e.bodyPart,
+          sets: experience.toLowerCase() === 'advanced' ? 4 : 3,
+          reps: experience.toLowerCase() === 'advanced' ? '6-8' : (primaryGoal.toLowerCase().includes('strength') ? '5-6' : '8-10'),
+          restSeconds: primaryGoal.toLowerCase().includes('strength') ? 120 : 90,
+          weight: experience.toLowerCase() === 'advanced' ? 75.0 : 50.0,
+          notes: 'Tempo 3-1-1-0. Prioritize strict range of motion and form.',
+        })),
+      });
+    }
+
+    const planTitle = `${name} — ${splitTemplate.displayName} (${daysPerWeek}-Day)`;
+    const summary = `${daysPerWeek}-day ${splitTemplate.displayName} protocol (${primaryGoal}) tailored for ${name}.`;
+    const reason = `Formulated for ${name} (${clientId || 'AXG'}) using ${splitTemplate.displayName} template based on ${experience} level, ${primaryGoal} goal, and recorded injury exclusions.`;
+
+    // Invoke propose_workout_plan tool handler
+    const toolResult = await proposeWorkoutPlanTool.handler(
+      {
+        clientIdentifier: clientId || name,
+        planTitle,
+        reason,
+        summary,
+        weeklySchedule,
+      },
+      {
+        adminId,
+        conversationId: effectiveConvId,
+        requestId: `req_gen_${Date.now()}`,
+      }
+    );
+
+    if (!toolResult.success) {
+      sendError(res, toolResult.error || 'GENERATION_ERROR', toolResult.message || 'Failed to generate workout proposal', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, {
+      proposal: toolResult.proposal,
+      proposalId: toolResult.proposalId,
+      status: 'PENDING',
+      message: 'Workout plan proposal generated and saved as PENDING for admin review',
+    }, HttpStatus.CREATED);
+    return;
+  }
+
+  // DIET PLAN GENERATION
+  if (planType === 'DIET') {
+    const isMacroOnly = dietConfig?.planKind === 'MACRO_ONLY';
+    const primaryGoal = dietConfig?.primaryGoal || clientProfile?.primaryGoal || 'Fat Loss';
+    const weightKg = Number(clientProfile?.weightKg) || 70.0;
+    const heightCm = Number(clientProfile?.heightCm) || 175.0;
+    const age = Number(clientProfile?.age) || 28;
+    const gender = (clientProfile?.gender || 'male').toLowerCase();
+
+    // Calculate BMR & TDEE
+    const bmr = gender === 'female'
+      ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
+      : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
+    const tdee = Math.round(bmr * 1.55);
+
+    let dailyCalories = dietConfig?.dailyCalories;
+    let protein = dietConfig?.protein;
+    let carbs = dietConfig?.carbohydrates;
+    let fat = dietConfig?.fat;
+
+    if (!dailyCalories) {
+      if (/fat loss|cutting/i.test(primaryGoal)) {
+        dailyCalories = Math.max(1400, Math.round(tdee - 450));
+        protein = protein || Math.round(weightKg * 2.2);
+        fat = fat || Math.max(35, Math.round((dailyCalories * 0.25) / 9));
+        carbs = carbs || Math.max(60, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
+      } else if (/muscle|hypertrophy|bulking/i.test(primaryGoal)) {
+        dailyCalories = Math.round(tdee + 300);
+        protein = protein || Math.round(weightKg * 2.0);
+        fat = fat || Math.max(45, Math.round((dailyCalories * 0.25) / 9));
+        carbs = carbs || Math.max(100, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
+      } else {
+        dailyCalories = tdee;
+        protein = protein || Math.round(weightKg * 1.8);
+        fat = fat || Math.max(40, Math.round((dailyCalories * 0.25) / 9));
+        carbs = carbs || Math.max(80, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
+      }
+    } else {
+      protein = protein || Math.round(weightKg * 2.0);
+      fat = fat || Math.max(35, Math.round((dailyCalories * 0.25) / 9));
+      carbs = carbs || Math.max(50, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
+    }
+
+    const planTitle = isMacroOnly
+      ? `${name} — Daily Macro Targets (Macro-Only)`
+      : `${name} — Tailored Nutrition Plan`;
+    const summary = `${dailyCalories} kcal • ${protein}g P • ${carbs}g C • ${fat}g F (${isMacroOnly ? 'Macro Targets' : 'Full Meal Plan'})`;
+    const reason = `Nutritional distribution formulated for ${name} based on assessment data, bodyweight (${weightKg} kg), and ${primaryGoal} objective.`;
+
+    let meals: Array<any> | undefined = undefined;
+    if (!isMacroOnly) {
+      const isVeg = (dietConfig?.dietaryPreferences || []).some((p: string) => /veg/i.test(p)) ||
+        (clientProfile?.adminNotes || '').toLowerCase().includes('veg');
+      const hasEggAllergy = (dietConfig?.dietaryPreferences || []).some((p: string) => /egg/i.test(p));
+      const hasDairyAllergy = (dietConfig?.dietaryPreferences || []).some((p: string) => /dairy|lactose/i.test(p));
+
+      const bfastProtein = (!isVeg && !hasEggAllergy)
+        ? { name: 'Whole Eggs', qty: 3, unit: 'piece', cal: 210, pro: 18, carb: 1, fat: 15 }
+        : { name: isVeg ? 'Low-Fat Paneer' : 'Organic Tofu', qty: 120, unit: 'g', cal: 216, pro: 21, carb: 4, fat: 12 };
+
+      const lunchProtein = !isVeg
+        ? { name: 'Chicken Breast (Grilled)', qty: 180, unit: 'g', cal: 297, pro: 55, carb: 0, fat: 6 }
+        : { name: 'Paneer / Tofu Curry', qty: 150, unit: 'g', cal: 270, pro: 27, carb: 6, fat: 15 };
+
+      const snackProtein = !hasDairyAllergy
+        ? { name: 'Whey Protein Isolate', qty: 30, unit: 'g', cal: 120, pro: 25, carb: 1, fat: 1 }
+        : { name: 'Plant Protein Blend', qty: 30, unit: 'g', cal: 115, pro: 24, carb: 2, fat: 1 };
+
+      const dinProtein = !isVeg
+        ? { name: 'Grilled Chicken Breast', qty: 150, unit: 'g', cal: 248, pro: 46, carb: 0, fat: 5 }
+        : { name: 'Lentils / Dal & Tofu', qty: 150, unit: 'g', cal: 225, pro: 25, carb: 12, fat: 5 };
+
+      meals = [
+        {
+          mealType: 'Breakfast',
+          timing: '8:00 AM',
+          foods: [
+            { foodName: 'Rolled Oats', quantity: 60, unit: 'g', calories: 233, protein: 10, carbs: 40, fat: 4 },
+            { foodName: bfastProtein.name, quantity: bfastProtein.qty, unit: bfastProtein.unit, calories: bfastProtein.cal, protein: bfastProtein.pro, carbs: bfastProtein.carb, fat: bfastProtein.fat },
+          ],
+        },
+        {
+          mealType: 'Lunch',
+          timing: '1:00 PM',
+          foods: [
+            { foodName: lunchProtein.name, quantity: lunchProtein.qty, unit: lunchProtein.unit, calories: lunchProtein.cal, protein: lunchProtein.pro, carbs: lunchProtein.carb, fat: lunchProtein.fat },
+            { foodName: 'Basmati Rice (Cooked)', quantity: 200, unit: 'g', calories: 260, protein: 5, carbs: 56, fat: 1 },
+          ],
+        },
+        {
+          mealType: 'Snacks',
+          timing: '4:30 PM',
+          foods: [
+            { foodName: 'Fresh Apple', quantity: 1, unit: 'piece', calories: 95, protein: 0.5, carbs: 25, fat: 0.3 },
+            { foodName: snackProtein.name, quantity: snackProtein.qty, unit: snackProtein.unit, calories: snackProtein.cal, protein: snackProtein.pro, carbs: snackProtein.carb, fat: snackProtein.fat },
+          ],
+        },
+        {
+          mealType: 'Dinner',
+          timing: '8:00 PM',
+          foods: [
+            { foodName: dinProtein.name, quantity: dinProtein.qty, unit: dinProtein.unit, calories: dinProtein.cal, protein: dinProtein.pro, carbs: dinProtein.carb, fat: dinProtein.fat },
+            { foodName: 'Steamed Rice', quantity: 150, unit: 'g', calories: 195, protein: 4, carbs: 42, fat: 0.5 },
+          ],
+        },
+      ];
+    }
+
+    const dietResult = await proposeDietPlanTool.handler(
+      {
+        clientIdentifier: clientId || name,
+        planName: planTitle,
+        planKind: isMacroOnly ? 'MACRO_ONLY' : 'DIET_PLAN',
+        reason,
+        summary,
+        dailyCalories,
+        protein,
+        carbohydrates: carbs,
+        fat,
+        fiber: Number(dietConfig?.fiber) || 30,
+        waterTargetLiters: Number(dietConfig?.waterTargetLiters) || 3.5,
+        meals,
+      },
+      {
+        adminId,
+        conversationId: effectiveConvId,
+        requestId: `req_diet_gen_${Date.now()}`,
+      }
+    );
+
+    if (!dietResult.success) {
+      sendError(res, dietResult.error || 'GENERATION_ERROR', dietResult.message || 'Failed to generate diet proposal', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, {
+      proposal: dietResult.proposal,
+      proposalId: dietResult.proposalId,
+      status: 'PENDING',
+      message: `${isMacroOnly ? 'Macro-only' : 'Diet plan'} proposal generated and saved as PENDING for admin review`,
+    }, HttpStatus.CREATED);
+    return;
+  }
+};
+
+router.post('/proposals/generate', handleGenerateProposal);
+router.post('/generate', handleGenerateProposal);
+
 export const aiCoachRoutes = router;
+
 

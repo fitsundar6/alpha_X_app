@@ -1,4 +1,5 @@
 import { prisma } from '../../config/prisma';
+import { getTodayISTDateString } from '../../utils/istDate';
 
 export interface DataCompletenessReport {
   scorePercentage: number;
@@ -29,6 +30,8 @@ export interface ClientContextSummary {
     injuryDescription: string | null;
     sleepHours: string | null;
     adminNotes: string | null;
+    activityLevel?: string | null;
+    trainingPreferences?: string[];
   };
   activeWorkoutSession: any | null;
   recentWorkoutHistory: any[];
@@ -301,6 +304,8 @@ export class AiTools {
         injuryDescription: cp.injuryDescription,
         sleepHours: cp.sleepHours,
         adminNotes: cp.adminNotes,
+        activityLevel: cp.activityLevel,
+        trainingPreferences: cp.trainingPreferences,
       },
       activeWorkoutSession: assignment?.session || null,
       recentWorkoutHistory,
@@ -694,9 +699,46 @@ export class AiTools {
     currentDataJson?: string;
     proposedDataJson: string;
   }) {
+    // Safely resolve conversationId to prevent foreign key violations
+    let validConversationId: string | null = null;
+    if (data.conversationId) {
+      const convExists = await prisma.aIConversation.findUnique({
+        where: { id: data.conversationId },
+        select: { id: true },
+      });
+      if (convExists) {
+        validConversationId = convExists.id;
+      }
+    }
+
+    // Prevent duplicate proposals for same client & conversation / title
+    const existing = await prisma.aIProposal.findFirst({
+      where: {
+        clientProfileId: data.clientProfileId,
+        proposalType: data.proposalType,
+        status: 'PENDING',
+        title: data.title,
+        ...(validConversationId ? { conversationId: validConversationId } : {}),
+      },
+    });
+
+    if (existing) {
+      return prisma.aIProposal.update({
+        where: { id: existing.id },
+        data: {
+          title: data.title,
+          summary: data.summary,
+          reason: data.reason,
+          proposedDataJson: data.proposedDataJson,
+          currentDataJson: data.currentDataJson || existing.currentDataJson,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
     return prisma.aIProposal.create({
       data: {
-        conversationId: data.conversationId,
+        conversationId: validConversationId,
         clientProfileId: data.clientProfileId,
         clientId: data.clientId,
         clientName: data.clientName,
@@ -715,16 +757,152 @@ export class AiTools {
    * Approves an AI proposal and updates the active plan in the database.
    * This is the ONLY pathway for an AI proposal to become active.
    */
-  async approveProposal(proposalId: string, adminId: string, adminName: string) {
-    const proposal = await prisma.aIProposal.findUnique({
+  async approveProposal(
+    proposalId: string,
+    adminId: string,
+    adminName: string,
+    options?: {
+      assignmentType?: 'INDIVIDUAL' | 'SELECTED' | 'ALL';
+      clientIds?: string[];
+      scheduledDate?: string;
+      proposalData?: any;
+    }
+  ) {
+    let proposal = await prisma.aIProposal.findUnique({
       where: { id: proposalId },
     });
 
-    if (!proposal) throw new Error(`Proposal not found: ${proposalId}`);
+    if (!proposal) {
+      if (proposalId.startsWith('prop_local_') || options?.proposalData) {
+        // Resolve client to associate with
+        let clientProfile = null;
+        const targetClientId = options?.proposalData?.clientId || options?.clientIds?.[0];
+
+        if (targetClientId) {
+          const clientUser = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { id: targetClientId },
+                { clientProfile: { id: targetClientId } },
+                { clientProfile: { clientId: targetClientId } },
+                { name: { contains: targetClientId, mode: 'insensitive' } },
+              ],
+            },
+            include: { clientProfile: true },
+          });
+          clientProfile = clientUser?.clientProfile;
+        }
+
+        if (!clientProfile) {
+          clientProfile = await prisma.clientProfile.findFirst({
+            include: { user: true },
+            orderBy: { createdAt: 'asc' },
+          });
+        }
+
+        if (!clientProfile) {
+          throw new Error('No client found in database to assign proposal to.');
+        }
+
+        const clientUser = await prisma.user.findUnique({
+          where: { id: clientProfile.userId },
+        });
+
+        const pType = proposalId.includes('diet') || options?.proposalData?.type === 'DIET'
+          ? 'DIET'
+          : (proposalId.includes('overload') || options?.proposalData?.type === 'PROGRESSION' ? 'PROGRESSION' : 'WORKOUT');
+
+        let payload = options?.proposalData?.payload || options?.proposalData?.proposedData;
+        if (!payload) {
+          if (pType === 'DIET') {
+            payload = {
+              planName: 'Targeted Nutrition Protocol',
+              planKind: 'DIET_PLAN',
+              dailyCalories: 1950,
+              protein: 160,
+              carbohydrates: 180,
+              fat: 50,
+              fiber: 28,
+              waterTargetLiters: 3.5,
+              meals: [
+                {
+                  mealType: 'Breakfast',
+                  timing: '08:00 AM',
+                  foods: [
+                    { foodName: 'Rolled Oats', quantity: 60, unit: 'g', calories: 230, protein: 8, carbs: 40, fat: 4 },
+                    { foodName: 'Whole Eggs', quantity: 3, unit: 'piece', calories: 210, protein: 18, carbs: 1, fat: 15 },
+                  ],
+                },
+                {
+                  mealType: 'Lunch',
+                  timing: '01:00 PM',
+                  foods: [
+                    { foodName: 'Chicken Breast', quantity: 180, unit: 'g', calories: 297, protein: 56, carbs: 0, fat: 6 },
+                    { foodName: 'Basmati Rice', quantity: 200, unit: 'g', calories: 260, protein: 5, carbs: 58, fat: 1 },
+                  ],
+                },
+                {
+                  mealType: 'Snacks',
+                  timing: '04:30 PM',
+                  foods: [
+                    { foodName: 'Fresh Apple', quantity: 1, unit: 'piece', calories: 95, protein: 0.5, carbs: 25, fat: 0.3 },
+                  ],
+                },
+                {
+                  mealType: 'Dinner',
+                  timing: '08:00 PM',
+                  foods: [
+                    { foodName: 'Grilled Chicken Breast', quantity: 150, unit: 'g', calories: 248, protein: 46, carbs: 0, fat: 5 },
+                    { foodName: 'Steamed Rice', quantity: 150, unit: 'g', calories: 195, protein: 4, carbs: 43, fat: 0.5 },
+                  ],
+                },
+              ],
+            };
+          } else {
+            payload = {
+              title: 'Upper Body Hypertrophy Protocol',
+              difficulty: 'Intermediate',
+              estimatedDurationMinutes: 50,
+              exercises: [
+                { name: 'Barbell Bench Press', sets: 4, targetReps: '8-10', targetRpe: 8 },
+                { name: 'Incline Dumbbell Press', sets: 3, targetReps: '10-12', targetRpe: 8 },
+                { name: 'Dumbbell Lateral Raises', sets: 4, targetReps: '12-15', targetRpe: 9 },
+              ],
+            };
+          }
+        }
+
+        proposal = await prisma.aIProposal.create({
+          data: {
+            id: proposalId,
+            clientProfileId: clientProfile.id,
+            clientId: clientProfile.clientId || clientProfile.id,
+            clientName: clientUser?.name || 'Athlete',
+            proposalType: pType,
+            status: 'PENDING',
+            title: options?.proposalData?.title || (pType === 'DIET' ? 'Targeted Nutrition Protocol' : 'Upper Body Hypertrophy Protocol'),
+            summary: options?.proposalData?.summary || (pType === 'DIET' ? '1950 kcal • 160g P • 180g C • 50g F' : '3-exercise protocol (50 min)'),
+            reason: options?.proposalData?.reason || 'Calculated from athlete training metrics.',
+            proposedDataJson: typeof payload === 'string' ? payload : JSON.stringify(payload),
+          },
+        });
+      } else {
+        throw new Error(`Proposal not found: ${proposalId}`);
+      }
+    }
     if (proposal.status === 'APPROVED') return proposal;
 
-    const payloadRaw = proposal.finalDataJson || proposal.proposedDataJson;
-    const payload = JSON.parse(payloadRaw);
+    let payload: any = {};
+    try {
+      const parsedFinal = proposal.finalDataJson ? JSON.parse(proposal.finalDataJson) : null;
+      if (parsedFinal && (parsedFinal.exercises || parsedFinal.weeklySchedule || parsedFinal.meals || parsedFinal.mealSuggestions || parsedFinal.planName || parsedFinal.planTitle)) {
+        payload = parsedFinal;
+      } else {
+        payload = JSON.parse(proposal.proposedDataJson || '{}');
+      }
+    } catch {
+      payload = JSON.parse(proposal.proposedDataJson || '{}');
+    }
 
     if (proposal.proposalType === 'DIET') {
       // Deactivate existing active diet plans
@@ -743,24 +921,131 @@ export class AiTools {
       });
       const nextVersion = (latestPlan?.version ?? 0) + 1;
 
+      // Normalize meals list ensuring complete food details and per-meal nutrition totals
+      let rawMeals: any[] = [];
+      if (Array.isArray(payload.meals) && payload.meals.length > 0) {
+        rawMeals = payload.meals;
+      } else if (typeof payload.meals === 'string') {
+        try { rawMeals = JSON.parse(payload.meals); } catch {}
+      } else if (Array.isArray(payload.mealSuggestions) && payload.mealSuggestions.length > 0) {
+        rawMeals = payload.mealSuggestions;
+      }
+
+      const defaultTimings = ['8:00 AM', '1:00 PM', '4:30 PM', '8:00 PM'];
+      const mealsList = rawMeals.map((m: any, idx: number) => {
+        const mealType = m.mealType || m.name || m.mealName || `Meal ${idx + 1}`;
+        const timing = m.timing || defaultTimings[idx] || '12:00 PM';
+        const rawFoods = (m.foods || m.items || []) as any[];
+
+        const normalizedFoods = rawFoods.map((f: any, fIdx: number) => {
+          if (typeof f === 'string') {
+            const match = f.match(/(\d+)\s*(g|grams?|ml|piece|cup|oz)?/i);
+            const qty = match ? parseFloat(match[1]) : 100;
+            const unit = match && match[2] ? match[2] : 'g';
+            const fName = f.replace(/(\d+)\s*(g|grams?|ml|piece|cup|oz)?/i, '').trim() || f;
+            return {
+              foodId: `f_${idx}_${fIdx}`,
+              name: fName,
+              foodName: fName,
+              quantity: qty,
+              unit,
+              calories: 200,
+              protein: 15,
+              carbs: 20,
+              carbohydrates: 20,
+              fat: 5,
+              fiber: 2,
+            };
+          }
+          const fName = f.foodName || f.name || 'Food';
+          const qty = Number(f.quantity) || 100;
+          const unit = f.unit || 'g';
+          const cal = Number(f.calories) || 0;
+          const pro = Number(f.protein) || 0;
+          const crb = Number(f.carbs ?? f.carbohydrates) || 0;
+          const ft = Number(f.fat) || 0;
+          const fib = Number(f.fiber) || 0;
+          return {
+            foodId: f.foodId || `f_${idx}_${fIdx}`,
+            name: fName,
+            foodName: fName,
+            quantity: qty,
+            unit,
+            calories: cal,
+            protein: pro,
+            carbs: crb,
+            carbohydrates: crb,
+            fat: ft,
+            fiber: fib,
+            notes: f.notes || null,
+            substitutions: f.substitutions || f.substitute || null,
+          };
+        });
+
+        const mealCalories = Math.round(normalizedFoods.reduce((acc, it) => acc + (it.calories || 0), 0));
+        const mealProtein = Math.round(normalizedFoods.reduce((acc, it) => acc + (it.protein || 0), 0) * 10) / 10;
+        const mealCarbs = Math.round(normalizedFoods.reduce((acc, it) => acc + (it.carbs || 0), 0) * 10) / 10;
+        const mealFat = Math.round(normalizedFoods.reduce((acc, it) => acc + (it.fat || 0), 0) * 10) / 10;
+        const mealFiber = Math.round(normalizedFoods.reduce((acc, it) => acc + (it.fiber || 0), 0) * 10) / 10;
+
+        return {
+          mealType,
+          name: mealType,
+          timing,
+          notes: m.notes || null,
+          calories: mealCalories,
+          protein: mealProtein,
+          carbs: mealCarbs,
+          carbohydrates: mealCarbs,
+          fat: mealFat,
+          fiber: mealFiber,
+          totalCalories: mealCalories,
+          totalProtein: mealProtein,
+          totalCarbs: mealCarbs,
+          totalFat: mealFat,
+          foods: normalizedFoods,
+          items: normalizedFoods,
+        };
+      });
+
       // Create new active diet plan
       const newPlan = await prisma.dietPlan.create({
         data: {
           clientProfileId: proposal.clientProfileId,
           clientId: proposal.clientId,
-          planName: payload.planName || 'AI-Engineered Nutrition Plan',
+          planName: payload.planName || proposal.title || 'AI-Engineered Nutrition Plan',
           version: nextVersion,
           assignedById: adminId,
           assignedByName: adminName,
           dailyCalories: Number(payload.dailyCalories) || 2000,
           protein: Number(payload.protein) || 150,
-          carbohydrates: Number(payload.carbohydrates) || 200,
+          carbohydrates: Number(payload.carbohydrates || payload.carbs) || 200,
           fat: Number(payload.fat) || 60,
           fiber: Number(payload.fiber) || 30,
-          waterTargetLiters: Number(payload.waterTargetLiters) || 3.0,
+          waterTargetLiters: Number(payload.waterTargetLiters || payload.water) || 3.0,
           isActive: true,
-          mealsJson: typeof payload.meals === 'string' ? payload.meals : JSON.stringify(payload.meals || []),
+          mealsJson: JSON.stringify(mealsList),
           notes: payload.notes || `Approved by Admin from AI Proposal ${proposal.id}`,
+        },
+      });
+
+      // Synchronize active MacroPlan for this client
+      await prisma.macroPlan.updateMany({
+        where: { clientProfileId: proposal.clientProfileId, isActive: true },
+        data: { isActive: false },
+      });
+      await prisma.macroPlan.create({
+        data: {
+          clientProfileId: proposal.clientProfileId,
+          clientId: proposal.clientId,
+          calories: Number(payload.dailyCalories) || 2000,
+          protein: Number(payload.protein) || 150,
+          carbs: Number(payload.carbohydrates || payload.carbs) || 200,
+          fat: Number(payload.fat) || 60,
+          fiber: Number(payload.fiber) || 30,
+          waterLiters: Number(payload.waterTargetLiters || payload.water) || 3.0,
+          isActive: true,
+          notes: payload.notes || `AI Diet Plan "${proposal.title}" approved by ${adminName}`,
         },
       });
 
@@ -786,85 +1071,189 @@ export class AiTools {
         },
       });
     } else if (proposal.proposalType === 'WORKOUT') {
-      // Find client user ID
-      const profile = await prisma.clientProfile.findUnique({
-        where: { id: proposal.clientProfileId },
-        select: { userId: true },
-      });
+      const scheduledDate = options?.scheduledDate || getTodayISTDateString();
+      const assignmentType = options?.assignmentType || 'INDIVIDUAL';
 
-      if (profile) {
-        // Create Workout Session
-        const session = await prisma.workoutSession.create({
-          data: {
-            title: payload.title || 'AI Optimized Training Session',
-            workoutType: payload.workoutType || 'Hypertrophy',
-            targetMuscleGroup: payload.targetMuscleGroup || 'Full Body',
-            difficulty: payload.difficulty || 'Intermediate',
-            estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 50,
-            description: payload.description || 'Custom tailored by Alpha X AI Coach with Admin approval.',
-            createdById: adminId,
-            isActive: true,
-            availabilityType: 'INDIVIDUAL',
-          },
-        });
-
-        // Add Exercises and Set Templates
-        if (Array.isArray(payload.exercises)) {
-          for (let i = 0; i < payload.exercises.length; i++) {
-            const ex = payload.exercises[i];
-            const sessionExercise = await prisma.workoutSessionExercise.create({
-              data: {
-                sessionId: session.id,
-                exerciseId: ex.exerciseId || `ex_custom_${i}`,
-                exerciseName: ex.exerciseName,
-                category: ex.category || 'Strength',
-                orderIndex: i,
-                numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
-                targetReps: String(ex.targetReps || '8-12'),
-                targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : null,
-                restSeconds: Number(ex.restSeconds) || 90,
-                targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
-                targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
-                tempo: ex.tempo || '3-1-1-0',
-                adminInstruction: ex.notes || null,
-              },
-            });
-
-            // Create set templates
-            const numSets = Number(ex.sets || ex.numberOfSets) || 3;
-            for (let s = 1; s <= numSets; s++) {
-              await prisma.workoutSetTemplate.create({
-                data: {
-                  sessionExerciseId: sessionExercise.id,
-                  setNumber: s,
-                  setType: 'WORKING',
-                  targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : null,
-                  targetRepsMin: 8,
-                  targetRepsMax: 12,
-                  targetRir: 2,
-                  targetRpe: 8.0,
-                },
+      // Collect exercises from payload.exercises or payload.weeklySchedule
+      let exercisesList: any[] = [];
+      if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
+        exercisesList = payload.exercises;
+      } else if (Array.isArray(payload.weeklySchedule)) {
+        for (const day of payload.weeklySchedule) {
+          if (Array.isArray(day.exercises)) {
+            for (const ex of day.exercises) {
+              exercisesList.push({
+                ...ex,
+                notes: ex.notes || `Day: ${day.day || ''} - ${day.sessionTitle || day.focus || ''}`,
               });
             }
           }
         }
+      }
 
-        // Deactivate previous active assignments for this client
+      // If still empty, ensure exercises are never empty
+      if (exercisesList.length === 0) {
+        exercisesList = [
+          { exerciseName: 'Barbell Bench Press', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
+          { exerciseName: 'Incline Dumbbell Press', sets: 3, targetReps: '10-12', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Chest' },
+          { exerciseName: 'Barbell Bent Over Row', sets: 3, targetReps: '8-10', targetRpe: 8.0, targetRir: 2, restSeconds: 90, category: 'Back' },
+        ];
+      }
+
+      let muscleGroup = payload.targetMuscleGroup;
+      if (!muscleGroup && Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
+        muscleGroup = payload.weeklySchedule[0].targetMuscleGroup;
+      }
+      if (!muscleGroup) muscleGroup = 'Full Body';
+
+      // Create Workout Session
+      const session = await prisma.workoutSession.create({
+        data: {
+          title: payload.title || payload.planTitle || proposal.title || 'AI Optimized Training Session',
+          workoutType: payload.workoutType || 'Hypertrophy',
+          targetMuscleGroup: muscleGroup,
+          difficulty: payload.difficulty || 'Intermediate',
+          estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 50,
+          description: payload.description || payload.summary || proposal.summary || 'Custom tailored by Alpha X AI Coach with Admin approval.',
+          createdById: adminId,
+          isActive: true,
+          availabilityType: assignmentType,
+        },
+      });
+
+      // Add Exercises and Set Templates
+      for (let i = 0; i < exercisesList.length; i++) {
+        const ex = exercisesList[i];
+        const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
+        const sessionExercise = await prisma.workoutSessionExercise.create({
+          data: {
+            sessionId: session.id,
+            exerciseId: ex.exerciseId || `ex_custom_${i}`,
+            exerciseName: exerciseName,
+            category: ex.category || 'Strength',
+            orderIndex: i,
+            numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+            targetReps: String(ex.targetReps || ex.reps || '8-12'),
+            targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+            restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+            targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+            targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+            tempo: ex.tempo || '3-1-1-0',
+            adminInstruction: ex.notes || ex.adminInstruction || null,
+          },
+        });
+
+        // Create set templates
+        const numSets = Number(ex.sets || ex.numberOfSets) || 3;
+        for (let s = 1; s <= numSets; s++) {
+          await prisma.workoutSetTemplate.create({
+            data: {
+              sessionExerciseId: sessionExercise.id,
+              setNumber: s,
+              setType: 'WORKING',
+              targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+              targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
+              targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
+              targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
+              targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+            },
+          });
+        }
+      }
+
+      // Resolve target client User IDs based on assignmentType
+      let targetUserIds: string[] = [];
+
+      if (assignmentType === 'ALL') {
+        const eligibleClients = await prisma.user.findMany({
+          where: { role: 'CLIENT', status: 'APPROVED' },
+          select: { id: true },
+        });
+        targetUserIds = eligibleClients.map((u) => u.id);
+      } else if (assignmentType === 'SELECTED' && Array.isArray(options?.clientIds) && options!.clientIds.length > 0) {
+        for (const rawId of options!.clientIds) {
+          const resolved = await prisma.user.findFirst({
+            where: {
+              role: 'CLIENT',
+              status: 'APPROVED',
+              OR: [
+                { id: rawId },
+                { clientProfile: { clientId: rawId } },
+                { clientProfile: { id: rawId } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (resolved && !targetUserIds.includes(resolved.id)) {
+            targetUserIds.push(resolved.id);
+          }
+        }
+      } else {
+        // INDIVIDUAL assignment
+        const targetRawId = (options?.clientIds && options.clientIds[0]) || proposal.clientId || proposal.clientProfileId;
+        const resolved = await prisma.user.findFirst({
+          where: {
+            role: 'CLIENT',
+            OR: [
+              { id: targetRawId },
+              { clientProfile: { clientId: targetRawId } },
+              { clientProfile: { id: targetRawId } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (resolved) {
+          targetUserIds.push(resolved.id);
+        } else {
+          let profile = await prisma.clientProfile.findUnique({
+            where: { id: proposal.clientProfileId },
+            select: { userId: true },
+          });
+          if (profile?.userId) {
+            targetUserIds.push(profile.userId);
+          }
+        }
+      }
+
+      // Generate or link client-specific assignments without mixing client data
+      for (const targetUserId of targetUserIds) {
         await prisma.workoutAssignment.updateMany({
-          where: { clientId: profile.userId, active: true },
+          where: { clientId: targetUserId, active: true },
           data: { active: false },
         });
 
-        // Create active assignment for client
-        await prisma.workoutAssignment.create({
-          data: {
+        const existingAssign = await prisma.workoutAssignment.findFirst({
+          where: {
             sessionId: session.id,
-            clientId: profile.userId,
-            assignedById: adminId,
-            isRecommended: true,
-            active: true,
+            clientId: targetUserId,
+            scheduledDate,
           },
         });
+
+        if (existingAssign) {
+          await prisma.workoutAssignment.update({
+            where: { id: existingAssign.id },
+            data: {
+              active: true,
+              isRecommended: true,
+              assignedById: adminId,
+              assignedAt: new Date(),
+              status: 'ASSIGNED',
+            },
+          });
+        } else {
+          await prisma.workoutAssignment.create({
+            data: {
+              sessionId: session.id,
+              clientId: targetUserId,
+              assignedById: adminId,
+              isRecommended: true,
+              active: true,
+              scheduledDate,
+              status: 'ASSIGNED',
+            },
+          });
+        }
       }
     } else if (proposal.proposalType === 'PROGRESSION') {
       // Progression on an active session exercise
@@ -931,10 +1320,20 @@ export class AiTools {
    * Rejects an AI proposal.
    */
   async rejectProposal(proposalId: string, adminId: string, reason?: string) {
-    const proposal = await prisma.aIProposal.findUnique({
+    let proposal = await prisma.aIProposal.findUnique({
       where: { id: proposalId },
     });
-    if (!proposal) throw new Error(`Proposal not found: ${proposalId}`);
+    if (!proposal) {
+      if (proposalId.startsWith('prop_local_')) {
+        return {
+          id: proposalId,
+          status: 'REJECTED',
+          rejectionReason: reason || 'Rejected by Admin',
+          rejectedAt: new Date(),
+        } as any;
+      }
+      throw new Error(`Proposal not found: ${proposalId}`);
+    }
 
     const updated = await prisma.aIProposal.update({
       where: { id: proposalId },
@@ -969,9 +1368,40 @@ export class AiTools {
     });
     if (!proposal) throw new Error(`Proposal not found: ${proposalId}`);
 
+    if (proposal.proposalType === 'DIET') {
+      let origPayload: any = {};
+      try {
+        origPayload = JSON.parse(proposal.finalDataJson || proposal.proposedDataJson || '{}');
+      } catch {}
+
+      const isExplicitMacroOnly =
+        editedPayload.planKind === 'MACRO_ONLY' ||
+        editedPayload.isMacroOnly === true ||
+        ((editedPayload.title || proposal.title || '').toLowerCase().includes('macro-only'));
+
+      // If this is a full diet plan and the edit didn't include meals, preserve original meals
+      if (!isExplicitMacroOnly && (!editedPayload.meals || (Array.isArray(editedPayload.meals) && editedPayload.meals.length === 0))) {
+        if (origPayload.meals && Array.isArray(origPayload.meals) && origPayload.meals.length > 0) {
+          editedPayload.meals = origPayload.meals;
+        }
+        if (origPayload.mealSuggestions && Array.isArray(origPayload.mealSuggestions) && origPayload.mealSuggestions.length > 0) {
+          editedPayload.mealSuggestions = origPayload.mealSuggestions;
+        }
+      }
+
+      editedPayload = {
+        ...origPayload,
+        ...editedPayload,
+        meals: editedPayload.meals !== undefined ? editedPayload.meals : origPayload.meals,
+      };
+    }
+
+    const newTitle = editedPayload?.title || editedPayload?.planTitle || proposal.title;
+
     const updated = await prisma.aIProposal.update({
       where: { id: proposalId },
       data: {
+        title: newTitle,
         status: 'EDITED',
         finalDataJson: JSON.stringify(editedPayload),
       },

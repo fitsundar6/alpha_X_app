@@ -6,6 +6,7 @@ import 'admin_create_edit_session_screen.dart';
 import 'admin_assign_session_dialog.dart';
 import 'admin_change_requests_screen.dart';
 import 'admin_performance_dashboard_screen.dart';
+import 'admin_workout_proposals_screen.dart';
 import 'package:alpha_x_gym/features/exercise/presentation/admin/admin_exercise_database_screen.dart';
 
 class AdminWorkoutSessionsScreen extends StatefulWidget {
@@ -351,6 +352,19 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                 ),
               ),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome_motion_outlined, color: AppColors.primaryRed),
+                  tooltip: 'AI Workout Proposals',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (ctx) => AdminWorkoutProposalsScreen(
+                          workoutRepository: widget.workoutRepository,
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.fitness_center_outlined, color: AppColors.textPrimary),
                   tooltip: 'Exercise Library',

@@ -24,6 +24,15 @@ adminRouter.delete(['/sessions/:id', '/workouts/:id'], (req, res) => workoutCont
 adminRouter.post(['/sessions/:id/assign', '/workouts/:id/assign'], (req, res) => workoutController.assignSession(req, res));
 adminRouter.delete(['/assignments/:assignmentId', '/workouts/assignments/:assignmentId'], (req, res) => workoutController.unassign(req, res));
 
+// Session Unlock / Release (Admin Only with Reason Audit)
+adminRouter.post('/unlock-session', (req, res) => workoutController.unlockSession(req, res));
+adminRouter.post(['/sessions/:id/unlock', '/workouts/:id/unlock'], (req, res) => {
+  if (!req.body.sessionId) {
+    req.body.sessionId = req.params.id;
+  }
+  workoutController.unlockSession(req, res);
+});
+
 // Client Workout Results Review
 adminRouter.get('/clients', (req, res) => workoutController.getClientsList(req, res));
 adminRouter.get('/clients/:clientId/workout-history', (req, res) => workoutController.getClientWorkoutResults(req, res));

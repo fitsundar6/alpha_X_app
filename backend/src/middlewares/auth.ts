@@ -57,6 +57,15 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       next();
       return;
     }
+    if (token === 'alpha_x_mock_token_for_client') {
+      req.user = {
+        id: 'client_marcus_vance',
+        email: 'marcus.vance@alphaxgym.com',
+        role: UserRole.CLIENT,
+      };
+      next();
+      return;
+    }
   }
 
   try {

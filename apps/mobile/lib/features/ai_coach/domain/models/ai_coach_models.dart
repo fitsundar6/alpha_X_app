@@ -36,6 +36,12 @@ class AiDataCompleteness {
       summary: json['summary']?.toString() ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'scorePercentage': scorePercentage,
+    'missingItems': missingItems,
+    'summary': summary,
+  };
 }
 
 class AiProposal {
@@ -43,8 +49,8 @@ class AiProposal {
   final String? clientId;
   final String? clientName;
   final AiProposalType type;
-  final String title;
-  final String summary;
+  String title;
+  String summary;
   final String reason;
   AiProposalStatus status;
   final dynamic currentData;
@@ -52,6 +58,7 @@ class AiProposal {
   final String? approvedByName;
   final DateTime? approvedAt;
   final String? rejectionReason;
+  final DateTime? createdAt;
 
   AiProposal({
     required this.id,
@@ -67,6 +74,7 @@ class AiProposal {
     this.approvedByName,
     this.approvedAt,
     this.rejectionReason,
+    this.createdAt,
   });
 
   bool get isPending => status == AiProposalStatus.pending || status == AiProposalStatus.edited;
@@ -116,8 +124,26 @@ class AiProposal {
       approvedByName: json['approvedByName']?.toString(),
       approvedAt: json['approvedAt'] != null ? DateTime.tryParse(json['approvedAt'].toString()) : null,
       rejectionReason: json['rejectionReason']?.toString(),
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'clientId': clientId,
+    'clientName': clientName,
+    'type': type == AiProposalType.diet ? 'DIET' : (type == AiProposalType.progression ? 'PROGRESSION' : 'WORKOUT'),
+    'title': title,
+    'summary': summary,
+    'reason': reason,
+    'status': status == AiProposalStatus.approved ? 'APPROVED' : (status == AiProposalStatus.rejected ? 'REJECTED' : (status == AiProposalStatus.edited ? 'EDITED' : 'PENDING')),
+    'currentData': currentData,
+    'payload': payload,
+    'approvedByName': approvedByName,
+    'approvedAt': approvedAt?.toIso8601String(),
+    'createdAt': createdAt?.toIso8601String(),
+    'rejectionReason': rejectionReason,
+  };
 }
 
 class AiReportCard {
@@ -159,6 +185,19 @@ class AiReportCard {
       checkInStatus: json['checkInStatus']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'workoutsCompleted': workoutsCompleted,
+    'foodLogsRecorded': foodLogsRecorded,
+    'checkInsPending': checkInsPending,
+    'clientsNeedReview': clientsNeedReview,
+    'clientName': clientName,
+    'clientId': clientId,
+    'workoutAdherence': workoutAdherence,
+    'foodTracking': foodTracking,
+    'checkInStatus': checkInStatus,
+  };
 }
 
 class VerifiedClientInfo {
@@ -179,6 +218,12 @@ class VerifiedClientInfo {
       verified: json['verified'] == true,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'clientId': clientId,
+    'displayName': displayName,
+    'verified': verified,
+  };
 }
 
 class AiChatMessage {
@@ -253,10 +298,11 @@ class AiChatMessage {
         [];
 
     return AiChatMessage(
-      id: UniqueKey().toString(),
+      id: json['id']?.toString() ?? json['messageId']?.toString() ?? 'msg_ai_${DateTime.now().millisecondsSinceEpoch}_${UniqueKey().toString().replaceAll('#', '')}',
       sender: 'AI',
       content: json['replyText']?.toString() ?? json['response']?.toString() ?? '',
       intent: json['intent']?.toString() ?? 'GENERAL',
+      timestamp: json['timestamp'] != null ? DateTime.tryParse(json['timestamp'].toString()) : null,
       completeness: completeness,
       proposal: proposal,
       reportCard: reportCard,
@@ -269,6 +315,80 @@ class AiChatMessage {
       verifiedClient: verifiedClient,
     );
   }
+
+  factory AiChatMessage.fromJson(Map<String, dynamic> json) {
+    AiProposal? proposal;
+    if (json['proposal'] != null && json['proposal'] is Map) {
+      proposal = AiProposal.fromJson(Map<String, dynamic>.from(json['proposal']));
+    }
+
+    AiReportCard? reportCard;
+    if (json['reportCard'] != null && json['reportCard'] is Map) {
+      reportCard = AiReportCard.fromJson(Map<String, dynamic>.from(json['reportCard']));
+    }
+
+    AiDataCompleteness? completeness;
+    if (json['completeness'] != null && json['completeness'] is Map) {
+      completeness = AiDataCompleteness.fromJson(Map<String, dynamic>.from(json['completeness']));
+    }
+
+    VerifiedClientInfo? verifiedClient;
+    if (json['verifiedClient'] != null && json['verifiedClient'] is Map) {
+      verifiedClient = VerifiedClientInfo.fromJson(Map<String, dynamic>.from(json['verifiedClient']));
+    }
+
+    final followUps = (json['suggestedFollowUps'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const [];
+
+    final ragIds = (json['retrievedKnowledgeIds'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList();
+
+    DateTime parsedTimestamp = DateTime.now();
+    if (json['timestamp'] != null) {
+      parsedTimestamp = DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now();
+    }
+
+    return AiChatMessage(
+      id: json['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+      sender: json['sender']?.toString() ?? 'AI',
+      content: json['content']?.toString() ?? '',
+      intent: json['intent']?.toString() ?? 'GENERAL',
+      timestamp: parsedTimestamp,
+      completeness: completeness,
+      proposal: proposal,
+      reportCard: reportCard,
+      suggestedFollowUps: followUps,
+      isError: json['isError'] == true,
+      conversationId: json['conversationId']?.toString(),
+      promptVersion: json['promptVersion']?.toString(),
+      knowledgeRetrievalEnabled: json['knowledgeRetrievalEnabled'] == true,
+      retrievedKnowledgeCount: json['retrievedKnowledgeCount'] is int ? json['retrievedKnowledgeCount'] : null,
+      retrievedKnowledgeIds: ragIds,
+      verifiedClient: verifiedClient,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'sender': sender,
+    'content': content,
+    'intent': intent,
+    'timestamp': timestamp.toIso8601String(),
+    'completeness': completeness?.toJson(),
+    'proposal': proposal?.toJson(),
+    'reportCard': reportCard?.toJson(),
+    'suggestedFollowUps': suggestedFollowUps,
+    'isError': isError,
+    'conversationId': conversationId,
+    'promptVersion': promptVersion,
+    'knowledgeRetrievalEnabled': knowledgeRetrievalEnabled,
+    'retrievedKnowledgeCount': retrievedKnowledgeCount,
+    'retrievedKnowledgeIds': retrievedKnowledgeIds,
+    'verifiedClient': verifiedClient?.toJson(),
+  };
 }
 
 class AiDailySummary {
@@ -331,4 +451,14 @@ class AiDailySummary {
       totalActiveClients: totalActiveClients,
     );
   }
+}
+
+class AiConversationSession {
+  final List<AiChatMessage> messages;
+  final String? conversationId;
+
+  const AiConversationSession({
+    required this.messages,
+    this.conversationId,
+  });
 }

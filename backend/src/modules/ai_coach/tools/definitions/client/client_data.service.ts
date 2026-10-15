@@ -44,6 +44,17 @@ export class ClientDataService {
 
     const clean = identifier.trim();
 
+    // Extract potential AXG-XXXX ID pattern from compound string like "Ajay (AXG-0005)"
+    const axgMatch = clean.match(/AXG-\d{4,}/i);
+    const targetAxgId = axgMatch ? axgMatch[0].toUpperCase() : null;
+
+    // Cleaned name search pattern if compound like "Ajay (AXG-0005)"
+    const strippedName = clean
+      .replace(/\(AXG-\d{4,}\)/gi, '')
+      .replace(/AXG-\d{4,}/gi, '')
+      .replace(/[()\-–—]/g, ' ')
+      .trim();
+
     // 1. Direct match on exact ID fields (UUID or AXG-XXXX)
     const exactUser = await prisma.user.findFirst({
       where: {
@@ -52,6 +63,7 @@ export class ClientDataService {
           { id: clean },
           { email: clean.toLowerCase() },
           { clientProfile: { clientId: clean.toUpperCase() } },
+          ...(targetAxgId ? [{ clientProfile: { clientId: targetAxgId } }] : []),
           { clientProfile: { id: clean } },
         ],
       },
@@ -83,10 +95,17 @@ export class ClientDataService {
     }
 
     // 2. Name search with potential ambiguity detection
+    const searchTerms = [clean];
+    if (strippedName && strippedName !== clean) {
+      searchTerms.push(strippedName);
+    }
+
     const nameMatches = await prisma.user.findMany({
       where: {
         role: 'CLIENT',
-        name: { contains: clean, mode: 'insensitive' },
+        OR: searchTerms.map((term) => ({
+          name: { contains: term, mode: 'insensitive' as const },
+        })),
       },
       select: {
         id: true,

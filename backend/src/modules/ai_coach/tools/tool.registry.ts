@@ -112,6 +112,9 @@ export class ToolRegistry {
       for (const [k, v] of Object.entries(prop.properties)) {
         result.properties[k] = this.convertSchemaProperty(v);
       }
+      if (Array.isArray(prop.required) && prop.required.length > 0) {
+        result.required = prop.required;
+      }
     }
 
     return result;

@@ -6,6 +6,7 @@ import { UserRole } from '../../constants/roles';
 import { prisma } from '../../config/prisma';
 import { foodPhotoController } from '../food/food.photo.controller';
 import { automationController } from '../automation/automation.controller';
+import { transformationPhotoController } from '../automation/transformation_photo.controller';
 
 const router = Router();
 
@@ -125,6 +126,7 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
       assessmentCompleted,
       onboardingStep,
       phone,
+      photoUrl,
     } = req.body;
 
     // Biometric Validation: Realistic numbers only
@@ -222,6 +224,9 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
     if (phone !== undefined && phone !== null && typeof phone === 'string' && phone.trim().length > 0) {
       updateData.phone = phone.trim();
     }
+    if (photoUrl !== undefined && typeof photoUrl === 'string') {
+      updateData.photoUrl = photoUrl.trim();
+    }
 
     const isDone = onboardingCompleted !== undefined ? Boolean(onboardingCompleted) : (assessmentCompleted !== undefined ? Boolean(assessmentCompleted) : undefined);
     if (isDone !== undefined) updateData.onboardingCompleted = isDone;
@@ -268,6 +273,27 @@ const handleAssessmentUpdate = async (req: Request, res: Response) => {
 };
 router.put(assessmentPaths, handleAssessmentUpdate);
 router.post(assessmentPaths, handleAssessmentUpdate);
+
+// PATCH /api/v1/client/me/name: Client updates their own display name
+router.patch('/me/name', async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    sendError(res, 'VALIDATION_ERROR', 'Name must be at least 2 characters.', HttpStatus.BAD_REQUEST);
+    return;
+  }
+  const trimmed = name.trim().slice(0, 100);
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { name: trimmed },
+      select: { id: true, name: true, email: true },
+    });
+    sendSuccess(res, { name: updated.name, email: updated.email });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to update name', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
 
 // GET /api/v1/client/me/workout: Active assigned workout
 router.get('/me/workout', async (req: Request, res: Response) => {
@@ -889,6 +915,18 @@ router.get('/me/transformation-timeline', (req: Request, res: Response) =>
 
 router.post('/me/transformation-timeline', (req: Request, res: Response) =>
   automationController.saveTransformationMilestone(req, res)
+);
+
+router.post('/me/transformation-timeline/upload-photo', (req: Request, res: Response) =>
+  transformationPhotoController.uploadTransformationPhoto(req, res)
+);
+
+router.delete('/me/transformation-timeline/:weekNumber/photo/:angle', (req: Request, res: Response) =>
+  transformationPhotoController.deletePhotoAngle(req, res)
+);
+
+router.delete('/me/transformation-timeline/:weekNumber', (req: Request, res: Response) =>
+  transformationPhotoController.deleteMilestone(req, res)
 );
 
 export const clientRoutes = router;

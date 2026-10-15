@@ -688,6 +688,106 @@ router.put('/clients/:id/notes', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /clients/:id/profile: Admin updates permitted client profile fields
+router.put('/clients/:id/profile', async (req: Request, res: Response) => {
+  const idOrClientId = String(req.params.id || '');
+  try {
+    const user = await findClientByIdOrClientId(idOrClientId);
+    if (!user || !user.clientProfile) {
+      sendError(res, 'NOT_FOUND', 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    const {
+      name, phone, photoUrl, age, weightKg, heightCm, gender,
+      fitnessLevel, primaryGoal, secondaryGoal,
+      trainingExperience, trainingDaysPerWeek, preferredDays,
+      trainingTimePref, trainingPreferences,
+      hasCurrentInjury, injuryAreas, injuryDescription,
+      hasPreviousSurgery, surgeryDetails,
+      activityLevel, sleepHours, dailySteps,
+    } = req.body;
+
+    // Biometric validation
+    if (weightKg !== undefined && weightKg !== null && weightKg !== '') {
+      const w = Number(weightKg);
+      if (isNaN(w) || w < 20 || w > 350) {
+        sendError(res, 'VALIDATION_ERROR', 'Weight must be between 20 and 350 kg.', HttpStatus.BAD_REQUEST);
+        return;
+      }
+    }
+    if (heightCm !== undefined && heightCm !== null && heightCm !== '') {
+      const h = Number(heightCm);
+      if (isNaN(h) || h < 50 || h > 280) {
+        sendError(res, 'VALIDATION_ERROR', 'Height must be between 50 and 280 cm.', HttpStatus.BAD_REQUEST);
+        return;
+      }
+    }
+    if (age !== undefined && age !== null && age !== '') {
+      const a = Number(age);
+      if (isNaN(a) || a < 10 || a > 120 || !Number.isInteger(a)) {
+        sendError(res, 'VALIDATION_ERROR', 'Age must be a whole number between 10 and 120.', HttpStatus.BAD_REQUEST);
+        return;
+      }
+    }
+
+    // Update User name if provided
+    if (name !== undefined && name !== null && typeof name === 'string' && name.trim().length >= 2) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { name: name.trim().slice(0, 100) },
+      });
+    }
+
+    // Build ClientProfile update payload — exclude protected fields (clientId, role, status)
+    const profileData: any = {};
+    if (phone !== undefined && phone !== null && typeof phone === 'string' && phone.trim().length > 0)
+      profileData.phone = phone.trim();
+    if (photoUrl !== undefined && typeof photoUrl === 'string')
+      profileData.photoUrl = photoUrl.trim();
+    if (age !== undefined && age !== null && age !== '') profileData.age = Number(age);
+    if (weightKg !== undefined && weightKg !== null && weightKg !== '') profileData.weightKg = Number(weightKg);
+    if (heightCm !== undefined && heightCm !== null && heightCm !== '') profileData.heightCm = Number(heightCm);
+    if (gender !== undefined) profileData.gender = gender;
+    if (fitnessLevel !== undefined) profileData.fitnessLevel = fitnessLevel;
+    if (primaryGoal !== undefined) profileData.primaryGoal = primaryGoal;
+    if (secondaryGoal !== undefined) profileData.secondaryGoal = secondaryGoal;
+    if (trainingExperience !== undefined) profileData.trainingExperience = trainingExperience;
+    if (trainingDaysPerWeek !== undefined && trainingDaysPerWeek !== null)
+      profileData.trainingDaysPerWeek = Number(trainingDaysPerWeek);
+    if (preferredDays !== undefined) profileData.preferredDays = Array.isArray(preferredDays) ? preferredDays : [];
+    if (trainingTimePref !== undefined) profileData.trainingTimePref = trainingTimePref;
+    if (trainingPreferences !== undefined)
+      profileData.trainingPreferences = Array.isArray(trainingPreferences) ? trainingPreferences : [];
+    if (hasCurrentInjury !== undefined) profileData.hasCurrentInjury = Boolean(hasCurrentInjury);
+    if (injuryAreas !== undefined) profileData.injuryAreas = Array.isArray(injuryAreas) ? injuryAreas : [];
+    if (injuryDescription !== undefined) profileData.injuryDescription = injuryDescription;
+    if (hasPreviousSurgery !== undefined) profileData.hasPreviousSurgery = Boolean(hasPreviousSurgery);
+    if (surgeryDetails !== undefined) profileData.surgeryDetails = surgeryDetails;
+    if (activityLevel !== undefined) profileData.activityLevel = activityLevel;
+    if (sleepHours !== undefined) profileData.sleepHours = sleepHours;
+    if (dailySteps !== undefined) {
+      profileData.dailySteps = Number(dailySteps) || 6000;
+      profileData.dailyStepGoal = Number(dailySteps) || 6000;
+    }
+
+    const updatedProfile = await prisma.clientProfile.update({
+      where: { id: user.clientProfile.id },
+      data: profileData,
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    sendSuccess(res, {
+      message: 'Client profile updated successfully',
+      clientId: updatedProfile.clientId,
+      name: updatedProfile.user.name,
+      profile: updatedProfile,
+    });
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to update client profile', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
+});
+
 // GET /clients/:id/workouts: Assigned workouts for client
 router.get('/clients/:id/workouts', async (req: Request, res: Response) => {
   const idOrClientId = String(req.params.id || '');
@@ -749,12 +849,10 @@ router.post('/clients/:id/workouts', async (req: Request, res: Response) => {
     }
 
     // Check if assignment already exists
-    const existing = await prisma.workoutAssignment.findUnique({
+    const existing = await prisma.workoutAssignment.findFirst({
       where: {
-        session_client_assignment_unique: {
-          sessionId,
-          clientId: user.id,
-        },
+        sessionId,
+        clientId: user.id,
       },
     });
 
@@ -1524,6 +1622,12 @@ router.get('/clients/:id/weekly-report', (req: Request, res: Response) => {
 // Retrieves transformation milestones (Weeks 1, 4, 8, 12 photos + stats)
 router.get('/clients/:id/transformation-timeline', (req: Request, res: Response) => {
   automationController.getTransformationTimeline(req, res);
+});
+
+// POST /api/v1/admin/clients/:id/transformation-timeline
+// Admin saves/updates transformation milestone for the athlete
+router.post('/clients/:id/transformation-timeline', (req: Request, res: Response) => {
+  automationController.saveTransformationMilestone(req, res);
 });
 
 export const adminRoutes = router;

@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/config/admin_config.dart';
+import 'package:alpha_x_gym/core/auth/secure_token_storage.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/network/network_exceptions.dart';
+import 'package:alpha_x_gym/core/services/push_notification_service.dart';
 
 /// Exception thrown when assessment is safely stored in local queue while device is offline.
 class OfflineAssessmentSyncException implements Exception {
@@ -80,8 +83,9 @@ class AuthService extends ChangeNotifier {
   String? get suspendedAt => _suspendedAt;
   String get currentToken {
     if (_token.isNotEmpty) return _token;
-    if (_role == UserRole.admin) return 'local_admin_session_token';
+    if (_role == UserRole.admin && _isAuthenticated) return 'local_admin_session_token';
     if (_isTestEnvironment) return 'alpha_x_mock_token_for_client';
+    if (!_isAuthenticated) return '';
     // Never return a mock client token in production — empty string forces re-authentication
     return '';
   }
@@ -129,9 +133,14 @@ class AuthService extends ChangeNotifier {
           debugPrint('[AuthService] Successfully acquired fresh Client JWT token');
           return token;
         }
+      } else if (res.statusCode == 401 || res.statusCode == 403) {
+        // Backend explicitly rejected the session (expired beyond 30-day grace period, user deleted, or invalid token)
+        debugPrint('[AuthService] Client session expired beyond recovery or invalid (${res.statusCode}). Purging session.');
+        await logout();
+        return null;
       }
     } catch (e) {
-      debugPrint('[AuthService] Client token refresh notice: $e');
+      debugPrint('[AuthService] Client token refresh network notice: $e');
     }
     return null;
   }
@@ -153,8 +162,18 @@ class AuthService extends ChangeNotifier {
   int get onboardingStep => _onboardingStep;
   Map<String, dynamic> get clientProfile => Map.unmodifiable(_clientProfile);
 
-  void updateLocalProfile(Map<String, dynamic> updated) {
+  Future<void> updateLocalProfile(Map<String, dynamic> updated) async {
+    if (updated.containsKey('name') && updated['name'] != null && updated['name'].toString().isNotEmpty) {
+      _userName = updated['name'].toString();
+    }
+    if (updated.containsKey('phone') && updated['phone'] != null && updated['phone'].toString().isNotEmpty) {
+      _userPhone = updated['phone'].toString();
+    }
+    if (updated.containsKey('photoUrl') && updated['photoUrl'] != null && updated['photoUrl'].toString().isNotEmpty) {
+      _photoUrl = updated['photoUrl'].toString();
+    }
     _clientProfile = {..._clientProfile, ...updated};
+    await _saveActiveSession();
     notifyListeners();
   }
 
@@ -167,35 +186,57 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Initializes AuthService from locally stored active session in SharedPreferences.
+  /// Initializes AuthService from locally stored active session in SecureTokenStorage and SharedPreferences.
   Future<void> initialize() async {
     if (_isInitialized) return;
     try {
       await ApiConfig.initialize();
       final prefs = await SharedPreferences.getInstance();
 
-      // Purge all existing legacy client accounts from local storage to ensure fresh real client data only
-      final clientCleanupKey = 'alpha_x_existing_clients_purged_v1';
-      if (!prefs.containsKey(clientCleanupKey)) {
-        await prefs.remove(_storageKeyClients);
+      // One-time sanitization: remove any plain text passwords previously stored in _storageKeyClients
+      final legacyCleanupKey = 'alpha_x_legacy_passwords_sanitized_v2';
+      if (!prefs.containsKey(legacyCleanupKey)) {
+        try {
+          final clientsJson = prefs.getString(_storageKeyClients);
+          if (clientsJson != null && clientsJson.isNotEmpty) {
+            final List<dynamic> list = jsonDecode(clientsJson);
+            final sanitized = list.map((item) {
+              final map = Map<String, dynamic>.from(item as Map);
+              if (map.containsKey('password')) {
+                final plain = map['password']?.toString();
+                if (plain != null && plain.isNotEmpty) {
+                  map['passwordHash'] = sha256.convert(utf8.encode(plain)).toString();
+                }
+                map.remove('password');
+              }
+              return map;
+            }).toList();
+            await prefs.setString(_storageKeyClients, jsonEncode(sanitized));
+          }
+        } catch (_) {}
+        await prefs.setBool(legacyCleanupKey, true);
+      }
+
+      // Check for saved session: first SecureTokenStorage, then SharedPreferences
+      final secureSession = await SecureTokenStorage.readSessionData();
+      final secureToken = await SecureTokenStorage.readAuthToken();
+
+      Map<String, dynamic>? session = secureSession;
+      if (session == null || session.isEmpty) {
         final sessionJson = prefs.getString(_storageKeySession);
         if (sessionJson != null && sessionJson.isNotEmpty) {
           try {
-            final session = jsonDecode(sessionJson) as Map<String, dynamic>;
-            if (session['role'] == 'CLIENT') {
-              await prefs.remove(_storageKeySession);
-            }
+            session = jsonDecode(sessionJson) as Map<String, dynamic>;
           } catch (_) {}
         }
-        await prefs.setBool(clientCleanupKey, true);
       }
 
-      // Check for saved session
-      final sessionJson = prefs.getString(_storageKeySession);
-      if (sessionJson != null && sessionJson.isNotEmpty) {
-        final session = jsonDecode(sessionJson) as Map<String, dynamic>;
+      if (session != null && session.isNotEmpty) {
         final savedRole = session['role'] as String?;
         final savedEmail = (session['email'] as String? ?? '').trim().toLowerCase();
+        final effectiveToken = (secureToken != null && secureToken.isNotEmpty)
+            ? secureToken
+            : (session['token']?.toString() ?? '');
 
         if (savedRole == 'ADMIN') {
           if (savedEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
@@ -207,12 +248,18 @@ class AuthService extends ChangeNotifier {
             _userPhone = null;
             _photoUrl = null;
             _isAuthenticated = true;
-            _token = session['token'] ?? 'local_admin_session_token';
+            _token = effectiveToken.isNotEmpty ? effectiveToken : 'local_admin_session_token';
             unawaited(refreshAdminToken());
           } else {
             await logout();
           }
         } else if (savedRole == 'CLIENT') {
+          // Strictly prevent Admin email from restoring as Client
+          if (savedEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
+            await logout();
+            return;
+          }
+
           _role = UserRole.client;
           _userId = session['id']?.toString() ?? '';
           _clientId = session['clientId']?.toString() ?? '';
@@ -229,7 +276,34 @@ class AuthService extends ChangeNotifier {
           _approvedAt = session['approvedAt']?.toString();
           _suspendedAt = session['suspendedAt']?.toString();
           _isAuthenticated = true;
-          _token = session['token']?.toString() ?? '';
+          _token = effectiveToken;
+
+          // Migrate to Secure Storage if not yet present
+          if (secureToken == null && _token.isNotEmpty) {
+            unawaited(SecureTokenStorage.writeAuthToken(_token));
+          }
+
+          // Handle token expiry and refresh on startup
+          if (_token.isNotEmpty && !_isTestEnvironment) {
+            if (isTokenExpired) {
+              debugPrint('[AuthService] Client access token expired on startup. Attempting refresh...');
+              final freshToken = await refreshClientToken();
+              if (freshToken == null) {
+                // If token cannot be refreshed and is expired beyond recovery, session is invalid
+                debugPrint('[AuthService] Token refresh failed. Securely clearing expired session.');
+                await logout();
+                return;
+              }
+            } else {
+              // Token is currently valid; proactively check verification status in background
+              unawaited(checkVerificationStatus());
+            }
+          }
+
+          // Connect push notification session
+          if (_userId.isNotEmpty && effectiveToken.isNotEmpty) {
+            unawaited(PushNotificationService.instance.onUserLogin(userId: _userId, authToken: effectiveToken));
+          }
 
           final pendingJson = prefs.getString(_storageKeyPendingAssessment);
           _hasPendingAssessmentSync = pendingJson != null && pendingJson.isNotEmpty;
@@ -278,10 +352,9 @@ class AuthService extends ChangeNotifier {
     return await _loadClientAccounts();
   }
 
-  /// Saves the active authenticated session into SharedPreferences.
+  /// Saves the active authenticated session into SecureTokenStorage and SharedPreferences.
   Future<void> _saveActiveSession() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final session = {
         'id': _userId,
         'clientId': _clientId,
@@ -302,13 +375,27 @@ class AuthService extends ChangeNotifier {
         'clientProfile': _clientProfile,
         'savedAt': DateTime.now().toIso8601String(),
       };
+
+      // 1. Secure token & session persistence using Flutter Secure Storage (Android KeyStore / iOS Keychain)
+      if (_token.isNotEmpty) {
+        await SecureTokenStorage.writeAuthToken(_token);
+      }
+      await SecureTokenStorage.writeSessionData(session);
+
+      // 2. Persist in SharedPreferences as fallback
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_storageKeySession, jsonEncode(session));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[AuthService] _saveActiveSession error: $e');
+    }
   }
 
   /// Returns the locally stored active session if present.
   Future<Map<String, dynamic>?> getActiveLocalSession() async {
     try {
+      final secure = await SecureTokenStorage.readSessionData();
+      if (secure != null && secure.isNotEmpty) return secure;
+
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString(_storageKeySession);
       if (jsonStr != null && jsonStr.isNotEmpty) {
@@ -318,7 +405,7 @@ class AuthService extends ChangeNotifier {
     return null;
   }
 
-  /// Saves a client account to the local list.
+  /// Saves a client account to the local list (NEVER stores plain text passwords).
   Future<void> _saveClientAccountLocally({
     required String id,
     required String clientId,
@@ -338,13 +425,18 @@ class AuthService extends ChangeNotifier {
           (c['email'] as String? ?? '').trim().toLowerCase() == email.trim().toLowerCase(),
     );
 
+    // Never store plain text password. Compute SHA-256 hash if needed for test mocks.
+    final passwordHash = (password != null && password.isNotEmpty)
+        ? sha256.convert(utf8.encode(password)).toString()
+        : null;
+
     final record = {
       'id': id,
       'clientId': clientId,
       'name': name,
       'email': email,
       'phone': phone,
-      'password': password,
+      'passwordHash': ?passwordHash,
       'photoUrl': photoUrl,
       'onboardingCompleted': onboardingCompleted,
       'assessmentCompleted': onboardingCompleted,
@@ -449,6 +541,9 @@ class AuthService extends ChangeNotifier {
             'alpha_x_step_start_date_$generatedClientId',
             DateTime.now().toIso8601String(),
           );
+          if (_userId.isNotEmpty && _token.isNotEmpty) {
+            unawaited(PushNotificationService.instance.onUserLogin(userId: _userId, authToken: _token));
+          }
           notifyListeners();
 
           return {
@@ -616,6 +711,9 @@ class AuthService extends ChangeNotifier {
           );
 
           await _saveActiveSession();
+          if (_userId.isNotEmpty && _token.isNotEmpty) {
+            unawaited(PushNotificationService.instance.onUserLogin(userId: _userId, authToken: _token));
+          }
           notifyListeners();
 
           return {
@@ -657,7 +755,10 @@ class AuthService extends ChangeNotifier {
           orElse: () => {},
         );
         if (matched.isNotEmpty) {
-          if (matched['password'] != null && matched['password'] != password) {
+          final passwordHash = sha256.convert(utf8.encode(password)).toString();
+          if (matched['passwordHash'] != null && matched['passwordHash'] != passwordHash) {
+            throw Exception('Invalid password.');
+          } else if (matched['password'] != null && matched['password'] != password) {
             throw Exception('Invalid password.');
           }
           _role = UserRole.client;
@@ -1032,7 +1133,10 @@ class AuthService extends ChangeNotifier {
   /// Complete logout: purges active session and resets state.
   Future<void> logout() async {
     _resetSession();
+    unawaited(PushNotificationService.instance.onUserLogout());
     try {
+      await SecureTokenStorage.deleteAuthToken();
+      await SecureTokenStorage.deleteSessionData();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKeySession);
     } catch (_) {}

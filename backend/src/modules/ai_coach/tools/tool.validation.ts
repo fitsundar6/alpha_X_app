@@ -170,6 +170,64 @@ export class ToolValidationService {
         return data.substring(0, maxCharacters - 50) + '... [TRUNCATED]';
       }
 
+      // If data is an object, preserve critical envelope fields (proposal, proposalId, success, status, etc.)
+      if (typeof data === 'object') {
+        const preserved: Record<string, any> = {
+          success: data.success,
+          proposalId: data.proposalId,
+          status: data.status,
+          message: data.message,
+          clientName: data.clientName,
+          planTitle: data.planTitle || data.planName,
+          source: data.source,
+          error: data.error,
+          note: data.note,
+        };
+
+        for (const [k, v] of Object.entries(preserved)) {
+          if (v === undefined) delete preserved[k];
+        }
+
+        if (data.proposal && typeof data.proposal === 'object') {
+          preserved.proposal = {
+            id: data.proposal.id,
+            clientId: data.proposal.clientId,
+            clientName: data.proposal.clientName,
+            type: data.proposal.type,
+            title: data.proposal.title,
+            summary: data.proposal.summary,
+            reason: data.proposal.reason,
+            status: data.proposal.status,
+            payload: data.proposal.payload,
+          };
+        }
+
+        // Check if preserved object alone fits within limit
+        if (JSON.stringify(preserved).length <= maxCharacters) {
+          return preserved;
+        }
+
+        // If payload is large, compact exercises inside payload but keep proposal envelope intact
+        if (preserved.proposal?.payload) {
+          const payloadCopy = { ...preserved.proposal.payload };
+          if (Array.isArray(payloadCopy.exercises) && payloadCopy.exercises.length > 8) {
+            payloadCopy.exercises = payloadCopy.exercises.slice(0, 8);
+            payloadCopy._note = 'Exercise preview trimmed for tool response; full plan is safely persisted in the database.';
+          }
+          preserved.proposal.payload = payloadCopy;
+          if (JSON.stringify(preserved).length <= maxCharacters) {
+            return preserved;
+          }
+        }
+
+        // Fallback: return preserved envelope with truncation notice, preserving proposalId & status
+        return {
+          ...preserved,
+          _truncated: true,
+          _notice: `Tool result payload exceeded limit (${maxCharacters} chars); complete proposal preserved in database under ID ${data.proposalId || data.proposal?.id || 'unknown'}`,
+        };
+      }
+
       // Otherwise return truncated preview
       return {
         _truncated: true,
