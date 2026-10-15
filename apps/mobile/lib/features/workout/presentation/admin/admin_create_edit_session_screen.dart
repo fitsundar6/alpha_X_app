@@ -386,8 +386,9 @@ class _AdminCreateEditSessionScreenState
 
     final duration =
         int.tryParse(_durationController.text.trim()) ?? 45;
-    final isEditing = widget.sessionToEdit != null;
-    final sessionId = isEditing
+    final isDraftSession = widget.sessionToEdit != null && widget.sessionToEdit!.id.startsWith('ai_draft_');
+    final isEditing = widget.sessionToEdit != null && !isDraftSession;
+    final sessionId = widget.sessionToEdit != null
         ? widget.sessionToEdit!.id
         : 'ws_${DateTime.now().millisecondsSinceEpoch}';
 

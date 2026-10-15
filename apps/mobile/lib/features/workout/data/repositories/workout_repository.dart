@@ -1117,6 +1117,10 @@ class WorkoutRepository extends ChangeNotifier {
       }
 
       if (response.statusCode == 200) return true;
+      if (response.statusCode == 404) {
+        // Fallback: If session does not exist on server to update, auto-create it
+        return await createSession(session);
+      }
       debugPrint('[WorkoutRepository] updateSession error: ${response.statusCode} -> ${response.body}');
       return false;
     } catch (e) {
@@ -1295,7 +1299,11 @@ class WorkoutRepository extends ChangeNotifier {
 
       if (response.statusCode == 404) {
         // If the session exists in local memory but hasn't reached DB, push it first
-        final localIdx = _sessions.indexWhere((s) => s.id == sessionId);
+        var localIdx = _sessions.indexWhere((s) => s.id == sessionId);
+        if (localIdx == -1 && _activeSession.id == sessionId) {
+          _sessions.insert(0, _activeSession);
+          localIdx = 0;
+        }
         if (localIdx != -1) {
           final localSession = _sessions[localIdx];
           final synced = await createSession(localSession);
