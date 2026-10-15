@@ -703,14 +703,29 @@ router.get('/split-templates', (req: Request, res: Response) => {
  */
 export const handleGenerateProposal = async (req: Request, res: Response): Promise<void> => {
   const {
-    clientIdentifier,
-    planType,
     conversationId,
     workoutConfig,
     dietConfig,
   } = req.body;
 
-  if (!clientIdentifier || typeof clientIdentifier !== 'string' || !clientIdentifier.trim()) {
+  const clientIdentifier = (
+    req.body.clientIdentifier ||
+    req.body.clientId ||
+    req.body.memberId ||
+    req.body.userId ||
+    ''
+  ).toString().trim();
+
+  const rawPlanType = (
+    req.body.planType ||
+    req.body.type ||
+    req.body.proposalType ||
+    (req.body.workoutConfig ? 'WORKOUT' : req.body.dietConfig ? 'DIET' : '')
+  ).toString().toUpperCase().trim();
+
+  const planType = rawPlanType.includes('DIET') ? 'DIET' : (rawPlanType.includes('WORKOUT') ? 'WORKOUT' : rawPlanType);
+
+  if (!clientIdentifier) {
     sendError(res, 'VALIDATION_ERROR', 'clientIdentifier is required', HttpStatus.BAD_REQUEST);
     return;
   }
@@ -866,10 +881,10 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
       : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
     const tdee = Math.round(bmr * 1.55);
 
-    let dailyCalories = dietConfig?.dailyCalories;
-    let protein = dietConfig?.protein;
-    let carbs = dietConfig?.carbohydrates;
-    let fat = dietConfig?.fat;
+    let dailyCalories = Number(dietConfig?.dailyCalories || dietConfig?.calorieTarget || dietConfig?.calories) || undefined;
+    let protein = Number(dietConfig?.protein || dietConfig?.proteinGrams) || undefined;
+    let carbs = Number(dietConfig?.carbohydrates || dietConfig?.carbGrams || dietConfig?.carbs) || undefined;
+    let fat = Number(dietConfig?.fat || dietConfig?.fatGrams) || undefined;
 
     if (!dailyCalories) {
       if (/fat loss|cutting/i.test(primaryGoal)) {
@@ -923,7 +938,7 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
         ? { name: 'Grilled Chicken Breast', qty: 150, unit: 'g', cal: 248, pro: 46, carb: 0, fat: 5 }
         : { name: 'Lentils / Dal & Tofu', qty: 150, unit: 'g', cal: 225, pro: 25, carb: 12, fat: 5 };
 
-      meals = [
+      const rawMeals = [
         {
           mealType: 'Breakfast',
           timing: '8:00 AM',
@@ -957,6 +972,25 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
           ],
         },
       ];
+
+      // Proportionally scale meal portions and calories so sum closely matches dailyCalories
+      const totalRawCalories = rawMeals.reduce((acc, m) => {
+        return acc + m.foods.reduce((sum, f) => sum + (Number(f.calories) || 0), 0);
+      }, 0);
+
+      const scale = totalRawCalories > 0 && dailyCalories > 0 ? dailyCalories / totalRawCalories : 1.0;
+
+      meals = rawMeals.map((meal) => ({
+        ...meal,
+        foods: meal.foods.map((food) => ({
+          ...food,
+          quantity: Math.max(1, Math.round(Number(food.quantity) * scale)),
+          calories: Math.max(1, Math.round(Number(food.calories) * scale)),
+          protein: Math.round(Number(food.protein) * scale * 10) / 10,
+          carbs: Math.round(Number(food.carbs) * scale * 10) / 10,
+          fat: Math.round(Number(food.fat) * scale * 10) / 10,
+        })),
+      }));
     }
 
     const dietResult = await proposeDietPlanTool.handler(

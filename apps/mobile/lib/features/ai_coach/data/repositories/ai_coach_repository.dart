@@ -611,8 +611,29 @@ class AiCoachRepository extends ChangeNotifier {
         }
       }
 
-      // If remote cloud returned 404, attempt local development server fallback
+      // If remote cloud returned 404 on /admin/ai-coach/proposals/generate,
+      // try alternative endpoint /admin/ai-proposals/generate
       if (resp.statusCode == 404) {
+        try {
+          final altCloudUrl = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-proposals/generate');
+          final altResp = await _httpClient.post(
+            altCloudUrl,
+            headers: _buildHeaders(),
+            body: jsonEncode(payload),
+          ).timeout(const Duration(seconds: 15));
+
+          if (altResp.statusCode == 200 || altResp.statusCode == 201) {
+            final decoded = jsonDecode(altResp.body);
+            if (decoded['success'] == true && decoded['data'] != null) {
+              final propData = decoded['data']['proposal'];
+              if (propData != null) {
+                return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+              }
+            }
+          }
+        } catch (_) {}
+
+        // Then attempt local development servers
         final candidateBases = [
           ApiConfig.localhostUrl,
           ApiConfig.emulatorUrl,
@@ -620,24 +641,26 @@ class AiCoachRepository extends ChangeNotifier {
         ];
         for (final base in candidateBases) {
           if (base == AppConstants.apiBaseUrl) continue;
-          try {
-            final localUrl = Uri.parse('$base/admin/ai-coach/proposals/generate');
-            final localResp = await _httpClient.post(
-              localUrl,
-              headers: _buildHeaders(),
-              body: jsonEncode(payload),
-            ).timeout(const Duration(seconds: 5));
+          for (final route in ['/admin/ai-coach/proposals/generate', '/admin/ai-proposals/generate']) {
+            try {
+              final localUrl = Uri.parse('$base$route');
+              final localResp = await _httpClient.post(
+                localUrl,
+                headers: _buildHeaders(),
+                body: jsonEncode(payload),
+              ).timeout(const Duration(seconds: 5));
 
-            if (localResp.statusCode == 200 || localResp.statusCode == 201) {
-              final decoded = jsonDecode(localResp.body);
-              if (decoded['success'] == true && decoded['data'] != null) {
-                final propData = decoded['data']['proposal'];
-                if (propData != null) {
-                  return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+              if (localResp.statusCode == 200 || localResp.statusCode == 201) {
+                final decoded = jsonDecode(localResp.body);
+                if (decoded['success'] == true && decoded['data'] != null) {
+                  final propData = decoded['data']['proposal'];
+                  if (propData != null) {
+                    return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+                  }
                 }
               }
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
         }
       }
     } catch (e) {
