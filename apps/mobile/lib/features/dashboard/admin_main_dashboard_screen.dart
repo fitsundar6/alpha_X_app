@@ -66,6 +66,15 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   String _clientSearchQuery = '';
   int _pendingVerificationCount = 0;
 
+  // Push Notification Broadcast state
+  final TextEditingController _pushTitleController = TextEditingController();
+  final TextEditingController _pushBodyController = TextEditingController();
+  Map<String, dynamic>? _audiencePreview;
+  bool _isLoadingAudiencePreview = false;
+  bool _isSendingBroadcast = false;
+  Map<String, dynamic>? _broadcastResult;
+  String? _broadcastError;
+
   final List<String> _tabTitles = [
     '🤖 AI COACH',
     '👥 CLIENTS',
@@ -95,6 +104,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   @override
   void dispose() {
     _clientSearchController.dispose();
+    _pushTitleController.dispose();
+    _pushBodyController.dispose();
     super.dispose();
   }
 
@@ -2271,6 +2282,130 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
+  // ── Push Notification Audience Preview ────────────────────────────────────
+  Future<void> _loadAudiencePreview() async {
+    if (_isLoadingAudiencePreview) return;
+    setState(() { _isLoadingAudiencePreview = true; });
+    try {
+      final token = await AuthService().getValidToken();
+      if (token.isEmpty) return;
+      final res = await http.get(
+        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/audience-preview'),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
+      ).timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200 && mounted) {
+        final body = jsonDecode(res.body);
+        setState(() { _audiencePreview = body['data'] as Map<String, dynamic>?; });
+      }
+    } catch (e) {
+      debugPrint('[AdminDashboard] Audience preview failed: $e');
+    } finally {
+      if (mounted) setState(() { _isLoadingAudiencePreview = false; });
+    }
+  }
+
+  // ── Push Notification Broadcast Send ───────────────────────────────────────
+  Future<void> _sendBroadcast() async {
+    final title = _pushTitleController.text.trim();
+    final body = _pushBodyController.text.trim();
+    if (title.isEmpty || body.isEmpty) return;
+
+    // Confirmation dialog
+    final eligibleCount = (_audiencePreview?['summary']?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _confirmRow('Title', title),
+            const SizedBox(height: 8),
+            _confirmRow('Message', body),
+            const SizedBox(height: 8),
+            _confirmRow('Audience', 'All Eligible Clients ($eligibleCount devices)'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.4)),
+              ),
+              child: const Text(
+                '⚠️ This will send a real push notification to all eligible registered devices. '  
+                'HTTP 200 from backend means OneSignal accepted the request — actual delivery '  
+                'to device depends on FCM and device notification permissions.',
+                style: TextStyle(color: Colors.orange, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Send Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() { _isSendingBroadcast = true; _broadcastResult = null; _broadcastError = null; });
+    try {
+      final token = await AuthService().getValidToken();
+      if (token.isEmpty) {
+        setState(() { _broadcastError = 'Authentication failed. Please log in again.'; });
+        return;
+      }
+      final res = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/broadcast'),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
+        body: jsonEncode({
+          'title': title,
+          'body': body,
+          'targetAudience': 'ALL_ELIGIBLE',
+          'confirmBroadcast': true,
+        }),
+      ).timeout(const Duration(seconds: 30));
+      if (mounted) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        if (res.statusCode == 200 && decoded['success'] == true) {
+          setState(() { _broadcastResult = decoded['data'] as Map<String, dynamic>?; });
+        } else {
+          final err = decoded['error'] as Map<String, dynamic>?;
+          setState(() {
+            _broadcastError = err?['message'] as String? ?? 'Unknown error (HTTP ${res.statusCode})';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() { _broadcastError = 'Network error: $e'; });
+    } finally {
+      if (mounted) setState(() { _isSendingBroadcast = false; });
+    }
+  }
+
+  Widget _confirmRow(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(color: Colors.white70, fontSize: 13),
+        children: [
+          TextSpan(text: '$label: ', style: const TextStyle(color: Colors.white54)),
+          TextSpan(text: value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
   // --- TAB 8: ⚙️ SETTINGS TAB ---
   Widget _buildSettingsTab() {
     final themeService = ClientThemeService();
@@ -2421,9 +2556,346 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 if (mounted) setState(() {});
               },
             ),
+            const SizedBox(height: 28),
+            // ── Push Notification Broadcast Panel ────────────────────────────
+            Text(
+              '📣 PUSH NOTIFICATIONS',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildPushNotificationPanel(colors, isDark),
+            const SizedBox(height: 24),
           ],
         );
       },
+    );
+  }
+
+  // ── Admin Push Notification Broadcast Panel Widget ─────────────────────────
+  Widget _buildPushNotificationPanel(ClientThemeColors colors, bool isDark) {
+    final summary = _audiencePreview?['summary'] as Map<String, dynamic>?;
+    final eligibleCount = (summary?['eligiblePushRecipientsCount'] as num?)?.toInt();
+    final totalClients = (summary?['totalRegisteredClients'] as num?)?.toInt();
+    final unregistered = (summary?['unregisteredDeviceCount'] as num?)?.toInt();
+    final optedOut = (summary?['optedOutCount'] as num?)?.toInt();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.campaign_rounded, color: AppColors.primaryRed, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Broadcast to All Clients',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      'Send a push notification to all eligible registered devices',
+                      style: TextStyle(color: colors.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Audience Preview Card
+          GestureDetector(
+            onTap: _loadAudiencePreview,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: eligibleCount != null && eligibleCount > 0
+                      ? Colors.greenAccent.withOpacity(0.35)
+                      : colors.border,
+                ),
+              ),
+              child: _isLoadingAudiencePreview
+                  ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)))
+                  : summary == null
+                      ? Row(
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+                            const SizedBox(width: 8),
+                            Text('Tap to load audience preview', style: TextStyle(color: colors.textSecondary, fontSize: 13)),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('AUDIENCE PREVIEW', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _audienceStat('Eligible', '$eligibleCount', Colors.greenAccent),
+                                _audienceStat('Total Clients', '$totalClients', colors.primary),
+                                _audienceStat('No Token', '$unregistered', Colors.orange),
+                                _audienceStat('Opted Out', '$optedOut', Colors.white54),
+                              ],
+                            ),
+                          ],
+                        ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Title Field
+          Text('Notification Title', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _pushTitleController,
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
+            maxLength: 80,
+            decoration: InputDecoration(
+              hintText: 'e.g. 🏋️ New Week. New Goals.',
+              hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
+              counterStyle: TextStyle(color: colors.textSecondary, fontSize: 10),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Message Body Field
+          Text('Message Body', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _pushBodyController,
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
+            maxLength: 200,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'e.g. Your next session starts Monday. Stay strong and stay consistent 💪',
+              hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
+              counterStyle: TextStyle(color: colors.textSecondary, fontSize: 10),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Target Audience Info Banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colors.primary.withOpacity(0.25)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.group_rounded, size: 16, color: colors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Target: All Eligible Clients  •  Excludes admins, demo/test accounts, opted-out & unregistered devices',
+                    style: TextStyle(color: colors.primary, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Send Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isSendingBroadcast || (_pushTitleController.text.trim().isEmpty || _pushBodyController.text.trim().isEmpty)
+                  ? null
+                  : _sendBroadcast,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.3),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: _isSendingBroadcast
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+              label: Text(
+                _isSendingBroadcast ? 'Sending...' : 'Send to All Eligible Clients',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+              ),
+            ),
+          ),
+
+          // Result Panel
+          if (_broadcastResult != null) ...[
+            const SizedBox(height: 16),
+            _buildBroadcastResult(colors, isDark),
+          ],
+          if (_broadcastError != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_broadcastError!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _audienceStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900)),
+        Text(label, style: TextStyle(color: Colors.white54, fontSize: 10)),
+      ],
+    );
+  }
+
+  Widget _buildBroadcastResult(ClientThemeColors colors, bool isDark) {
+    final result = _broadcastResult!;
+    final success = result['broadcastSuccess'] as bool? ?? false;
+    final summary = result['recipientsSummary'] as Map<String, dynamic>?;
+    final lifecycle = result['deliveryLifecycle'] as Map<String, dynamic>?;
+    final gateway = result['gatewayResponse'] as Map<String, dynamic>?;
+    final notifId = gateway?['notificationId'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: success ? Colors.greenAccent.withOpacity(0.06) : Colors.orange.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: success ? Colors.greenAccent.withOpacity(0.3) : Colors.orange.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(success ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: success ? Colors.greenAccent : Colors.orange, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                success ? 'Broadcast Accepted by Gateway' : 'Broadcast Partially Processed',
+                style: TextStyle(
+                  color: success ? Colors.greenAccent : Colors.orange,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (summary != null) ...[
+            _resultRow('Eligible Clients', '${summary['eligibleClientsTotal']}', colors),
+            _resultRow('Push Devices Targeted', '${summary['pushDevicesTargeted']}', colors),
+            _resultRow('In-App Notifications Created', '${summary['inAppNotificationsCreated']}', colors),
+          ],
+          if (notifId != null) _resultRow('OneSignal Notification ID', notifId, colors),
+          const Divider(color: Colors.white12, height: 16),
+          Text('DELIVERY STAGES', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+          const SizedBox(height: 6),
+          _deliveryStage('Gateway Accepted', lifecycle?['stage1_gatewayAccepted'] == true, colors),
+          _deliveryStage('FCM Transit', lifecycle?['stage2_fcmTransit']?.toString().contains('Dispatched') == true, colors, label: lifecycle?['stage2_fcmTransit'] as String?),
+          _deliveryStage('Device Display', false, colors, label: lifecycle?['stage3_deviceDisplay'] as String?),
+          const SizedBox(height: 6),
+          Text(
+            '⚠️ Stage 1 (gateway) ≠ delivery. Actual device receipt depends on FCM, network, and device notification permissions.',
+            style: const TextStyle(color: Colors.orange, fontSize: 10),
+          ),
+          if (gateway?['error'] != null) ...[
+            const SizedBox(height: 8),
+            Text('Gateway error: ${gateway!['error']}', style: const TextStyle(color: Colors.red, fontSize: 11)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _resultRow(String label, String value, ClientThemeColors colors) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+          Text(value, style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _deliveryStage(String stage, bool done, ClientThemeColors colors, {String? label}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        children: [
+          Icon(done ? Icons.check_circle_outline : Icons.radio_button_unchecked,
+              size: 14, color: done ? Colors.greenAccent : Colors.white38),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label != null ? '$stage: $label' : stage,
+              style: TextStyle(color: done ? Colors.greenAccent : Colors.white54, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

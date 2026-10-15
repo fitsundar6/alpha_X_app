@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // Required for Firebase/FCM — OneSignal v5 uses FCM for Android push delivery.
+    // STEP: Download google-services.json from Firebase Console and place it at
+    //       apps/mobile/android/app/google-services.json, then uncomment the next line.
+    // id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

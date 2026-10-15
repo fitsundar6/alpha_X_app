@@ -19,7 +19,7 @@ class PushNotificationService {
   static final PushNotificationService _instance = PushNotificationService._internal();
   static PushNotificationService get instance => _instance;
 
-  static const String oneSignalAppId = '56c1791b-aa5e-4042-8fba-e370433b8055';
+  static const String oneSignalAppId = 'b57d6e24-d636-42ce-bb54-bc95fe4ce74e';
 
   bool _initialized = false;
   String? _currentUserId;
@@ -48,34 +48,56 @@ class PushNotificationService {
     try {
       OneSignal.initialize(oneSignalAppId);
       _initialized = true;
+      debugPrint('[OneSignal] ✅ Initialized with App ID: $oneSignalAppId');
 
       // Request runtime notification permission (shows system dialog on iOS & Android 13+)
       unawaited(OneSignal.Notifications.requestPermission(true));
 
       // Foreground notification listener — triggers immediate UI sync for real-time coach alerts
       OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-        debugPrint('[OneSignal] Foreground notification received: ${event.notification.title}');
+        debugPrint('[OneSignal] 📩 Foreground notification: "${event.notification.title}"');
+        // Display the notification while the app is in foreground
+        event.preventDefault();
+        event.notification.display();
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
+      });
+
+      // Notification tap/click handler — called when user taps a notification
+      // (works for both foreground and background/terminated state taps)
+      OneSignal.Notifications.addClickListener((event) {
+        final title = event.notification.title ?? '';
+        final type = event.notification.additionalData?['type'] as String? ?? '';
+        debugPrint('[OneSignal] 🔔 Notification tapped: "$title" (type: $type)');
+        // Trigger immediate data sync so the app reflects the latest server state
+        AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Notification Tapped');
       });
 
       // Observer for push subscription state (e.g. when FCM generates token after handshake)
       OneSignal.User.pushSubscription.addObserver((state) {
         final newId = state.current.id;
-        debugPrint('[OneSignal] Push subscription state updated. ID: $newId (optedIn: ${state.current.optedIn})');
+        final optedIn = state.current.optedIn;
+        debugPrint('[OneSignal] 🔄 Subscription updated. ID: ${newId ?? "null"} | optedIn: $optedIn');
         if (newId != null && newId.isNotEmpty && newId != _lastRegisteredPlayerId) {
+          debugPrint('[OneSignal] 📲 New push subscription ID detected: $newId');
           if (_currentAuthToken != null && _currentAuthToken!.isNotEmpty) {
             unawaited(_uploadPlayerIdToServer(_currentAuthToken!, newId));
+          } else {
+            debugPrint('[OneSignal] ⚠️ No auth token available to upload subscription ID. Will retry on next login.');
           }
         }
       });
 
       // Immediate check if a subscription ID is already available
       final initialId = OneSignal.User.pushSubscription.id;
+      final initialOptedIn = OneSignal.User.pushSubscription.optedIn;
       if (initialId != null && initialId.isNotEmpty) {
-        debugPrint('[OneSignal] Initial push subscription ID: $initialId');
+        debugPrint('[OneSignal] 📲 Existing subscription ID at init: $initialId (optedIn: $initialOptedIn)');
+      } else {
+        debugPrint('[OneSignal] ℹ️ No push subscription ID at init yet. This is normal on first launch — FCM will generate one shortly.');
+        debugPrint('[OneSignal] ℹ️ If no ID appears, ensure google-services.json is in android/app/ and the app has notification permission.');
       }
     } catch (e) {
-      debugPrint('[OneSignal] Initialization error: $e');
+      debugPrint('[OneSignal] ❌ Initialization error: $e');
     }
   }
 

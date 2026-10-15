@@ -303,7 +303,7 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
   final TextEditingController _preferredController = TextEditingController();
   final TextEditingController _avoidController = TextEditingController();
 
-  // Step 3 (Diet): Configuration State
+  // Step 3 (Diet): Configuration & BMR / Macro Calculator State
   bool _isMacroOnly = false;
   String _dietGoal = 'Fat Loss';
   final TextEditingController _caloriesController = TextEditingController(text: '2000');
@@ -314,6 +314,26 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
   final TextEditingController _waterController = TextEditingController(text: '3.5');
   final Set<String> _dietaryPreferences = <String>{};
   int _mealsPerDay = 4;
+
+  // Dedicated BMR / TDEE Calculator Controls & State
+  final TextEditingController _calcWeightController = TextEditingController(text: '70');
+  final TextEditingController _calcHeightController = TextEditingController(text: '175');
+  final TextEditingController _calcAgeController = TextEditingController(text: '28');
+  String _calcSex = 'male'; // 'male', 'female', 'unisex_midpoint'
+  String _calcActivityLevel = 'MODERATE'; // 'SEDENTARY', 'LIGHT', 'MODERATE', 'VERY_ACTIVE', 'EXTRA_ACTIVE'
+  double _calcCalorieAdjustmentPct = -20.0;
+  double _calcProteinRatioGPerKg = 2.2;
+  bool _isCustomOverride = false;
+  int _calculatedBmr = 0;
+  int _calculatedTdee = 0;
+  int _calculatedTargetCalories = 0;
+  int _calculatedProtein = 0;
+  int _calculatedCarbs = 0;
+  int _calculatedFat = 0;
+  int _calculatedFiber = 30;
+  double _calculatedWater = 3.5;
+  String? _calculatorSafetyWarning;
+  bool _isClientBiometricsMissing = false;
 
   bool _isGenerating = false;
   String? _errorMessage;
@@ -347,6 +367,8 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
       'clientId': 'AXG-0001',
       'id': 'AXG-0001',
       'name': 'Kumar',
+      'gender': 'male',
+      'age': '28',
       'primaryGoal': 'Hypertrophy',
       'fitnessLevel': 'Intermediate',
       'trainingDaysPerWeek': '4',
@@ -360,6 +382,8 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
       'clientId': 'AXG-0002',
       'id': 'AXG-0002',
       'name': 'Alex Johnson',
+      'gender': 'male',
+      'age': '28',
       'primaryGoal': 'Strength',
       'fitnessLevel': 'Advanced',
       'trainingDaysPerWeek': '5',
@@ -372,6 +396,8 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
       'clientId': 'AXG-0003',
       'id': 'AXG-0003',
       'name': 'Sarah Smith',
+      'gender': 'female',
+      'age': '28',
       'primaryGoal': 'Fat Loss',
       'fitnessLevel': 'Beginner',
       'trainingDaysPerWeek': '3',
@@ -426,107 +452,182 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
           _exclusionsController.text = match['injuryAreas']!;
         }
 
-        // Auto compute personalized diet metrics based on client biometrics and goal
-        _recalculateDietMacrosForGoal(_dietGoal);
+        // Initialize calculator biometrics from client profile
+        final rawWeight = double.tryParse(_selectedClientData['weightKg'] ?? '');
+        final rawHeight = double.tryParse(_selectedClientData['heightCm'] ?? '');
+        final rawAge = int.tryParse(_selectedClientData['age'] ?? '');
+        final rawGender = (_selectedClientData['gender'] ?? _selectedClientData['sex'] ?? '').toLowerCase();
+
+        _isClientBiometricsMissing = rawWeight == null || rawWeight <= 0 || rawHeight == null || rawHeight <= 0;
+
+        _calcWeightController.text = (rawWeight != null && rawWeight > 0)
+            ? (rawWeight == rawWeight.roundToDouble() ? rawWeight.toInt().toString() : rawWeight.toString())
+            : '70';
+        _calcHeightController.text = (rawHeight != null && rawHeight > 0)
+            ? (rawHeight == rawHeight.roundToDouble() ? rawHeight.toInt().toString() : rawHeight.toString())
+            : '175';
+        _calcAgeController.text = (rawAge != null && rawAge > 0 && rawAge < 100) ? rawAge.toString() : '28';
+
+        if (rawGender.contains('female') || rawGender == 'f') {
+          _calcSex = 'female';
+        } else if (rawGender.contains('male') || rawGender == 'm') {
+          _calcSex = 'male';
+        } else {
+          _calcSex = 'unisex_midpoint';
+        }
+
+        final act = (_selectedClientData['activityLevel'] ?? '').toUpperCase();
+        if (act.contains('EXTRA')) {
+          _calcActivityLevel = 'EXTRA_ACTIVE';
+        } else if (act.contains('VERY') || act.contains('HIGH')) {
+          _calcActivityLevel = 'VERY_ACTIVE';
+        } else if (act.contains('SEDENTARY') || act.contains('LOW')) {
+          _calcActivityLevel = 'SEDENTARY';
+        } else if (act.contains('LIGHT')) {
+          _calcActivityLevel = 'LIGHT';
+        } else {
+          final tDays = int.tryParse(_selectedClientData['trainingDaysPerWeek'] ?? '') ?? _daysPerWeek;
+          if (tDays >= 6) {
+            _calcActivityLevel = 'VERY_ACTIVE';
+          } else if (tDays >= 4) {
+            _calcActivityLevel = 'MODERATE';
+          } else if (tDays == 3) {
+            _calcActivityLevel = 'LIGHT';
+          } else {
+            _calcActivityLevel = 'SEDENTARY';
+          }
+        }
+
+        _isCustomOverride = false;
+        _syncGoalDefaults(_dietGoal);
+        _executeBmrAndMacroCalculations(syncToInputs: true);
       }
     } else {
-      _recalculateDietMacrosForGoal(_dietGoal);
+      _syncGoalDefaults(_dietGoal);
+      _executeBmrAndMacroCalculations(syncToInputs: true);
+    }
+  }
+
+  void _syncGoalDefaults(String goal) {
+    final lower = goal.toLowerCase();
+    if (lower.contains('fat loss') || lower.contains('cutting') || lower.contains('cut') || lower.contains('deficit')) {
+      _calcCalorieAdjustmentPct = -20.0;
+      _calcProteinRatioGPerKg = 2.2;
+    } else if (lower.contains('lean') || lower.contains('bulk') || lower.contains('muscle') || lower.contains('hypertrophy')) {
+      _calcCalorieAdjustmentPct = 10.0;
+      _calcProteinRatioGPerKg = 2.0;
+    } else if (lower.contains('athletic') || lower.contains('performance') || lower.contains('endurance') || lower.contains('sport')) {
+      _calcCalorieAdjustmentPct = 8.0;
+      _calcProteinRatioGPerKg = 1.9;
+    } else {
+      _calcCalorieAdjustmentPct = 0.0;
+      _calcProteinRatioGPerKg = 1.8;
+    }
+  }
+
+  double _getActivityMultiplier() {
+    switch (_calcActivityLevel) {
+      case 'SEDENTARY':
+        return 1.20;
+      case 'LIGHT':
+        return 1.375;
+      case 'MODERATE':
+        return 1.55;
+      case 'VERY_ACTIVE':
+        return 1.725;
+      case 'EXTRA_ACTIVE':
+        return 1.90;
+      default:
+        return 1.55;
+    }
+  }
+
+  void _executeBmrAndMacroCalculations({bool syncToInputs = false}) {
+    final rawW = double.tryParse(_calcWeightController.text);
+    final rawH = double.tryParse(_calcHeightController.text);
+    final rawA = int.tryParse(_calcAgeController.text);
+
+    final weightKg = (rawW != null && rawW > 0) ? rawW : 70.0;
+    final heightCm = (rawH != null && rawH > 0) ? rawH : 175.0;
+    final age = (rawA != null && rawA > 0 && rawA < 100) ? rawA : 28;
+
+    // 1. Mifflin-St Jeor BMR
+    double bmr;
+    if (_calcSex == 'female') {
+      bmr = (10 * weightKg + 6.25 * heightCm - 5 * age - 161);
+    } else if (_calcSex == 'male') {
+      bmr = (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
+    } else {
+      bmr = (10 * weightKg + 6.25 * heightCm - 5 * age - 78);
+    }
+    _calculatedBmr = bmr.round();
+
+    // 2. Activity Multiplier -> TDEE
+    final activityMultiplier = _getActivityMultiplier();
+    _calculatedTdee = (bmr * activityMultiplier).round();
+
+    // 3. Goal-adjusted Daily Calorie Target
+    final adjustedCalories = (_calculatedTdee * (1.0 + _calcCalorieAdjustmentPct / 100.0)).round();
+
+    // 4. Protein Allocation
+    int proteinGrams = (weightKg * _calcProteinRatioGPerKg).round();
+    if (proteinGrams < 100) proteinGrams = 100;
+
+    // 5. Fat Allocation (configurable range with safety floor)
+    final lowerGoal = _dietGoal.toLowerCase();
+    int fatGrams;
+    if (lowerGoal.contains('fat loss')) {
+      final fatFromPct = (adjustedCalories * 0.22 / 9).round();
+      final minFat = (weightKg * 0.7).round();
+      fatGrams = fatFromPct > minFat ? fatFromPct : (minFat > 40 ? minFat : 40);
+    } else if (lowerGoal.contains('athletic')) {
+      final fatFromPct = (adjustedCalories * 0.20 / 9).round();
+      fatGrams = fatFromPct > 45 ? fatFromPct : 45;
+    } else {
+      final fatFromPct = (adjustedCalories * 0.25 / 9).round();
+      final minFat = (weightKg * 0.8).round();
+      fatGrams = fatFromPct > minFat ? fatFromPct : (minFat > 45 ? minFat : 45);
+    }
+
+    // 6. Carbohydrate Allocation (Remaining Calories)
+    final proteinCalories = proteinGrams * 4;
+    final fatCalories = fatGrams * 9;
+    final remainingCaloriesForCarbs = adjustedCalories - (proteinCalories + fatCalories);
+    int carbGrams = (remainingCaloriesForCarbs / 4).round();
+
+    // Clinical Validation & Safety Warning Flags
+    _calculatorSafetyWarning = null;
+    if (adjustedCalories < 1200) {
+      _calculatorSafetyWarning = '⚠️ Daily calorie target ($adjustedCalories kcal) is critically low for adult energy balance. Recommend reducing deficit.';
+    } else if (carbGrams < 40) {
+      _calculatorSafetyWarning = '⚠️ Carbohydrate allocation ($carbGrams g) is extremely low. May impair workout performance and cognitive stamina.';
+    } else if (_calcCalorieAdjustmentPct < -30.0) {
+      _calculatorSafetyWarning = '⚠️ Aggressive deficit (${_calcCalorieAdjustmentPct.toStringAsFixed(0)}%) carries increased risk of lean muscle catabolism.';
+    }
+
+    if (carbGrams < 30) carbGrams = 30;
+
+    // Strict Reconciled Energy: 4*P + 4*C + 9*F
+    _calculatedTargetCalories = proteinGrams * 4 + carbGrams * 4 + fatGrams * 9;
+    _calculatedProtein = proteinGrams;
+    _calculatedCarbs = carbGrams;
+    _calculatedFat = fatGrams;
+    _calculatedFiber = (_calculatedTargetCalories * 0.014).round().clamp(25, 45);
+    _calculatedWater = (weightKg * 0.04 < 3.0 ? 3.0 : ((weightKg * 0.04 * 10).round() / 10));
+
+    if (syncToInputs || !_isCustomOverride) {
+      _caloriesController.text = _calculatedTargetCalories.toString();
+      _proteinController.text = _calculatedProtein.toString();
+      _carbsController.text = _calculatedCarbs.toString();
+      _fatController.text = _calculatedFat.toString();
+      _fiberController.text = _calculatedFiber.toString();
+      _waterController.text = _calculatedWater.toStringAsFixed(1);
     }
   }
 
   void _recalculateDietMacrosForGoal(String goal) {
-    final rawWeight = double.tryParse(_selectedClientData['weightKg'] ?? '');
-    final rawHeight = double.tryParse(_selectedClientData['heightCm'] ?? '');
-    final rawAge = int.tryParse(_selectedClientData['age'] ?? '');
-    final gender = (_selectedClientData['gender'] ?? 'male').toLowerCase();
-    final trainingDays = int.tryParse(_selectedClientData['trainingDaysPerWeek'] ?? '') ?? _daysPerWeek;
-
-    final isMissingAssessmentData = rawWeight == null || rawWeight <= 0 || rawHeight == null || rawHeight <= 0;
-    final weightKg = !isMissingAssessmentData ? rawWeight : 70.0;
-    final heightCm = !isMissingAssessmentData ? rawHeight : 175.0;
-    final age = (rawAge != null && rawAge > 0 && rawAge < 100) ? rawAge : 28;
-
-    // 1. Mifflin-St Jeor BMR
-    final double bmr = gender == 'female'
-        ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
-        : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
-
-    // 2. Activity Multiplier
-    double activityMultiplier = 1.55;
-    if (trainingDays >= 6) {
-      activityMultiplier = 1.725;
-    } else if (trainingDays == 4 || trainingDays == 5) {
-      activityMultiplier = 1.55;
-    } else if (trainingDays == 3) {
-      activityMultiplier = 1.375;
-    } else if (trainingDays <= 2) {
-      activityMultiplier = 1.2;
-    }
-
-    final int tdee = (bmr * activityMultiplier).round();
-
-    // 3. Goal-Specific Partitioning
-    final lower = goal.toLowerCase();
-    int targetCalories;
-    int targetProtein;
-    int targetFat;
-    int targetCarbs;
-
-    if (lower.contains('fat loss') || lower.contains('cutting') || lower.contains('cut') || lower.contains('deficit')) {
-      targetCalories = (tdee * 0.80).round();
-      if (targetCalories < 1400) targetCalories = 1400;
-      targetProtein = (weightKg * 2.2).round();
-      if (targetProtein < 120) targetProtein = 120;
-      final fatFromPct = (targetCalories * 0.22 / 9).round();
-      final minFat = (weightKg * 0.7).round();
-      targetFat = fatFromPct > minFat ? fatFromPct : (minFat > 40 ? minFat : 40);
-      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
-      targetCarbs = (remainingCals / 4).round();
-      if (targetCarbs < 50) targetCarbs = 50;
-      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
-    } else if (lower.contains('lean') || lower.contains('bulk') || lower.contains('muscle') || lower.contains('hypertrophy')) {
-      targetCalories = (tdee * 1.10).round();
-      targetProtein = (weightKg * 2.0).round();
-      if (targetProtein < 120) targetProtein = 120;
-      final fatFromPct = (targetCalories * 0.25 / 9).round();
-      final minFat = (weightKg * 0.8).round();
-      targetFat = fatFromPct > minFat ? fatFromPct : (minFat > 50 ? minFat : 50);
-      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
-      targetCarbs = (remainingCals / 4).round();
-      if (targetCarbs < 100) targetCarbs = 100;
-      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
-    } else if (lower.contains('athletic') || lower.contains('performance') || lower.contains('endurance') || lower.contains('sport')) {
-      targetCalories = (tdee * 1.08).round();
-      targetProtein = (weightKg * 1.9).round();
-      if (targetProtein < 120) targetProtein = 120;
-      targetFat = (targetCalories * 0.20 / 9).round();
-      if (targetFat < 45) targetFat = 45;
-      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
-      targetCarbs = (remainingCals / 4).round();
-      if (targetCarbs < 120) targetCarbs = 120;
-      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
-    } else {
-      // Maintenance / General / Custom
-      targetCalories = tdee;
-      targetProtein = (weightKg * 1.8).round();
-      if (targetProtein < 110) targetProtein = 110;
-      targetFat = (targetCalories * 0.25 / 9).round();
-      if (targetFat < 45) targetFat = 45;
-      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
-      targetCarbs = (remainingCals / 4).round();
-      if (targetCarbs < 80) targetCarbs = 80;
-      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
-    }
-
-    final int targetFiber = (targetCalories * 0.014).round().clamp(25, 45);
-    final double targetWater = (weightKg * 0.04 < 3.0 ? 3.0 : ((weightKg * 0.04 * 10).round() / 10));
-
-    _caloriesController.text = targetCalories.toString();
-    _proteinController.text = targetProtein.toString();
-    _carbsController.text = targetCarbs.toString();
-    _fatController.text = targetFat.toString();
-    _fiberController.text = targetFiber.toString();
-    _waterController.text = targetWater.toStringAsFixed(1);
+    _syncGoalDefaults(goal);
+    _executeBmrAndMacroCalculations(syncToInputs: !_isCustomOverride);
   }
 
   @override
@@ -542,6 +643,9 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
     _fatController.dispose();
     _fiberController.dispose();
     _waterController.dispose();
+    _calcWeightController.dispose();
+    _calcHeightController.dispose();
+    _calcAgeController.dispose();
     super.dispose();
   }
 
@@ -550,6 +654,7 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
       _selectedClientId = client['clientId'] ?? client['id'];
       _selectedClientName = client['name'] ?? 'Athlete';
       _selectedClientData = Map<String, String>.from(client);
+      _isCustomOverride = false;
       _loadClientData();
       _errorMessage = null;
     });
@@ -608,6 +713,14 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                 'waterTargetLiters': double.tryParse(_waterController.text) ?? 3.5,
                 'dietaryPreferences': _dietaryPreferences.toList(),
                 'mealsPerDay': _mealsPerDay,
+                'weightKg': double.tryParse(_calcWeightController.text),
+                'heightCm': double.tryParse(_calcHeightController.text),
+                'age': int.tryParse(_calcAgeController.text),
+                'sex': _calcSex,
+                'activityLevel': _calcActivityLevel,
+                'activityMultiplier': _getActivityMultiplier(),
+                'calorieAdjustmentPct': _calcCalorieAdjustmentPct,
+                'proteinGramsPerKg': _calcProteinRatioGPerKg,
               }
             : null,
       );
@@ -1601,6 +1714,32 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
         ),
         const SizedBox(height: 14),
 
+        // Interactive BMR + TDEE + Goal-Based Macro Calculator
+        _buildBmrTdeeMacroCalculator(),
+        const SizedBox(height: 16),
+
+        // Section Title: Proposal Daily Targets
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text(
+                'PROPOSAL TARGETS',
+                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              ),
+            ),
+            Text(
+              _isCustomOverride ? 'Manual Override Active' : 'Synced with Calculator',
+              style: TextStyle(
+                color: _isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
         // Daily Calories & Protein
         Row(
           children: [
@@ -1609,13 +1748,18 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                 key: const Key('diet_calories_input'),
                 controller: _caloriesController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() => _isCustomOverride = true),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Daily Calories (kcal)',
-                  labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _isCustomOverride ? AppColors.warningYellow.withOpacity(0.6) : AppColors.border,
+                    ),
+                  ),
+                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
             ),
@@ -1625,13 +1769,18 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                 key: const Key('diet_protein_input'),
                 controller: _proteinController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() => _isCustomOverride = true),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Protein (g)',
-                  labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _isCustomOverride ? AppColors.warningYellow.withOpacity(0.6) : AppColors.border,
+                    ),
+                  ),
+                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
             ),
@@ -1639,7 +1788,7 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
         ),
         const SizedBox(height: 10),
 
-        // Carbs, Fat, Fiber, Water
+        // Carbs, Fat, Water
         Row(
           children: [
             Expanded(
@@ -1647,13 +1796,18 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                 key: const Key('diet_carbs_input'),
                 controller: _carbsController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() => _isCustomOverride = true),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Carbs (g)',
-                  labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _isCustomOverride ? AppColors.warningYellow.withOpacity(0.6) : AppColors.border,
+                    ),
+                  ),
+                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
               ),
             ),
@@ -1663,13 +1817,18 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                 key: const Key('diet_fat_input'),
                 controller: _fatController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() => _isCustomOverride = true),
                 style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Fat (g)',
-                  labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: _isCustomOverride ? AppColors.warningYellow.withOpacity(0.6) : AppColors.border,
+                    ),
+                  ),
+                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
               ),
             ),
@@ -1735,6 +1894,633 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
             },
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildBmrTdeeMacroCalculator() {
+    final int proCals = _calculatedProtein * 4;
+    final int carbCals = _calculatedCarbs * 4;
+    final int fatCals = _calculatedFat * 9;
+    final int totalMacroCals = proCals + carbCals + fatCals;
+
+    final double proPct = totalMacroCals > 0 ? (proCals / totalMacroCals) : 0.3;
+    final double carbPct = totalMacroCals > 0 ? (carbCals / totalMacroCals) : 0.45;
+    final double fatPct = totalMacroCals > 0 ? (fatCals / totalMacroCals) : 0.25;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isCustomOverride ? AppColors.warningYellow.withOpacity(0.5) : AppColors.statusGreen.withOpacity(0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isClientBiometricsMissing) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: AppColors.warningYellow.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.warningYellow.withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.warningYellow, size: 14),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Missing client assessment biometrics. Baseline values loaded for calculation.',
+                      style: TextStyle(color: AppColors.warningYellow, fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          // Header Row: Title & Badge
+          Row(
+            children: [
+              Icon(
+                Icons.calculate_outlined,
+                color: _isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'BMR & TDEE MACRO CALCULATOR',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Container(
+                key: _isCustomOverride ? const Key('calc_override_badge') : const Key('calc_auto_badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (_isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: _isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isCustomOverride ? Icons.edit_note : Icons.auto_awesome,
+                      color: _isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen,
+                      size: 12,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isCustomOverride ? 'MANUAL OVERRIDE' : 'AUTO-CALCULATED',
+                      style: TextStyle(
+                        color: _isCustomOverride ? AppColors.warningYellow : AppColors.statusGreen,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Mifflin-St Jeor Energy Estimation & Goal-Based Macro Distribution',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+
+          // Client Biometrics Inputs (Weight, Height, Age)
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('calc_weight_input'),
+                  controller: _calcWeightController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  onChanged: (_) => setState(() => _executeBmrAndMacroCalculations()),
+                  decoration: const InputDecoration(
+                    labelText: 'Weight (kg)',
+                    labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  key: const Key('calc_height_input'),
+                  controller: _calcHeightController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  onChanged: (_) => setState(() => _executeBmrAndMacroCalculations()),
+                  decoration: const InputDecoration(
+                    labelText: 'Height (cm)',
+                    labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  key: const Key('calc_age_input'),
+                  controller: _calcAgeController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  onChanged: (_) => setState(() => _executeBmrAndMacroCalculations()),
+                  decoration: const InputDecoration(
+                    labelText: 'Age (yrs)',
+                    labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.statusGreen)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Sex & Activity Level Dropdowns
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const Key('calc_sex_dropdown'),
+                      value: _calcSex,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surface,
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      items: const [
+                        DropdownMenuItem(value: 'male', child: Text('Male (Mifflin +5)')),
+                        DropdownMenuItem(value: 'female', child: Text('Female (Mifflin -161)')),
+                        DropdownMenuItem(value: 'unisex_midpoint', child: Text('Unisex Midpoint (-78)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _calcSex = val;
+                            _executeBmrAndMacroCalculations();
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const Key('calc_activity_dropdown'),
+                      value: _calcActivityLevel,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surface,
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      items: const [
+                        DropdownMenuItem(value: 'SEDENTARY', child: Text('Sedentary (1.20×)')),
+                        DropdownMenuItem(value: 'LIGHT', child: Text('Lightly Active (1.375×)')),
+                        DropdownMenuItem(value: 'MODERATE', child: Text('Moderately Active (1.55×)')),
+                        DropdownMenuItem(value: 'VERY_ACTIVE', child: Text('Very Active (1.725×)')),
+                        DropdownMenuItem(value: 'EXTRA_ACTIVE', child: Text('Extra Active (1.90×)')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _calcActivityLevel = val;
+                            _executeBmrAndMacroCalculations();
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _calcSex == 'female'
+                ? 'Mifflin-St Jeor Female: 10W + 6.25H − 5A − 161. BMR is resting energy expenditure.'
+                : (_calcSex == 'male'
+                    ? 'Mifflin-St Jeor Male: 10W + 6.25H − 5A + 5. BMR is resting energy expenditure.'
+                    : 'Sex-Neutral Midpoint: 10W + 6.25H − 5A − 78. (Selected when sex is unspecified).'),
+            style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+          ),
+          const SizedBox(height: 12),
+
+          // Energy Flow Stat Cards: BMR -> TDEE -> TARGET
+          Row(
+            children: [
+              Expanded(
+                child: _buildEnergyMetricCard(
+                  title: 'EST. BMR',
+                  value: '$_calculatedBmr',
+                  unit: 'kcal',
+                  subtitle: 'Resting energy',
+                  accentColor: Colors.blueAccent,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.arrow_forward, color: AppColors.textTertiary, size: 14),
+              ),
+              Expanded(
+                child: _buildEnergyMetricCard(
+                  title: 'EST. TDEE',
+                  value: '$_calculatedTdee',
+                  unit: 'kcal',
+                  subtitle: '${_getActivityMultiplier().toStringAsFixed(3)}× Factor',
+                  accentColor: Colors.purpleAccent,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.arrow_forward, color: AppColors.textTertiary, size: 14),
+              ),
+              Expanded(
+                child: _buildEnergyMetricCard(
+                  title: 'TARGET CALORIES',
+                  value: '$_calculatedTargetCalories',
+                  unit: 'kcal',
+                  subtitle: '${_calcCalorieAdjustmentPct >= 0 ? '+' : ''}${_calcCalorieAdjustmentPct.toStringAsFixed(0)}% (${_dietGoal.split(' ').first})',
+                  accentColor: AppColors.statusGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Calorie Adjustment & Protein Ratio Quick Sliders / Steppers
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Adjustment: ${_calcCalorieAdjustmentPct >= 0 ? '+' : ''}${_calcCalorieAdjustmentPct.toStringAsFixed(0)}%',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Text(
+                'Protein: ${_calcProteinRatioGPerKg.toStringAsFixed(1)} g/kg',
+                style: const TextStyle(color: AppColors.statusGreen, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Goal adjustment preset chips
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              _buildAdjustmentPresetChip('-20% Deficit', -20.0),
+              _buildAdjustmentPresetChip('-15% Deficit', -15.0),
+              _buildAdjustmentPresetChip('0% Maint', 0.0),
+              _buildAdjustmentPresetChip('+8% Athletic', 8.0),
+              _buildAdjustmentPresetChip('+10% Surplus', 10.0),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // Protein Ratio preset chips
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('Protein Ratio: ', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+              _buildProteinPresetChip('1.6 g/kg', 1.6),
+              _buildProteinPresetChip('1.8 g/kg', 1.8),
+              _buildProteinPresetChip('2.0 g/kg', 2.0),
+              _buildProteinPresetChip('2.2 g/kg', 2.2),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Segmented Macro Distribution Bar (Visual 3-color bar)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 12,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: (proPct * 100).round().clamp(1, 100),
+                    child: Container(color: Colors.tealAccent.shade400),
+                  ),
+                  Expanded(
+                    flex: (carbPct * 100).round().clamp(1, 100),
+                    child: Container(color: Colors.amberAccent.shade400),
+                  ),
+                  Expanded(
+                    flex: (fatPct * 100).round().clamp(1, 100),
+                    child: Container(color: Colors.deepOrangeAccent.shade200),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Macro breakdown text row
+          Row(
+            children: [
+              Expanded(
+                child: _buildMacroStatIndicator(
+                  color: Colors.tealAccent.shade400,
+                  name: 'PROTEIN',
+                  grams: _calculatedProtein,
+                  calories: proCals,
+                  percent: (proPct * 100).round(),
+                ),
+              ),
+              Expanded(
+                child: _buildMacroStatIndicator(
+                  color: Colors.amberAccent.shade400,
+                  name: 'CARBS',
+                  grams: _calculatedCarbs,
+                  calories: carbCals,
+                  percent: (carbPct * 100).round(),
+                ),
+              ),
+              Expanded(
+                child: _buildMacroStatIndicator(
+                  color: Colors.deepOrangeAccent.shade200,
+                  name: 'FAT',
+                  grams: _calculatedFat,
+                  calories: fatCals,
+                  percent: (fatPct * 100).round(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Reconciliation Note
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.background.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppColors.statusGreen, size: 13),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Reconciled Energy: 4×${_calculatedProtein}g P ($proCals kcal) + 4×${_calculatedCarbs}g C ($carbCals kcal) + 9×${_calculatedFat}g F ($fatCals kcal) = $totalMacroCals kcal',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Clinical Safety Warning (if present)
+          if (_calculatorSafetyWarning != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.warningYellow.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.warningYellow.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.warningYellow, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _calculatorSafetyWarning!,
+                      style: const TextStyle(color: AppColors.warningYellow, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // Action Buttons: Reset to Calculated & Use These Targets
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('btn_reset_calculated_values'),
+                  onPressed: () {
+                    setState(() {
+                      _isCustomOverride = false;
+                      _executeBmrAndMacroCalculations(syncToInputs: true);
+                    });
+                  },
+                  icon: const Icon(Icons.refresh, size: 14, color: AppColors.textSecondary),
+                  label: const Text(
+                    'Reset to Calculated',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    side: const BorderSide(color: AppColors.border),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  key: const Key('btn_apply_targets_to_plan'),
+                  onPressed: () {
+                    setState(() {
+                      _isCustomOverride = false;
+                      _executeBmrAndMacroCalculations(syncToInputs: true);
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '✔ Applied targets: $_calculatedTargetCalories kcal (${_calculatedProtein}g P / ${_calculatedCarbs}g C / ${_calculatedFat}g F)',
+                        ),
+                        backgroundColor: AppColors.statusGreen,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.check, size: 14, color: Colors.white),
+                  label: const Text(
+                    'Use Targets for Plan',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.statusGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnergyMetricCard({
+    required String title,
+    required String value,
+    required String unit,
+    required String subtitle,
+    required Color accentColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accentColor.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: accentColor, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 2),
+              Text(unit, style: const TextStyle(color: AppColors.textTertiary, fontSize: 9)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdjustmentPresetChip(String label, double val) {
+    final isSelected = (_calcCalorieAdjustmentPct - val).abs() < 0.5;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _calcCalorieAdjustmentPct = val;
+          _executeBmrAndMacroCalculations();
+        });
+      },
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.statusGreen.withOpacity(0.2) : AppColors.surface,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected ? AppColors.statusGreen : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+            fontSize: 9,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProteinPresetChip(String label, double val) {
+    final isSelected = (_calcProteinRatioGPerKg - val).abs() < 0.05;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _calcProteinRatioGPerKg = val;
+          _executeBmrAndMacroCalculations();
+        });
+      },
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.statusGreen.withOpacity(0.2) : AppColors.surface,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isSelected ? AppColors.statusGreen : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+            fontSize: 9,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMacroStatIndicator({
+    required Color color,
+    required String name,
+    required int grams,
+    required int calories,
+    required int percent,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$name ($percent%)', style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              Text('$grams g • $calories kcal', style: const TextStyle(color: Colors.white, fontSize: 9), overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -922,12 +922,16 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
 
     const macroResult = calculatePersonalizedDietMacros(
       {
-        weightKg: clientProfile?.weightKg,
-        heightCm: clientProfile?.heightCm,
-        age: clientProfile?.age,
-        gender: clientProfile?.gender,
-        activityLevel: clientProfile?.activityLevel,
-        trainingDaysPerWeek: clientProfile?.trainingDaysPerWeek,
+        weightKg: dietConfig?.weightKg || clientProfile?.weightKg,
+        heightCm: dietConfig?.heightCm || clientProfile?.heightCm,
+        age: dietConfig?.age || clientProfile?.age,
+        gender: dietConfig?.sex || dietConfig?.gender || clientProfile?.gender,
+        sex: dietConfig?.sex || dietConfig?.gender || clientProfile?.gender,
+        activityLevel: dietConfig?.activityLevel || clientProfile?.activityLevel,
+        activityMultiplier: dietConfig?.activityMultiplier,
+        trainingDaysPerWeek: dietConfig?.trainingDaysPerWeek || clientProfile?.trainingDaysPerWeek,
+        calorieAdjustmentPct: dietConfig?.calorieAdjustmentPct,
+        proteinGramsPerKg: dietConfig?.proteinGramsPerKg,
       },
       primaryGoal,
       {

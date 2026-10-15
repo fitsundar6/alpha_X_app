@@ -259,6 +259,285 @@ router.post('/admin/send-test', requireAuth, requireAdmin, async (req: Request, 
   }
 });
 
+function isDemoAccount(email: string, clientId?: string | null): boolean {
+  const lowerEmail = (email || '').toLowerCase();
+  const lowerClientId = (clientId || '').toLowerCase();
+  return (
+    lowerEmail.includes('demo') ||
+    lowerEmail.includes('test@') ||
+    lowerEmail.endsWith('@example.com') ||
+    lowerClientId.startsWith('demo') ||
+    lowerClientId.startsWith('test')
+  );
+}
+
+let lastBroadcastCache: {
+  hash: string;
+  timestamp: number;
+} | null = null;
+
+/**
+ * GET /admin/audience-preview (Admin only)
+ * Returns the exact audience breakdown before broadcasting.
+ */
+router.get('/admin/audience-preview', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const clients = await prisma.user.findMany({
+      where: { role: 'CLIENT' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        notificationsEnabled: true,
+        oneSignalPlayerId: true,
+        createdAt: true,
+        clientProfile: {
+          select: {
+            id: true,
+            clientId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const eligibleClients = clients.filter(
+      (c) =>
+        c.status === 'APPROVED' &&
+        c.notificationsEnabled &&
+        c.oneSignalPlayerId &&
+        c.oneSignalPlayerId.trim().length > 0 &&
+        !isDemoAccount(c.email, c.clientProfile?.clientId)
+    );
+
+    const unregisteredApprovedClients = clients.filter(
+      (c) =>
+        c.status === 'APPROVED' &&
+        c.notificationsEnabled &&
+        (!c.oneSignalPlayerId || c.oneSignalPlayerId.trim().length === 0) &&
+        !isDemoAccount(c.email, c.clientProfile?.clientId)
+    );
+
+    const optedOutClients = clients.filter((c) => !c.notificationsEnabled);
+    const unapprovedClients = clients.filter((c) => c.status !== 'APPROVED');
+    const demoClients = clients.filter((c) => isDemoAccount(c.email, c.clientProfile?.clientId));
+
+    sendSuccess(
+      res,
+      {
+        summary: {
+          totalRegisteredClients: clients.length,
+          approvedClientsCount: clients.filter((c) => c.status === 'APPROVED').length,
+          eligiblePushRecipientsCount: eligibleClients.length,
+          unregisteredDeviceCount: unregisteredApprovedClients.length,
+          optedOutCount: optedOutClients.length,
+          unapprovedOrSuspendedCount: unapprovedClients.length,
+          demoAccountsExcludedCount: demoClients.length,
+        },
+        eligibleRecipients: eligibleClients.map((c) => ({
+          id: c.id,
+          clientId: c.clientProfile?.clientId || 'N/A',
+          name: c.name,
+          email: c.email,
+          hasPushToken: true,
+        })),
+        pendingDeviceClients: unregisteredApprovedClients.map((c) => ({
+          id: c.id,
+          clientId: c.clientProfile?.clientId || 'N/A',
+          name: c.name,
+          email: c.email,
+          hasPushToken: false,
+          notice: 'Requires client mobile login to register push token',
+        })),
+      },
+      HttpStatus.OK
+    );
+  } catch (err: any) {
+    sendError(res, 'FETCH_ERROR', err?.message || 'Failed to generate audience preview', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/broadcast (Admin only)
+ * Broadcasts a push notification to All Eligible Clients or targeted recipients.
+ */
+router.post('/admin/broadcast', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { title, body, targetAudience = 'ALL_ELIGIBLE', targetClientId, targetPlayerId, confirmBroadcast, channelId } = req.body;
+
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'Notification title is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+  if (!body || typeof body !== 'string' || body.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'Notification message body is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const cleanTitle = title.trim();
+  const cleanBody = body.trim();
+
+  // Safety safeguard: require explicit operator confirmation when broadcasting to all clients
+  if (targetAudience === 'ALL_ELIGIBLE' && confirmBroadcast !== true) {
+    sendError(
+      res,
+      'CONFIRMATION_REQUIRED',
+      'Broadcasting to all eligible clients requires explicit operator confirmation (confirmBroadcast: true)',
+      HttpStatus.BAD_REQUEST
+    );
+    return;
+  }
+
+  // Duplicate send prevention (60-second window for identical message)
+  const broadcastHash = `${targetAudience}:${cleanTitle}:${cleanBody}`;
+  const now = Date.now();
+  if (lastBroadcastCache && lastBroadcastCache.hash === broadcastHash && (now - lastBroadcastCache.timestamp) < 60000) {
+    const remainingSec = Math.ceil((60000 - (now - lastBroadcastCache.timestamp)) / 1000);
+    sendError(
+      res,
+      'DUPLICATE_BROADCAST_PREVENTED',
+      `An identical broadcast was dispatched ${60 - remainingSec}s ago. Please wait ${remainingSec}s before retrying to prevent duplicate notifications.`,
+      HttpStatus.CONFLICT
+    );
+    return;
+  }
+
+  try {
+    let targetClients: any[] = [];
+    let playerIds: string[] = [];
+
+    if (targetAudience === 'TEST_DEVICE') {
+      if (!targetPlayerId || typeof targetPlayerId !== 'string') {
+        sendError(res, 'VALIDATION_ERROR', 'targetPlayerId is required when targetAudience is TEST_DEVICE', HttpStatus.BAD_REQUEST);
+        return;
+      }
+      playerIds = [targetPlayerId.trim()];
+    } else if (targetAudience === 'SPECIFIC_CLIENT') {
+      if (!targetClientId) {
+        sendError(res, 'VALIDATION_ERROR', 'targetClientId is required when targetAudience is SPECIFIC_CLIENT', HttpStatus.BAD_REQUEST);
+        return;
+      }
+      const client = await prisma.user.findFirst({
+        where: {
+          role: 'CLIENT',
+          OR: [
+            { id: targetClientId },
+            { clientProfile: { clientId: targetClientId } },
+            { email: targetClientId },
+          ],
+        },
+        include: { clientProfile: true },
+      });
+      if (!client) {
+        sendError(res, 'NOT_FOUND', `Client "${targetClientId}" not found`, HttpStatus.NOT_FOUND);
+        return;
+      }
+      if (!client.notificationsEnabled) {
+        sendError(res, 'OPTED_OUT', `Client "${client.name}" has disabled notifications`, HttpStatus.BAD_REQUEST);
+        return;
+      }
+      targetClients = [client];
+      if (client.oneSignalPlayerId && client.oneSignalPlayerId.trim().length > 0) {
+        playerIds = [client.oneSignalPlayerId.trim()];
+      }
+    } else {
+      // ALL_ELIGIBLE: Query all approved, non-demo clients
+      const allClients = await prisma.user.findMany({
+        where: {
+          role: 'CLIENT',
+          status: 'APPROVED',
+          notificationsEnabled: true,
+        },
+        include: { clientProfile: true },
+      });
+
+      targetClients = allClients.filter((c) => !isDemoAccount(c.email, c.clientProfile?.clientId));
+      playerIds = targetClients
+        .map((c) => c.oneSignalPlayerId?.trim())
+        .filter((id): id is string => Boolean(id && id.length > 0));
+    }
+
+    // Dispatch via OneSignal
+    const gatewayResult = playerIds.length > 0
+      ? await oneSignalService.broadcastToDevices(playerIds, {
+          title: cleanTitle,
+          body: cleanBody,
+          channelId: channelId || 'alpha_x_announcements',
+          data: {
+            type: 'admin_broadcast',
+            targetAudience,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      : {
+          success: true,
+          recipientsCount: 0,
+          devicesTargeted: 0,
+          response: { notice: 'No registered push devices found. In-app notifications created.' },
+        };
+
+    // Update duplicate protection cache
+    lastBroadcastCache = { hash: broadcastHash, timestamp: now };
+
+    // Record in-app Notification records in PostgreSQL for client notification center
+    let createdNotificationCount = 0;
+    for (const client of targetClients) {
+      if (client.clientProfile?.id) {
+        try {
+          await prisma.notification.create({
+            data: {
+              clientProfileId: client.clientProfile.id,
+              clientId: client.clientProfile.clientId || null,
+              title: cleanTitle,
+              message: cleanBody,
+              type: 'SYSTEM',
+              category: 'ANNOUNCEMENT',
+              source: 'ADMIN',
+              triggerRule: 'ADMIN_BROADCAST',
+              sentStatus: gatewayResult.success ? 'SENT' : 'FAILED',
+              metadataJson: JSON.stringify({
+                targetAudience,
+                oneSignalId: gatewayResult.notificationId || null,
+                gatewaySuccess: gatewayResult.success,
+                deviceTargeted: Boolean(client.oneSignalPlayerId),
+              }),
+            },
+          });
+          createdNotificationCount++;
+        } catch (_) {}
+      }
+    }
+
+    sendSuccess(
+      res,
+      {
+        broadcastSuccess: gatewayResult.success,
+        targetAudience,
+        title: cleanTitle,
+        recipientsSummary: {
+          eligibleClientsTotal: targetClients.length,
+          pushDevicesTargeted: playerIds.length,
+          inAppNotificationsCreated: createdNotificationCount,
+        },
+        deliveryLifecycle: {
+          stage1_gatewayAccepted: gatewayResult.success,
+          stage2_fcmTransit: gatewayResult.success ? (playerIds.length > 0 ? 'Dispatched to push provider gateway' : 'No push tokens; in-app only') : 'Gateway rejected',
+          stage3_deviceDisplay: 'Visible on device once received from FCM (subject to device notification permissions)',
+        },
+        gatewayResponse: {
+          notificationId: gatewayResult.notificationId || null,
+          httpStatus: gatewayResult.httpStatus,
+          error: gatewayResult.error,
+          details: gatewayResult.response,
+        },
+      },
+      HttpStatus.OK
+    );
+  } catch (err: any) {
+    sendError(res, 'BROADCAST_ERROR', err?.message || 'Failed to dispatch broadcast', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 /**
  * GET /admin/devices (Admin only)
  * Lists all clients and their push notification token registration status.
