@@ -297,5 +297,100 @@ void main() {
       expect(stagedProposal!.type, AiProposalType.diet);
       expect(stagedProposal!.status, AiProposalStatus.pending);
     });
+
+    testWidgets('7. Step 3 (Diet): Changing nutrition goal dynamically recalculates calories, protein, carbs, fat', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdminThreeStepPlanConfigDialog(
+              aiCoachRepository: aiCoachRepo,
+              workoutRepository: workoutRepo,
+              initialClientId: 'AXG-0001',
+              initialPlanType: AiProposalType.diet,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('STEP 3: CONFIGURE DIET & MACRO PLAN'), findsOneWidget);
+
+      final caloriesInputFinder = find.byKey(const Key('diet_calories_input'));
+      final proteinInputFinder = find.byKey(const Key('diet_protein_input'));
+      final carbsInputFinder = find.byKey(const Key('diet_carbs_input'));
+      final fatInputFinder = find.byKey(const Key('diet_fat_input'));
+
+      expect(caloriesInputFinder, findsOneWidget);
+      expect(proteinInputFinder, findsOneWidget);
+      expect(carbsInputFinder, findsOneWidget);
+      expect(fatInputFinder, findsOneWidget);
+
+      // Helper to read integer values from input widgets
+      int getCalories() => int.parse((tester.widget(caloriesInputFinder) as TextField).controller!.text);
+      int getProtein() => int.parse((tester.widget(proteinInputFinder) as TextField).controller!.text);
+      int getCarbs() => int.parse((tester.widget(carbsInputFinder) as TextField).controller!.text);
+      int getFat() => int.parse((tester.widget(fatInputFinder) as TextField).controller!.text);
+
+      // Initial state: Kumar has Hypertrophy goal -> Lean Muscle Gain / Bulking
+      final initialCal = getCalories();
+      final initialPro = getProtein();
+      final initialCarb = getCarbs();
+      final initialFat = getFat();
+
+      // Energy balance verification for initial state
+      expect((initialPro * 4 + initialCarb * 4 + initialFat * 9 - initialCal).abs(), lessThanOrEqualTo(2));
+      expect(initialCal, greaterThan(2800)); // Lean bulk surplus
+
+      // Helper to change goal in dropdown
+      Future<void> selectGoal(String goalName) async {
+        final dropdownFinder = find.byType(DropdownButton<String>).first;
+        await tester.tap(dropdownFinder);
+        await tester.pumpAndSettle();
+
+        final itemFinder = find.text(goalName).last;
+        await tester.tap(itemFinder);
+        await tester.pumpAndSettle();
+      }
+
+      // 1. Switch to 'Fat Loss'
+      await selectGoal('Fat Loss');
+      final fatLossCal = getCalories();
+      final fatLossPro = getProtein();
+      final fatLossCarb = getCarbs();
+      final fatLossFat = getFat();
+
+      expect(fatLossCal, lessThan(initialCal), reason: 'Fat Loss calories must be lower than Lean Bulk');
+      expect(fatLossPro, greaterThanOrEqualTo(initialPro), reason: 'Fat Loss preserves muscle with higher protein ratio');
+      expect((fatLossPro * 4 + fatLossCarb * 4 + fatLossFat * 9 - fatLossCal).abs(), lessThanOrEqualTo(2));
+
+      // 2. Switch to 'Athletic Performance'
+      await selectGoal('Athletic Performance');
+      final athleticCal = getCalories();
+      final athleticPro = getProtein();
+      final athleticCarb = getCarbs();
+      final athleticFat = getFat();
+
+      expect(athleticCarb, greaterThan(fatLossCarb), reason: 'Athletic Performance must prescribe higher carbohydrates');
+      expect(athleticCal, greaterThan(fatLossCal), reason: 'Athletic Performance must have higher energy than Fat Loss');
+      expect((athleticPro * 4 + athleticCarb * 4 + athleticFat * 9 - athleticCal).abs(), lessThanOrEqualTo(2));
+
+      // 3. Switch to 'Maintenance'
+      await selectGoal('Maintenance');
+      final maintCal = getCalories();
+      final maintPro = getProtein();
+      final maintCarb = getCarbs();
+      final maintFat = getFat();
+
+      expect(maintCal, greaterThan(fatLossCal), reason: 'Maintenance must be higher than deficit');
+      expect(maintCal, lessThan(initialCal), reason: 'Maintenance must be lower than surplus');
+      expect((maintPro * 4 + maintCarb * 4 + maintFat * 9 - maintCal).abs(), lessThanOrEqualTo(2));
+    });
   });
 }
