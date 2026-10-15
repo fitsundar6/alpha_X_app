@@ -392,5 +392,196 @@ void main() {
       expect(maintCal, lessThan(initialCal), reason: 'Maintenance must be lower than surplus');
       expect((maintPro * 4 + maintCarb * 4 + maintFat * 9 - maintCal).abs(), lessThanOrEqualTo(2));
     });
+
+    testWidgets('8. Step 3 (Diet): BMR & TDEE Calculator interactive sex equation and activity factor recalculation', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdminThreeStepPlanConfigDialog(
+              aiCoachRepository: aiCoachRepo,
+              workoutRepository: workoutRepo,
+              initialClientId: 'AXG-0001', // Kumar: 78kg, 176cm, 28yo male
+              initialPlanType: AiProposalType.diet,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify BMR Calculator Card is rendered
+      expect(find.text('BMR & TDEE MACRO CALCULATOR'), findsOneWidget);
+      expect(find.byKey(const Key('calc_auto_badge')), findsOneWidget);
+
+      // Verify initial BMR (Male Mifflin-St Jeor: 10*78 + 6.25*176 - 5*28 + 5 = 1745)
+      expect(find.text('1745'), findsOneWidget);
+      // Initial TDEE (1745 * 1.55 = 2705)
+      expect(find.text('2705'), findsOneWidget);
+
+      // Switch Sex to Female (Mifflin-St Jeor Female: 10*78 + 6.25*176 - 5*28 - 161 = 1579)
+      final sexDropdown = find.byKey(const Key('calc_sex_dropdown'));
+      expect(sexDropdown, findsOneWidget);
+      await tester.tap(sexDropdown);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Female (Mifflin -161)').last);
+      await tester.pumpAndSettle();
+
+      // Verify recalculated Female BMR: 1579 kcal, and TDEE: 2447 kcal
+      expect(find.text('1579'), findsOneWidget);
+      expect(find.text('2447'), findsOneWidget);
+
+      // Switch Sex to Unisex Midpoint (10*78 + 6.25*176 - 5*28 - 78 = 1662)
+      await tester.tap(sexDropdown);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Unisex Midpoint (-78)').last);
+      await tester.pumpAndSettle();
+
+      // Verify recalculated Unisex BMR: 1662 kcal
+      expect(find.text('1662'), findsOneWidget);
+
+      // Change Activity Level to Sedentary (1.20x)
+      final actDropdown = find.byKey(const Key('calc_activity_dropdown'));
+      await tester.tap(actDropdown);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Sedentary (1.20×)').last);
+      await tester.pumpAndSettle();
+
+      // 1662 * 1.20 = 1994 TDEE
+      expect(find.text('1994'), findsOneWidget);
+    });
+
+    testWidgets('9. Step 3 (Diet): Manual overrides vs Reset to Calculated Values state tracking', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdminThreeStepPlanConfigDialog(
+              aiCoachRepository: aiCoachRepo,
+              workoutRepository: workoutRepo,
+              initialClientId: 'AXG-0001',
+              initialPlanType: AiProposalType.diet,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Initial state: AUTO-CALCULATED
+      expect(find.byKey(const Key('calc_auto_badge')), findsOneWidget);
+      expect(find.byKey(const Key('calc_override_badge')), findsNothing);
+
+      // Manually edit calories input
+      final caloriesInput = find.byKey(const Key('diet_calories_input'));
+      await tester.enterText(caloriesInput, '2500');
+      await tester.pumpAndSettle();
+
+      // Verify badge changes to MANUAL OVERRIDE
+      expect(find.byKey(const Key('calc_override_badge')), findsOneWidget);
+      expect(find.byKey(const Key('calc_auto_badge')), findsNothing);
+      expect(find.text('Manual Override Active'), findsOneWidget);
+
+      // Click "Reset to Calculated" button
+      final resetBtn = find.byKey(const Key('btn_reset_calculated_values'));
+      expect(resetBtn, findsOneWidget);
+      await tester.tap(resetBtn);
+      await tester.pumpAndSettle();
+
+      // Verify badge switches back to AUTO-CALCULATED and input matches calculated target
+      expect(find.byKey(const Key('calc_auto_badge')), findsOneWidget);
+      expect(find.byKey(const Key('calc_override_badge')), findsNothing);
+      expect(find.text('Synced with Calculator'), findsOneWidget);
+    });
+
+    testWidgets('10. Step 3 (Diet): Client switching isolation prevents stale calculator values', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdminThreeStepPlanConfigDialog(
+              aiCoachRepository: aiCoachRepo,
+              workoutRepository: workoutRepo,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Select Alex Johnson (85kg, 182cm, male, 5 training days -> Very Active)
+      final alexTile = find.text('Alex Johnson').first;
+      await tester.tap(alexTile);
+      await tester.pumpAndSettle();
+
+      // Continue to Step 2
+      final continueBtn = find.byKey(const Key('admin_plan_config_continue_button'));
+      await tester.tap(continueBtn);
+      await tester.pumpAndSettle();
+
+      // Select Diet plan type
+      await tester.tap(find.byKey(const Key('plan_type_diet_card')));
+      await tester.pumpAndSettle();
+
+      // Continue to Step 3
+      await tester.tap(continueBtn);
+      await tester.pumpAndSettle();
+
+      // Verify Alex's biometrics are loaded in calculator
+      final weightField = tester.widget<TextField>(find.byKey(const Key('calc_weight_input')));
+      expect(weightField.controller!.text, '85');
+      final heightField = tester.widget<TextField>(find.byKey(const Key('calc_height_input')));
+      expect(heightField.controller!.text, '182');
+
+      // Alex BMR = 10*85 + 6.25*182 - 5*28 + 5 = 850 + 1137.5 - 140 + 5 = 1853 kcal
+      expect(find.text('1853'), findsOneWidget);
+
+      // Now click "Back" button twice to return to Step 1
+      final backBtn = find.byKey(const Key('admin_plan_config_back_button'));
+      await tester.tap(backBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(backBtn);
+      await tester.pumpAndSettle();
+
+      // 2. Select Sarah Smith (62kg, 165cm, female, 3 training days -> Light)
+      final sarahTile = find.text('Sarah Smith').first;
+      await tester.tap(sarahTile);
+      await tester.pumpAndSettle();
+
+      // Navigate back to Step 3
+      await tester.tap(continueBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(continueBtn);
+      await tester.pumpAndSettle();
+
+      // Verify Sarah's fresh biometrics are loaded (NO stale values from Alex!)
+      final sarahWeightField = tester.widget<TextField>(find.byKey(const Key('calc_weight_input')));
+      expect(sarahWeightField.controller!.text, '62');
+      final sarahHeightField = tester.widget<TextField>(find.byKey(const Key('calc_height_input')));
+      expect(sarahHeightField.controller!.text, '165');
+
+      // Sarah BMR (Female equation: 10*62 + 6.25*165 - 5*28 - 161 = 620 + 1031.25 - 140 - 161 = 1350 kcal)
+      expect(find.text('1350'), findsOneWidget);
+      expect(find.text('1853'), findsNothing, reason: 'Stale BMR from Alex Johnson must not exist');
+    });
   });
 }
+

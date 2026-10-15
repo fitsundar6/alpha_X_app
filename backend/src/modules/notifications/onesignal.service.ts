@@ -25,6 +25,16 @@ export interface SendResult {
   error?: string;
 }
 
+export interface BroadcastResult {
+  success: boolean;
+  notificationId?: string;
+  recipientsCount: number;
+  devicesTargeted: number;
+  httpStatus?: number;
+  response?: any;
+  error?: string;
+}
+
 export class OneSignalService {
   private get appId(): string {
     return env.ONESIGNAL_APP_ID || '';
@@ -41,8 +51,12 @@ export class OneSignalService {
   /** Send a push notification to one specific device by OneSignal player ID or subscription ID */
   async sendToPlayer(playerId: string, payload: NotificationPayload): Promise<SendResult> {
     if (!this.appId || !this.apiKey) {
-      console.warn('[ONESIGNAL] Missing credentials — notification skipped for player:', playerId);
-      return { success: false, playerId, error: 'OneSignal not configured on backend (.env ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY missing)' };
+      console.warn('[ONESIGNAL] Missing credentials — notification skipped for target:', playerId);
+      return {
+        success: false,
+        playerId,
+        error: 'OneSignal not configured on backend (.env ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY missing)',
+      };
     }
 
     if (!playerId || typeof playerId !== 'string' || playerId.trim().length === 0) {
@@ -53,7 +67,6 @@ export class OneSignalService {
 
     // In modern OneSignal v5, devices are addressed via include_subscription_ids.
     // Legacy OneSignal apps use include_player_ids.
-    // We send via include_subscription_ids first, falling back to include_player_ids if needed.
     const basePayload = {
       app_id: this.appId,
       headings: { en: payload.title },
@@ -76,7 +89,7 @@ export class OneSignalService {
 
     // If rejected with an error specifically related to subscription IDs or targeting, attempt include_player_ids
     if (resultV5.httpStatus === 400 || (resultV5.error && resultV5.error.includes('subscription'))) {
-      console.log(`[ONESIGNAL] Retrying player ${cleanPlayerId} using legacy include_player_ids...`);
+      console.log(`[ONESIGNAL] Retrying target ${cleanPlayerId} using legacy include_player_ids...`);
       return this.executePost({
         ...basePayload,
         include_player_ids: [cleanPlayerId],
@@ -84,6 +97,85 @@ export class OneSignalService {
     }
 
     return resultV5;
+  }
+
+  /** Broadcast push notification to multiple devices in a single OneSignal API call */
+  async broadcastToDevices(playerIds: string[], payload: NotificationPayload): Promise<BroadcastResult> {
+    if (!this.appId || !this.apiKey) {
+      return {
+        success: false,
+        recipientsCount: playerIds.length,
+        devicesTargeted: 0,
+        error: 'OneSignal not configured on backend (.env ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY missing)',
+      };
+    }
+
+    // Deduplicate and sanitize IDs
+    const cleanPlayerIds = Array.from(new Set(playerIds.map((p) => p.trim()).filter((p) => p.length > 0)));
+
+    if (cleanPlayerIds.length === 0) {
+      return {
+        success: true,
+        recipientsCount: 0,
+        devicesTargeted: 0,
+        response: { notice: 'No active device tokens found for target audience' },
+      };
+    }
+
+    const basePayload = {
+      app_id: this.appId,
+      headings: { en: payload.title },
+      contents: { en: payload.body },
+      data: payload.data || {},
+      android_accent_color: 'FF39FF14',
+      ios_sound: 'default',
+      ...(payload.channelId ? { android_channel_id: payload.channelId } : {}),
+    };
+
+    // First attempt using include_subscription_ids (OneSignal v5 standard)
+    const resultV5 = await this.executePost({
+      ...basePayload,
+      include_subscription_ids: cleanPlayerIds,
+    }, `bulk-${cleanPlayerIds.length}-devices`, payload.title);
+
+    if (resultV5.success) {
+      return {
+        success: true,
+        notificationId: resultV5.response?.id,
+        recipientsCount: resultV5.response?.recipients ?? cleanPlayerIds.length,
+        devicesTargeted: cleanPlayerIds.length,
+        httpStatus: resultV5.httpStatus,
+        response: resultV5.response,
+      };
+    }
+
+    // Fallback attempt using include_player_ids if subscription IDs rejected
+    if (resultV5.httpStatus === 400 || (resultV5.error && resultV5.error.includes('subscription'))) {
+      console.log(`[ONESIGNAL] Retrying bulk dispatch of ${cleanPlayerIds.length} devices using include_player_ids...`);
+      const resultLegacy = await this.executePost({
+        ...basePayload,
+        include_player_ids: cleanPlayerIds,
+      }, `bulk-${cleanPlayerIds.length}-legacy-players`, payload.title);
+
+      return {
+        success: resultLegacy.success,
+        notificationId: resultLegacy.response?.id,
+        recipientsCount: resultLegacy.response?.recipients ?? cleanPlayerIds.length,
+        devicesTargeted: cleanPlayerIds.length,
+        httpStatus: resultLegacy.httpStatus,
+        response: resultLegacy.response,
+        error: resultLegacy.error,
+      };
+    }
+
+    return {
+      success: false,
+      recipientsCount: cleanPlayerIds.length,
+      devicesTargeted: cleanPlayerIds.length,
+      httpStatus: resultV5.httpStatus,
+      response: resultV5.response,
+      error: resultV5.error,
+    };
   }
 
   /** Send push notification targeting by external user ID (Alpha X User UUID) */
@@ -129,8 +221,11 @@ export class OneSignalService {
       }
 
       if (!response.ok || result.errors) {
-        const errorMsg = result.errors ? JSON.stringify(result.errors) : `HTTP ${httpStatus}`;
-        console.error(`[ONESIGNAL] Delivery error (HTTP ${httpStatus}) for ${targetId}:`, errorMsg);
+        let errorMsg = result.errors ? JSON.stringify(result.errors) : `HTTP ${httpStatus}`;
+        if (httpStatus === 401) {
+          errorMsg = 'OneSignal REST API authentication failed (HTTP 401: Access denied). Please verify ONESIGNAL_REST_API_KEY in server environment.';
+        }
+        console.error(`[ONESIGNAL] Gateway error (HTTP ${httpStatus}) for ${targetId}:`, errorMsg);
         return {
           success: false,
           playerId: targetId,
@@ -140,7 +235,7 @@ export class OneSignalService {
         };
       }
 
-      console.log(`[ONESIGNAL] ✅ Sent to ${targetId}: "${title}" (ID: ${result.id || 'ok'})`);
+      console.log(`[ONESIGNAL] ✅ Dispatched to ${targetId}: "${title}" (ID: ${result.id || 'ok'})`);
       return {
         success: true,
         playerId: targetId,
