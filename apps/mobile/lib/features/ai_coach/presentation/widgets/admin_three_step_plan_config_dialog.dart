@@ -402,7 +402,16 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
         // Pre-fill fields from actual client assessment
         if (match['primaryGoal'] != null) {
           _primaryGoal = match['primaryGoal']!;
-          _dietGoal = match['primaryGoal']!;
+          final pg = match['primaryGoal']!.toLowerCase();
+          if (pg.contains('fat loss') || pg.contains('cutting') || pg.contains('cut')) {
+            _dietGoal = 'Fat Loss';
+          } else if (pg.contains('hypertrophy') || pg.contains('muscle') || pg.contains('bulk') || pg.contains('strength')) {
+            _dietGoal = 'Lean Muscle Gain / Bulking';
+          } else if (pg.contains('athletic') || pg.contains('performance') || pg.contains('sport')) {
+            _dietGoal = 'Athletic Performance';
+          } else {
+            _dietGoal = 'Maintenance';
+          }
         }
         if (match['fitnessLevel'] != null) {
           _trainingExperience = match['fitnessLevel']!;
@@ -417,19 +426,107 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
           _exclusionsController.text = match['injuryAreas']!;
         }
 
-        // Auto compute default diet metrics based on client metrics
-        final weightKg = double.tryParse(match['weightKg'] ?? '') ?? 70.0;
-        final targetCals = _dietGoal.toLowerCase().contains('fat loss') ? (weightKg * 28).round() : (weightKg * 34).round();
-        final targetPro = (weightKg * 2.2).round();
-        final targetFat = (targetCals * 0.25 / 9).round();
-        final targetCarb = ((targetCals - (targetPro * 4 + targetFat * 9)) / 4).round();
-
-        _caloriesController.text = targetCals.toString();
-        _proteinController.text = targetPro.toString();
-        _carbsController.text = targetCarb.toString();
-        _fatController.text = targetFat.toString();
+        // Auto compute personalized diet metrics based on client biometrics and goal
+        _recalculateDietMacrosForGoal(_dietGoal);
       }
+    } else {
+      _recalculateDietMacrosForGoal(_dietGoal);
     }
+  }
+
+  void _recalculateDietMacrosForGoal(String goal) {
+    final rawWeight = double.tryParse(_selectedClientData['weightKg'] ?? '');
+    final rawHeight = double.tryParse(_selectedClientData['heightCm'] ?? '');
+    final rawAge = int.tryParse(_selectedClientData['age'] ?? '');
+    final gender = (_selectedClientData['gender'] ?? 'male').toLowerCase();
+    final trainingDays = int.tryParse(_selectedClientData['trainingDaysPerWeek'] ?? '') ?? _daysPerWeek;
+
+    final isMissingAssessmentData = rawWeight == null || rawWeight <= 0 || rawHeight == null || rawHeight <= 0;
+    final weightKg = !isMissingAssessmentData ? rawWeight : 70.0;
+    final heightCm = !isMissingAssessmentData ? rawHeight : 175.0;
+    final age = (rawAge != null && rawAge > 0 && rawAge < 100) ? rawAge : 28;
+
+    // 1. Mifflin-St Jeor BMR
+    final double bmr = gender == 'female'
+        ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
+        : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
+
+    // 2. Activity Multiplier
+    double activityMultiplier = 1.55;
+    if (trainingDays >= 6) {
+      activityMultiplier = 1.725;
+    } else if (trainingDays == 4 || trainingDays == 5) {
+      activityMultiplier = 1.55;
+    } else if (trainingDays == 3) {
+      activityMultiplier = 1.375;
+    } else if (trainingDays <= 2) {
+      activityMultiplier = 1.2;
+    }
+
+    final int tdee = (bmr * activityMultiplier).round();
+
+    // 3. Goal-Specific Partitioning
+    final lower = goal.toLowerCase();
+    int targetCalories;
+    int targetProtein;
+    int targetFat;
+    int targetCarbs;
+
+    if (lower.contains('fat loss') || lower.contains('cutting') || lower.contains('cut') || lower.contains('deficit')) {
+      targetCalories = (tdee * 0.80).round();
+      if (targetCalories < 1400) targetCalories = 1400;
+      targetProtein = (weightKg * 2.2).round();
+      if (targetProtein < 120) targetProtein = 120;
+      final fatFromPct = (targetCalories * 0.22 / 9).round();
+      final minFat = (weightKg * 0.7).round();
+      targetFat = fatFromPct > minFat ? fatFromPct : (minFat > 40 ? minFat : 40);
+      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
+      targetCarbs = (remainingCals / 4).round();
+      if (targetCarbs < 50) targetCarbs = 50;
+      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
+    } else if (lower.contains('lean') || lower.contains('bulk') || lower.contains('muscle') || lower.contains('hypertrophy')) {
+      targetCalories = (tdee * 1.10).round();
+      targetProtein = (weightKg * 2.0).round();
+      if (targetProtein < 120) targetProtein = 120;
+      final fatFromPct = (targetCalories * 0.25 / 9).round();
+      final minFat = (weightKg * 0.8).round();
+      targetFat = fatFromPct > minFat ? fatFromPct : (minFat > 50 ? minFat : 50);
+      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
+      targetCarbs = (remainingCals / 4).round();
+      if (targetCarbs < 100) targetCarbs = 100;
+      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
+    } else if (lower.contains('athletic') || lower.contains('performance') || lower.contains('endurance') || lower.contains('sport')) {
+      targetCalories = (tdee * 1.08).round();
+      targetProtein = (weightKg * 1.9).round();
+      if (targetProtein < 120) targetProtein = 120;
+      targetFat = (targetCalories * 0.20 / 9).round();
+      if (targetFat < 45) targetFat = 45;
+      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
+      targetCarbs = (remainingCals / 4).round();
+      if (targetCarbs < 120) targetCarbs = 120;
+      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
+    } else {
+      // Maintenance / General / Custom
+      targetCalories = tdee;
+      targetProtein = (weightKg * 1.8).round();
+      if (targetProtein < 110) targetProtein = 110;
+      targetFat = (targetCalories * 0.25 / 9).round();
+      if (targetFat < 45) targetFat = 45;
+      final remainingCals = targetCalories - (targetProtein * 4 + targetFat * 9);
+      targetCarbs = (remainingCals / 4).round();
+      if (targetCarbs < 80) targetCarbs = 80;
+      targetCalories = targetProtein * 4 + targetCarbs * 4 + targetFat * 9;
+    }
+
+    final int targetFiber = (targetCalories * 0.014).round().clamp(25, 45);
+    final double targetWater = (weightKg * 0.04 < 3.0 ? 3.0 : ((weightKg * 0.04 * 10).round() / 10));
+
+    _caloriesController.text = targetCalories.toString();
+    _proteinController.text = targetProtein.toString();
+    _carbsController.text = targetCarbs.toString();
+    _fatController.text = targetFat.toString();
+    _fiberController.text = targetFiber.toString();
+    _waterController.text = targetWater.toStringAsFixed(1);
   }
 
   @override
@@ -1464,12 +1561,43 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
         ),
         const SizedBox(height: 16),
 
+        if (_selectedClientData['weightKg'] == null || _selectedClientData['weightKg']!.isEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.warningYellow.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.warningYellow.withOpacity(0.5)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: AppColors.warningYellow, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Client biometrics missing (weight/height). Standard reference baseline (70kg, 175cm) used. Update assessment in Athlete Profile.',
+                    style: TextStyle(color: AppColors.warningYellow, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // Primary Nutrition Goal
         _buildDropdown(
           label: 'PRIMARY NUTRITION GOAL',
           value: _dietGoal,
           items: ['Fat Loss', 'Lean Muscle Gain / Bulking', 'Maintenance', 'Athletic Performance'],
-          onChanged: (val) => setState(() => _dietGoal = val ?? _dietGoal),
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _dietGoal = val;
+                _recalculateDietMacrosForGoal(val);
+              });
+            }
+          },
         ),
         const SizedBox(height: 14),
 

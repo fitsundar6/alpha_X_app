@@ -1,6 +1,7 @@
 import { aiTools, ClientContextSummary } from './ai_tools';
 import { prisma } from '../../config/prisma';
 import { workoutIntentService } from './workout_intent.service';
+import { calculatePersonalizedDietMacros } from './diet_calculator';
 
 export interface AiCoachRequest {
   adminId: string;
@@ -582,46 +583,27 @@ ${overloadData.hasHistory && overloadData.current ? `
     const hasDairyAllergy = adminNotes.includes('lactose') || adminNotes.includes('dairy') || queryLower.includes('dairy free') || queryLower.includes('lactose');
     const hasPeanutAllergy = adminNotes.includes('peanut') || adminNotes.includes('nut allergy') || queryLower.includes('nut allergy');
 
-    // Scientific BMR Calculation (Mifflin-St Jeor)
-    const bmr = gender === 'female'
-      ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
-      : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
+    // Goal-Specific Scientific Macro Calculation via Mifflin-St Jeor Engine
+    const macroResult = calculatePersonalizedDietMacros(
+      {
+        weightKg: ctx.profile.weightKg,
+        heightCm: ctx.profile.heightCm,
+        age: ctx.profile.age,
+        gender: ctx.profile.gender,
+        activityLevel: ctx.profile.activityLevel,
+        trainingDaysPerWeek: ctx.profile.trainingDaysPerWeek,
+      },
+      goal || queryLower,
+    );
 
-    // TDEE multiplier based on activity level
-    let activityMultiplier = 1.55; // MODERATE default
-    if (activityLevel === 'LOW' || activityLevel === 'SEDENTARY') activityMultiplier = 1.2;
-    else if (activityLevel === 'LIGHT') activityMultiplier = 1.375;
-    else if (activityLevel === 'HIGH' || activityLevel === 'VERY_ACTIVE') activityMultiplier = 1.725;
-
-    const tdee = Math.round(bmr * activityMultiplier);
-
-    // Caloric and macronutrient target calculation
-    let targetCalories = 2000;
-    let targetProtein = Math.round(weightKg * 2.0); // 2.0g/kg
-    let targetFat = 55;
-    let targetCarbs = 200;
-    const targetFiber = 30;
-    const targetWater = Math.max(3.0, Math.round((weightKg * 0.04) * 10) / 10);
-
-    const isFatLoss = /fat loss|cutting|weight loss/i.test(goal) || /fat-loss|fat loss/i.test(queryLower);
-    const isMuscleGain = /muscle|strength|hypertrophy|bulking/i.test(goal) || /muscle gain|bulking/i.test(queryLower);
-
-    if (isFatLoss) {
-      targetCalories = Math.max(1400, Math.round(tdee - 450)); // Moderate ~450 kcal deficit
-      targetProtein = Math.round(weightKg * 2.2); // Higher protein in deficit
-      targetFat = Math.max(35, Math.round((targetCalories * 0.25) / 9));
-      targetCarbs = Math.max(60, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
-    } else if (isMuscleGain) {
-      targetCalories = Math.round(tdee + 300); // 300 kcal lean surplus
-      targetProtein = Math.round(weightKg * 2.0);
-      targetFat = Math.max(45, Math.round((targetCalories * 0.25) / 9));
-      targetCarbs = Math.max(100, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
-    } else {
-      targetCalories = tdee;
-      targetProtein = Math.round(weightKg * 1.8);
-      targetFat = Math.max(40, Math.round((targetCalories * 0.25) / 9));
-      targetCarbs = Math.max(80, Math.round((targetCalories - (targetProtein * 4 + targetFat * 9)) / 4));
-    }
+    const targetCalories = macroResult.dailyCalories;
+    const targetProtein = macroResult.protein;
+    const targetCarbs = macroResult.carbohydrates;
+    const targetFat = macroResult.fat;
+    const targetFiber = macroResult.fiber;
+    const targetWater = macroResult.waterTargetLiters;
+    const bmr = macroResult.bmr;
+    const tdee = macroResult.tdee;
 
     const isMacroOnly = /macro[- ]?only|only macro|macro targets?|macro proposal|daily macros?|target macros?/i.test(queryLower) ||
       (queryLower.includes('macro') && !queryLower.includes('meal') && !queryLower.includes('diet plan'));
@@ -812,31 +794,34 @@ ${overloadData.hasHistory && overloadData.current ? `
       m.foods = [...m.items];
     });
 
-    // Compute actual summed totals from food items
-    let calcCalories = 0;
-    let calcProtein = 0;
-    let calcCarbs = 0;
-    let calcFat = 0;
-    let calcFiber = 0;
+    // Proportionally scale meal portions and calories so sum matches targetCalories
+    const totalRawCalories = meals.reduce((acc, m) => {
+      return acc + m.items.reduce((sum: number, it: any) => sum + (Number(it.calories) || 0), 0);
+    }, 0);
+
+    const scale = totalRawCalories > 0 && targetCalories > 0 ? targetCalories / totalRawCalories : 1.0;
 
     meals.forEach(m => {
-      m.items.forEach(it => {
-        calcCalories += it.calories;
-        calcProtein += it.protein;
-        calcCarbs += it.carbs;
-        calcFat += it.fat;
-        calcFiber += it.fiber;
-      });
+      m.items = m.items.map((it: any) => ({
+        ...it,
+        quantity: Math.max(1, Math.round(Number(it.quantity) * scale)),
+        calories: Math.max(1, Math.round(Number(it.calories) * scale)),
+        protein: Math.round(Number(it.protein) * scale * 10) / 10,
+        carbs: Math.round(Number(it.carbs) * scale * 10) / 10,
+        carbohydrates: Math.round(Number(it.carbohydrates) * scale * 10) / 10,
+        fat: Math.round(Number(it.fat) * scale * 10) / 10,
+      }));
+      m.foods = [...m.items];
     });
 
-    const finalCalories = Math.round(calcCalories);
-    const finalProtein = Math.round(calcProtein);
-    const finalCarbs = Math.round(calcCarbs);
-    const finalFat = Math.round(calcFat);
-    const finalFiber = Math.round(calcFiber);
+    const finalCalories = targetCalories;
+    const finalProtein = targetProtein;
+    const finalCarbs = targetCarbs;
+    const finalFat = targetFat;
+    const finalFiber = targetFiber;
 
-    const reason = `Formulated based on ${ctx.user.name}'s verified body metrics (${weightKg} kg, ${heightCm} cm), primary objective (${goal}), and ${activityLevel} activity tier.`;
-    const assumptions = `Mifflin-St Jeor BMR: ${Math.round(bmr)} kcal, TDEE: ${tdee} kcal. Target macros: ${finalCalories} kcal, ${finalProtein}g protein (${(finalProtein / weightKg).toFixed(1)}g/kg), ${finalCarbs}g carbs, ${finalFat}g fat, ${finalFiber}g fiber. Water target: ${targetWater}L/day. Restrictions evaluated: ${isVegetarian ? 'Vegetarian' : 'Omnivore'}${hasEggAllergy ? ', Egg-free' : ''}${hasDairyAllergy ? ', Dairy-free' : ''}.`;
+    const reason = macroResult.rationale;
+    const assumptions = `${macroResult.assumptions} Restrictions evaluated: ${isVegetarian ? 'Vegetarian' : 'Omnivore'}${hasEggAllergy ? ', Egg-free' : ''}${hasDairyAllergy ? ', Dairy-free' : ''}.`;
 
     const proposedPayload = {
       planKind: 'DIET_PLAN',

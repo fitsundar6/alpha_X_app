@@ -634,15 +634,43 @@ export const proposeDietPlanTool: ToolDefinition<ProposeDietPlanInput> = {
         }
       }
 
-      // Check consistency between meal totals and daily calorie target within reasonable tolerance (±25% or ±400 kcal)
+      // Harmonize meal totals with daily calorie target by proportionally scaling food portions
       const sumMealCalories = normalizedMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
-      if (sumMealCalories > 0 && Math.abs(sumMealCalories - dailyCalories) > Math.max(400, dailyCalories * 0.25)) {
-        return {
-          success: false,
-          source: 'ALPHA_X_DATABASE',
-          error: 'VALIDATION_ERROR',
-          message: `Internal consistency check failed: sum of meal calories (${sumMealCalories} kcal) differs significantly from daily calorie target (${dailyCalories} kcal). Please adjust meal portions to match the daily target within reasonable tolerance.`,
-        };
+      if (sumMealCalories > 0 && Math.abs(sumMealCalories - dailyCalories) > 10) {
+        const scale = dailyCalories / sumMealCalories;
+        normalizedMeals = normalizedMeals.map((meal) => {
+          const scaledFoods = (meal.foods || []).map((food: any) => ({
+            ...food,
+            quantity: Math.max(1, Math.round(Number(food.quantity) * scale)),
+            calories: Math.max(1, Math.round(Number(food.calories) * scale)),
+            protein: Math.round(Number(food.protein) * scale * 10) / 10,
+            carbs: Math.round(Number(food.carbs ?? food.carbohydrates) * scale * 10) / 10,
+            carbohydrates: Math.round(Number(food.carbs ?? food.carbohydrates) * scale * 10) / 10,
+            fat: Math.round(Number(food.fat) * scale * 10) / 10,
+            fiber: Math.round(Number(food.fiber || 0) * scale * 10) / 10,
+          }));
+          const mealCalories = Math.round(scaledFoods.reduce((acc: number, it: any) => acc + (it.calories || 0), 0));
+          const mealProtein = Math.round(scaledFoods.reduce((acc: number, it: any) => acc + (it.protein || 0), 0) * 10) / 10;
+          const mealCarbs = Math.round(scaledFoods.reduce((acc: number, it: any) => acc + (it.carbs || 0), 0) * 10) / 10;
+          const mealFat = Math.round(scaledFoods.reduce((acc: number, it: any) => acc + (it.fat || 0), 0) * 10) / 10;
+          const mealFiber = Math.round(scaledFoods.reduce((acc: number, it: any) => acc + (it.fiber || 0), 0) * 10) / 10;
+
+          return {
+            ...meal,
+            calories: mealCalories,
+            protein: mealProtein,
+            carbs: mealCarbs,
+            carbohydrates: mealCarbs,
+            fat: mealFat,
+            fiber: mealFiber,
+            totalCalories: mealCalories,
+            totalProtein: mealProtein,
+            totalCarbs: mealCarbs,
+            totalFat: mealFat,
+            foods: scaledFoods,
+            items: scaledFoods,
+          };
+        });
       }
     }
 
@@ -698,7 +726,7 @@ export const proposeDietPlanTool: ToolDefinition<ProposeDietPlanInput> = {
           clientProfileId: profileId,
           proposalType: 'DIET',
           status: 'PENDING',
-          ...(validConversationId ? { conversationId: validConversationId } : { title: resolvedTitle }),
+          ...(validConversationId ? { conversationId: validConversationId } : {}),
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -711,6 +739,8 @@ export const proposeDietPlanTool: ToolDefinition<ProposeDietPlanInput> = {
             summary: args.summary,
             reason: args.reason,
             proposedDataJson: JSON.stringify(proposedPayload),
+            finalDataJson: null,
+            status: 'PENDING',
             updatedAt: new Date(),
           },
           select: { id: true, title: true, status: true, createdAt: true },

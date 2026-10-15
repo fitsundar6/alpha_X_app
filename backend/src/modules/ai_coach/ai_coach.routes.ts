@@ -15,6 +15,7 @@ import { workoutIntentService } from './workout_intent.service';
 import { proposeWorkoutPlanTool } from './tools/definitions/client/propose_workout_plan';
 import { proposeDietPlanTool } from './tools/definitions/client/propose_diet_plan';
 import { clientDataService } from './tools/definitions/client/client_data.service';
+import { calculatePersonalizedDietMacros } from './diet_calculator';
 
 const router = Router();
 
@@ -918,50 +919,42 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
   if (planType === 'DIET') {
     const isMacroOnly = dietConfig?.planKind === 'MACRO_ONLY';
     const primaryGoal = dietConfig?.primaryGoal || clientProfile?.primaryGoal || 'Fat Loss';
-    const weightKg = Number(clientProfile?.weightKg) || 70.0;
-    const heightCm = Number(clientProfile?.heightCm) || 175.0;
-    const age = Number(clientProfile?.age) || 28;
-    const gender = (clientProfile?.gender || 'male').toLowerCase();
 
-    // Calculate BMR & TDEE
-    const bmr = gender === 'female'
-      ? (10 * weightKg + 6.25 * heightCm - 5 * age - 161)
-      : (10 * weightKg + 6.25 * heightCm - 5 * age + 5);
-    const tdee = Math.round(bmr * 1.55);
-
-    let dailyCalories = Number(dietConfig?.dailyCalories || dietConfig?.calorieTarget || dietConfig?.calories) || undefined;
-    let protein = Number(dietConfig?.protein || dietConfig?.proteinGrams) || undefined;
-    let carbs = Number(dietConfig?.carbohydrates || dietConfig?.carbGrams || dietConfig?.carbs) || undefined;
-    let fat = Number(dietConfig?.fat || dietConfig?.fatGrams) || undefined;
-
-    if (!dailyCalories) {
-      if (/fat loss|cutting/i.test(primaryGoal)) {
-        dailyCalories = Math.max(1400, Math.round(tdee - 450));
-        protein = protein || Math.round(weightKg * 2.2);
-        fat = fat || Math.max(35, Math.round((dailyCalories * 0.25) / 9));
-        carbs = carbs || Math.max(60, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
-      } else if (/muscle|hypertrophy|bulking/i.test(primaryGoal)) {
-        dailyCalories = Math.round(tdee + 300);
-        protein = protein || Math.round(weightKg * 2.0);
-        fat = fat || Math.max(45, Math.round((dailyCalories * 0.25) / 9));
-        carbs = carbs || Math.max(100, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
-      } else {
-        dailyCalories = tdee;
-        protein = protein || Math.round(weightKg * 1.8);
-        fat = fat || Math.max(40, Math.round((dailyCalories * 0.25) / 9));
-        carbs = carbs || Math.max(80, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
+    const macroResult = calculatePersonalizedDietMacros(
+      {
+        weightKg: clientProfile?.weightKg,
+        heightCm: clientProfile?.heightCm,
+        age: clientProfile?.age,
+        gender: clientProfile?.gender,
+        activityLevel: clientProfile?.activityLevel,
+        trainingDaysPerWeek: clientProfile?.trainingDaysPerWeek,
+      },
+      primaryGoal,
+      {
+        dailyCalories: dietConfig?.dailyCalories || dietConfig?.calorieTarget || dietConfig?.calories,
+        protein: dietConfig?.protein || dietConfig?.proteinGrams,
+        carbohydrates: dietConfig?.carbohydrates || dietConfig?.carbGrams || dietConfig?.carbs,
+        fat: dietConfig?.fat || dietConfig?.fatGrams,
+        fiber: dietConfig?.fiber,
+        waterTargetLiters: dietConfig?.waterTargetLiters,
       }
-    } else {
-      protein = protein || Math.round(weightKg * 2.0);
-      fat = fat || Math.max(35, Math.round((dailyCalories * 0.25) / 9));
-      carbs = carbs || Math.max(50, Math.round((dailyCalories - (protein * 4 + fat * 9)) / 4));
-    }
+    );
+
+    const dailyCalories = macroResult.dailyCalories;
+    const protein = macroResult.protein;
+    const carbs = macroResult.carbohydrates;
+    const fat = macroResult.fat;
+    const fiber = macroResult.fiber;
+    const waterTargetLiters = macroResult.waterTargetLiters;
 
     const planTitle = isMacroOnly
-      ? `${name} — Daily Macro Targets (Macro-Only)`
-      : `${name} — Tailored Nutrition Plan`;
+      ? `${name} — Daily Macro Targets (${macroResult.normalizedGoal})`
+      : `${name} — ${macroResult.normalizedGoal} Nutrition Plan`;
     const summary = `${dailyCalories} kcal • ${protein}g P • ${carbs}g C • ${fat}g F (${isMacroOnly ? 'Macro Targets' : 'Full Meal Plan'})`;
-    const reason = `Nutritional distribution formulated for ${name} based on assessment data, bodyweight (${weightKg} kg), and ${primaryGoal} objective.`;
+    const reason = macroResult.rationale;
+    const notes = dietConfig?.notes || (macroResult.missingDataNotes
+      ? `[FLAGGED FOR ADMIN REVIEW] ${macroResult.missingDataNotes}`
+      : `Personalized ${macroResult.normalizedGoal} protocol for ${name}.`);
 
     let meals: Array<any> | undefined = undefined;
     if (!isMacroOnly) {
@@ -1052,8 +1045,9 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
         protein,
         carbohydrates: carbs,
         fat,
-        fiber: Number(dietConfig?.fiber) || 30,
-        waterTargetLiters: Number(dietConfig?.waterTargetLiters) || 3.5,
+        fiber,
+        waterTargetLiters,
+        notes,
         meals,
       },
       {
