@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { workoutService } from './workout.service';
+import { prisma } from '../../config/prisma';
 import {
   createSessionSchema,
   updateSessionSchema,
@@ -12,6 +13,74 @@ import {
 } from './workout.validation';
 
 export class WorkoutController {
+  private async autoMaterializeDraftSession(id: string, adminId: string, adminName: string): Promise<any | null> {
+    if (!id.startsWith('ai_draft_')) return null;
+
+    const proposalId = id.replace(/^ai_draft_(workout_|diet_)?/, '');
+    const proposal = await prisma.aIProposal.findUnique({
+      where: { id: proposalId },
+    });
+
+    if (!proposal) return null;
+
+    let payload: any = {};
+    try {
+      payload = JSON.parse(proposal.finalDataJson || proposal.proposedDataJson || '{}');
+    } catch {}
+
+    let rawExercises: any[] = [];
+    if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
+      rawExercises = payload.exercises;
+    } else if (Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
+      for (const day of payload.weeklySchedule) {
+        if (Array.isArray(day.exercises)) rawExercises.push(...day.exercises);
+      }
+    }
+
+    const session = await workoutService.createSession(
+      {
+        id,
+        title: payload.title || payload.planTitle || proposal.title || 'AI Workout Session',
+        workoutType: payload.workoutType || 'Strength',
+        targetMuscleGroup: payload.targetMuscleGroup || 'Full Body',
+        difficulty: payload.difficulty || 'Intermediate',
+        estimatedDurationMinutes: Number(payload.estimatedDurationMinutes) || 45,
+        description: payload.description || proposal.summary || null,
+        isActive: true,
+        availabilityType: 'ALL',
+        exercises: rawExercises.map((ex: any, idx: number) => ({
+          exerciseId: ex.exerciseId || `ex_${id}_${idx + 1}`,
+          exerciseName: ex.exerciseName || ex.name || 'Exercise',
+          category: ex.category || 'General',
+          orderIndex: idx,
+          numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+          targetReps: String(ex.targetReps || ex.reps || '8–12'),
+          targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+          restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+          targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+          targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+          tempo: ex.tempo || '3-1-1-0',
+          adminInstruction: ex.notes || null,
+        })),
+      },
+      adminId
+    );
+
+    if (proposal.status === 'PENDING' || proposal.status === 'EDITED') {
+      await prisma.aIProposal.update({
+        where: { id: proposal.id },
+        data: {
+          status: 'APPROVED',
+          approvedAt: new Date(),
+          approvedById: adminId,
+          approvedByName: adminName,
+        },
+      });
+    }
+
+    return session;
+  }
+
   // --- Admin Endpoints ---
   async getAllAdminSessions(_req: Request, res: Response): Promise<void> {
     const sessions = await workoutService.getAllAdminSessions();
@@ -26,7 +95,12 @@ export class WorkoutController {
 
   async getAdminSessionById(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
-    const session = await workoutService.getSessionById(id);
+    let session = await workoutService.getSessionById(id);
+    if (!session && id.startsWith('ai_draft_')) {
+      const adminId = (req as any).user?.id || 'admin';
+      const adminName = (req as any).user?.name || 'Admin';
+      session = await this.autoMaterializeDraftSession(id, adminId, adminName);
+    }
     if (!session) {
       sendError(
         res,
@@ -112,7 +186,11 @@ export class WorkoutController {
       return;
     }
 
-    const updated = await workoutService.updateSession(id, parsed.data);
+    let updated = await workoutService.updateSession(id, parsed.data);
+    if (!updated && (id.startsWith('ai_draft_') || parsed.data.title)) {
+      const adminId = req.user!.id;
+      updated = await workoutService.createSession({ ...parsed.data, id }, adminId);
+    }
     if (!updated) {
       sendError(
         res,
@@ -247,7 +325,12 @@ export class WorkoutController {
       return;
     }
 
-    const session = await workoutService.getSessionById(id);
+    let session = await workoutService.getSessionById(id);
+    if (!session && id.startsWith('ai_draft_')) {
+      const adminId = req.user?.id || 'admin';
+      const adminName = (req.user as any)?.name || 'Admin';
+      session = await this.autoMaterializeDraftSession(id, adminId, adminName);
+    }
     if (!session) {
       sendError(
         res,
