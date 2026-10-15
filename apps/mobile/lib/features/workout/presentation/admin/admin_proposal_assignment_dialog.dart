@@ -179,6 +179,7 @@ class _AdminProposalAssignmentDialogState extends State<AdminProposalAssignmentD
       if (ok) {
         widget.proposal.status = AiProposalStatus.approved;
         await widget.workoutRepository.fetchAdminSessions();
+        if (!mounted) return;
         Navigator.of(context).pop(); // Close dialog
         widget.onAssigned();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -692,7 +693,7 @@ class _AdminProposalAssignmentDialogState extends State<AdminProposalAssignmentD
               child: ListView.separated(
               shrinkWrap: true,
               itemCount: recipients.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
+              separatorBuilder: (_, _) => const Divider(height: 1, color: AppColors.border),
               itemBuilder: (ctx, i) {
                 final r = recipients[i];
                 final rName = r['name'] ?? 'Athlete';

@@ -1,10 +1,13 @@
 import { prisma } from './config/prisma';
 
-// The verified real production clients to strictly preserve
+// The verified real production clients and master admin to strictly preserve
 const PRESERVED_EMAILS = [
-  'dranubharathi2498@gmail.com',
-  'johnguru2510@gmail.com',
-  'sakthiprabakar1515dsp@gnail.com',
+  'fitsundar6@gmail.com',            // Sole Authorized Master Administrator
+  'dranubharathi2498@gmail.com',     // Real Client AXG-0002
+  'johnguru2510@gmail.com',          // Real Client AXG-0006
+  'sakthiprabakar1515dsp@gnail.com', // Real Client AXG-0007
+  'akilar@gmail.com',                // Real Client AXG-0004
+  'ajaymaathank@gmail.com',          // Real Client AXG-0005
 ];
 
 async function main() {

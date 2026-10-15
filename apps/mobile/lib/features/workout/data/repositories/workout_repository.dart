@@ -1538,7 +1538,7 @@ class WorkoutRepository extends ChangeNotifier {
           : (todayRecord != null ? 'IN_PROGRESS' : assignment.status);
 
       // Clean fresh sets for new scheduled session occurrence
-      final exercises = isLockedToday && todayRecord != null
+      final exercises = isLockedToday
           ? todayRecord.exercises
           : session.exercises.map((ex) {
               return ex.copyWith(
@@ -1561,7 +1561,7 @@ class WorkoutRepository extends ChangeNotifier {
           scheduledDate: todayIST,
           isLocked: isLockedToday,
           status: sessionStatus,
-          lockedAt: isLockedToday ? (todayRecord?.lockedAt ?? todayRecord?.completedAt) : null,
+          lockedAt: isLockedToday ? (todayRecord.lockedAt ?? todayRecord.completedAt) : null,
           unlockedAt: todayRecord?.unlockedAt ?? assignment.unlockedAt,
           unlockReason: todayRecord?.unlockReason ?? assignment.unlockReason,
           exercises: exercises,

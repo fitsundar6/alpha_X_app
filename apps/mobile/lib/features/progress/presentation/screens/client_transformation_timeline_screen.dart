@@ -1310,7 +1310,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
             fit: BoxFit.cover,
             width: totalWidth,
             height: constraints.maxHeight,
-            errorBuilder: (_, __, ___) => _buildPhotoErrorPlaceholder(angle),
+            errorBuilder: (_, _, _) => _buildPhotoErrorPlaceholder(angle),
           );
 
           final afterWidget = Image.network(
@@ -1318,7 +1318,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
             fit: BoxFit.cover,
             width: totalWidth,
             height: constraints.maxHeight,
-            errorBuilder: (_, __, ___) => _buildPhotoErrorPlaceholder(angle),
+            errorBuilder: (_, _, _) => _buildPhotoErrorPlaceholder(angle),
           );
 
           return GestureDetector(

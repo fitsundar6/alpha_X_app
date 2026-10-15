@@ -147,7 +147,7 @@ class IstDateUtils {
       final recurringWeekdays = parseWeekdaysFromScheduleString(recurringSchedule);
       final combinedWeekdays = <int>{
         ...recurringWeekdays,
-        if (trainingDays != null) ...trainingDays,
+        ...?trainingDays,
       }.toList()..sort();
 
       if (combinedWeekdays.isNotEmpty) {

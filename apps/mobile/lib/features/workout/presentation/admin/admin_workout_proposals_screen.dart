@@ -400,7 +400,7 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
                             child: ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               itemCount: _filteredProposals.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
                               itemBuilder: (ctx, idx) => _buildProposalCard(_filteredProposals[idx]),
                             ),
                           ),

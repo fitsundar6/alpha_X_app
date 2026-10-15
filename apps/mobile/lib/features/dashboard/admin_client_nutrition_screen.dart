@@ -886,7 +886,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
         final item = _dietHistory[i];
         final version = item['version'] ?? (i + 1);
         final planName = item['planName'] ?? 'Diet Plan';
-        final adminName = item['adminName'] ?? 'Trainer Alex Stone';
+        final adminName = item['adminName'] ?? 'Master Coach';
         final date = item['createdAt'] != null
             ? DateFormat('d MMMM yyyy, h:mm a').format(DateTime.parse(item['createdAt']).toLocal())
             : 'Recent';
