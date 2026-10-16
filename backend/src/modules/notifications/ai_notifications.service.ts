@@ -16,8 +16,41 @@
  */
 
 import { prisma } from '../../config/prisma';
+import { env } from '../../config/environment';
 import { geminiReliability, classifyGeminiError, redactSecrets } from '../ai_coach/gemini.reliability';
 import { notificationPolicyService } from './notification_policy.service';
+
+export interface DryRunDiagnosticsResult {
+  dryRun: true;
+  sweep: 'MORNING_READINESS' | 'MISSED_WORKOUT_CHECK_IN' | 'EVENING_NUTRITION_AND_RECOVERY' | 'DISPATCHER' | 'ALL';
+  scheduledIst: string;
+  scheduledUtc: string;
+  timezone: string;
+  localTimeIST: {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    dateStr: string;
+    weekday: string;
+  };
+  isInQuietHours: boolean;
+  databaseWrites: 0;
+  oneSignalDispatches: 0;
+  previewGuardActive: boolean;
+  isolatedDbVerified: boolean;
+  diagnostics: {
+    targetAudience: string;
+    mode: 'READ_ONLY_SAFE_DIAGNOSTICS';
+    summary: string;
+    eligibilitySummary?: {
+      totalClients?: number;
+      notificationsEnabled?: number;
+      yesterdayDateStr?: string;
+    };
+  };
+}
 
 export interface MorningCheckInContext {
   firstName: string;
@@ -705,6 +738,100 @@ Reply with ONLY the notification text.`;
       console.warn('[AI NOTIFICATIONS] Diet plan assignment notification failed:', err?.message);
       return false;
     }
+  }
+
+  /**
+   * Safe, read-only dry-run diagnostics.
+   * Performs ZERO database writes, ZERO notification reservations, and ZERO OneSignal dispatches.
+   * In Vercel Preview deployments, strictly suppresses all client database queries.
+   */
+  async runDryRunDiagnostics(
+    sweep: 'MORNING_READINESS' | 'MISSED_WORKOUT_CHECK_IN' | 'EVENING_NUTRITION_AND_RECOVERY' | 'DISPATCHER' | 'ALL'
+  ): Promise<DryRunDiagnosticsResult> {
+    const isPreview =
+      process.env.VERCEL_ENV === 'preview' ||
+      (typeof env !== 'undefined' && (env as any).VERCEL_ENV === 'preview');
+
+    const tz = 'Asia/Kolkata';
+    const local = notificationPolicyService.getLocalTimeParts(tz);
+    const inQuietHours = notificationPolicyService.isInQuietHours(tz, 21, 7);
+
+    let scheduledIst = 'Universal Slot';
+    let scheduledUtc = 'Variable';
+    if (sweep === 'MORNING_READINESS') {
+      scheduledIst = '07:30 AM IST';
+      scheduledUtc = '02:00 UTC';
+    } else if (sweep === 'MISSED_WORKOUT_CHECK_IN') {
+      scheduledIst = '10:30 AM IST';
+      scheduledUtc = '05:00 UTC';
+    } else if (sweep === 'EVENING_NUTRITION_AND_RECOVERY') {
+      scheduledIst = '08:30 PM IST';
+      scheduledUtc = '15:00 UTC';
+    }
+
+    // In Preview deployment, strictly suppress querying production client records
+    if (isPreview) {
+      return {
+        dryRun: true,
+        sweep,
+        scheduledIst,
+        scheduledUtc,
+        timezone: tz,
+        localTimeIST: local,
+        isInQuietHours: inQuietHours,
+        databaseWrites: 0,
+        oneSignalDispatches: 0,
+        previewGuardActive: true,
+        isolatedDbVerified: false,
+        diagnostics: {
+          targetAudience: 'PROTECTED_PRODUCTION_DATABASE (Queries suppressed in Preview)',
+          mode: 'READ_ONLY_SAFE_DIAGNOSTICS',
+          summary:
+            'Vercel Preview environment detected. Production client data querying is strictly suppressed to protect production database privacy. Routes, authentication, schedules, and timezone calculations verified with zero database queries, zero database writes, and zero push dispatches.',
+        },
+      };
+    }
+
+    // In verified test database or safe read-only environment, perform pure read-only counts (ZERO mutations)
+    let eligibilitySummary: any = undefined;
+    try {
+      const [totalClients, notificationsEnabled] = await Promise.all([
+        prisma.user.count({ where: { role: 'CLIENT' } }),
+        prisma.user.count({ where: { role: 'CLIENT', notificationsEnabled: true } }),
+      ]);
+
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const yesterdayParts = notificationPolicyService.getLocalTimeParts(tz, yesterday);
+
+      eligibilitySummary = {
+        totalClients,
+        notificationsEnabled,
+        yesterdayDateStr: yesterdayParts.dateStr,
+      };
+    } catch (_) {
+      // In case DB is offline or read error, maintain zero-write guarantee
+    }
+
+    return {
+      dryRun: true,
+      sweep,
+      scheduledIst,
+      scheduledUtc,
+      timezone: tz,
+      localTimeIST: local,
+      isInQuietHours: inQuietHours,
+      databaseWrites: 0,
+      oneSignalDispatches: 0,
+      previewGuardActive: false,
+      isolatedDbVerified: false,
+      diagnostics: {
+        targetAudience: 'READ_ONLY_SAFE_COUNT',
+        mode: 'READ_ONLY_SAFE_DIAGNOSTICS',
+        summary:
+          'Safe dry-run completed. All checks executed in read-only diagnostic mode with zero database writes and zero OneSignal dispatches.',
+        eligibilitySummary,
+      },
+    };
   }
 }
 

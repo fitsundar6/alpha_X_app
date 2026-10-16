@@ -1,14 +1,23 @@
 /**
  * Alpha X Vercel Serverless Cron Routes
  *
- * Provides authenticated, retry-safe endpoints for Vercel Cron jobs and external dispatchers:
+ * Provides authenticated, retry-safe endpoints for Vercel Cron jobs, external dispatchers,
+ * and safe read-only preview diagnostics:
  *   - GET /api/v1/cron/morning-sweep          (07:30 AM IST / 02:00 UTC)
  *   - GET /api/v1/cron/missed-workout-sweep   (10:30 AM IST / 05:00 UTC)
  *   - GET /api/v1/cron/evening-sweep          (08:30 PM IST / 15:00 UTC)
  *   - GET /api/v1/cron/dispatcher             (Universal smart runner, preserves distinct times)
+ *   - GET /api/v1/cron/diagnostics            (Authenticated read-only dry-run diagnostics)
+ *   - GET /api/v1/cron/recover-stale          (Stale pending notification recovery worker)
  *
  * All endpoints are secured by CRON_SECRET header (Authorization: Bearer <CRON_SECRET>)
- * or ?secret=<CRON_SECRET> query parameter.
+ * or ?secret=<CRON_SECRET> query parameter (in non-production only).
+ *
+ * Security & Preview Safety:
+ *   - In Vercel Preview (VERCEL_ENV === "preview"), mutating sweep execution is strictly blocked
+ *     unless an isolated test database is verified.
+ *   - Supports true read-only dry-run (?dryRun=true or /diagnostics) performing ZERO database writes
+ *     and ZERO OneSignal dispatches.
  */
 
 import { Router, Request, Response } from 'express';
@@ -21,17 +30,68 @@ import { notificationPolicyService } from './notification_policy.service';
 const router = Router();
 
 /**
+ * Check if current runtime is a Vercel Preview deployment.
+ */
+export function isVercelPreview(): boolean {
+  return (
+    process.env.VERCEL_ENV === 'preview' ||
+    (typeof env !== 'undefined' && (env as any).VERCEL_ENV === 'preview')
+  );
+}
+
+/**
+ * Verifies whether the configured DATABASE_URL points to a genuinely isolated database.
+ * Security guard against shared production database corruption:
+ *   - NEVER trusts IS_ISOLATED_TEST_DB=true alone without positive verification.
+ *   - Substring checks ("test", "staging", "localhost") are rejected as unverified.
+ *   - In the absence of infrastructure-attested isolation, fails closed (returns false)
+ *     to prevent preview cron sweeps from ever mutating a shared production database.
+ */
+export function isIsolatedTestDatabase(): boolean {
+  return false;
+}
+
+/**
+ * Enforces Preview Data Safety:
+ * All mutating cron sweeps and recovery jobs are strictly blocked in Vercel Preview deployments.
+ * To guarantee that shared production databases cannot be mutated under any circumstances,
+ * Preview does not permit live sweep execution and strictly requires the authenticated
+ * read-only dry-run diagnostics mode (?dryRun=true or /diagnostics).
+ *
+ * If isolation cannot be established reliably (isIsolatedTestDatabase() returns false),
+ * it fails closed with HTTP 403 (PREVIEW_SWEEP_BLOCKED).
+ */
+export function enforcePreviewSafety(res: Response, isDryRun: boolean): boolean {
+  if (isVercelPreview() && !isDryRun) {
+    if (!isIsolatedTestDatabase()) {
+      console.warn('[CRON_PREVIEW_GUARD] Mutating sweep rejected: Vercel Preview deployment has no verified isolated database.');
+      sendError(
+        res,
+        'PREVIEW_SWEEP_BLOCKED',
+        'Live cron sweep execution is strictly disabled in Vercel Preview deployments to guarantee production database protection. To validate cron configuration safely without database writes or pushes, use the authenticated dry-run diagnostics endpoint (?dryRun=true).',
+        HttpStatus.FORBIDDEN
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Authentication middleware for cron routes.
  *
  * Requirements:
- *   - Production strictly requires 'Authorization: Bearer <CRON_SECRET>'.
- *   - Query-parameter credentials (?secret=...) are strictly rejected in production to prevent leaking tokens in logs/URLs.
+ *   - Production and Vercel Preview strictly require 'Authorization: Bearer <CRON_SECRET>'.
+ *   - Query-parameter credentials (?secret=...) are strictly rejected in production and preview.
  *   - Fails closed if CRON_SECRET is missing or empty on server.
- *   - Preserves non-production query parameter convenience only when NODE_ENV !== 'production'.
+ *   - Preserves non-production query parameter convenience only when NODE_ENV !== 'production' and not preview.
  *   - Never logs secrets or exposes expected tokens in response bodies.
  */
 export function verifyCronSecret(req: Request, res: Response, next: () => void): void {
-  const isProduction = env.NODE_ENV === 'production' || process.env.NODE_ENV === 'production';
+  const isStrictEnv =
+    env.NODE_ENV === 'production' ||
+    process.env.NODE_ENV === 'production' ||
+    isVercelPreview();
   const expectedSecret = env.CRON_SECRET;
 
   // Fail closed if server has no configured CRON_SECRET
@@ -46,20 +106,20 @@ export function verifyCronSecret(req: Request, res: Response, next: () => void):
   const bearerToken = hasBearer ? authHeader.substring(7).trim() : null;
   const querySecret = typeof req.query.secret === 'string' ? req.query.secret.trim() : null;
 
-  // Production security rule: Query-parameter secrets are strictly forbidden
-  if (isProduction && querySecret) {
-    console.warn('[CRON_AUTH] Security violation: Query-parameter secret rejected in production environment');
+  // Security rule: Query-parameter secrets are strictly forbidden in production and preview
+  if (isStrictEnv && querySecret) {
+    console.warn('[CRON_AUTH] Security violation: Query-parameter secret rejected in production/preview environment');
     sendError(
       res,
       'UNAUTHORIZED',
-      'Query parameter authentication is not permitted in production. Use Authorization: Bearer <token>',
+      'Query parameter authentication is not permitted in production or preview environments. Use Authorization: Bearer <token>',
       HttpStatus.UNAUTHORIZED
     );
     return;
   }
 
-  // In non-production, permit query parameter as a fallback
-  const providedSecret = bearerToken || (!isProduction ? querySecret : null);
+  // In local dev non-strict mode, permit query parameter as a fallback
+  const providedSecret = bearerToken || (!isStrictEnv ? querySecret : null);
 
   if (!providedSecret) {
     sendError(res, 'UNAUTHORIZED', 'Missing authorization header', HttpStatus.UNAUTHORIZED);
@@ -76,7 +136,19 @@ export function verifyCronSecret(req: Request, res: Response, next: () => void):
 }
 
 // ── GET /morning-sweep ─────────────────────────────────────────────────────────
-router.get('/morning-sweep', verifyCronSecret, async (_req: Request, res: Response) => {
+router.get('/morning-sweep', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('MORNING_READINESS');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
   try {
     console.log('[CRON_ROUTE] Authenticated trigger: Morning Readiness Sweep');
     const result = await aiNotificationEngine.runMorningCheckInSweep();
@@ -97,7 +169,19 @@ router.get('/morning-sweep', verifyCronSecret, async (_req: Request, res: Respon
 });
 
 // ── GET /missed-workout-sweep ──────────────────────────────────────────────────
-router.get('/missed-workout-sweep', verifyCronSecret, async (_req: Request, res: Response) => {
+router.get('/missed-workout-sweep', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('MISSED_WORKOUT_CHECK_IN');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
   try {
     console.log('[CRON_ROUTE] Authenticated trigger: Missed Workout Sweep');
     const result = await aiNotificationEngine.runMissedWorkoutSweep();
@@ -118,7 +202,19 @@ router.get('/missed-workout-sweep', verifyCronSecret, async (_req: Request, res:
 });
 
 // ── GET /evening-sweep ────────────────────────────────────────────────────────
-router.get('/evening-sweep', verifyCronSecret, async (_req: Request, res: Response) => {
+router.get('/evening-sweep', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('EVENING_NUTRITION_AND_RECOVERY');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
   try {
     console.log('[CRON_ROUTE] Authenticated trigger: Evening Sweep');
     const result = await aiNotificationEngine.runEveningCheckInSweep();
@@ -142,6 +238,18 @@ router.get('/evening-sweep', verifyCronSecret, async (_req: Request, res: Respon
 // Universal dispatcher for Vercel Hobby (2 crons) or external scheduled triggers.
 // Preserves distinct execution times and never runs all three together.
 router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('DISPATCHER');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
   const job = (req.query.job as string) || 'auto';
 
   try {
@@ -204,8 +312,40 @@ router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) 
   }
 });
 
+// ── GET /diagnostics ─────────────────────────────────────────────────────────
+// Dedicated authenticated read-only diagnostics endpoint
+router.get('/diagnostics', verifyCronSecret, async (_req: Request, res: Response) => {
+  try {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('ALL');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'DIAGNOSTICS_FAILED', err?.message || 'Dry-run diagnostics failed', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 // ── GET /recover-stale ────────────────────────────────────────────────────────
-router.get('/recover-stale', verifyCronSecret, async (_req: Request, res: Response) => {
+router.get('/recover-stale', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    sendSuccess(
+      res,
+      {
+        dryRun: true,
+        task: 'RECOVER_STALE_PENDING',
+        mode: 'READ_ONLY_SIMULATION',
+        databaseWrites: 0,
+        oneSignalDispatches: 0,
+      },
+      HttpStatus.OK
+    );
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
   try {
     console.log('[CRON_ROUTE] Authenticated trigger: Stale Notification Recovery');
     const result = await notificationPolicyService.recoverStalePendingNotifications();
