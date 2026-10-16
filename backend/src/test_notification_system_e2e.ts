@@ -18,7 +18,7 @@ import { prisma } from './config/prisma';
 import { notificationPolicyService } from './modules/notifications/notification_policy.service';
 import { aiNotificationEngine } from './modules/notifications/ai_notifications.service';
 import { workoutService } from './modules/workout/workout.service';
-import { verifyCronSecret } from './modules/notifications/cron.routes';
+import { verifyCronSecret, isVercelPreview, isIsolatedTestDatabase } from './modules/notifications/cron.routes';
 import { oneSignalService } from './modules/notifications/onesignal.service';
 import { env } from './config/environment';
 import { UserStatus, UserRole } from './constants/roles';
@@ -709,6 +709,107 @@ async function runNotificationIntegrationTests() {
 
     const totalClaimed = workerA.claimed + workerB.claimed;
     assert(totalClaimed === 1, `Exactly 1 concurrent recovery worker claimed the stale record (A=${workerA.claimed}, B=${workerB.claimed})`);
+
+    // ── TEST 12: Vercel Preview Protection & True Dry-Run Verification ────
+    console.log('\n[TEST 12] Testing Vercel Preview Protection & True Dry-Run Safety...');
+    const originalVercelEnv = process.env.VERCEL_ENV;
+    const originalIsolatedDb = process.env.IS_ISOLATED_TEST_DB;
+
+    // 12A: Preview OneSignal Push Blocking
+    process.env.VERCEL_ENV = 'preview';
+    assert(oneSignalService.isPreviewEnvironment() === true, 'OneSignal detects Vercel Preview environment');
+    assert(oneSignalService.isConfigured() === false, 'OneSignal marks isConfigured as false in Preview');
+
+    const previewPushRes = await oneSignalService.sendToPlayer('fake_preview_player_id', {
+      title: 'Preview Push',
+      body: 'Should never reach network',
+    });
+    assert(previewPushRes.success === false, 'Preview push dispatch strictly rejected server-side');
+    assert(Boolean(previewPushRes.error?.includes('Preview')), 'Error explicitly cites Preview protection');
+
+    const previewBulkRes = await oneSignalService.broadcastToDevices(['p1', 'p2'], {
+      title: 'Bulk Preview',
+      body: 'Should never reach network',
+    });
+    assert(previewBulkRes.success === false, 'Preview bulk push dispatch strictly rejected server-side');
+
+    const previewUserRes = await oneSignalService.sendToUser(testUserId, {
+      title: 'User Preview',
+      body: 'Should never reach network',
+    });
+    assert(previewUserRes.success === false, 'Preview sendToUser strictly rejected server-side');
+
+    // 12B: True Dry-Run Zero Database Writes & Zero Dispatches
+    const notifsBeforeDryRun = await prisma.notification.count();
+    const dryRunResult = await aiNotificationEngine.runDryRunDiagnostics('MORNING_READINESS');
+
+    assert(dryRunResult.dryRun === true, 'Dry-run returns dryRun: true flag');
+    assert(dryRunResult.databaseWrites === 0, 'Dry-run guarantees databaseWrites: 0');
+    assert(dryRunResult.oneSignalDispatches === 0, 'Dry-run guarantees oneSignalDispatches: 0');
+    assert(dryRunResult.scheduledIst === '07:30 AM IST', 'Dry-run returns verified scheduled IST time');
+    assert(dryRunResult.scheduledUtc === '02:00 UTC', 'Dry-run returns verified scheduled UTC time');
+
+    const notifsAfterDryRun = await prisma.notification.count();
+    assert(notifsBeforeDryRun === notifsAfterDryRun, 'Dry-run created ZERO database records (0 writes verified)');
+
+    // 12C: Unauthenticated Requests Rejection on Dry-Run & Diagnostics
+    const unauthDryRunReq = mockExpressReqRes({}, { dryRun: 'true' });
+    verifyCronSecret(unauthDryRunReq.req, unauthDryRunReq.res, unauthDryRunReq.next);
+    assert(
+      unauthDryRunReq.getStatusCode() === 401 && !unauthDryRunReq.wasNextCalled(),
+      'Unauthenticated dry-run request strictly rejected with HTTP 401 (query param cannot bypass auth)'
+    );
+
+    const invalidBearerDryRun = mockExpressReqRes({ authorization: 'Bearer invalid_secret' }, { dryRun: 'true' });
+    verifyCronSecret(invalidBearerDryRun.req, invalidBearerDryRun.res, invalidBearerDryRun.next);
+    assert(
+      invalidBearerDryRun.getStatusCode() === 401 && !invalidBearerDryRun.wasNextCalled(),
+      'Invalid token dry-run request strictly rejected with HTTP 401'
+    );
+
+    // Query parameter strictly rejected in Preview environment
+    process.env.VERCEL_ENV = 'preview';
+    const querySecretInPreview = mockExpressReqRes({}, { secret: env.CRON_SECRET, dryRun: 'true' });
+    verifyCronSecret(querySecretInPreview.req, querySecretInPreview.res, querySecretInPreview.next);
+    assert(
+      querySecretInPreview.getStatusCode() === 401 && !querySecretInPreview.wasNextCalled(),
+      'Query-param secret strictly rejected in Vercel Preview environment'
+    );
+
+    // 12D: Preview Data Safety (Suppression of Production Client Queries without Isolated DB)
+    process.env.VERCEL_ENV = 'preview';
+    delete process.env.IS_ISOLATED_TEST_DB;
+    assert(isVercelPreview() === true, 'isVercelPreview() returns true when VERCEL_ENV=preview');
+    assert(isIsolatedTestDatabase() === false, 'isIsolatedTestDatabase() returns false when unconfigured');
+
+    process.env.IS_ISOLATED_TEST_DB = 'true';
+    assert(isIsolatedTestDatabase() === false, 'isIsolatedTestDatabase() returns false even when IS_ISOLATED_TEST_DB=true (does not blindly trust env flag)');
+    delete process.env.IS_ISOLATED_TEST_DB;
+
+    const previewDiagnostics = await aiNotificationEngine.runDryRunDiagnostics('MORNING_READINESS');
+    assert(previewDiagnostics.previewGuardActive === true, 'Preview guard confirmed active in diagnostics');
+    assert(previewDiagnostics.isolatedDbVerified === false, 'Isolated DB flagged unverified in Preview');
+    assert(
+      previewDiagnostics.diagnostics.targetAudience.includes('PROTECTED_PRODUCTION_DATABASE'),
+      'Production client data queries suppressed in Preview dry-run'
+    );
+
+    // 12E: Production Behavior Preserved
+    process.env.VERCEL_ENV = 'production';
+    assert(isVercelPreview() === false, 'isVercelPreview() returns false in production');
+    assert(oneSignalService.isPreviewEnvironment() === false, 'OneSignal isPreviewEnvironment() returns false in production');
+
+    // Restore environment
+    if (originalVercelEnv) {
+      process.env.VERCEL_ENV = originalVercelEnv;
+    } else {
+      delete process.env.VERCEL_ENV;
+    }
+    if (originalIsolatedDb) {
+      process.env.IS_ISOLATED_TEST_DB = originalIsolatedDb;
+    } else {
+      delete process.env.IS_ISOLATED_TEST_DB;
+    }
 
     // ── Summary ───────────────────────────────────────────────────────────
     console.log('\n================================================================');

@@ -43,13 +43,33 @@ export class OneSignalService {
     return env.ONESIGNAL_REST_API_KEY || '';
   }
 
-  /** Check if OneSignal credentials are configured */
+  /** Check if running inside Vercel Preview deployment where live pushes are forbidden */
+  isPreviewEnvironment(): boolean {
+    return (
+      process.env.VERCEL_ENV === 'preview' ||
+      (typeof env !== 'undefined' && env.VERCEL_ENV === 'preview')
+    );
+  }
+
+  /** Check if OneSignal credentials are configured and permitted in this deployment */
   isConfigured(): boolean {
+    if (this.isPreviewEnvironment()) {
+      return false;
+    }
     return Boolean(this.appId && this.apiKey);
   }
 
   /** Send a push notification to one specific device by OneSignal player ID or subscription ID */
   async sendToPlayer(playerId: string, payload: NotificationPayload): Promise<SendResult> {
+    if (this.isPreviewEnvironment()) {
+      console.warn('[ONESIGNAL_PREVIEW_GUARD] Push blocked: Vercel Preview deployment detected (VERCEL_ENV === "preview").');
+      return {
+        success: false,
+        playerId,
+        error: 'Push notifications are strictly disabled in Vercel Preview deployments to prevent broadcasting to real clients.',
+      };
+    }
+
     if (!this.appId || !this.apiKey) {
       console.warn('[ONESIGNAL] Missing credentials — notification skipped for target:', playerId);
       return {
@@ -101,6 +121,16 @@ export class OneSignalService {
 
   /** Broadcast push notification to multiple devices in a single OneSignal API call */
   async broadcastToDevices(playerIds: string[], payload: NotificationPayload): Promise<BroadcastResult> {
+    if (this.isPreviewEnvironment()) {
+      console.warn('[ONESIGNAL_PREVIEW_GUARD] Bulk push blocked: Vercel Preview deployment detected (VERCEL_ENV === "preview").');
+      return {
+        success: false,
+        recipientsCount: playerIds.length,
+        devicesTargeted: 0,
+        error: 'Bulk push notifications are strictly disabled in Vercel Preview deployments to protect real clients.',
+      };
+    }
+
     if (!this.appId || !this.apiKey) {
       return {
         success: false,
@@ -180,6 +210,10 @@ export class OneSignalService {
 
   /** Send push notification targeting by external user ID (Alpha X User UUID) */
   async sendToUser(userId: string, payload: NotificationPayload): Promise<SendResult> {
+    if (this.isPreviewEnvironment()) {
+      return { success: false, playerId: userId, error: 'Push notifications disabled in Vercel Preview deployments' };
+    }
+
     if (!this.appId || !this.apiKey) {
       return { success: false, playerId: userId, error: 'OneSignal not configured' };
     }
