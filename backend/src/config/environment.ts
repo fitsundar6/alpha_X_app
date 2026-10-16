@@ -24,6 +24,7 @@ const envSchema = z.object({
   ONESIGNAL_APP_ID: z.string().optional(),
   ONESIGNAL_REST_API_KEY: z.string().optional(),
   PYTHON_AI_URL: z.string().default('http://127.0.0.1:8000/api/v1/ai'),
+  CRON_SECRET: z.string().optional(),
   // Master Administrator Email & Password Credentials
   // Exactly ONE authorized master admin account
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),

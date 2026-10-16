@@ -1,0 +1,60 @@
+name: Alpha X Cron — Missed Workout Sweep (10:30 AM IST)
+
+on:
+  schedule:
+    # 05:00 UTC = 10:30 AM IST (Asia/Kolkata, UTC+5:30)
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    # Allows manual execution via GitHub Actions UI for verification
+
+concurrency:
+  group: alpha-x-missed-workout-cron
+  cancel-in-progress: false
+
+jobs:
+  trigger-missed-workout-sweep:
+    name: Dispatch Missed Workout Sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify Secret Configuration
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET secret is not configured in repository secrets!"
+            echo "Please navigate to GitHub Settings -> Secrets and variables -> Actions and add CRON_SECRET."
+            exit 1
+          fi
+          echo "✅ CRON_SECRET is present in repository secrets."
+
+      - name: Invoke Production Missed-Workout Sweep Endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          PROD_URL="https://alpha-x-app.vercel.app/api/v1/cron/missed-workout-sweep"
+          echo "Dispatching authenticated sweep trigger to: $PROD_URL"
+          echo "Scheduled window: 10:30 AM IST (05:00 UTC)"
+
+          HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            --max-time 45 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: Alpha-X-GitHub-Actions-Cron/1.0" \
+            "$PROD_URL")
+
+          BODY=$(echo "$HTTP_RESPONSE" | sed -e '$d')
+          STATUS=$(echo "$HTTP_RESPONSE" | tr -d '\r' | tr -d '\n' | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+
+          echo "Received HTTP Status: $STATUS"
+          echo "Response Body:"
+          echo "$BODY"
+
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "✅ Missed-workout sweep executed successfully."
+            exit 0
+          else
+            echo "::error::Failed with HTTP status $STATUS: $BODY"
+            exit 1
+          fi

@@ -210,6 +210,7 @@ export class OneSignalService {
           Authorization: `Key ${this.apiKey}`,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
       });
 
       const httpStatus = response.status;
@@ -243,13 +244,84 @@ export class OneSignalService {
         response: result,
       };
     } catch (err: any) {
-      console.error('[ONESIGNAL] Network exception:', err?.message);
+      const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
+      const errorMsg = isTimeout ? 'OneSignal API request timed out after 8000ms' : (err?.message || 'Network exception');
+      console.error('[ONESIGNAL] Network exception:', errorMsg);
       return {
         success: false,
         playerId: targetId,
-        error: err?.message,
+        error: errorMsg,
       };
     }
+  }
+
+  /**
+   * Fetch details of a specific notification by OneSignal ID to verify provider acceptance/delivery
+   */
+  async getNotification(notificationId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.appId || !this.apiKey || !notificationId) {
+      return { success: false, error: 'Missing OneSignal credentials or notificationId' };
+    }
+
+    try {
+      const response = await fetch(`${ONESIGNAL_API}/notifications/${notificationId}?app_id=${this.appId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Key ${this.apiKey}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `OneSignal returned HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to query OneSignal notification' };
+    }
+  }
+
+  /**
+   * Fetch recent notifications from OneSignal to reconcile unverified pushes
+   */
+  async getRecentNotifications(limit: number = 30): Promise<{ success: boolean; notifications?: any[]; error?: string }> {
+    if (!this.appId || !this.apiKey) {
+      return { success: false, error: 'Missing OneSignal credentials' };
+    }
+
+    try {
+      const response = await fetch(`${ONESIGNAL_API}/notifications?app_id=${this.appId}&limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Key ${this.apiKey}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `OneSignal returned HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, notifications: data.notifications || [] };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to query OneSignal recent notifications' };
+    }
+  }
+
+  /**
+   * Reconcile if a notification with the given dedupKey was already accepted by OneSignal
+   */
+  async findNotificationByDedupKey(dedupKey: string): Promise<{ found: boolean; notification?: any }> {
+    const res = await this.getRecentNotifications(50);
+    if (!res.success || !res.notifications) {
+      return { found: false };
+    }
+
+    const match = res.notifications.find((n: any) => n.data && (n.data.dedupKey === dedupKey || n.data?.custom?.dedupKey === dedupKey));
+    return { found: Boolean(match), notification: match };
   }
 
   /** Send to multiple players at once (batches per-player for personalized messages) */
