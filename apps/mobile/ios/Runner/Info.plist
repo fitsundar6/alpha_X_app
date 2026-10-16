@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Alpha X Gym requires live camera access to scan your meal and analyze nutritional macros in real-time.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

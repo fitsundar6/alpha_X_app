@@ -52,6 +52,7 @@ app.*.map.json
 *.jks
 key.properties
 local.properties
+google-services.json
 
 # iOS credentials & profiles
 *.mobileprovision

@@ -6,11 +6,7 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     // Required for Firebase/FCM — OneSignal v5 uses FCM for Android push delivery.
-    // STEP 1: Download google-services.json from Firebase Console
-    //         (Firebase project must have Android app: com.alphax.gym.alpha_x_gym)
-    // STEP 2: Place google-services.json at android/app/google-services.json
-    // STEP 3: Uncomment the next line AND the matching line in settings.gradle.kts
-    // id("com.google.gms.google-services")
+    id("com.google.gms.google-services")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")

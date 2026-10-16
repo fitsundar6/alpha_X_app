@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -50,7 +48,7 @@ void main() async {
   }
 
   // OneSignal Push Notifications — Centralized Lifecycle & Token Sync
-  unawaited(PushNotificationService.instance.initialize());
+  await PushNotificationService.instance.initialize();
 
   // Runtime API Configuration Logging (Zero secrets or credentials logged)
   debugPrint('====================================================');
@@ -154,6 +152,9 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
       notificationRepository: NotificationRepository(),
     );
 
+    // Register Push Subscription Verification Observer for OneSignal
+    PushNotificationService.instance.setupPushSubscriptionObserver();
+
     // Automatically update daily activity tracking & sync with backend when workout is completed
     _workoutRepository.onWorkoutCompleted = (record) {
       final minutes = (record.durationSeconds / 60).round().clamp(1, 300);
@@ -199,6 +200,7 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
       child: MaterialApp(
+        navigatorKey: PushNotificationService.instance.navigatorKey,
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: effectiveTheme,

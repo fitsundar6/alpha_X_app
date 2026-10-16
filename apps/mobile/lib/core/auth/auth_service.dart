@@ -1132,8 +1132,14 @@ class AuthService extends ChangeNotifier {
 
   /// Complete logout: purges active session and resets state.
   Future<void> logout() async {
+    final tokenToUnregister = _token;
+    try {
+      // Must await push notification unregistration BEFORE clearing credentials and session
+      await PushNotificationService.instance.onUserLogout(token: tokenToUnregister);
+    } catch (e) {
+      debugPrint('[AuthService] Logout unregister notice: $e');
+    }
     _resetSession();
-    unawaited(PushNotificationService.instance.onUserLogout());
     try {
       await SecureTokenStorage.deleteAuthToken();
       await SecureTokenStorage.deleteSessionData();
