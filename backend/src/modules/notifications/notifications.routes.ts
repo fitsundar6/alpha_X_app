@@ -24,26 +24,142 @@ const router = Router();
 /**
  * POST /register-device
  * Client app calls this on login to register/update their push token.
+ * Supports multi-device subscriptions by deduplicating and appending to existing tokens.
  */
 router.post('/register-device', requireAuth, async (req: Request, res: Response) => {
+  // Support both explicit /unregister-device and legacy /register-device with unregister action
+  if (req.body.action === 'unregister' || req.body.unregister === true) {
+    return unregisterDeviceHandler(req, res);
+  }
+
   const userId = (req as any).user?.id;
   const { playerId } = req.body;
 
-  if (!playerId || typeof playerId !== 'string') {
-    sendError(res, 'VALIDATION_ERROR', 'playerId is required', HttpStatus.BAD_REQUEST);
+  if (!playerId || typeof playerId !== 'string' || playerId.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'playerId is required and must be a non-empty string', HttpStatus.BAD_REQUEST);
     return;
   }
 
+  const cleanPlayerId = playerId.trim();
+
   try {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { oneSignalPlayerId: true },
+    });
+
+    let updatedTokens: string[];
+    if (currentUser?.oneSignalPlayerId) {
+      const existing = currentUser.oneSignalPlayerId
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+      if (!existing.includes(cleanPlayerId)) {
+        updatedTokens = [...existing, cleanPlayerId];
+      } else {
+        updatedTokens = existing;
+      }
+    } else {
+      updatedTokens = [cleanPlayerId];
+    }
+
     await prisma.user.update({
       where: { id: userId },
-      data: { oneSignalPlayerId: playerId },
+      data: { oneSignalPlayerId: updatedTokens.join(',') },
     });
-    sendSuccess(res, { registered: true }, HttpStatus.OK);
+    console.log(`[NOTIFICATIONS] ✅ Registered device ${cleanPlayerId} for user ${userId}. Total devices: ${updatedTokens.length}`);
+    sendSuccess(res, { registered: true, totalDevices: updatedTokens.length }, HttpStatus.OK);
   } catch (err: any) {
+    console.error(`[NOTIFICATIONS] ❌ Failed to register device: ${err?.message}`);
     sendError(res, 'DB_ERROR', 'Failed to register device', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
+
+/**
+ * POST /unregister-device and DELETE /unregister-device
+ * Client app calls this on logout to unbind their specific push token.
+ * Security & Multi-Device Safety:
+ *   - Strictly authenticated via requireAuth (JWT).
+ *   - Clears ONLY the matching logged-out device subscription.
+ *   - Preserves other active device subscriptions for the same client.
+ *   - Prevents stale subscriptions from receiving notifications after logout.
+ */
+const unregisterDeviceHandler = async (req: Request, res: Response): Promise<void> => {
+  const userId = (req as any).user?.id;
+  const { playerId } = req.body;
+
+  if (!playerId || typeof playerId !== 'string' || playerId.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'playerId is required and must be a non-empty string', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const cleanPlayerId = playerId.trim();
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { oneSignalPlayerId: true },
+    });
+
+    if (!user || !user.oneSignalPlayerId) {
+      console.log(`[NOTIFICATIONS] ℹ️ Unregister request for user ${userId}: no active device registered.`);
+      sendSuccess(res, { unregistered: true, cleared: false, preservedTokensCount: 0 }, HttpStatus.OK);
+      return;
+    }
+
+    const currentTokens = user.oneSignalPlayerId
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    const tokenMatched = currentTokens.includes(cleanPlayerId);
+
+    if (!tokenMatched) {
+      // The unregistering playerId does not match any active registered device token for this client.
+      // Crucial: preserve existing active device tokens!
+      console.log(`[NOTIFICATIONS] ℹ️ Unregister request for ${cleanPlayerId} did not match registered device for user ${userId}. Preserved ${currentTokens.length} active device(s).`);
+      sendSuccess(
+        res,
+        {
+          unregistered: true,
+          cleared: false,
+          preservedTokensCount: currentTokens.length,
+          message: 'Device subscription was not active or already rotated; existing devices preserved.',
+        },
+        HttpStatus.OK
+      );
+      return;
+    }
+
+    // Filter out ONLY the matching logged-out device token
+    const remainingTokens = currentTokens.filter((t) => t !== cleanPlayerId);
+    const newPlayerIdValue = remainingTokens.length > 0 ? remainingTokens.join(',') : null;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { oneSignalPlayerId: newPlayerIdValue },
+    });
+
+    console.log(`[NOTIFICATIONS] ✅ Successfully unregistered device ${cleanPlayerId} for user ${userId}. Remaining devices: ${remainingTokens.length}`);
+    sendSuccess(
+      res,
+      {
+        unregistered: true,
+        cleared: true,
+        preservedTokensCount: remainingTokens.length,
+        hasRemainingDevices: remainingTokens.length > 0,
+      },
+      HttpStatus.OK
+    );
+  } catch (err: any) {
+    console.error(`[NOTIFICATIONS] ❌ Failed to unregister device: ${err?.message}`);
+    sendError(res, 'DB_ERROR', 'Failed to unregister device', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+};
+
+router.post('/unregister-device', requireAuth, unregisterDeviceHandler);
+router.delete('/unregister-device', requireAuth, unregisterDeviceHandler);
+
 
 /**
  * PATCH /opt-out

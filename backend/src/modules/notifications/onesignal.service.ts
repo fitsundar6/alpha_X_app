@@ -83,7 +83,16 @@ export class OneSignalService {
       return { success: false, playerId, error: 'Invalid or empty player/subscription ID' };
     }
 
-    const cleanPlayerId = playerId.trim();
+    const targetIds = playerId
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+
+    if (targetIds.length === 0) {
+      return { success: false, playerId, error: 'Invalid or empty player/subscription ID' };
+    }
+
+    const targetSummary = targetIds.join(',');
 
     // In modern OneSignal v5, devices are addressed via include_subscription_ids.
     // Legacy OneSignal apps use include_player_ids.
@@ -93,15 +102,17 @@ export class OneSignalService {
       contents: { en: payload.body },
       data: payload.data || {},
       android_accent_color: 'FF39FF14',
+      android_sound: 'default',
       ios_sound: 'default',
-      ...(payload.channelId ? { android_channel_id: payload.channelId } : {}),
+      priority: 10,
+      android_channel_id: payload.channelId || 'alpha_x_alerts',
     };
 
     // Try sending with include_subscription_ids (OneSignal v5 standard)
     const resultV5 = await this.executePost({
       ...basePayload,
-      include_subscription_ids: [cleanPlayerId],
-    }, cleanPlayerId, payload.title);
+      include_subscription_ids: targetIds,
+    }, targetSummary, payload.title);
 
     if (resultV5.success) {
       return resultV5;
@@ -109,11 +120,11 @@ export class OneSignalService {
 
     // If rejected with an error specifically related to subscription IDs or targeting, attempt include_player_ids
     if (resultV5.httpStatus === 400 || (resultV5.error && resultV5.error.includes('subscription'))) {
-      console.log(`[ONESIGNAL] Retrying target ${cleanPlayerId} using legacy include_player_ids...`);
+      console.log(`[ONESIGNAL] Retrying target ${targetSummary} using legacy include_player_ids...`);
       return this.executePost({
         ...basePayload,
-        include_player_ids: [cleanPlayerId],
-      }, cleanPlayerId, payload.title);
+        include_player_ids: targetIds,
+      }, targetSummary, payload.title);
     }
 
     return resultV5;
@@ -140,8 +151,15 @@ export class OneSignalService {
       };
     }
 
-    // Deduplicate and sanitize IDs
-    const cleanPlayerIds = Array.from(new Set(playerIds.map((p) => p.trim()).filter((p) => p.length > 0)));
+    // Deduplicate and sanitize IDs, supporting multi-device comma-separated tokens
+    const cleanPlayerIds = Array.from(
+      new Set(
+        playerIds
+          .flatMap((p) => p.split(','))
+          .map((p) => p.trim())
+          .filter((p) => p.length > 0)
+      )
+    );
 
     if (cleanPlayerIds.length === 0) {
       return {
@@ -158,8 +176,10 @@ export class OneSignalService {
       contents: { en: payload.body },
       data: payload.data || {},
       android_accent_color: 'FF39FF14',
+      android_sound: 'default',
       ios_sound: 'default',
-      ...(payload.channelId ? { android_channel_id: payload.channelId } : {}),
+      priority: 10,
+      android_channel_id: payload.channelId || 'alpha_x_alerts',
     };
 
     // First attempt using include_subscription_ids (OneSignal v5 standard)
@@ -228,8 +248,10 @@ export class OneSignalService {
       contents: { en: payload.body },
       data: payload.data || {},
       android_accent_color: 'FF39FF14',
+      android_sound: 'default',
       ios_sound: 'default',
-      ...(payload.channelId ? { android_channel_id: payload.channelId } : {}),
+      priority: 10,
+      android_channel_id: payload.channelId || 'alpha_x_alerts',
     };
 
     return this.executePost(body, userId, payload.title);
