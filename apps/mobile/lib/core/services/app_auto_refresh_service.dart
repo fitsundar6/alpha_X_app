@@ -7,6 +7,7 @@ import 'package:alpha_x_gym/features/activity/data/repositories/activity_reposit
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
 import 'package:alpha_x_gym/features/notifications/data/repositories/notification_repository.dart';
+import 'package:alpha_x_gym/core/services/push_notification_service.dart';
 
 /// Centralized, intelligent auto-refresh engine for the entire Alpha X Gym app.
 ///
@@ -162,6 +163,9 @@ class AppAutoRefreshService with WidgetsBindingObserver {
         if (_activityRepository != null) {
           futures.add(_activityRepository!.refreshActivityData());
         }
+
+        // Catch any pending OneSignal push subscription registrations (e.g. after network restore or delayed token)
+        futures.add(PushNotificationService.instance.syncRegistrationIfNeeded());
 
         await Future.wait(futures);
       } else {

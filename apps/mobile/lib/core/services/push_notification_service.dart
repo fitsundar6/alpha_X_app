@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
+import 'package:alpha_x_gym/core/auth/auth_service.dart';
 
 /// Centralized Push Notification Service for Alpha X Gym.
 ///
@@ -13,21 +16,28 @@ import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 /// 1. Lifecycle initialization & runtime permission request (Android 13+ & iOS).
 /// 2. User identification via [OneSignal.login] on authenticated login/restore.
 /// 3. Device Subscription / Player ID capture and automatic backend synchronization.
-/// 4. Push subscription observer to catch delayed token generation from FCM.
-/// 5. Clean session unbinding on logout via [OneSignal.logout].
+/// 4. Push subscription observer with delayed token generation and retry support.
+/// 5. Clean session unbinding on logout via [OneSignal.logout] and authenticated unregister.
+/// 6. Transient network failure resilience with exponential backoff and pending sync.
 class PushNotificationService {
   static final PushNotificationService _instance = PushNotificationService._internal();
   static PushNotificationService get instance => _instance;
 
   static const String oneSignalAppId = 'b57d6e24-d636-42ce-bb54-bc95fe4ce74e';
+  static const String _keyRegisteredPlayerId = 'alpha_x_onesignal_registered_player_id';
+  static const String _keyRegisteredUserId = 'alpha_x_onesignal_registered_user_id';
+  static const String _keyPendingPlayerId = 'alpha_x_onesignal_pending_player_id';
 
   bool _initialized = false;
   String? _currentUserId;
   String? _currentAuthToken;
   String? _lastRegisteredPlayerId;
+  String? _lastRegisteredUserId;
+  bool _isUploading = false;
 
   String? get currentUserId => _currentUserId;
   String? get lastRegisteredPlayerId => _lastRegisteredPlayerId;
+  String? get lastRegisteredUserId => _lastRegisteredUserId;
 
   PushNotificationService._internal();
 
@@ -41,64 +51,198 @@ class PushNotificationService {
     }
   }
 
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  bool _dialogShown = false;
+
+  /// Whether a push subscription ID is a real server-assigned ID (not local- placeholder)
+  bool _isRegistered(String? id) =>
+      id != null && id.isNotEmpty && !id.startsWith('local-');
+
+  /// Displays the required Push Subscription Verification Dialog once registered
+  void _maybeShowIntegrationCompleteDialog(BuildContext context, String? subscriptionId) {
+    if (_isRegistered(subscriptionId) && !_dialogShown) {
+      _dialogShown = true;
+      showIntegrationCompleteDialog(context);
+    }
+  }
+
+  /// Sets up push subscription observer to confirm registration and present verification dialog
+  void setupPushSubscriptionObserver([BuildContext? context]) {
+    if (!_isSupportedPlatform) return;
+
+    OneSignal.User.pushSubscription.addObserver((state) {
+      final ctx = context ?? navigatorKey.currentContext;
+      if (ctx != null) {
+        _maybeShowIntegrationCompleteDialog(ctx, state.current.id);
+      }
+    });
+
+    final currentId = OneSignal.User.pushSubscription.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = context ?? navigatorKey.currentContext;
+      if (ctx != null) {
+        _maybeShowIntegrationCompleteDialog(ctx, currentId);
+      }
+    });
+  }
+
+  /// Shows the official OneSignal Integration Complete Dialog
+  void showIntegrationCompleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Your OneSignal SDK integration is complete!'),
+        content: const Text(
+          'You can now send Push Notifications & In-App Messages through OneSignal. Tap below to enable push notifications.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              requestPermission();
+            },
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Requests push notification permission (prompted on button tap or app launch)
+  Future<bool> requestPermission() async {
+    if (!_isSupportedPlatform) return false;
+    final granted = await OneSignal.Notifications.requestPermission(true);
+    if (granted) {
+      // Permission granted: trigger sync to ensure token is captured and sent
+      unawaited(syncRegistrationIfNeeded());
+    }
+    return granted;
+  }
+
+  /// Sets logging level
+  void setLogLevel(OSLogLevel level) {
+    if (!_isSupportedPlatform) return;
+    OneSignal.Debug.setLogLevel(level);
+  }
+
+  /// Sets user email in OneSignal
+  void setEmail(String email) {
+    if (!_isSupportedPlatform) return;
+    OneSignal.User.addEmail(email);
+  }
+
+  /// Sets user SMS phone number in OneSignal
+  void setSmsNumber(String number) {
+    if (!_isSupportedPlatform) return;
+    OneSignal.User.addSms(number);
+  }
+
+  /// Sets user tag in OneSignal
+  void setTag(String key, String value) {
+    if (!_isSupportedPlatform) return;
+    OneSignal.User.addTagWithKey(key, value);
+  }
+
   /// Initializes OneSignal and registers lifecycle listeners on app startup.
   Future<void> initialize() async {
     if (!_isSupportedPlatform || _initialized) return;
 
     try {
-      OneSignal.initialize(oneSignalAppId);
+      // 1. Restore persisted device & user registration state from SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        _lastRegisteredPlayerId = prefs.getString(_keyRegisteredPlayerId);
+        _lastRegisteredUserId = prefs.getString(_keyRegisteredUserId);
+      } catch (_) {}
+
+      // Set verbose log level so adb logcat captures all OneSignal/FCM token handshakes
+      OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+
+      await OneSignal.initialize(oneSignalAppId);
       _initialized = true;
       debugPrint('[OneSignal] ✅ Initialized with App ID: $oneSignalAppId');
 
-      // Request runtime notification permission (shows system dialog on iOS & Android 13+)
-      unawaited(OneSignal.Notifications.requestPermission(true));
+      // Explicitly opt in the push subscription
+      await OneSignal.User.pushSubscription.optIn();
 
-      // Foreground notification listener — triggers immediate UI sync for real-time coach alerts
+      // Request runtime notification permission (Android 13+ & iOS)
+      final permissionGranted = await OneSignal.Notifications.requestPermission(true);
+      debugPrint('[OneSignal] 🔔 Notification permission status: $permissionGranted');
+
+      // Foreground notification listener — displays notification natively and triggers UI sync
       OneSignal.Notifications.addForegroundWillDisplayListener((event) {
         debugPrint('[OneSignal] 📩 Foreground notification: "${event.notification.title}"');
-        // Display the notification while the app is in foreground
-        event.preventDefault();
         event.notification.display();
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
       });
 
       // Notification tap/click handler — called when user taps a notification
-      // (works for both foreground and background/terminated state taps)
       OneSignal.Notifications.addClickListener((event) {
         final title = event.notification.title ?? '';
         final type = event.notification.additionalData?['type'] as String? ?? '';
         debugPrint('[OneSignal] 🔔 Notification tapped: "$title" (type: $type)');
-        // Trigger immediate data sync so the app reflects the latest server state
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Notification Tapped');
       });
 
-      // Observer for push subscription state (e.g. when FCM generates token after handshake)
+      // Observer for push subscription state (e.g. when FCM generates token after handshake or permission grant)
       OneSignal.User.pushSubscription.addObserver((state) {
         final newId = state.current.id;
         final optedIn = state.current.optedIn;
         debugPrint('[OneSignal] 🔄 Subscription updated. ID: ${newId ?? "null"} | optedIn: $optedIn');
-        if (newId != null && newId.isNotEmpty && newId != _lastRegisteredPlayerId) {
-          debugPrint('[OneSignal] 📲 New push subscription ID detected: $newId');
-          if (_currentAuthToken != null && _currentAuthToken!.isNotEmpty) {
-            unawaited(_uploadPlayerIdToServer(_currentAuthToken!, newId));
-          } else {
-            debugPrint('[OneSignal] ⚠️ No auth token available to upload subscription ID. Will retry on next login.');
-          }
+        if (newId != null && newId.isNotEmpty) {
+          unawaited(syncRegistrationIfNeeded(overridePlayerId: newId));
         }
       });
 
-      // Immediate check if a subscription ID is already available
+      // Immediate check if a subscription ID is already available at startup
       final initialId = OneSignal.User.pushSubscription.id;
       final initialOptedIn = OneSignal.User.pushSubscription.optedIn;
       if (initialId != null && initialId.isNotEmpty) {
         debugPrint('[OneSignal] 📲 Existing subscription ID at init: $initialId (optedIn: $initialOptedIn)');
+        unawaited(syncRegistrationIfNeeded(overridePlayerId: initialId));
       } else {
-        debugPrint('[OneSignal] ℹ️ No push subscription ID at init yet. This is normal on first launch — FCM will generate one shortly.');
-        debugPrint('[OneSignal] ℹ️ If no ID appears, ensure google-services.json is in android/app/ and the app has notification permission.');
+        debugPrint('[OneSignal] ℹ️ Push subscription ID not yet generated by FCM at startup. Observer will handle once created.');
       }
     } catch (e) {
       debugPrint('[OneSignal] ❌ Initialization error: $e');
     }
+  }
+
+  /// Evaluates whether the device needs to register its push subscription with the backend.
+  /// Handles delayed token creation, login timing, new users, and automatic recovery.
+  Future<void> syncRegistrationIfNeeded({String? overridePlayerId}) async {
+    if (!_isSupportedPlatform) return;
+
+    final playerId = (overridePlayerId != null && overridePlayerId.isNotEmpty)
+        ? overridePlayerId
+        : OneSignal.User.pushSubscription.id;
+
+    if (playerId == null || playerId.isEmpty) return;
+
+    final effectiveUserId = (_currentUserId != null && _currentUserId!.isNotEmpty)
+        ? _currentUserId!
+        : AuthService().currentUserId;
+
+    final effectiveToken = (_currentAuthToken != null && _currentAuthToken!.isNotEmpty)
+        ? _currentAuthToken!
+        : AuthService().currentToken;
+
+    // Only clients register device tokens (admins do not register device tokens)
+    if (AuthService().isAdmin) return;
+
+    if (effectiveUserId.isEmpty || effectiveToken.isEmpty) {
+      // User is not logged in yet; record pending token so it uploads immediately upon login
+      await _savePendingPlayerId(playerId);
+      return;
+    }
+
+    // Check if already registered for this exact user and device token
+    if (playerId == _lastRegisteredPlayerId && effectiveUserId == _lastRegisteredUserId) {
+      return; // Already up to date
+    }
+
+    await _uploadPlayerIdToServer(effectiveToken, playerId, userId: effectiveUserId);
   }
 
   /// Called on user login or session restore to associate device with user account.
@@ -120,10 +264,17 @@ class PushNotificationService {
       await OneSignal.login(userId);
       debugPrint('[OneSignal] Logged in with external userId: $userId');
 
-      // Obtain current push subscription ID (token) and upload to backend
-      final playerId = OneSignal.User.pushSubscription.id;
+      // Check current subscription ID or any stored pending registration
+      String? playerId = OneSignal.User.pushSubscription.id;
+      if (playerId == null || playerId.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          playerId = prefs.getString(_keyPendingPlayerId);
+        } catch (_) {}
+      }
+
       if (playerId != null && playerId.isNotEmpty) {
-        await _uploadPlayerIdToServer(authToken, playerId);
+        await _uploadPlayerIdToServer(authToken, playerId, userId: userId);
       } else {
         debugPrint('[OneSignal] Subscription ID not yet ready; observer will upload once generated.');
       }
@@ -132,11 +283,56 @@ class PushNotificationService {
     }
   }
 
-  /// Called on logout to dissociate user from OneSignal.
-  Future<void> onUserLogout() async {
+  /// Called on logout to dissociate user from OneSignal and unregister device token on backend.
+  Future<void> onUserLogout({String? token, String? playerId}) async {
+    final effectiveToken = (token != null && token.isNotEmpty)
+        ? token
+        : (_currentAuthToken ?? AuthService().currentToken);
+
+    // Resolve playerId: parameter -> memory cache -> OneSignal SDK -> SharedPreferences
+    String? resolvedPlayerId = (playerId != null && playerId.isNotEmpty) ? playerId : _lastRegisteredPlayerId;
+    if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
+      if (_isSupportedPlatform) {
+        try {
+          resolvedPlayerId = OneSignal.User.pushSubscription.id;
+        } catch (_) {}
+      }
+    }
+    if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        resolvedPlayerId = prefs.getString(_keyRegisteredPlayerId);
+      } catch (_) {}
+    }
+
+    if (effectiveToken.isNotEmpty && resolvedPlayerId != null && resolvedPlayerId.isNotEmpty) {
+      try {
+        debugPrint('[OneSignal] 🔄 Unregistering device ($resolvedPlayerId) from backend before session wipe...');
+        final success = await _unregisterPlayerIdFromServer(effectiveToken, resolvedPlayerId);
+        if (success) {
+          debugPrint('[OneSignal] ✅ Backend confirmed device unregistration.');
+        } else {
+          debugPrint('[OneSignal] ⚠️ Backend device unregister was not acknowledged by server.');
+        }
+      } catch (e) {
+        debugPrint('[OneSignal] ⚠️ Error during device unregister on logout: $e');
+      }
+    } else {
+      debugPrint('[OneSignal] ℹ️ Skipped backend unregister: tokenPresent=${effectiveToken.isNotEmpty}, playerIdPresent=${resolvedPlayerId != null && resolvedPlayerId.isNotEmpty}');
+    }
+
+    // Always reset local session tracking on logout
     _currentUserId = null;
     _currentAuthToken = null;
     _lastRegisteredPlayerId = null;
+    _lastRegisteredUserId = null;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyRegisteredPlayerId);
+      await prefs.remove(_keyRegisteredUserId);
+      await prefs.remove(_keyPendingPlayerId);
+    } catch (_) {}
 
     if (!_isSupportedPlatform) return;
 
@@ -148,12 +344,12 @@ class PushNotificationService {
     }
   }
 
-  /// Uploads client's OneSignal Subscription ID to backend PostgreSQL database.
-  Future<bool> _uploadPlayerIdToServer(String authToken, String playerId) async {
+  /// Unregisters client's OneSignal Subscription ID from backend PostgreSQL database on logout.
+  Future<bool> _unregisterPlayerIdFromServer(String authToken, String playerId) async {
     if (authToken.isEmpty || playerId.isEmpty) return false;
 
     Future<http.Response> postToUrl(String base) {
-      final url = Uri.parse('$base/notifications/register-device');
+      final url = Uri.parse('$base/notifications/unregister-device');
       return http.post(
         url,
         headers: {
@@ -161,7 +357,7 @@ class PushNotificationService {
           'Authorization': 'Bearer $authToken',
         },
         body: jsonEncode({'playerId': playerId}),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 5));
     }
 
     try {
@@ -187,16 +383,113 @@ class PushNotificationService {
       }
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        _lastRegisteredPlayerId = playerId;
-        debugPrint('✅ [OneSignal] Successfully registered device playerId ($playerId) to backend DB.');
+        debugPrint('✅ [OneSignal] Successfully unregistered device ($playerId) from backend.');
         return true;
       } else {
-        debugPrint('⚠️ [OneSignal] Backend device registration returned status ${res.statusCode}: ${res.body}');
+        debugPrint('⚠️ [OneSignal] Backend device unregister returned status ${res.statusCode}: ${res.body}');
         return false;
       }
     } catch (e) {
-      debugPrint('⚠️ [OneSignal] Failed to upload playerId to server: $e');
+      debugPrint('⚠️ [OneSignal] Failed to unregister device from server: $e');
       return false;
     }
+  }
+
+  /// Uploads client's OneSignal Subscription ID to backend database with retries and fail-safe persistence.
+  Future<bool> _uploadPlayerIdToServer(
+    String authToken,
+    String playerId, {
+    String? userId,
+  }) async {
+    if (authToken.isEmpty || playerId.isEmpty) return false;
+    if (_isUploading) return false;
+    _isUploading = true;
+
+    Future<http.Response> postToUrl(String base) {
+      final url = Uri.parse('$base/notifications/register-device');
+      return http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+        body: jsonEncode({'playerId': playerId}),
+      ).timeout(const Duration(seconds: 10));
+    }
+
+    final targetUserId = (userId != null && userId.isNotEmpty)
+        ? userId
+        : (_currentUserId ?? AuthService().currentUserId);
+
+    bool registrationSuccess = false;
+
+    // Retry up to 3 attempts with exponential backoff on transient network failures
+    const maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final primaryBase = AppConstants.apiBaseUrl;
+        http.Response res;
+        try {
+          res = await postToUrl(primaryBase);
+        } catch (primaryErr) {
+          if (!primaryBase.contains(ApiConfig.defaultHostIp) && !primaryBase.contains('localhost')) {
+            res = await postToUrl(ApiConfig.physicalLanUrl);
+          } else {
+            rethrow;
+          }
+        }
+
+        if (res.statusCode == 404 &&
+            !primaryBase.contains(ApiConfig.defaultHostIp) &&
+            !primaryBase.contains('localhost')) {
+          try {
+            final lanRes = await postToUrl(ApiConfig.physicalLanUrl);
+            if (lanRes.statusCode == 200) res = lanRes;
+          } catch (_) {}
+        }
+
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          _lastRegisteredPlayerId = playerId;
+          _lastRegisteredUserId = targetUserId;
+          registrationSuccess = true;
+
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(_keyRegisteredPlayerId, playerId);
+            if (targetUserId.isNotEmpty) {
+              await prefs.setString(_keyRegisteredUserId, targetUserId);
+            }
+            await prefs.remove(_keyPendingPlayerId);
+          } catch (_) {}
+
+          debugPrint('✅ [OneSignal] Successfully registered device ($playerId) for user ($targetUserId) to backend DB.');
+          break;
+        } else {
+          debugPrint('⚠️ [OneSignal] Backend registration attempt $attempt returned status ${res.statusCode}: ${res.body}');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [OneSignal] Backend registration attempt $attempt network error: $e');
+      }
+
+      if (attempt < maxAttempts) {
+        await Future.delayed(Duration(seconds: attempt * 2));
+      }
+    }
+
+    _isUploading = false;
+
+    if (!registrationSuccess) {
+      debugPrint('⚠️ [OneSignal] Failed to register device token after $maxAttempts attempts. Saving pending sync.');
+      await _savePendingPlayerId(playerId);
+    }
+
+    return registrationSuccess;
+  }
+
+  Future<void> _savePendingPlayerId(String playerId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyPendingPlayerId, playerId);
+    } catch (_) {}
   }
 }
