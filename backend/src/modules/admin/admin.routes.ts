@@ -13,6 +13,7 @@ import { automationController } from '../automation/automation.controller';
 import { maskPhone, maskEmail } from '../../utils/pii_mask';
 import { passwordResetService } from '../../services/password_reset.service';
 import { env } from '../../config/environment';
+import { aiNotificationEngine } from '../notifications/ai_notifications.service';
 
 const router = Router();
 
@@ -1010,6 +1011,14 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
           : `Initial Diet Plan v1 assigned`,
       },
     });
+
+    // Asynchronously dispatch plan assignment push notification
+    aiNotificationEngine.notifyDietPlanAssignment({
+      dietPlanId: newDietPlan.id,
+      clientProfileId: cp.id,
+      planName: newDietPlan.planName,
+      version: nextVersion,
+    }).catch((e) => console.warn('[ADMIN] Failed to send diet plan assignment notification:', e?.message));
 
     sendSuccess(res, newDietPlan, HttpStatus.CREATED);
   } catch (err: any) {

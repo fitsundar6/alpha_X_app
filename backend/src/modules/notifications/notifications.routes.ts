@@ -70,7 +70,7 @@ router.patch('/opt-out', requireAuth, async (req: Request, res: Response) => {
  */
 router.post('/admin/trigger-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    aiNotificationEngine.runDailySweep().catch((err) =>
+    aiNotificationEngine.runDailySweep().catch((err: any) =>
       console.error('[NOTIFICATIONS] Manual sweep error:', err?.message)
     );
     sendSuccess(res, { message: 'Daily AI notification sweep triggered' }, HttpStatus.OK);

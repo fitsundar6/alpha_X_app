@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma';
 import { getTodayISTDateString, getTodayISTWeekday, getWeekdayFromDayName, getISTDateForWeekday } from '../../utils/istDate';
+import { aiNotificationEngine } from '../notifications/ai_notifications.service';
 
 export interface DataCompletenessReport {
   scorePercentage: number;
@@ -1070,6 +1071,14 @@ export class AiTools {
           changeSummary: `AI Nutrition Proposal approved by ${adminName}`,
         },
       });
+
+      // Asynchronously dispatch plan assignment push notification
+      aiNotificationEngine.notifyDietPlanAssignment({
+        dietPlanId: newPlan.id,
+        clientProfileId: proposal.clientProfileId,
+        planName: newPlan.planName,
+        version: nextVersion,
+      }).catch((e) => console.warn('[AI_TOOLS] Failed to send diet plan notification:', e?.message));
     } else if (proposal.proposalType === 'WORKOUT') {
       const scheduledDate = options?.scheduledDate || getTodayISTDateString();
       const assignmentType = options?.assignmentType || 'INDIVIDUAL';

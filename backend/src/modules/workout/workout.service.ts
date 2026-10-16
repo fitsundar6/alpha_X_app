@@ -52,7 +52,6 @@ export class WorkoutService {
     return workoutRepository.deleteSession(id);
   }
 
-  // --- Admin Assignment Operations ---
   async assignSession(params: {
     sessionId: string;
     assignmentType: 'ALL' | 'SELECTED' | 'INDIVIDUAL';
@@ -62,7 +61,44 @@ export class WorkoutService {
     scheduledDate?: string | null;
     assignedById: string;
   }): Promise<StoredWorkoutAssignment[]> {
-    return workoutRepository.assignSession(params);
+    const assignments = await workoutRepository.assignSession(params);
+
+    // Asynchronously dispatch plan assignment push notifications
+    (async () => {
+      try {
+        const session = await workoutRepository.getSessionById(params.sessionId);
+        const sessionTitle = session?.title || 'Workout Session';
+
+        for (const a of assignments) {
+          if (a.clientId) {
+            await aiNotificationEngine.notifyWorkoutAssignment({
+              assignmentId: a.id,
+              clientId: a.clientId,
+              sessionTitle,
+              scheduledDate: a.scheduledDate,
+            });
+          } else {
+            // Assigned to ALL clients
+            const allClients = await prisma.user.findMany({
+              where: { role: 'CLIENT', notificationsEnabled: true },
+              select: { id: true },
+            });
+            for (const client of allClients) {
+              await aiNotificationEngine.notifyWorkoutAssignment({
+                assignmentId: `${a.id}_${client.id}`,
+                clientId: client.id,
+                sessionTitle,
+                scheduledDate: a.scheduledDate,
+              });
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn('[WORKOUT SERVICE] Failed to dispatch assignment notifications:', err?.message);
+      }
+    })().catch(() => {});
+
+    return assignments;
   }
 
   async unlockSession(adminId: string, params: {
@@ -228,9 +264,12 @@ export class WorkoutService {
     const savedRecord = await workoutRepository.saveWorkoutRecord(clientId, data);
 
     // Autonomous Proactive AI Event Trigger: Post-Workout Celebration & Recovery Guidance
-    aiNotificationEngine.sendPostWorkoutCelebration(clientId, savedRecord).catch((err) => {
-      console.warn('[WORKOUT SERVICE] Post-workout proactive notification error:', err?.message);
-    });
+    // Strictly guarded: only fires upon final workout session completion
+    if (savedRecord.isCompleted) {
+      aiNotificationEngine.sendPostWorkoutCelebration(clientId, savedRecord).catch((err) => {
+        console.warn('[WORKOUT SERVICE] Post-workout proactive notification error:', err?.message);
+      });
+    }
 
     return savedRecord;
   }

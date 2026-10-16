@@ -5,5 +5,15 @@
       "source": "/(.*)",
       "destination": "/api/index.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/cron/morning-sweep",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/v1/cron/evening-sweep",
+      "schedule": "0 15 * * *"
+    }
   ]
 }

@@ -732,8 +732,12 @@ model Notification {
   triggerRule     String?
   isRead          Boolean       @default(false)
   readAt          DateTime?
-  sentStatus      String        @default("SENT") // PENDING, SENT, FAILED
+  sentStatus      String        @default("SENT") // PENDING, SENT, FAILED, SUPPRESSED_QUIET_HOURS, DEFERRED, SKIPPED_CAP
   metadataJson    String?
+  dedupKey        String?       @unique
+  scheduledFor    DateTime?
+  sentAt          DateTime?
+  errorDetails    String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -741,6 +745,7 @@ model Notification {
   @@index([clientId])
   @@index([isRead])
   @@index([createdAt])
+  @@index([sentStatus])
   @@map("notifications")
 }
 
@@ -754,6 +759,9 @@ model NotificationPreference {
   activityReminders      Boolean       @default(true)
   membershipAlerts       Boolean       @default(true)
   aiEngagementEnabled    Boolean       @default(true)
+  timezone               String        @default("Asia/Kolkata")
+  quietHoursStart        Int           @default(21) // 9 PM local (0-23)
+  quietHoursEnd          Int           @default(7)  // 7 AM local (0-23)
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
