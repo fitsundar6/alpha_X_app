@@ -313,11 +313,26 @@ router.post('/register', async (req: Request, res: Response) => {
             dailySteps: 6000,
             onboardingCompleted: false,
             onboardingStep: 0,
+            notificationPref: {
+              create: {
+                timezone: 'Asia/Kolkata',
+                quietHoursStart: 21,
+                quietHoursEnd: 7,
+                workoutReminders: true,
+                nutritionReminders: true,
+                weeklyCheckInReminders: true,
+                activityReminders: true,
+                membershipAlerts: true,
+                aiEngagementEnabled: true,
+              },
+            },
           },
         },
       },
       include: {
-        clientProfile: true,
+        clientProfile: {
+          include: { notificationPref: true },
+        },
       },
     });
 
@@ -495,11 +510,26 @@ router.post('/google', async (req: Request, res: Response) => {
             dailySteps: 6000,
             onboardingCompleted: false,
             onboardingStep: 0,
+            notificationPref: {
+              create: {
+                timezone: 'Asia/Kolkata',
+                quietHoursStart: 21,
+                quietHoursEnd: 7,
+                workoutReminders: true,
+                nutritionReminders: true,
+                weeklyCheckInReminders: true,
+                activityReminders: true,
+                membershipAlerts: true,
+                aiEngagementEnabled: true,
+              },
+            },
           },
         },
       },
       include: {
-        clientProfile: true,
+        clientProfile: {
+          include: { notificationPref: true },
+        },
       },
     });
 

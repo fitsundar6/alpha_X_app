@@ -43,13 +43,33 @@ export class OneSignalService {
     return env.ONESIGNAL_REST_API_KEY || '';
   }
 
-  /** Check if OneSignal credentials are configured */
+  /** Check if running inside Vercel Preview deployment where live pushes are forbidden */
+  isPreviewEnvironment(): boolean {
+    return (
+      process.env.VERCEL_ENV === 'preview' ||
+      (typeof env !== 'undefined' && env.VERCEL_ENV === 'preview')
+    );
+  }
+
+  /** Check if OneSignal credentials are configured and permitted in this deployment */
   isConfigured(): boolean {
+    if (this.isPreviewEnvironment()) {
+      return false;
+    }
     return Boolean(this.appId && this.apiKey);
   }
 
   /** Send a push notification to one specific device by OneSignal player ID or subscription ID */
   async sendToPlayer(playerId: string, payload: NotificationPayload): Promise<SendResult> {
+    if (this.isPreviewEnvironment()) {
+      console.warn('[ONESIGNAL_PREVIEW_GUARD] Push blocked: Vercel Preview deployment detected (VERCEL_ENV === "preview").');
+      return {
+        success: false,
+        playerId,
+        error: 'Push notifications are strictly disabled in Vercel Preview deployments to prevent broadcasting to real clients.',
+      };
+    }
+
     if (!this.appId || !this.apiKey) {
       console.warn('[ONESIGNAL] Missing credentials — notification skipped for target:', playerId);
       return {
@@ -101,6 +121,16 @@ export class OneSignalService {
 
   /** Broadcast push notification to multiple devices in a single OneSignal API call */
   async broadcastToDevices(playerIds: string[], payload: NotificationPayload): Promise<BroadcastResult> {
+    if (this.isPreviewEnvironment()) {
+      console.warn('[ONESIGNAL_PREVIEW_GUARD] Bulk push blocked: Vercel Preview deployment detected (VERCEL_ENV === "preview").');
+      return {
+        success: false,
+        recipientsCount: playerIds.length,
+        devicesTargeted: 0,
+        error: 'Bulk push notifications are strictly disabled in Vercel Preview deployments to protect real clients.',
+      };
+    }
+
     if (!this.appId || !this.apiKey) {
       return {
         success: false,
@@ -180,6 +210,10 @@ export class OneSignalService {
 
   /** Send push notification targeting by external user ID (Alpha X User UUID) */
   async sendToUser(userId: string, payload: NotificationPayload): Promise<SendResult> {
+    if (this.isPreviewEnvironment()) {
+      return { success: false, playerId: userId, error: 'Push notifications disabled in Vercel Preview deployments' };
+    }
+
     if (!this.appId || !this.apiKey) {
       return { success: false, playerId: userId, error: 'OneSignal not configured' };
     }
@@ -210,6 +244,7 @@ export class OneSignalService {
           Authorization: `Key ${this.apiKey}`,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
       });
 
       const httpStatus = response.status;
@@ -243,13 +278,84 @@ export class OneSignalService {
         response: result,
       };
     } catch (err: any) {
-      console.error('[ONESIGNAL] Network exception:', err?.message);
+      const isTimeout = err?.name === 'TimeoutError' || err?.message?.includes('timeout');
+      const errorMsg = isTimeout ? 'OneSignal API request timed out after 8000ms' : (err?.message || 'Network exception');
+      console.error('[ONESIGNAL] Network exception:', errorMsg);
       return {
         success: false,
         playerId: targetId,
-        error: err?.message,
+        error: errorMsg,
       };
     }
+  }
+
+  /**
+   * Fetch details of a specific notification by OneSignal ID to verify provider acceptance/delivery
+   */
+  async getNotification(notificationId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.appId || !this.apiKey || !notificationId) {
+      return { success: false, error: 'Missing OneSignal credentials or notificationId' };
+    }
+
+    try {
+      const response = await fetch(`${ONESIGNAL_API}/notifications/${notificationId}?app_id=${this.appId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Key ${this.apiKey}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `OneSignal returned HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to query OneSignal notification' };
+    }
+  }
+
+  /**
+   * Fetch recent notifications from OneSignal to reconcile unverified pushes
+   */
+  async getRecentNotifications(limit: number = 30): Promise<{ success: boolean; notifications?: any[]; error?: string }> {
+    if (!this.appId || !this.apiKey) {
+      return { success: false, error: 'Missing OneSignal credentials' };
+    }
+
+    try {
+      const response = await fetch(`${ONESIGNAL_API}/notifications?app_id=${this.appId}&limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Key ${this.apiKey}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `OneSignal returned HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, notifications: data.notifications || [] };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to query OneSignal recent notifications' };
+    }
+  }
+
+  /**
+   * Reconcile if a notification with the given dedupKey was already accepted by OneSignal
+   */
+  async findNotificationByDedupKey(dedupKey: string): Promise<{ found: boolean; notification?: any }> {
+    const res = await this.getRecentNotifications(50);
+    if (!res.success || !res.notifications) {
+      return { found: false };
+    }
+
+    const match = res.notifications.find((n: any) => n.data && (n.data.dedupKey === dedupKey || n.data?.custom?.dedupKey === dedupKey));
+    return { found: Boolean(match), notification: match };
   }
 
   /** Send to multiple players at once (batches per-player for personalized messages) */

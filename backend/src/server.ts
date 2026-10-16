@@ -58,6 +58,7 @@ import { telemetryService } from './modules/telemetry/telemetry.service';
 import { workoutRepository } from './modules/workout/workout.repository';
 import { prisma } from './config/prisma';
 import { foodPhotoCleanupService } from './modules/food/food_photo_cleanup.service';
+import cronRoutes from './modules/notifications/cron.routes';
 import cron from 'node-cron';
 
 const app = express();
@@ -264,6 +265,10 @@ app.use('/api/v1/admin/ai-proposals', aiProposalsRoutes);
 // Push Notifications — Device registration & AI daily sweep routes
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+
+// Vercel Serverless Cron Routes (Authenticated by CRON_SECRET)
+app.use('/api/v1/cron', cronRoutes);
+app.use('/api/cron', cronRoutes);
 
 // Weekly Alpha Telemetry — Sunday "Spotify-Wrapped for Lifting"
 app.use('/api/v1/telemetry', telemetryRoutes);

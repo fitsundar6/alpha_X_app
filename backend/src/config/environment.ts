@@ -10,6 +10,7 @@ const envSchema = z.object({
   PORT: z.string().default('5000').transform((val) => parseInt(val, 10)),
   HOST: z.string().default('0.0.0.0'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),
@@ -24,6 +25,7 @@ const envSchema = z.object({
   ONESIGNAL_APP_ID: z.string().optional(),
   ONESIGNAL_REST_API_KEY: z.string().optional(),
   PYTHON_AI_URL: z.string().default('http://127.0.0.1:8000/api/v1/ai'),
+  CRON_SECRET: z.string().optional(),
   // Master Administrator Email & Password Credentials
   // Exactly ONE authorized master admin account
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),
