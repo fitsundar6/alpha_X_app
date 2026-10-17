@@ -578,7 +578,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             onTap: () async {
               Navigator.of(context).pop();
               await AuthService().logout();
-              if (context.mounted) {
+              if (mounted) {
                 Navigator.of(context).pushReplacementNamed('/login');
               }
             },

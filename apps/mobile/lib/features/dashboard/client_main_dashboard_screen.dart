@@ -489,7 +489,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             onTap: () async {
               Navigator.of(context).pop();
               await AuthService().logout();
-              if (context.mounted) {
+              if (mounted) {
                 Navigator.of(context).pushReplacementNamed('/login');
               }
             },

@@ -1108,28 +1108,30 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        meal.name.toUpperCase(),
-                                        style: TextStyle(
-                                          color: colors.textPrimary,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 13,
-                                          letterSpacing: 0.8,
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          meal.name.toUpperCase(),
+                                          style: TextStyle(
+                                            color: colors.textPrimary,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 13,
+                                            letterSpacing: 0.8,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${meal.totalCalories.round()} kcal • P:${meal.totalProtein.round()}g C:${meal.totalCarbs.round()}g F:${meal.totalFat.round()}g',
-                                        style: TextStyle(
-                                          color: colors.textSecondary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${meal.totalCalories.round()} kcal • P:${meal.totalProtein.round()}g C:${meal.totalCarbs.round()}g F:${meal.totalFat.round()}g',
+                                          style: TextStyle(
+                                            color: colors.textSecondary,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                   if (meal.timing.isNotEmpty)
                                     Container(

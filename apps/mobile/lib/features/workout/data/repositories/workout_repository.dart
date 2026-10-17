@@ -2700,8 +2700,14 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   Future<void> discardActiveSession({String? userId}) async {
+    final effectiveUid = userId ?? _activeSession.assignedClientId ?? AuthService().currentUserId;
+    _activeSession = _activeSession.copyWith(status: 'ABANDONED');
+    _hasRestoredActiveSession = false;
+    _activeSessionSavedAt = null;
+    _currentSessionSwaps.clear();
+    notifyListeners();
+
     try {
-      final effectiveUid = userId ?? _activeSession.assignedClientId ?? AuthService().currentUserId;
       final prefs = await SharedPreferences.getInstance();
       if (effectiveUid.isNotEmpty) {
         await prefs.remove(_activeSessionKey(effectiveUid));
@@ -2711,13 +2717,6 @@ class WorkoutRepository extends ChangeNotifier {
       await prefs.remove(_storageKeyActiveSession);
       await prefs.remove(_storageKeyActiveSessionTimestamp);
       await prefs.remove(_storageKeyActiveSessionDuration);
-
-      if (_activeSession.status != 'IN_PROGRESS') {
-        _hasRestoredActiveSession = false;
-        _activeSessionSavedAt = null;
-        _currentSessionSwaps.clear();
-        notifyListeners();
-      }
     } catch (e) {
       debugPrint('[WorkoutRepository] Failed to discard active session: $e');
     }
