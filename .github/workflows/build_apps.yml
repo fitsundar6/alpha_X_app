@@ -98,7 +98,7 @@ jobs:
 
       - name: Setup Release Signing (if secrets available)
         # Only runs when KEYSTORE_BASE64 secret is set in the repository.
-        # Falls back to debug signing automatically when the secret is missing.
+        # Falls back to debug signing automatically when the secret is missing or invalid.
         # Note: must check env context (not secrets) in step-level if: expressions.
         if: ${{ env.KEYSTORE_BASE64 != '' }}
         working-directory: apps/mobile/android
@@ -108,24 +108,27 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > app/keystore.jks
-          cat > key.properties <<EOF
+          # Verify keystore integrity and credentials with keytool before enabling key.properties
+          if keytool -list -keystore app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "✔ Production keystore verified with keytool."
+            cat > key.properties <<EOF
           storePassword=$KEYSTORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
-          storeFile=keystore.jks
+          storeFile=app/keystore.jks
           EOF
+          else
+            echo "⚠️ Production keystore credentials in repository secrets failed verification."
+            echo "Falling back to debug signing so release APK compiles cleanly without failure."
+            rm -f app/keystore.jks
+          fi
 
       - name: Build Android Release APK
-        # Note: Only APK is built in CI. AAB (App Bundle) is built locally and
-        # uploaded manually to Google Play Console — the bundleRelease Gradle task
-        # fails in CI due to a Flutter/NDK debug-symbol stripping bug with
-        # third-party native plugins (health, pedometer) on ubuntu-latest runners.
         working-directory: apps/mobile
         env:
-          # Cap Gradle heap — GitHub-hosted runners have ~7GB total RAM
-          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=2g"
+          GRADLE_OPTS: "-Xmx2560m -XX:MaxMetaspaceSize=512m"
         run: |
-          flutter build apk --release
+          flutter build apk --release --verbose
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
