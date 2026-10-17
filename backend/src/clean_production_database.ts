@@ -8,6 +8,7 @@ const PRESERVED_EMAILS = [
   'sakthiprabakar1515dsp@gnail.com', // Real Client AXG-0007
   'akilar@gmail.com',                // Real Client AXG-0004
   'ajaymaathank@gmail.com',          // Real Client AXG-0005
+  'sundar@gmail.com',                // Real Client AXG-0008
 ];
 
 async function main() {

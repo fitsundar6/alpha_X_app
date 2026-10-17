@@ -3,6 +3,7 @@ import http from 'http';
 import jwt from 'jsonwebtoken';
 import { env } from './config/environment';
 import { UserRole } from './constants/roles';
+import { prisma } from './config/prisma';
 
 async function runSecurityTests() {
   console.log('================================================================');
@@ -12,12 +13,12 @@ async function runSecurityTests() {
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(5098, '127.0.0.1', () => resolve()));
   const baseUrl = 'http://127.0.0.1:5098/api/v1';
+  const clientEmail = 'client.athlete@alphaxgym.com';
+  const unauthorizedHackerEmail = 'attacker@external.com';
 
   try {
     const adminEmail = env.ADMIN_EMAIL;
     const adminPassword = env.ADMIN_PASSWORD || 'AlphaXAdmin2026!';
-    const clientEmail = 'client.athlete@alphaxgym.com';
-    const unauthorizedHackerEmail = 'attacker@external.com';
 
     console.log(`Configured Master Admin Email in Backend: [${adminEmail}]`);
 
@@ -179,6 +180,25 @@ async function runSecurityTests() {
     console.log('================================================================');
   } finally {
     server.close();
+    try {
+      const emailsToDelete = [
+        clientEmail.toLowerCase(),
+        unauthorizedHackerEmail.toLowerCase(),
+      ];
+      await prisma.clientProfile.deleteMany({
+        where: { user: { email: { in: emailsToDelete } } },
+      });
+      await prisma.user.deleteMany({
+        where: { email: { in: emailsToDelete } },
+      });
+      await prisma.clientProfile.deleteMany({
+        where: { user: { email: { startsWith: 'brand_new_member_' } } },
+      });
+      await prisma.user.deleteMany({
+        where: { email: { startsWith: 'brand_new_member_' } },
+      });
+    } catch (_) {}
+    await prisma.$disconnect();
   }
 }
 
