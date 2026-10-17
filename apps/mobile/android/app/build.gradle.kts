@@ -9,6 +9,46 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Ensure google-services.json exists so processReleaseGoogleServices never crashes builds
+val googleServicesFile = project.file("google-services.json")
+if (!googleServicesFile.exists()) {
+    try {
+        googleServicesFile.writeText(
+            """
+            {
+              "project_info": {
+                "project_number": "691722461906",
+                "project_id": "alpha-x-app-ba27d",
+                "storage_bucket": "alpha-x-app-ba27d.firebasestorage.app"
+              },
+              "client": [
+                {
+                  "client_info": {
+                    "mobilesdk_app_id": "1:691722461906:android:0d8e6b4341b64127db030b",
+                    "android_client_info": {
+                      "package_name": "com.alphax.gym.alpha_x_gym"
+                    }
+                  },
+                  "oauth_client": [],
+                  "api_key": [
+                    {
+                      "current_key": "AIzaSyC0er4U0jDxYMd6_XH-bEkVQsH32ceo5Jc"
+                    }
+                  ],
+                  "services": {
+                    "appinvite_service": {
+                      "other_platform_oauth_client": []
+                    }
+                  }
+                }
+              ],
+              "configuration_version": "1"
+            }
+            """.trimIndent()
+        )
+    } catch (_: Exception) {}
+}
+
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 val hasKeyProperties = keystorePropertiesFile.exists() && keystorePropertiesFile.isFile
