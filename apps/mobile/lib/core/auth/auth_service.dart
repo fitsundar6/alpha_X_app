@@ -82,13 +82,14 @@ class AuthService extends ChangeNotifier {
   String? get approvedAt => _approvedAt;
   String? get suspendedAt => _suspendedAt;
   String get currentToken {
-    if (!_isAuthenticated) return '';
     if (_token.isNotEmpty) return _token;
-    if (_role == UserRole.admin) return 'local_admin_session_token';
+    if (_role == UserRole.admin && _isAuthenticated) return 'local_admin_session_token';
     if (_isTestEnvironment) return 'alpha_x_mock_token_for_client';
+    if (!_isAuthenticated) return '';
     // Never return a mock client token in production — empty string forces re-authentication
     return '';
   }
+  String get rawToken => _token;
   String get token => currentToken;
 
   /// Checks whether the active JWT token is expired or within 60 seconds of expiring.

@@ -62,7 +62,7 @@ if (-not $flutterCmd) {
 }
 
 $flutterVersion = (flutter --version | Select-Object -First 1)
-Write-Host " ✔ Flutter detected: $flutterVersion" -ForegroundColor Green
+Write-Host " [OK] Flutter detected: $flutterVersion" -ForegroundColor Green
 
 # 2. Git sync
 if (-not $NoPull) {
@@ -73,14 +73,14 @@ if (-not $NoPull) {
         try {
             Push-Location $RootDir
             git pull origin main
-            Write-Host " ✔ Codebase synced with origin/main" -ForegroundColor Green
+            Write-Host " [OK] Codebase synced with origin/main" -ForegroundColor Green
         } catch {
-            Write-Host " ⚠ Warning: git pull failed (offline or local changes). Continuing with local files..." -ForegroundColor DarkYellow
+            Write-Host " [!] Warning: git pull failed (offline or local changes). Continuing with local files..." -ForegroundColor DarkYellow
         } finally {
             Pop-Location
         }
     } else {
-        Write-Host " ⚠ Git not found in PATH, skipping pull." -ForegroundColor DarkYellow
+        Write-Host " [!] Git not found in PATH, skipping pull." -ForegroundColor DarkYellow
     }
 } else {
     Write-Host "[2/5] Skipping git pull (-NoPull flag supplied)." -ForegroundColor Gray
@@ -99,14 +99,14 @@ Push-Location $MobileDir
 try {
     # Clean if requested
     if ($Clean) {
-        Write-Host " 🔄 Cleaning stale build artifacts (flutter clean)..." -ForegroundColor Yellow
+        Write-Host " [*] Cleaning stale build artifacts (flutter clean)..." -ForegroundColor Yellow
         flutter clean
     }
 
     # Dependencies
-    Write-Host " 📦 Fetching dependencies (flutter pub get)..." -ForegroundColor Yellow
+    Write-Host " [*] Fetching dependencies (flutter pub get)..." -ForegroundColor Yellow
     flutter pub get
-    Write-Host " ✔ Dependencies resolved." -ForegroundColor Green
+    Write-Host " [OK] Dependencies resolved." -ForegroundColor Green
 
     # 4. Build Release APK
     Write-Host ""
@@ -129,7 +129,7 @@ try {
     }
 
     $elapsed = (Get-Date) - $startTime
-    Write-Host " ✔ Compilation succeeded in $($elapsed.Minutes)m $($elapsed.Seconds)s!" -ForegroundColor Green
+    Write-Host " [OK] Compilation succeeded in $($elapsed.Minutes)m $($elapsed.Seconds)s!" -ForegroundColor Green
 
     # 5. Locate and Copy Output
     Write-Host ""
@@ -154,20 +154,21 @@ try {
 
         $fileInfo = Get-Item $TargetApk
         $sizeMb = [Math]::Round($fileInfo.Length / 1MB, 2)
+        $fileBytes = $fileInfo.Length
         $sha256 = (Get-FileHash -Path $TargetApk -Algorithm SHA256).Hash
 
         Write-Host ""
         Write-Host "======================================================================" -ForegroundColor Green
-        Write-Host " 🎉 SUCCESS! Android Release APK Generated Successfully!" -ForegroundColor Green
+        Write-Host "  SUCCESS! Android Release APK Generated Successfully!" -ForegroundColor Green
         Write-Host "======================================================================" -ForegroundColor Green
         Write-Host "  File Name:    AlphaXGym-Release.apk" -ForegroundColor White
-        Write-Host "  File Size:    $sizeMb MB ($($fileInfo.Length) bytes)" -ForegroundColor White
+        Write-Host "  File Size:    $sizeMb MB ($fileBytes bytes)" -ForegroundColor White
         Write-Host "  Location 1:   $TargetApk" -ForegroundColor Cyan
         Write-Host "  Location 2:   $RootApk" -ForegroundColor Cyan
         Write-Host "  SHA-256:      $sha256" -ForegroundColor Gray
         Write-Host "  Build Time:   $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "  📱 How to install on your Android phone:" -ForegroundColor Yellow
+        Write-Host "  How to install on your Android phone:" -ForegroundColor Yellow
         Write-Host "  1. Copy AlphaXGym-Release.apk to your phone (via USB, Drive, or Telegram)." -ForegroundColor White
         Write-Host "  2. Open the file on your device and tap 'Install'." -ForegroundColor White
         Write-Host "  3. If prompted, allow 'Install from unknown sources'." -ForegroundColor White

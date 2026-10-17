@@ -130,7 +130,7 @@ void main() {
       await auth.logout();
 
       expect(auth.isAuthenticated, isFalse);
-      expect(auth.currentToken, isEmpty);
+      expect(auth.rawToken, isEmpty);
 
       // Verify all local storage keys are purged
       final secureToken = await SecureTokenStorage.readAuthToken();
