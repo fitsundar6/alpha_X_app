@@ -2,7 +2,7 @@ name: Build iOS IPA & Android APK (Production)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'fix/**' ]
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
@@ -137,6 +137,7 @@ jobs:
   publish-release:
     name: 🚀 Publish GitHub Release
     needs: [build-ios, build-android]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
