@@ -59,6 +59,7 @@ import { workoutRepository } from './modules/workout/workout.repository';
 import { prisma } from './config/prisma';
 import { foodPhotoCleanupService } from './modules/food/food_photo_cleanup.service';
 import cronRoutes from './modules/notifications/cron.routes';
+import { automationService } from './modules/automation/automation.service';
 import cron from 'node-cron';
 
 const app = express();
@@ -381,7 +382,15 @@ if (!isTestRun && !isVercel && isDirectRun) {
         );
       });
 
-      // 4. 8:00 PM Sunday — "Spotify-Wrapped for Lifting" Alpha Telemetry Report
+      // 4. 9:00 AM — Daily Client Automation & Membership Expiry Sweep (Payment Reminders, Expiry Alerts)
+      cron.schedule('0 9 * * *', () => {
+        console.log('[CRON] 9:00 AM — Starting Daily Client Automation & Membership Expiry sweep...');
+        automationService.runDailyAutomationCycle().catch((err) =>
+          console.error('[CRON] Daily automation cycle error:', err?.message)
+        );
+      });
+
+      // 5. 8:00 PM Sunday — "Spotify-Wrapped for Lifting" Alpha Telemetry Report
       cron.schedule('0 20 * * 0', () => {
         console.log('[CRON] Sunday 8:00 PM — Starting Sunday Alpha Telemetry sweep...');
         telemetryService.dispatchSundayTelemetrySweep().catch((err) =>
@@ -389,7 +398,7 @@ if (!isTestRun && !isVercel && isDirectRun) {
         );
       });
 
-      console.log('🔔 Proactive AI Coach & Sunday Telemetry: Autonomous Push Crons active (7:30 AM, 10:30 AM, 8:30 PM, Sun 8:00 PM)');
+      console.log('🔔 Proactive AI Coach & Sunday Telemetry: Autonomous Push Crons active (7:30 AM, 9:00 AM, 10:30 AM, 8:30 PM, Sun 8:00 PM)');
     } else {
       console.warn('🔔 Proactive AI Coach: ONESIGNAL credentials not set — push notifications skipped');
     }

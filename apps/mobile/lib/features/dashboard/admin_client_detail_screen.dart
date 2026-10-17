@@ -356,7 +356,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
             const Icon(Icons.notifications_active, color: AppColors.primaryRed, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Test Push Notification',
+              'Targeted Push Notification',
               style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
@@ -366,8 +366,30 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Send a live push notification to $_clientName ($_displayId).',
+              'Dispatch a real OneSignal push notification to $_clientName ($_displayId) targeted by their linked OneSignal External ID.',
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.link, size: 14, color: Colors.greenAccent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Target: External ID ($_clientId)',
+                      style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontFamily: 'monospace'),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -413,7 +435,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
 
     try {
       final token = await AuthService().getValidToken();
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/send-test');
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/send-to-client');
       final res = await http.post(
         url,
         headers: {
@@ -424,28 +446,31 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
           'clientId': _clientId,
           'title': titleController.text.trim(),
           'body': bodyController.text.trim(),
+          'targetMethod': 'EXTERNAL_ID',
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       final data = jsonDecode(res.body);
       if (!mounted) return;
 
       if (res.statusCode == 200 && data['success'] == true) {
-        final gateway = data['data']?['gatewayResponse'];
+        final payload = data['data'];
+        final gateway = payload?['gatewayResponse'];
+        final notificationId = payload?['notificationId']?.toString() ?? gateway?['details']?['id']?.toString() ?? 'N/A';
         final isSuccess = gateway?['success'] == true;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isSuccess
-                  ? '✔ Push notification dispatched successfully!'
-                  : 'Gateway response: ${gateway?['error'] ?? 'Delivery skipped'}',
-            ),
-            backgroundColor: isSuccess ? AppColors.success : AppColors.warning,
-            duration: const Duration(seconds: 4),
-          ),
+
+        await _showPushResultDialog(
+          title: isSuccess ? 'Push Notification Dispatched' : 'Dispatch Partially Processed',
+          isSuccess: isSuccess,
+          notificationId: notificationId,
+          clientName: _clientName,
+          clientId: _displayId,
+          externalId: _clientId,
+          httpStatus: res.statusCode,
+          errorMsg: gateway?['error']?.toString(),
         );
       } else {
-        final msg = data['error']?['message'] ?? 'Failed to send test push';
+        final msg = data['error']?['message'] ?? 'Failed to send push notification';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
@@ -463,6 +488,195 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
         ),
       );
     }
+  }
+
+  Future<void> _showPushResultDialog({
+    required String title,
+    required bool isSuccess,
+    required String notificationId,
+    required String clientName,
+    required String clientId,
+    required String externalId,
+    required int httpStatus,
+    String? errorMsg,
+  }) async {
+    Map<String, dynamic>? liveReport;
+    bool isCheckingLive = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A2E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(
+                  isSuccess ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: isSuccess ? Colors.greenAccent : Colors.orange,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _detailResultRow('Recipient', '$clientName ($clientId)'),
+                  const SizedBox(height: 6),
+                  _detailResultRow('External ID', externalId),
+                  const SizedBox(height: 6),
+                  _detailResultRow('Notification ID', notificationId),
+                  const SizedBox(height: 6),
+                  _detailResultRow('Gateway Status', 'HTTP $httpStatus (${isSuccess ? "ACCEPTED" : "REJECTED"})'),
+                  if (errorMsg != null && errorMsg.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: Text('Error: $errorMsg', style: const TextStyle(color: Colors.redAccent, fontSize: 11)),
+                    ),
+                  ],
+                  const Divider(color: Colors.white12, height: 20),
+                  const Text(
+                    'DELIVERY LIFECYCLE',
+                    style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                  ),
+                  const SizedBox(height: 8),
+                  _lifecycleStageRow('Stage 1: API Acceptance', isSuccess, 'Payload accepted by OneSignal REST API'),
+                  _lifecycleStageRow(
+                    'Stage 2: Gateway Transmission',
+                    isSuccess,
+                    liveReport != null
+                        ? 'Successful dispatches to FCM/APNs: ${liveReport!['successful']} (Remaining: ${liveReport!['remaining']})'
+                        : 'Dispatched to push provider gateway',
+                  ),
+                  _lifecycleStageRow('Stage 3: Physical Device Display', false, 'Requires client device connectivity & notification permission'),
+                  if (liveReport != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('LIVE ONESIGNAL DELIVERY REPORT', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Successful Deliveries: ${liveReport!['successful']}', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                          Text('Failed / Inactive: ${liveReport!['failed']}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                          Text('Remaining In-Flight: ${liveReport!['remaining']}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  if (notificationId != 'N/A')
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: isCheckingLive
+                            ? null
+                            : () async {
+                                setDialogState(() { isCheckingLive = true; });
+                                try {
+                                  final token = await AuthService().getValidToken();
+                                  final statusUrl = Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/delivery-status/$notificationId');
+                                  final statusRes = await http.get(
+                                    statusUrl,
+                                    headers: { 'Authorization': 'Bearer $token' },
+                                  ).timeout(const Duration(seconds: 10));
+                                  if (statusRes.statusCode == 200) {
+                                    final reportData = jsonDecode(statusRes.body);
+                                    if (reportData['success'] == true) {
+                                      setDialogState(() { liveReport = reportData['data']; });
+                                    }
+                                  }
+                                } catch (_) {} finally {
+                                  setDialogState(() { isCheckingLive = false; });
+                                }
+                              },
+                        icon: isCheckingLive
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.refresh_rounded, size: 16),
+                        label: Text(isCheckingLive ? 'Querying OneSignal...' : 'Check Live Delivery Status', style: const TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('CLOSE', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _detailResultRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        ),
+        Expanded(
+          child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+
+  Widget _lifecycleStageRow(String stage, bool isDone, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            size: 14,
+            color: isDone ? Colors.greenAccent : Colors.white30,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(stage, style: TextStyle(color: isDone ? Colors.greenAccent : Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

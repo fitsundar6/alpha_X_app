@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma';
 import { aiEngagementService, NotificationTriggerRule, ClientContext } from './ai_engagement.service';
+import { notificationPolicyService, NotificationTier } from '../notifications/notification_policy.service';
 
 export interface DailyAutomationResult {
   clientsEvaluated: number;
@@ -282,21 +283,74 @@ export class AutomationService {
 
           const payload = aiEngagementService.generateEngagementMessage(candidateRule, clientContext);
 
-          await prisma.notification.create({
+          // Configure priority tier, preferences, and deterministic deduplication key
+          let tier: NotificationTier = 'PROACTIVE';
+          let prefKey: any = undefined;
+          let dedupKey = `AUTOMATION_${candidateRule}:${client.id}:${todayStr}`;
+
+          if (candidateRule === 'MEMBERSHIP_EXPIRING_SOON') {
+            tier = 'ESSENTIAL'; // Membership expiry / payment reminders are essential
+            prefKey = 'membershipAlerts';
+            const expireDateStr = client.membershipExpiresAt
+              ? new Date(client.membershipExpiresAt).toISOString().split('T')[0]
+              : todayStr;
+            dedupKey = `MEMBERSHIP_EXPIRING_SOON:${client.id}:${expireDateStr}`;
+          } else if (candidateRule === 'MEMBERSHIP_EXPIRED') {
+            tier = 'ESSENTIAL';
+            prefKey = 'membershipAlerts';
+            dedupKey = `MEMBERSHIP_EXPIRED:${client.id}:${todayStr}`;
+          } else if (candidateRule.includes('CHECK_IN')) {
+            tier = 'ESSENTIAL';
+            prefKey = 'weeklyCheckInReminders';
+          } else if (candidateRule.includes('WORKOUT') || candidateRule.startsWith('INACTIVE')) {
+            prefKey = 'workoutReminders';
+          } else if (candidateRule.includes('FOOD') || candidateRule.includes('PROTEIN')) {
+            prefKey = 'nutritionReminders';
+          }
+
+          const notifCategory = candidateRule.startsWith('MEMBERSHIP')
+            ? 'MEMBERSHIP'
+            : candidateRule.includes('CHECK_IN')
+              ? 'CHECK_IN'
+              : candidateRule.includes('WORKOUT')
+                ? 'WORKOUT'
+                : 'NUTRITION';
+
+          const notifType = candidateRule.startsWith('MEMBERSHIP')
+            ? 'MEMBERSHIP'
+            : (candidateRule.split('_')[0] as any) || 'SYSTEM';
+
+          const dispatchRes = await notificationPolicyService.dispatch({
+            userId: client.user.id,
+            clientProfileId: client.id,
+            clientId: client.clientId,
+            title: payload.title,
+            message: payload.message,
+            type: notifType,
+            category: notifCategory,
+            priority: payload.priority,
+            source: prefs.aiEngagementEnabled ? 'AI_COACH' : 'AUTOMATION_RULE',
+            triggerRule: candidateRule,
+            tier,
+            preferenceKey: prefKey,
+            dedupKey,
             data: {
-              clientProfileId: client.id,
-              clientId: client.clientId,
-              title: payload.title,
-              message: payload.message,
-              type: candidateRule.split('_')[0] || 'SYSTEM',
-              category: candidateRule.includes('CHECK_IN') ? 'CHECK_IN' : (candidateRule.includes('WORKOUT') ? 'WORKOUT' : 'NUTRITION'),
-              priority: payload.priority,
-              source: prefs.aiEngagementEnabled ? 'AI_COACH' : 'AUTOMATION_RULE',
+              type: 'automation_engagement',
               triggerRule: candidateRule,
-              sentStatus: 'SENT',
+              clientId: client.clientId || '',
+              date: todayStr,
+            },
+            metadata: {
+              membershipDaysRemaining,
+              daysInactive,
+              workoutCompletedToday,
+              foodLoggedToday,
             },
           });
-          notificationsCreated++;
+
+          if (dispatchRes.success || dispatchRes.status === 'SENT' || dispatchRes.status === 'DEFERRED') {
+            notificationsCreated++;
+          }
         }
       }
     }

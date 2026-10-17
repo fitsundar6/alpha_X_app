@@ -57,6 +57,16 @@ class AuthService extends ChangeNotifier {
   String? _approvedAt;
   String? _suspendedAt;
 
+  // In-flight refresh deduplication locks & mockable HTTP client
+  Future<String?>? _clientRefreshFuture;
+  Future<String?>? _adminRefreshFuture;
+  http.Client? _customHttpClient;
+
+  @visibleForTesting
+  void setHttpClientForTesting(http.Client? client) {
+    _customHttpClient = client;
+  }
+
   AuthService._internal();
 
   UserRole get currentRole => _role;
@@ -113,25 +123,49 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Authenticates with the backend to refresh an existing client session token.
+  /// Automatically deduplicates concurrent refresh requests using in-flight lock.
   Future<String?> refreshClientToken() async {
     if (_token.isEmpty || _role != UserRole.client) return null;
+    if (_clientRefreshFuture != null) {
+      return await _clientRefreshFuture;
+    }
+    final future = _performRefreshClientToken();
+    _clientRefreshFuture = future;
+    try {
+      return await future;
+    } finally {
+      _clientRefreshFuture = null;
+    }
+  }
+
+  Future<String?> _performRefreshClientToken() async {
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
-      final res = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_token',
-        },
-      ).timeout(const Duration(seconds: 8));
+      final client = _customHttpClient;
+      final res = client != null
+          ? await client.post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_token',
+              },
+            ).timeout(const Duration(seconds: 8))
+          : await http.post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_token',
+              },
+            ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        final token = decoded['data']?['token']?.toString();
+        final token = (decoded['data'] is Map ? decoded['data']['token'] : decoded['token'])?.toString();
         if (token != null && token.isNotEmpty) {
           _token = token;
           await _saveActiveSession();
           debugPrint('[AuthService] Successfully acquired fresh Client JWT token');
+          notifyListeners();
           return token;
         }
       } else if (res.statusCode == 401 || res.statusCode == 403) {
@@ -141,17 +175,18 @@ class AuthService extends ChangeNotifier {
         return null;
       }
     } catch (e) {
-      debugPrint('[AuthService] Client token refresh network notice: $e');
+      debugPrint('[AuthService] Client token refresh network notice (offline or transient): $e');
     }
     return null;
   }
 
   /// Returns a valid JWT token, automatically acquiring or refreshing admin & client tokens if expired.
   Future<String> getValidToken() async {
-    if (_role == UserRole.admin && (isTokenExpired || _token.isEmpty || _token == 'local_admin_session_token' || !_token.contains('.')) && !_isTestEnvironment) {
+    final allowRefresh = !_isTestEnvironment || _customHttpClient != null;
+    if (_role == UserRole.admin && (isTokenExpired || _token.isEmpty || _token == 'local_admin_session_token' || !_token.contains('.')) && allowRefresh) {
       final fresh = await refreshAdminToken();
       if (fresh != null && fresh.isNotEmpty) return fresh;
-    } else if (_role == UserRole.client && isTokenExpired && !_isTestEnvironment) {
+    } else if (_role == UserRole.client && isTokenExpired && allowRefresh) {
       final fresh = await refreshClientToken();
       if (fresh != null && fresh.isNotEmpty) return fresh;
     }
@@ -233,7 +268,7 @@ class AuthService extends ChangeNotifier {
       }
 
       if (session != null && session.isNotEmpty) {
-        final savedRole = session['role'] as String?;
+        final savedRole = (session['role'] as String? ?? 'CLIENT').trim().toUpperCase();
         final savedEmail = (session['email'] as String? ?? '').trim().toLowerCase();
         final effectiveToken = (secureToken != null && secureToken.isNotEmpty)
             ? secureToken
@@ -284,17 +319,14 @@ class AuthService extends ChangeNotifier {
             unawaited(SecureTokenStorage.writeAuthToken(_token));
           }
 
-          // Handle token expiry and refresh on startup
-          if (_token.isNotEmpty && !_isTestEnvironment) {
+          // Handle token expiry and proactive refresh on startup
+          if (_token.isNotEmpty && (!_isTestEnvironment || _customHttpClient != null)) {
             if (isTokenExpired) {
-              debugPrint('[AuthService] Client access token expired on startup. Attempting refresh...');
-              final freshToken = await refreshClientToken();
-              if (freshToken == null) {
-                // If token cannot be refreshed and is expired beyond recovery, session is invalid
-                debugPrint('[AuthService] Token refresh failed. Securely clearing expired session.');
-                await logout();
-                return;
-              }
+              debugPrint('[AuthService] Client access token expired on startup. Attempting proactive refresh...');
+              // Proactively refresh the expired token.
+              // Note: _performRefreshClientToken() will explicitly call logout() only if the backend confirms
+              // an unrecoverable auth error (HTTP 401/403). Normal network/offline failures preserve the session!
+              await refreshClientToken();
             } else {
               // Token is currently valid; proactively check verification status in background
               unawaited(checkVerificationStatus());
@@ -1050,29 +1082,53 @@ class AuthService extends ChangeNotifier {
   /// Authenticates with the backend as Master Administrator to obtain a fresh signed JWT token.
   /// Ensures valid authorization for all /admin/* endpoints in production.
   Future<String?> refreshAdminToken() async {
+    if (_adminRefreshFuture != null) {
+      return await _adminRefreshFuture;
+    }
+    final future = _performRefreshAdminToken();
+    _adminRefreshFuture = future;
+    try {
+      return await future;
+    } finally {
+      _adminRefreshFuture = null;
+    }
+  }
+
+  Future<String?> _performRefreshAdminToken() async {
     try {
       final email = AdminConfig.adminEmail.trim().toLowerCase();
       final password = AdminConfig.adminPassword;
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+      final client = _customHttpClient;
 
-      final res = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final res = client != null
+          ? await client.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'email': email,
+                'password': password,
+              }),
+            ).timeout(const Duration(seconds: 10))
+          : await http.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'email': email,
+                'password': password,
+              }),
+            ).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        final token = decoded['data']?['token']?.toString();
+        final token = (decoded['data'] is Map ? decoded['data']['token'] : decoded['token'])?.toString();
         if (token != null && token.isNotEmpty) {
           _token = token;
           if (_role == UserRole.admin) {
             await _saveActiveSession();
           }
           debugPrint('[AuthService] Successfully acquired fresh Admin JWT token');
+          notifyListeners();
           return token;
         }
       } else {
@@ -1716,6 +1772,9 @@ class AuthService extends ChangeNotifier {
   void resetForTesting() {
     _resetSession();
     _isInitialized = false;
+    _customHttpClient = null;
+    _clientRefreshFuture = null;
+    _adminRefreshFuture = null;
     notifyListeners();
   }
 }

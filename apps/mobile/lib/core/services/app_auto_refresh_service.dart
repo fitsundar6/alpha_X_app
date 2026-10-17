@@ -103,6 +103,10 @@ class AppAutoRefreshService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       // User switched back to the app (from another app, screen lock, etc.)
+      // Proactively refresh token if expired or near expiry without disrupting user session
+      if (AuthService().isAuthenticated && AuthService().isTokenExpired) {
+        unawaited(AuthService().getValidToken());
+      }
       // Immediately pull fresh assignments from server!
       triggerImmediateSync(reason: 'App Resumed');
       _checkAndStartPolling();
@@ -122,7 +126,7 @@ class AppAutoRefreshService with WidgetsBindingObserver {
     bool force = false,
   }) async {
     // Only sync if user is authenticated with a valid token
-    final token = AuthService().currentToken;
+    final token = await AuthService().getValidToken();
     if (token.isEmpty) return;
 
     // Prevent concurrent overlapping requests

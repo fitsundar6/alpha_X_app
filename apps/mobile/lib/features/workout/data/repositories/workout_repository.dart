@@ -1397,18 +1397,33 @@ class WorkoutRepository extends ChangeNotifier {
 
   /// Fetches real authorized workout sessions assigned to the current client from backend
   Future<void> fetchClientWorkouts({bool forceRefresh = false}) async {
-    final token = AuthService().currentToken;
+    var token = await AuthService().getValidToken();
     if (token.isEmpty) return;
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions');
-      final response = await _httpClient.get(
+      var response = await _httpClient.get(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 10));
+
+      // Automatic 401 recovery: token expired or invalid in production
+      if (response.statusCode == 401 && !_isTestEnvironment && !AuthService().isAdmin) {
+        final freshToken = await AuthService().refreshClientToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          token = freshToken;
+          response = await _httpClient.get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          ).timeout(const Duration(seconds: 10));
+        }
+      }
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);

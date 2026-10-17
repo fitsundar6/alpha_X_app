@@ -26,6 +26,7 @@ import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { aiNotificationEngine } from './ai_notifications.service';
 import { notificationPolicyService } from './notification_policy.service';
+import { automationService } from '../automation/automation.service';
 
 const router = Router();
 
@@ -234,6 +235,39 @@ router.get('/evening-sweep', verifyCronSecret, async (req: Request, res: Respons
   }
 });
 
+// ── GET /daily-automation ─────────────────────────────────────────────────────
+// Daily Client Automation & Membership Expiry Sweep (Membership, Payment Reminders, Inactivity)
+router.get('/daily-automation', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+  if (isDryRun) {
+    const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('ALL');
+    sendSuccess(res, diagnostics, HttpStatus.OK);
+    return;
+  }
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
+  try {
+    console.log('[CRON_ROUTE] Authenticated trigger: Daily Automation & Membership Expiry Sweep');
+    const result = await automationService.runDailyAutomationCycle();
+    sendSuccess(
+      res,
+      {
+        sweep: 'DAILY_AUTOMATION_CYCLE',
+        scheduledIst: '09:00 AM IST',
+        result,
+      },
+      HttpStatus.OK
+    );
+  } catch (err: any) {
+    console.error('[CRON_ROUTE] Daily automation cycle error:', err?.message);
+    sendError(res, 'CRON_EXECUTION_FAILED', err?.message || 'Daily automation cycle failed', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
 // ── GET /dispatcher ───────────────────────────────────────────────────────────
 // Universal dispatcher for Vercel Hobby (2 crons) or external scheduled triggers.
 // Preserves distinct execution times and never runs all three together.
@@ -256,6 +290,12 @@ router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) 
     if (job === 'morning') {
       const result = await aiNotificationEngine.runMorningCheckInSweep();
       sendSuccess(res, { executed: 'morning', result }, HttpStatus.OK);
+      return;
+    }
+
+    if (job === 'automation') {
+      const result = await automationService.runDailyAutomationCycle();
+      sendSuccess(res, { executed: 'automation', result }, HttpStatus.OK);
       return;
     }
 
