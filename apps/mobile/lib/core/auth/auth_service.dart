@@ -82,10 +82,10 @@ class AuthService extends ChangeNotifier {
   String? get approvedAt => _approvedAt;
   String? get suspendedAt => _suspendedAt;
   String get currentToken {
-    if (_token.isNotEmpty) return _token;
-    if (_role == UserRole.admin && _isAuthenticated) return 'local_admin_session_token';
-    if (_isTestEnvironment) return 'alpha_x_mock_token_for_client';
     if (!_isAuthenticated) return '';
+    if (_token.isNotEmpty) return _token;
+    if (_role == UserRole.admin) return 'local_admin_session_token';
+    if (_isTestEnvironment) return 'alpha_x_mock_token_for_client';
     // Never return a mock client token in production — empty string forces re-authentication
     return '';
   }
@@ -1132,10 +1132,19 @@ class AuthService extends ChangeNotifier {
 
   /// Complete logout: purges active session and resets state.
   Future<void> logout() async {
-    final tokenToUnregister = _token;
+    String? tokenToUnregister = _token;
+    if (tokenToUnregister.isEmpty) {
+      try {
+        tokenToUnregister = await SecureTokenStorage.readAuthToken();
+      } catch (_) {}
+    }
+    final userToUnregister = _userId;
     try {
       // Must await push notification unregistration BEFORE clearing credentials and session
-      await PushNotificationService.instance.onUserLogout(token: tokenToUnregister);
+      await PushNotificationService.instance.onUserLogout(
+        token: tokenToUnregister,
+        userId: userToUnregister,
+      );
     } catch (e) {
       debugPrint('[AuthService] Logout unregister notice: $e');
     }

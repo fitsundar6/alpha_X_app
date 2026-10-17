@@ -426,7 +426,7 @@ export class NotificationPolicyService {
       const sendResult = await oneSignalService.sendToPlayer(user.oneSignalPlayerId, {
         title,
         body: message,
-        data: { ...data, notificationId: reservationId, dedupKey },
+        data: { ...data, notificationId: reservationId, dedupKey, targetUserId: user.id },
       });
 
       if (sendResult.success) {
@@ -592,7 +592,7 @@ export class NotificationPolicyService {
         const sendResult = await oneSignalService.sendToPlayer(user.oneSignalPlayerId, {
           title: notif.title,
           body: notif.message,
-          data: { notificationId: notif.id, dedupKey: notif.dedupKey || '' },
+          data: { notificationId: notif.id, dedupKey: notif.dedupKey || '', targetUserId: user.id },
         });
 
         if (sendResult.success) {

@@ -43,6 +43,31 @@ router.post('/register-device', requireAuth, async (req: Request, res: Response)
   const cleanPlayerId = playerId.trim();
 
   try {
+    // 1. Cross-account safety: Detach this device from ANY OTHER user that might have had it previously.
+    // This prevents stale device mappings and cross-account notification bleed when switching accounts on the same device.
+    const staleUsers = await prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        oneSignalPlayerId: { contains: cleanPlayerId },
+      },
+      select: { id: true, oneSignalPlayerId: true },
+    });
+
+    for (const otherUser of staleUsers) {
+      if (otherUser.oneSignalPlayerId) {
+        const remaining = otherUser.oneSignalPlayerId
+          .split(',')
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0 && t !== cleanPlayerId);
+        await prisma.user.update({
+          where: { id: otherUser.id },
+          data: { oneSignalPlayerId: remaining.length > 0 ? remaining.join(',') : null },
+        });
+        console.log(`[NOTIFICATIONS] 🔄 Safely detached device ${cleanPlayerId} from previous user ${otherUser.id}. Preserved ${remaining.length} other devices for that user.`);
+      }
+    }
+
+    // 2. Register/append device to current user (deduplicated)
     const currentUser = await prisma.user.findUnique({
       where: { id: userId },
       select: { oneSignalPlayerId: true },

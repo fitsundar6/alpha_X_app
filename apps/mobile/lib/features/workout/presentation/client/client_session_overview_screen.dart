@@ -232,9 +232,12 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
           // Pending Offline Sync Queue Banner (Basement-Safe)
           if (workoutRepository.pendingSyncCount > 0)
             Container(
@@ -392,7 +395,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
             tag: session.workoutType.toUpperCase(),
             title: session.title,
             subtitle: '${session.targetMuscleGroup.toUpperCase()} • ~${session.estimatedDurationMinutes} MIN',
-            height: 220,
+            minHeight: 220,
             action: (session.isLocked || session.status == 'COMPLETED')
                 ? AlphaXButton(
                     label: 'COMPLETED & LOCKED',
@@ -462,9 +465,9 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _metricItem('Exercises', '${session.exercises.length}', colors),
-                    _metricItem('Total Sets', '$totalSets', colors),
-                    _metricItem('Est. Duration', '${session.estimatedDurationMinutes}m', colors),
+                    Expanded(child: _metricItem('Exercises', '${session.exercises.length}', colors)),
+                    Expanded(child: _metricItem('Total Sets', '$totalSets', colors)),
+                    Expanded(child: _metricItem('Est. Duration', '${session.estimatedDurationMinutes}m', colors)),
                   ],
                 ),
               ],
@@ -521,20 +524,27 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           const SizedBox(height: 32),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _metricItem(String label, String value, ClientThemeColors colors) {
     return Column(
       children: [
-        Text(
-          value,
-          style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 18),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 18),
+          ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );
@@ -628,7 +638,10 @@ class ClientSessionOverviewScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
             children: [
               if (firstSet?.targetWeight != null && firstSet!.targetWeight > 0) ...[
                 Icon(Icons.fitness_center, size: 12, color: colors.textSecondary),

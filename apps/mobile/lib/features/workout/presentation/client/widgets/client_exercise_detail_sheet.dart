@@ -318,7 +318,12 @@ class _ClientExerciseDetailSheetState extends State<ClientExerciseDetailSheet>
                   const Icon(Icons.circle, size: 8, color: AppColors.primaryRed),
                   const SizedBox(width: 6),
                   Text('Primary: ', style: TextStyle(color: colors.textTertiary, fontSize: 12, fontWeight: FontWeight.w700)),
-                  Text(primaryMuscle, style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Expanded(
+                    child: Text(
+                      primaryMuscle,
+                      style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ],
               ),
               if (secondaryMuscle.isNotEmpty) ...[
@@ -328,7 +333,12 @@ class _ClientExerciseDetailSheetState extends State<ClientExerciseDetailSheet>
                     Icon(Icons.circle, size: 8, color: colors.textTertiary),
                     const SizedBox(width: 6),
                     Text('Secondary: ', style: TextStyle(color: colors.textTertiary, fontSize: 12, fontWeight: FontWeight.w700)),
-                    Text(secondaryMuscle, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+                    Expanded(
+                      child: Text(
+                        secondaryMuscle,
+                        style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                      ),
+                    ),
                   ],
                 ),
               ],

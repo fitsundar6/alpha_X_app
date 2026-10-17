@@ -493,6 +493,10 @@ async function runNotificationIntegrationTests() {
       response: { id: `mock_os_deferred_${Date.now()}` },
     });
 
+    // Simulate daytime execution (7:30 AM morning sweep outside quiet hours)
+    const origIsInQuietHours = notificationPolicyService.isInQuietHours;
+    notificationPolicyService.isInQuietHours = () => false;
+
     // 10A: Create deferred notification with scheduledFor in the past
     const pastScheduledTime = new Date(Date.now() - 30 * 60 * 1000);
     const deferredNotif = await prisma.notification.create({
@@ -579,6 +583,7 @@ async function runNotificationIntegrationTests() {
       data: { workoutReminders: true },
     });
     (oneSignalService as any).sendToPlayer = origSendToPlayer;
+    notificationPolicyService.isInQuietHours = origIsInQuietHours;
 
     // ── TEST 11: Reliable Stale PENDING Recovery ──────────────────────────
     console.log('\n[TEST 11] Testing Reliable Stale PENDING Recovery & Idempotency...');

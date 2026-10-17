@@ -29,17 +29,50 @@ class PushNotificationService {
   static const String _keyPendingPlayerId = 'alpha_x_onesignal_pending_player_id';
 
   bool _initialized = false;
+  bool _isLoggingOut = false;
   String? _currentUserId;
   String? _currentAuthToken;
   String? _lastRegisteredPlayerId;
   String? _lastRegisteredUserId;
   bool _isUploading = false;
 
+  /// Test hooks and injectable transport
+  http.Client? httpClient;
+  Future<void> Function(String externalId)? onOneSignalLoginHook;
+  Future<void> Function()? onOneSignalLogoutHook;
+
+  bool get isLoggingOut => _isLoggingOut;
   String? get currentUserId => _currentUserId;
   String? get lastRegisteredPlayerId => _lastRegisteredPlayerId;
   String? get lastRegisteredUserId => _lastRegisteredUserId;
 
   PushNotificationService._internal();
+
+  /// Evaluates whether an incoming push notification should be displayed.
+  /// Prevents user-targeted notifications from showing when logged out or targeted to a different user,
+  /// while safely allowing general/anonymous broadcasts.
+  bool shouldDisplayNotification({
+    String? targetUserId,
+    bool isBroadcast = false,
+    bool? isAuthenticated,
+    String? currentUserId,
+  }) {
+    final authed = isAuthenticated ?? AuthService().isAuthenticated;
+    final activeId = currentUserId ?? AuthService().currentUserId;
+
+    if (targetUserId != null && targetUserId.isNotEmpty) {
+      if (!authed || activeId != targetUserId) {
+        return false;
+      }
+      return true;
+    }
+
+    if (!authed && !isBroadcast) {
+      return false;
+    }
+
+    return true;
+  }
 
   bool get _isSupportedPlatform {
     if (kIsWeb) return false;
@@ -172,7 +205,18 @@ class PushNotificationService {
 
       // Foreground notification listener — displays notification natively and triggers UI sync
       OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-        debugPrint('[OneSignal] 📩 Foreground notification: "${event.notification.title}"');
+        final title = event.notification.title ?? '';
+        final additionalData = event.notification.additionalData;
+        final targetUserId = additionalData?['targetUserId'] as String?;
+        final isBroadcast = additionalData?['isBroadcast'] == true || additionalData?['type'] == 'admin_broadcast';
+
+        if (!shouldDisplayNotification(targetUserId: targetUserId, isBroadcast: isBroadcast)) {
+          debugPrint('[OneSignal] 🛑 Suppressed notification "$title" for target: $targetUserId (Session active: ${AuthService().isAuthenticated})');
+          event.preventDefault();
+          return;
+        }
+
+        debugPrint('[OneSignal] 📩 Foreground notification: "$title"');
         event.notification.display();
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
       });
@@ -180,7 +224,16 @@ class PushNotificationService {
       // Notification tap/click handler — called when user taps a notification
       OneSignal.Notifications.addClickListener((event) {
         final title = event.notification.title ?? '';
-        final type = event.notification.additionalData?['type'] as String? ?? '';
+        final additionalData = event.notification.additionalData;
+        final targetUserId = additionalData?['targetUserId'] as String?;
+        final isBroadcast = additionalData?['isBroadcast'] == true || additionalData?['type'] == 'admin_broadcast';
+
+        if (!shouldDisplayNotification(targetUserId: targetUserId, isBroadcast: isBroadcast)) {
+          debugPrint('[OneSignal] ⚠️ Ignored tap on notification "$title" (Target mismatch or logged out)');
+          return;
+        }
+
+        final type = additionalData?['type'] as String? ?? '';
         debugPrint('[OneSignal] 🔔 Notification tapped: "$title" (type: $type)');
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Notification Tapped');
       });
@@ -191,7 +244,11 @@ class PushNotificationService {
         final optedIn = state.current.optedIn;
         debugPrint('[OneSignal] 🔄 Subscription updated. ID: ${newId ?? "null"} | optedIn: $optedIn');
         if (newId != null && newId.isNotEmpty) {
-          unawaited(syncRegistrationIfNeeded(overridePlayerId: newId));
+          if (!_isLoggingOut && AuthService().isAuthenticated) {
+            unawaited(syncRegistrationIfNeeded(overridePlayerId: newId));
+          } else {
+            debugPrint('[OneSignal] ⏹️ Subscription sync suppressed: logout in progress or unauthenticated session.');
+          }
         }
       });
 
@@ -212,11 +269,20 @@ class PushNotificationService {
   /// Evaluates whether the device needs to register its push subscription with the backend.
   /// Handles delayed token creation, login timing, new users, and automatic recovery.
   Future<void> syncRegistrationIfNeeded({String? overridePlayerId}) async {
-    if (!_isSupportedPlatform) return;
+    if (!_isSupportedPlatform && httpClient == null) return;
+    if (_isLoggingOut) {
+      debugPrint('[OneSignal] ⏹️ Push registration skipped: logout in progress.');
+      return;
+    }
+
+    if (!AuthService().isAuthenticated) {
+      debugPrint('[OneSignal] ℹ️ Push registration skipped: unauthenticated session.');
+      return;
+    }
 
     final playerId = (overridePlayerId != null && overridePlayerId.isNotEmpty)
         ? overridePlayerId
-        : OneSignal.User.pushSubscription.id;
+        : (_isSupportedPlatform ? OneSignal.User.pushSubscription.id : _lastRegisteredPlayerId);
 
     if (playerId == null || playerId.isEmpty) return;
 
@@ -232,8 +298,6 @@ class PushNotificationService {
     if (AuthService().isAdmin) return;
 
     if (effectiveUserId.isEmpty || effectiveToken.isEmpty) {
-      // User is not logged in yet; record pending token so it uploads immediately upon login
-      await _savePendingPlayerId(playerId);
       return;
     }
 
@@ -250,22 +314,40 @@ class PushNotificationService {
     required String userId,
     required String authToken,
   }) async {
+    _isLoggingOut = false;
     _currentUserId = userId;
     _currentAuthToken = authToken;
 
-    if (!_isSupportedPlatform) return;
+    // Handle account switching on same device: reset cached IDs for old user
+    if (_lastRegisteredUserId != null && _lastRegisteredUserId != userId) {
+      _lastRegisteredPlayerId = null;
+      _lastRegisteredUserId = null;
+    }
+
+    if (onOneSignalLoginHook != null) {
+      await onOneSignalLoginHook!(userId);
+    } else if (_isSupportedPlatform) {
+      try {
+        if (!_initialized) {
+          await initialize();
+        }
+
+        // Associate device with user ID in OneSignal (External ID)
+        await OneSignal.login(userId);
+        debugPrint('[OneSignal] Logged in with external userId: $userId');
+      } catch (e) {
+        debugPrint('[OneSignal] onUserLogin OneSignal.login error: $e');
+      }
+    }
 
     try {
-      if (!_initialized) {
-        await initialize();
-      }
-
-      // Associate device with user ID in OneSignal (External ID)
-      await OneSignal.login(userId);
-      debugPrint('[OneSignal] Logged in with external userId: $userId');
-
       // Check current subscription ID or any stored pending registration
-      String? playerId = OneSignal.User.pushSubscription.id;
+      String? playerId;
+      if (_isSupportedPlatform) {
+        try {
+          playerId = OneSignal.User.pushSubscription.id;
+        } catch (_) {}
+      }
       if (playerId == null || playerId.isEmpty) {
         try {
           final prefs = await SharedPreferences.getInstance();
@@ -284,63 +366,71 @@ class PushNotificationService {
   }
 
   /// Called on logout to dissociate user from OneSignal and unregister device token on backend.
-  Future<void> onUserLogout({String? token, String? playerId}) async {
-    final effectiveToken = (token != null && token.isNotEmpty)
-        ? token
-        : (_currentAuthToken ?? AuthService().currentToken);
+  Future<void> onUserLogout({String? token, String? playerId, String? userId}) async {
+    _isLoggingOut = true;
+    try {
+      final effectiveToken = (token != null && token.isNotEmpty)
+          ? token
+          : (_currentAuthToken ?? AuthService().currentToken);
 
-    // Resolve playerId: parameter -> memory cache -> OneSignal SDK -> SharedPreferences
-    String? resolvedPlayerId = (playerId != null && playerId.isNotEmpty) ? playerId : _lastRegisteredPlayerId;
-    if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
-      if (_isSupportedPlatform) {
+      // Resolve playerId: parameter -> memory cache -> OneSignal SDK -> SharedPreferences
+      String? resolvedPlayerId = (playerId != null && playerId.isNotEmpty) ? playerId : _lastRegisteredPlayerId;
+      if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
+        if (_isSupportedPlatform) {
+          try {
+            resolvedPlayerId = OneSignal.User.pushSubscription.id;
+          } catch (_) {}
+        }
+      }
+      if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
         try {
-          resolvedPlayerId = OneSignal.User.pushSubscription.id;
+          final prefs = await SharedPreferences.getInstance();
+          resolvedPlayerId = prefs.getString(_keyRegisteredPlayerId);
         } catch (_) {}
       }
-    }
-    if (resolvedPlayerId == null || resolvedPlayerId.isEmpty) {
+
+      if (effectiveToken.isNotEmpty && resolvedPlayerId != null && resolvedPlayerId.isNotEmpty) {
+        try {
+          debugPrint('[OneSignal] 🔄 Unregistering device ($resolvedPlayerId) from backend before session wipe...');
+          final success = await _unregisterPlayerIdFromServer(effectiveToken, resolvedPlayerId);
+          if (success) {
+            debugPrint('[OneSignal] ✅ Backend confirmed device unregistration.');
+          } else {
+            debugPrint('[OneSignal] ⚠️ Backend device unregister was not acknowledged by server.');
+          }
+        } catch (e) {
+          debugPrint('[OneSignal] ⚠️ Error during device unregister on logout: $e');
+        }
+      } else {
+        debugPrint('[OneSignal] ℹ️ Skipped backend unregister: tokenPresent=${effectiveToken.isNotEmpty}, playerIdPresent=${resolvedPlayerId != null && resolvedPlayerId.isNotEmpty}');
+      }
+
+      // Always reset local session tracking on logout
+      _currentUserId = null;
+      _currentAuthToken = null;
+      _lastRegisteredPlayerId = null;
+      _lastRegisteredUserId = null;
+
       try {
         final prefs = await SharedPreferences.getInstance();
-        resolvedPlayerId = prefs.getString(_keyRegisteredPlayerId);
+        await prefs.remove(_keyRegisteredPlayerId);
+        await prefs.remove(_keyRegisteredUserId);
+        await prefs.remove(_keyPendingPlayerId);
       } catch (_) {}
-    }
 
-    if (effectiveToken.isNotEmpty && resolvedPlayerId != null && resolvedPlayerId.isNotEmpty) {
-      try {
-        debugPrint('[OneSignal] 🔄 Unregistering device ($resolvedPlayerId) from backend before session wipe...');
-        final success = await _unregisterPlayerIdFromServer(effectiveToken, resolvedPlayerId);
-        if (success) {
-          debugPrint('[OneSignal] ✅ Backend confirmed device unregistration.');
-        } else {
-          debugPrint('[OneSignal] ⚠️ Backend device unregister was not acknowledged by server.');
+      // Detach External ID in OneSignal
+      if (onOneSignalLogoutHook != null) {
+        await onOneSignalLogoutHook!();
+      } else if (_isSupportedPlatform) {
+        try {
+          await OneSignal.logout();
+          debugPrint('[OneSignal] ✅ Detached previous user External ID and logged out from OneSignal.');
+        } catch (e) {
+          debugPrint('[OneSignal] onUserLogout OneSignal.logout error: $e');
         }
-      } catch (e) {
-        debugPrint('[OneSignal] ⚠️ Error during device unregister on logout: $e');
       }
-    } else {
-      debugPrint('[OneSignal] ℹ️ Skipped backend unregister: tokenPresent=${effectiveToken.isNotEmpty}, playerIdPresent=${resolvedPlayerId != null && resolvedPlayerId.isNotEmpty}');
-    }
-
-    // Always reset local session tracking on logout
-    _currentUserId = null;
-    _currentAuthToken = null;
-    _lastRegisteredPlayerId = null;
-    _lastRegisteredUserId = null;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_keyRegisteredPlayerId);
-      await prefs.remove(_keyRegisteredUserId);
-      await prefs.remove(_keyPendingPlayerId);
-    } catch (_) {}
-
-    if (!_isSupportedPlatform) return;
-
-    try {
-      await OneSignal.logout();
-      debugPrint('[OneSignal] Logged out from device.');
-    } catch (e) {
-      debugPrint('[OneSignal] onUserLogout error: $e');
+    } finally {
+      _isLoggingOut = false;
     }
   }
 
@@ -350,13 +440,18 @@ class PushNotificationService {
 
     Future<http.Response> postToUrl(String base) {
       final url = Uri.parse('$base/notifications/unregister-device');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $authToken',
+      };
+      final body = jsonEncode({'playerId': playerId});
+      if (httpClient != null) {
+        return httpClient!.post(url, headers: headers, body: body);
+      }
       return http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: jsonEncode({'playerId': playerId}),
+        headers: headers,
+        body: body,
       ).timeout(const Duration(seconds: 5));
     }
 
@@ -407,13 +502,18 @@ class PushNotificationService {
 
     Future<http.Response> postToUrl(String base) {
       final url = Uri.parse('$base/notifications/register-device');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $authToken',
+      };
+      final body = jsonEncode({'playerId': playerId});
+      if (httpClient != null) {
+        return httpClient!.post(url, headers: headers, body: body);
+      }
       return http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: jsonEncode({'playerId': playerId}),
+        headers: headers,
+        body: body,
       ).timeout(const Duration(seconds: 10));
     }
 

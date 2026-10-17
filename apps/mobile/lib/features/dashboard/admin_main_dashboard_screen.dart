@@ -326,9 +326,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           IconButton(
             icon: Icon(Icons.logout, size: 20, color: colors.textSecondary),
             tooltip: 'Logout',
-            onPressed: () {
-              AuthService().logout();
-              Navigator.of(context).pushReplacementNamed('/login');
+            onPressed: () async {
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
             },
           ),
         ],
@@ -573,10 +575,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           ListTile(
             leading: Icon(Icons.logout, color: colors.primary),
             title: Text('Sign Out', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
-            onTap: () {
+            onTap: () async {
               Navigator.of(context).pop();
-              AuthService().logout();
-              Navigator.of(context).pushReplacementNamed('/login');
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
             },
           ),
         ],

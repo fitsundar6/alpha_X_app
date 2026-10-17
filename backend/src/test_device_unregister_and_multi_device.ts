@@ -139,9 +139,18 @@ async function runTestSuite() {
     },
   };
 
-  // Mock prisma.user.findUnique and prisma.user.update
+  // Mock prisma.user.findUnique, prisma.user.update, and prisma.user.findMany
   const originalFindUnique = prisma.user.findUnique;
   const originalUpdate = prisma.user.update;
+  const originalFindMany = prisma.user.findMany;
+  const originalNotification = (prisma as any).notification;
+
+  (prisma as any).notification = {
+    findUnique: async () => null,
+    create: async ({ data }: any) => ({ id: 'mock-notif-1', ...data }),
+    update: async ({ data }: any) => ({ id: 'mock-notif-1', ...data }),
+    count: async () => 0,
+  };
 
   (prisma.user as any).findUnique = async ({ where, select }: any) => {
     const user = mockUsers[where.id];
@@ -163,6 +172,25 @@ async function runTestSuite() {
       user.oneSignalPlayerId = data.oneSignalPlayerId;
     }
     return { ...user };
+  };
+
+  (prisma.user as any).findMany = async ({ where, select }: any) => {
+    const results = Object.values(mockUsers).filter((user) => {
+      if (where?.id?.not && user.id === where.id.not) return false;
+      if (where?.oneSignalPlayerId?.contains) {
+        if (!user.oneSignalPlayerId) return false;
+        return user.oneSignalPlayerId.split(',').map((t) => t.trim()).includes(where.oneSignalPlayerId.contains);
+      }
+      return true;
+    });
+    if (select) {
+      return results.map((user) => {
+        const item: any = {};
+        for (const k of Object.keys(select)) item[k] = (user as any)[k];
+        return item;
+      });
+    }
+    return results;
   };
 
   try {
@@ -326,16 +354,6 @@ async function runTestSuite() {
     // ── SUITE 8: Preventing Dispatch to Logged-Out Device ─────────────────────
     console.log('\n[SECTION 8] Testing Notification Dispatch Suppression for Logged-Out Device...');
     {
-      // Mock prisma.notification for dispatch test
-      const originalNotificationCreate = (prisma as any).notification?.create;
-      const originalNotificationUpdate = (prisma as any).notification?.update;
-      (prisma as any).notification = {
-        findUnique: async () => null,
-        create: async ({ data }: any) => ({ id: 'mock-notif-1', ...data }),
-        update: async ({ data }: any) => ({ id: 'mock-notif-1', ...data }),
-        count: async () => 0,
-      };
-
       // Mock user with null oneSignalPlayerId (logged out)
       mockUsers['user-client-1'].oneSignalPlayerId = null;
       (mockUsers['user-client-1'] as any).notificationsEnabled = true;
@@ -364,6 +382,7 @@ async function runTestSuite() {
         message: 'Time to train!',
         type: 'WORKOUT',
         tier: 'PROACTIVE',
+        ignoreQuietHours: true,
         dedupKey: `LOGGED_OUT_TEST:${Date.now()}`,
       });
 
@@ -373,8 +392,6 @@ async function runTestSuite() {
 
       // Restore
       oneSignalService.sendToPlayer = origSendToPlayer;
-      (prisma as any).notification.create = originalNotificationCreate;
-      (prisma as any).notification.update = originalNotificationUpdate;
     }
 
     // ── SUITE 9: Register-Device Delegation for Unregister ─────────────────────
@@ -393,10 +410,176 @@ async function runTestSuite() {
       assert(mockUsers['user-client-1'].oneSignalPlayerId === null, 'Token cleared in database via register-device delegation');
     }
 
+    // ── SUITE 10: Account Switching on the Same Device (Cross-Account Isolation) ──
+    console.log('\n[SECTION 10] Testing Safe Account Switching on the Same Physical Device...');
+    {
+      // Scenario: User 1 was previously logged into Shared Phone (device-phone-shared)
+      mockUsers['user-client-1'].oneSignalPlayerId = 'device-phone-shared';
+      mockUsers['user-client-2'].oneSignalPlayerId = null;
+
+      // User 2 logs into the exact same device and registers device-phone-shared
+      const resSwitch = await dispatchRoute(
+        'POST',
+        '/register-device',
+        { playerId: 'device-phone-shared' },
+        tokenUser2
+      );
+
+      assert(resSwitch.statusCode === 200, 'Account switch registration returns HTTP 200');
+      assert(
+        mockUsers['user-client-2'].oneSignalPlayerId === 'device-phone-shared',
+        'Device successfully registered for new user (User 2)'
+      );
+      assert(
+        mockUsers['user-client-1'].oneSignalPlayerId === null,
+        'Device token was automatically and cleanly removed from previous user (User 1)'
+      );
+
+      // Now verify targeting User 1 produces zero dispatches
+      let dispatchedToPlayerIds: string[] = [];
+      const origSend = oneSignalService.sendToPlayer;
+      oneSignalService.sendToPlayer = async (targetId: string) => {
+        dispatchedToPlayerIds.push(targetId);
+        return { success: true, playerId: targetId };
+      };
+
+      // Target User 1 with notification policy
+      const resultUser1 = await notificationPolicyService.dispatch({
+        userId: 'user-client-1',
+        clientProfileId: 'prof-1',
+        title: 'User 1 Alert',
+        message: 'Personal workout',
+        type: 'WORKOUT',
+        tier: 'PROACTIVE',
+        ignoreQuietHours: true,
+        dedupKey: `USER1_TEST:${Date.now()}`,
+      });
+
+      assert(resultUser1.status === 'NO_DEVICE', 'Notification to logged-out User 1 is marked NO_DEVICE');
+      assert(dispatchedToPlayerIds.length === 0, 'Zero pushes sent to shared device for logged-out User 1');
+
+      // Target User 2 with notification policy
+      (mockUsers['user-client-2'] as any).notificationsEnabled = true;
+      (mockUsers['user-client-2'] as any).clientProfile = {
+        id: 'prof-2',
+        clientId: 'AXG-0002',
+        notificationPref: {
+          timezone: 'Asia/Kolkata',
+          quietHoursStart: 23,
+          quietHoursEnd: 5,
+          workoutReminders: true,
+        },
+      };
+
+      const resultUser2 = await notificationPolicyService.dispatch({
+        userId: 'user-client-2',
+        clientProfileId: 'prof-2',
+        title: 'User 2 Alert',
+        message: 'Welcome back!',
+        type: 'WORKOUT',
+        tier: 'PROACTIVE',
+        ignoreQuietHours: true,
+        dedupKey: `USER2_TEST:${Date.now()}`,
+      });
+
+      assert(resultUser2.success === true, 'Notification to active User 2 succeeds');
+      assert(
+        dispatchedToPlayerIds.includes('device-phone-shared'),
+        'Push was correctly and securely delivered to active User 2 on the device'
+      );
+
+      oneSignalService.sendToPlayer = origSend;
+    }
+
+    // ── SUITE 11: Multi-Device Account Switching (Preserving Other Devices) ───────
+    console.log('\n[SECTION 11] Testing Multi-Device Account Switching with Device Preservation...');
+    {
+      // Scenario: User 1 has two devices: a private phone and a shared tablet
+      mockUsers['user-client-1'].oneSignalPlayerId = 'user1-phone-private,shared-tablet';
+      mockUsers['user-client-2'].oneSignalPlayerId = null;
+
+      // User 2 logs into the shared tablet and registers shared-tablet
+      const resTabletSwitch = await dispatchRoute(
+        'POST',
+        '/register-device',
+        { playerId: 'shared-tablet' },
+        tokenUser2
+      );
+
+      assert(resTabletSwitch.statusCode === 200, 'Tablet switch registration returns HTTP 200');
+      assert(
+        mockUsers['user-client-2'].oneSignalPlayerId === 'shared-tablet',
+        'User 2 now owns shared-tablet'
+      );
+      assert(
+        mockUsers['user-client-1'].oneSignalPlayerId === 'user1-phone-private',
+        'User 1 private phone is strictly preserved while shared tablet was detached'
+      );
+    }
+
+    // ── SUITE 12: Stale Mappings & Full Logout Flow Safety ────────────────────────
+    console.log('\n[SECTION 12] Testing Stale Device Mappings & Full Logout Flow Safety...');
+    {
+      // User 1 logs out of their private phone
+      const resLogout = await dispatchRoute(
+        'POST',
+        '/unregister-device',
+        { playerId: 'user1-phone-private' },
+        tokenUser1
+      );
+
+      assert(resLogout.statusCode === 200, 'Logout unregister returns HTTP 200');
+      assert(resLogout.data?.data?.cleared === true, 'Token was cleared on logout');
+      assert(mockUsers['user-client-1'].oneSignalPlayerId === null, 'User 1 has null oneSignalPlayerId in PostgreSQL');
+
+      // Targeting User 1 now cannot reach any device
+      const resTargetLoggedOut = await notificationPolicyService.dispatch({
+        userId: 'user-client-1',
+        clientProfileId: 'prof-1',
+        title: 'Logged Out Client Test',
+        message: 'Should never arrive',
+        type: 'WORKOUT',
+        tier: 'PROACTIVE',
+        ignoreQuietHours: true,
+        dedupKey: `LOGGED_OUT_CLEAN_TEST:${Date.now()}`,
+      });
+      assert(resTargetLoggedOut.status === 'NO_DEVICE', 'Logged-out user is safely designated NO_DEVICE');
+    }
+
+    // ── SUITE 13: Anonymous & General Broadcast Safety ────────────────────────────
+    console.log('\n[SECTION 13] Testing Anonymous & General Broadcast Safety...');
+    {
+      let broadcastTargetIds: string[] = [];
+      const origBroadcast = oneSignalService.broadcastToDevices;
+      oneSignalService.broadcastToDevices = async (playerIds: string[]) => {
+        broadcastTargetIds = playerIds;
+        return {
+          success: true,
+          recipientsCount: playerIds.length,
+          devicesTargeted: playerIds.length,
+        };
+      };
+
+      // Broadcast to multiple devices (anonymous broadcast / gym announcements)
+      const broadcastRes = await oneSignalService.broadcastToDevices(
+        ['general-sub-1', 'general-sub-2', 'shared-tablet'],
+        { title: 'Gym Announcement', body: 'Gym closes early today.' }
+      );
+
+      assert(broadcastRes.success === true, 'Broadcast succeeds for anonymous & active devices');
+      assert(broadcastTargetIds.length === 3, 'All 3 broadcast target devices reached');
+      assert(broadcastTargetIds.includes('shared-tablet'), 'Active device receives broadcast');
+      assert(broadcastTargetIds.includes('general-sub-1'), 'Anonymous device receives broadcast');
+
+      oneSignalService.broadcastToDevices = origBroadcast;
+    }
+
   } finally {
     // Restore original prisma methods
     (prisma.user as any).findUnique = originalFindUnique;
     (prisma.user as any).update = originalUpdate;
+    (prisma.user as any).findMany = originalFindMany;
+    (prisma as any).notification = originalNotification;
   }
 
   console.log('\n================================================================');

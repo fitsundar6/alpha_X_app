@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -79,7 +80,7 @@ Widget getInitialScreen({
 
   if (auth.isAuthenticated) {
     if (auth.isTokenExpired) {
-      auth.logout();
+      unawaited(auth.logout());
       return const LoginScreen(animateLogo: false);
     }
     if (auth.isAdmin) {

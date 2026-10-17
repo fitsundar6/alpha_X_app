@@ -486,10 +486,12 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
           ListTile(
             leading: Icon(Icons.logout, color: ClientThemeColors(context).textSecondary),
             title: Text('Sign Out', style: TextStyle(color: ClientThemeColors(context).textSecondary, fontWeight: FontWeight.w600)),
-            onTap: () {
+            onTap: () async {
               Navigator.of(context).pop();
-              AuthService().logout();
-              Navigator.of(context).pushReplacementNamed('/login');
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
             },
           ),
         ],
@@ -1873,7 +1875,7 @@ class _ClientProgressSubScreenState extends State<_ClientProgressSubScreen> {
               tag: 'BODY COMPOSITION',
               title: 'YOUR PROGRESS',
               subtitle: 'Consistency > daily fluctuations',
-              height: 240,
+              minHeight: 220,
               action: AlphaXButton(
                 label: 'LOG CHECK-IN',
                 icon: Icons.monitor_weight_outlined,
@@ -2465,9 +2467,11 @@ class ClientProfileSubScreen extends StatelessWidget {
                   style: TextStyle(color: colors.textSecondary, fontSize: 12),
                 ),
                 trailing: Icon(Icons.arrow_forward_ios, size: 14, color: colors.textTertiary),
-                onTap: () {
-                  AuthService().logout();
-                  Navigator.of(context).pushReplacementNamed('/login');
+                onTap: () async {
+                  await AuthService().logout();
+                  if (context.mounted) {
+                    Navigator.of(context).pushReplacementNamed('/login');
+                  }
                 },
               ),
               const SizedBox(height: 24),
