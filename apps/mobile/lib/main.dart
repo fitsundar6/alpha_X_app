@@ -79,9 +79,9 @@ Widget getInitialScreen({
   final weeklyProgressRepo = weeklyProgressRepository ?? WeeklyProgressRepository();
 
   if (auth.isAuthenticated) {
+    // Proactively refresh expired or near-expiry token in background without blocking screen launch or wiping session
     if (auth.isTokenExpired) {
-      unawaited(auth.logout());
-      return const LoginScreen(animateLogo: false);
+      unawaited(auth.getValidToken());
     }
     if (auth.isAdmin) {
       return AdminMainDashboardScreen(

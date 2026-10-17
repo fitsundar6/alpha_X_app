@@ -96,7 +96,7 @@ export class OneSignalService {
 
     // In modern OneSignal v5, devices are addressed via include_subscription_ids.
     // Legacy OneSignal apps use include_player_ids.
-    const basePayload = {
+    const basePayload: Record<string, any> = {
       app_id: this.appId,
       headings: { en: payload.title },
       contents: { en: payload.body },
@@ -105,8 +105,10 @@ export class OneSignalService {
       android_sound: 'default',
       ios_sound: 'default',
       priority: 10,
-      android_channel_id: payload.channelId || 'alpha_x_alerts',
     };
+    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
+      basePayload.android_channel_id = payload.channelId;
+    }
 
     // Try sending with include_subscription_ids (OneSignal v5 standard)
     const resultV5 = await this.executePost({
@@ -170,7 +172,7 @@ export class OneSignalService {
       };
     }
 
-    const basePayload = {
+    const basePayload: Record<string, any> = {
       app_id: this.appId,
       headings: { en: payload.title },
       contents: { en: payload.body },
@@ -179,8 +181,10 @@ export class OneSignalService {
       android_sound: 'default',
       ios_sound: 'default',
       priority: 10,
-      android_channel_id: payload.channelId || 'alpha_x_alerts',
     };
+    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
+      basePayload.android_channel_id = payload.channelId;
+    }
 
     // First attempt using include_subscription_ids (OneSignal v5 standard)
     const resultV5 = await this.executePost({
@@ -235,15 +239,17 @@ export class OneSignalService {
     }
 
     if (!this.appId || !this.apiKey) {
-      return { success: false, playerId: userId, error: 'OneSignal not configured' };
+      return { success: false, playerId: userId, error: 'OneSignal not configured on backend' };
     }
 
-    const body = {
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      return { success: false, playerId: userId, error: 'Invalid or empty user External ID' };
+    }
+
+    const cleanUserId = userId.trim();
+
+    const basePayload: Record<string, any> = {
       app_id: this.appId,
-      include_aliases: {
-        external_id: [userId],
-      },
-      target_channel: 'push',
       headings: { en: payload.title },
       contents: { en: payload.body },
       data: payload.data || {},
@@ -251,10 +257,36 @@ export class OneSignalService {
       android_sound: 'default',
       ios_sound: 'default',
       priority: 10,
-      android_channel_id: payload.channelId || 'alpha_x_alerts',
+    };
+    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
+      basePayload.android_channel_id = payload.channelId;
+    }
+
+    // Modern OneSignal v5 targeting by external ID alias
+    const bodyV5 = {
+      ...basePayload,
+      target_channel: 'push',
+      include_aliases: {
+        external_id: [cleanUserId],
+      },
     };
 
-    return this.executePost(body, userId, payload.title);
+    const resultV5 = await this.executePost(bodyV5, cleanUserId, payload.title);
+    if (resultV5.success) {
+      return resultV5;
+    }
+
+    // If rejected with an error specifically related to aliases or targeting, retry with legacy include_external_user_ids
+    if (resultV5.httpStatus === 400 || (resultV5.error && (resultV5.error.includes('alias') || resultV5.error.includes('external_id') || resultV5.error.includes('include_aliases')))) {
+      console.log(`[ONESIGNAL] Retrying external ID ${cleanUserId} using legacy include_external_user_ids...`);
+      const bodyLegacy = {
+        ...basePayload,
+        include_external_user_ids: [cleanUserId],
+      };
+      return this.executePost(bodyLegacy, cleanUserId, payload.title);
+    }
+
+    return resultV5;
   }
 
   private async executePost(body: any, targetId: string, title: string): Promise<SendResult> {
@@ -278,6 +310,14 @@ export class OneSignalService {
       }
 
       if (!response.ok || result.errors) {
+        // Automatic recovery: If OneSignal rejects because android_channel_id does not exist, strip and retry immediately
+        if (body.android_channel_id && (JSON.stringify(result.errors || {}).includes('android_channel_id') || httpStatus === 400)) {
+          console.warn(`[ONESIGNAL] Channel "${body.android_channel_id}" not found in OneSignal dashboard. Retrying without android_channel_id...`);
+          const fallbackBody = { ...body };
+          delete fallbackBody.android_channel_id;
+          return this.executePost(fallbackBody, targetId, title);
+        }
+
         let errorMsg = result.errors ? JSON.stringify(result.errors) : `HTTP ${httpStatus}`;
         if (httpStatus === 401) {
           errorMsg = 'OneSignal REST API authentication failed (HTTP 401: Access denied). Please verify ONESIGNAL_REST_API_KEY in server environment.';
@@ -337,6 +377,65 @@ export class OneSignalService {
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to query OneSignal notification' };
     }
+  }
+
+  /**
+   * Generates a structured delivery report distinguishing API acceptance from gateway transmission and device receipt
+   */
+  async getNotificationDeliveryReport(notificationId: string): Promise<{
+    success: boolean;
+    notificationId: string;
+    accepted: boolean;
+    successful: number;
+    failed: number;
+    errored: number;
+    remaining: number;
+    converted?: number;
+    platformDeliveryStats?: any;
+    queuedAt?: string;
+    completedAt?: string;
+    actualDeviceReceiptNotice: string;
+    error?: string;
+  }> {
+    const res = await this.getNotification(notificationId);
+    if (!res.success || !res.data) {
+      return {
+        success: false,
+        notificationId,
+        accepted: false,
+        successful: 0,
+        failed: 0,
+        errored: 0,
+        remaining: 0,
+        actualDeviceReceiptNotice: 'Delivery status query failed. Device receipt unconfirmed.',
+        error: res.error || 'Failed to retrieve notification status from OneSignal REST API',
+      };
+    }
+
+    const n = res.data;
+    const successfulCount = typeof n.successful === 'number' ? n.successful : 0;
+    const failedCount = typeof n.failed === 'number' ? n.failed : 0;
+    const remainingCount = typeof n.remaining === 'number' ? n.remaining : 0;
+    const erroredCount = typeof n.errored === 'number' ? n.errored : 0;
+
+    return {
+      success: true,
+      notificationId,
+      accepted: true,
+      successful: successfulCount,
+      failed: failedCount,
+      errored: erroredCount,
+      remaining: remainingCount,
+      converted: typeof n.converted === 'number' ? n.converted : 0,
+      platformDeliveryStats: n.platform_delivery_stats || undefined,
+      queuedAt: n.queued_at ? new Date(n.queued_at * 1000).toISOString() : undefined,
+      completedAt: n.completed_at ? new Date(n.completed_at * 1000).toISOString() : undefined,
+      actualDeviceReceiptNotice: successfulCount > 0
+        ? `OneSignal dispatched to ${successfulCount} device(s) via push gateway (FCM/APNS). Actual device display requires active network connectivity and notification permissions enabled on the client hardware.`
+        : remainingCount > 0
+          ? 'Notification is currently queued/in-flight at the push provider gateway.'
+          : 'No device deliveries confirmed by push gateway. Verify client device token registration.',
+    };
   }
 
   /**

@@ -9,6 +9,8 @@ import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_splash_screen.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_logo_animation.dart';
 import 'package:alpha_x_gym/features/navigation/navigation_shell.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -142,7 +144,15 @@ void main() {
       expect(find.byType(LoginScreen), findsNothing);
     });
 
-    testWidgets('6. Expired/invalid session -> Animation -> Login', (tester) async {
+    testWidgets('6. Expired/invalid session with unrecoverable failure -> Animation -> Login', (tester) async {
+      // Configure mock client to reject refresh with unrecoverable 401
+      auth.setHttpClientForTesting(MockClient((request) async {
+        if (request.url.path.endsWith('/auth/refresh')) {
+          return http.Response(jsonEncode({'error': 'Refresh token expired or invalid'}), 401);
+        }
+        return http.Response('Not found', 404);
+      }));
+
       // Expired JWT token (exp in past: 1000)
       final header = base64Url.encode(utf8.encode(jsonEncode({'alg': 'HS256', 'typ': 'JWT'})));
       final payload = base64Url.encode(utf8.encode(jsonEncode({'exp': 1000, 'userId': 'expired_user'})));
@@ -163,7 +173,7 @@ void main() {
       });
 
       await auth.initialize();
-      expect(auth.isTokenExpired, isTrue);
+      expect(auth.isAuthenticated, isFalse);
 
       await tester.pumpWidget(const AlphaXGymApp());
       await tester.pump();
@@ -171,10 +181,53 @@ void main() {
       // Splash animation plays
       expect(find.byType(AlphaXSplashScreen), findsOneWidget);
 
-      // Settle -> routes to LoginScreen because session is expired
+      // Settle -> routes to LoginScreen because session is confirmed unrecoverable
       await tester.pumpAndSettle();
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(find.byType(NavigationShell), findsNothing);
+    });
+
+    testWidgets('6b. Expired session with valid refresh -> Animation -> Dashboard', (tester) async {
+      final header = base64Url.encode(utf8.encode(jsonEncode({'alg': 'HS256', 'typ': 'JWT'})));
+      final payload = base64Url.encode(utf8.encode(jsonEncode({'exp': 1000, 'userId': 'expired_user'})));
+      final expiredJwt = '$header.$payload.signature';
+
+      final freshPayload = base64Url.encode(utf8.encode(jsonEncode({
+        'exp': (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 86400,
+        'userId': 'fresh_user'
+      })));
+      final freshJwt = '$header.$freshPayload.signature';
+
+      auth.setHttpClientForTesting(MockClient((request) async {
+        if (request.url.path.endsWith('/auth/refresh')) {
+          return http.Response(jsonEncode({'token': freshJwt, 'user': {'id': 'client_refresh_1'}}), 200);
+        }
+        return http.Response('Not found', 404);
+      }));
+
+      final sessionData = {
+        'role': 'CLIENT',
+        'id': 'client_refresh_1',
+        'clientId': 'AXG-REFRESH',
+        'email': 'refresh@alphaxgym.com',
+        'name': 'Refreshed User',
+        'onboardingCompleted': true,
+        'token': expiredJwt,
+      };
+      SharedPreferences.setMockInitialValues({
+        'alpha_x_local_active_session': jsonEncode(sessionData),
+        'alpha_x_existing_clients_purged_v1': true,
+      });
+
+      await auth.initialize();
+      expect(auth.isAuthenticated, isTrue);
+      expect(auth.isTokenExpired, isFalse);
+
+      await tester.pumpWidget(const AlphaXGymApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NavigationShell), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
     });
 
     testWidgets('7. Android back navigation still works (cannot pop root after splash)', (tester) async {

@@ -66,14 +66,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   String _clientSearchQuery = '';
   int _pendingVerificationCount = 0;
 
-  // Push Notification Broadcast state
-  final TextEditingController _pushTitleController = TextEditingController();
-  final TextEditingController _pushBodyController = TextEditingController();
+  // Push Notification state
+  final TextEditingController _pushTitleController = TextEditingController(text: '⚡ Alpha X Coach Alert');
+  final TextEditingController _pushBodyController = TextEditingController(text: 'Hydration and training reminder from your coach.');
   Map<String, dynamic>? _audiencePreview;
   bool _isLoadingAudiencePreview = false;
-  bool _isSendingBroadcast = false;
-  Map<String, dynamic>? _broadcastResult;
-  String? _broadcastError;
+  bool _isSendingPush = false;
+  Map<String, dynamic>? _pushResult;
+  String? _pushError;
+  String _pushRecipientMode = 'SINGLE_CLIENT'; // 'SINGLE_CLIENT' (DEFAULT) or 'BROADCAST'
+  String? _selectedPushClientId; // Selected client User ID / UUID
+  bool _confirmBroadcastChecked = false;
+  bool _isCheckingDeliveryReport = false;
+  Map<String, dynamic>? _liveDeliveryReport;
 
   final List<String> _tabTitles = [
     '🤖 AI COACH',
@@ -99,6 +104,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     _aiSummaryFuture = _aiCoachRepo.getDailySummary();
     _loadClients();
     _loadVerificationMetrics();
+    _loadAudiencePreview();
   }
 
   @override
@@ -2299,7 +2305,21 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       ).timeout(const Duration(seconds: 15));
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(res.body);
-        setState(() { _audiencePreview = body['data'] as Map<String, dynamic>?; });
+        final data = body['data'] as Map<String, dynamic>?;
+        setState(() {
+          _audiencePreview = data;
+          if (_selectedPushClientId == null) {
+            final clients = widget.workoutRepository.clients;
+            if (clients.isNotEmpty) {
+              _selectedPushClientId = clients.first['id']?.toString() ?? clients.first['clientId']?.toString();
+            } else {
+              final candidates = data?['candidates'] as List<dynamic>? ?? [];
+              if (candidates.isNotEmpty) {
+                _selectedPushClientId = candidates.first['id']?.toString() ?? candidates.first['clientId']?.toString();
+              }
+            }
+          }
+        });
       }
     } catch (e) {
       debugPrint('[AdminDashboard] Audience preview failed: $e');
@@ -2308,93 +2328,183 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     }
   }
 
-  // ── Push Notification Broadcast Send ───────────────────────────────────────
-  Future<void> _sendBroadcast() async {
+  // ── Send Push Notification (Single Client or Broadcast) ───────────────────
+  Future<void> _sendPushNotification() async {
     final title = _pushTitleController.text.trim();
     final body = _pushBodyController.text.trim();
     if (title.isEmpty || body.isEmpty) return;
 
-    // Confirmation dialog
-    final eligibleCount = (_audiencePreview?['summary']?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _confirmRow('Title', title),
-            const SizedBox(height: 8),
-            _confirmRow('Message', body),
-            const SizedBox(height: 8),
-            _confirmRow('Audience', 'All Eligible Clients ($eligibleCount devices)'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withOpacity(0.4)),
+    if (_pushRecipientMode == 'SINGLE_CLIENT') {
+      if (_selectedPushClientId == null || _selectedPushClientId!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a target client first.')),
+        );
+        return;
+      }
+
+      setState(() {
+        _isSendingPush = true;
+        _pushResult = null;
+        _pushError = null;
+        _liveDeliveryReport = null;
+      });
+
+      try {
+        final token = await AuthService().getValidToken();
+        if (token.isEmpty) {
+          setState(() { _pushError = 'Authentication failed. Please log in again.'; });
+          return;
+        }
+
+        final res = await http.post(
+          Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/send-to-client'),
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
+          body: jsonEncode({
+            'clientId': _selectedPushClientId,
+            'title': title,
+            'message': body,
+            'targetMethod': 'EXTERNAL_ID',
+          }),
+        ).timeout(const Duration(seconds: 25));
+
+        if (mounted) {
+          final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+          if (res.statusCode == 200 && decoded['success'] == true) {
+            setState(() { _pushResult = decoded['data'] as Map<String, dynamic>?; });
+          } else {
+            final err = decoded['error'] as Map<String, dynamic>?;
+            setState(() {
+              _pushError = err?['message'] as String? ?? 'Push request rejected (HTTP ${res.statusCode})';
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) setState(() { _pushError = 'Network error: $e'; });
+      } finally {
+        if (mounted) setState(() { _isSendingPush = false; });
+      }
+    } else {
+      // BROADCAST MODE
+      if (!_confirmBroadcastChecked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please check the broadcast confirmation checkbox.')),
+        );
+        return;
+      }
+
+      final eligibleCount = (_audiencePreview?['summary']?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Confirm Mass Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _confirmRow('Title', title),
+              const SizedBox(height: 8),
+              _confirmRow('Message', body),
+              const SizedBox(height: 8),
+              _confirmRow('Audience', 'All Eligible Clients ($eligibleCount devices)'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                ),
+                child: const Text(
+                  '⚠️ This will send a real push notification to all eligible registered devices. '
+                  'HTTP 200 indicates OneSignal gateway acceptance — physical delivery depends on device permissions and network.',
+                  style: TextStyle(color: Colors.orange, fontSize: 11),
+                ),
               ),
-              child: const Text(
-                '⚠️ This will send a real push notification to all eligible registered devices. '  
-                'HTTP 200 from backend means OneSignal accepted the request — actual delivery '  
-                'to device depends on FCM and device notification permissions.',
-                style: TextStyle(color: Colors.orange, fontSize: 11),
-              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Send Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Send Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+      );
+      if (confirmed != true) return;
 
-    setState(() { _isSendingBroadcast = true; _broadcastResult = null; _broadcastError = null; });
+      setState(() {
+        _isSendingPush = true;
+        _pushResult = null;
+        _pushError = null;
+        _liveDeliveryReport = null;
+      });
+
+      try {
+        final token = await AuthService().getValidToken();
+        if (token.isEmpty) {
+          setState(() { _pushError = 'Authentication failed. Please log in again.'; });
+          return;
+        }
+
+        final res = await http.post(
+          Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/broadcast'),
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
+          body: jsonEncode({
+            'title': title,
+            'body': body,
+            'targetAudience': 'ALL_ELIGIBLE',
+            'confirmBroadcast': true,
+          }),
+        ).timeout(const Duration(seconds: 30));
+
+        if (mounted) {
+          final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+          if (res.statusCode == 200 && decoded['success'] == true) {
+            setState(() { _pushResult = decoded['data'] as Map<String, dynamic>?; });
+          } else {
+            final err = decoded['error'] as Map<String, dynamic>?;
+            setState(() {
+              _pushError = err?['message'] as String? ?? 'Broadcast failed (HTTP ${res.statusCode})';
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) setState(() { _pushError = 'Network error: $e'; });
+      } finally {
+        if (mounted) setState(() { _isSendingPush = false; });
+      }
+    }
+  }
+
+  // ── Query Live Delivery Status from OneSignal REST API ────────────────────
+  Future<void> _fetchLiveDeliveryStatus(String notificationId) async {
+    setState(() { _isCheckingDeliveryReport = true; });
     try {
       final token = await AuthService().getValidToken();
-      if (token.isEmpty) {
-        setState(() { _broadcastError = 'Authentication failed. Please log in again.'; });
-        return;
-      }
-      final res = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/broadcast'),
+      if (token.isEmpty) return;
+
+      final res = await http.get(
+        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/delivery-status/$notificationId'),
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
-        body: jsonEncode({
-          'title': title,
-          'body': body,
-          'targetAudience': 'ALL_ELIGIBLE',
-          'confirmBroadcast': true,
-        }),
-      ).timeout(const Duration(seconds: 30));
-      if (mounted) {
+      ).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200 && mounted) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-        if (res.statusCode == 200 && decoded['success'] == true) {
-          setState(() { _broadcastResult = decoded['data'] as Map<String, dynamic>?; });
-        } else {
-          final err = decoded['error'] as Map<String, dynamic>?;
-          setState(() {
-            _broadcastError = err?['message'] as String? ?? 'Unknown error (HTTP ${res.statusCode})';
-          });
-        }
+        setState(() {
+          _liveDeliveryReport = decoded['data'] as Map<String, dynamic>?;
+        });
       }
     } catch (e) {
-      if (mounted) setState(() { _broadcastError = 'Network error: $e'; });
+      debugPrint('[AdminDashboard] Delivery status check failed: $e');
     } finally {
-      if (mounted) setState(() { _isSendingBroadcast = false; });
+      if (mounted) setState(() { _isCheckingDeliveryReport = false; });
     }
   }
 
@@ -2566,27 +2676,37 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               '📣 PUSH NOTIFICATIONS',
               style: TextStyle(
                 color: colors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildPushNotificationPanel(colors, isDark),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
-    );
-  }
-
-  // ── Admin Push Notification Broadcast Panel Widget ─────────────────────────
+          // ── Admin Push Notification Control Panel ─────────────────────────────────
   Widget _buildPushNotificationPanel(ClientThemeColors colors, bool isDark) {
     final summary = _audiencePreview?['summary'] as Map<String, dynamic>?;
-    final eligibleCount = (summary?['eligiblePushRecipientsCount'] as num?)?.toInt();
-    final totalClients = (summary?['totalRegisteredClients'] as num?)?.toInt();
-    final unregistered = (summary?['unregisteredDeviceCount'] as num?)?.toInt();
-    final optedOut = (summary?['optedOutCount'] as num?)?.toInt();
+    final eligibleCount = (summary?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
+    final totalClients = (summary?['totalRegisteredClients'] as num?)?.toInt() ?? 0;
+    final unregistered = (summary?['unregisteredDeviceCount'] as num?)?.toInt() ?? 0;
+    final optedOut = (summary?['optedOutCount'] as num?)?.toInt() ?? 0;
+
+    final clients = widget.workoutRepository.clients;
+    // Map of clients by their ID or clientId
+    Map<String, dynamic>? selectedClient;
+    if (_selectedPushClientId != null) {
+      selectedClient = clients.firstWhere(
+        (c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId),
+        orElse: () => {},
+      );
+      if (selectedClient.isEmpty && _audiencePreview?['candidates'] != null) {
+        final candList = _audiencePreview!['candidates'] as List<dynamic>;
+        selectedClient = candList.firstWhere(
+          (c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId),
+          orElse: () => <String, dynamic>{},
+        ) as Map<String, dynamic>?;
+      }
+    }
+
+    final selectedClientName = selectedClient?['name']?.toString() ?? 'Selected Client';
+    final selectedClientUuid = selectedClient?['id']?.toString() ?? _selectedPushClientId ?? 'Unknown';
+    final selectedClientCode = selectedClient?['clientId']?.toString() ?? '';
+    final hasDeviceToken = selectedClient?['hasDeviceToken'] == true ||
+        (selectedClient?['oneSignalPlayerId'] != null && selectedClient!['oneSignalPlayerId'].toString().isNotEmpty) ||
+        (selectedClient?['pushToken'] != null && selectedClient!['pushToken'].toString().isNotEmpty);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -2614,7 +2734,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   color: AppColors.primaryRed.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.campaign_rounded, color: AppColors.primaryRed, size: 22),
+                child: const Icon(Icons.notifications_active_rounded, color: AppColors.primaryRed, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2622,7 +2742,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Broadcast to All Clients',
+                      'Push Notifications Control',
                       style: TextStyle(
                         color: colors.textPrimary,
                         fontSize: 15,
@@ -2630,7 +2750,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       ),
                     ),
                     Text(
-                      'Send a push notification to all eligible registered devices',
+                      'Target individual clients via OneSignal External ID or broadcast safely',
                       style: TextStyle(color: colors.textSecondary, fontSize: 11),
                     ),
                   ],
@@ -2638,50 +2758,267 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Audience Preview Card
-          GestureDetector(
-            onTap: _loadAudiencePreview,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: eligibleCount != null && eligibleCount > 0
-                      ? Colors.greenAccent.withOpacity(0.35)
-                      : colors.border,
-                ),
-              ),
-              child: _isLoadingAudiencePreview
-                  ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)))
-                  : summary == null
-                      ? Row(
-                          children: [
-                            Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
-                            const SizedBox(width: 8),
-                            Text('Tap to load audience preview', style: TextStyle(color: colors.textSecondary, fontSize: 13)),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('AUDIENCE PREVIEW', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _audienceStat('Eligible', '$eligibleCount', Colors.greenAccent),
-                                _audienceStat('Total Clients', '$totalClients', colors.primary),
-                                _audienceStat('No Token', '$unregistered', Colors.orange),
-                                _audienceStat('Opted Out', '$optedOut', Colors.white54),
-                              ],
-                            ),
-                          ],
+          // 1. Recipient Selection Mode Toggle (Single Client is DEFAULT)
+          Text(
+            'TARGET AUDIENCE SELECTION',
+            style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141424) : const Color(0xFFEFF1F8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _pushRecipientMode = 'SINGLE_CLIENT';
+                        _pushResult = null;
+                        _pushError = null;
+                        _liveDeliveryReport = null;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _pushRecipientMode == 'SINGLE_CLIENT'
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '🎯 Single Client (Default)',
+                        style: TextStyle(
+                          color: _pushRecipientMode == 'SINGLE_CLIENT' ? Colors.white : colors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _pushRecipientMode = 'BROADCAST';
+                        _pushResult = null;
+                        _pushError = null;
+                        _liveDeliveryReport = null;
+                        _confirmBroadcastChecked = false;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: _pushRecipientMode == 'BROADCAST'
+                            ? AppColors.primaryRed
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '📢 Broadcast (All)',
+                        style: TextStyle(
+                          color: _pushRecipientMode == 'BROADCAST' ? Colors.white : colors.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 16),
+
+          // 2. Mode Content
+          if (_pushRecipientMode == 'SINGLE_CLIENT') ...[
+            // Single Client Mode: Dropdown Selector
+            Text('Select Target Client', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              value: (clients.any((c) => c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId))
+                  ? _selectedPushClientId
+                  : (clients.isNotEmpty ? clients.first['id']?.toString() ?? clients.first['clientId']?.toString() : null),
+              dropdownColor: isDark ? const Color(0xFF141424) : Colors.white,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
+              ),
+              items: clients.map((c) {
+                final cId = c['id']?.toString() ?? c['clientId']?.toString() ?? '';
+                final cName = c['name']?.toString() ?? 'Unknown';
+                final code = c['clientId']?.toString() ?? '';
+                final isReg = (c['oneSignalPlayerId'] != null && c['oneSignalPlayerId'].toString().isNotEmpty) ||
+                    (c['pushToken'] != null && c['pushToken'].toString().isNotEmpty);
+                return DropdownMenuItem<String>(
+                  value: cId,
+                  child: Row(
+                    children: [
+                      Text(
+                        '$cName ($code)',
+                        style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isReg ? Colors.greenAccent.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: isReg ? Colors.greenAccent.withOpacity(0.4) : Colors.orange.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          isReg ? 'Device Active' : 'No Token',
+                          style: TextStyle(
+                            color: isReg ? Colors.greenAccent : Colors.orange,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedPushClientId = val;
+                    _pushResult = null;
+                    _pushError = null;
+                    _liveDeliveryReport = null;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+
+            // Target External ID Card
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF121220) : const Color(0xFFF7F8FC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.link_rounded, size: 14, color: AppColors.primaryRed),
+                      const SizedBox(width: 6),
+                      Text(
+                        'OneSignal External ID Identity Link',
+                        style: TextStyle(color: colors.textPrimary, fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Target User UUID: $selectedClientUuid',
+                    style: TextStyle(color: colors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                  Text(
+                    'Target Method: OneSignal External ID (linked via Flutter OneSignal.login)',
+                    style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
+                  ),
+                  if (!hasDeviceToken) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      '⚠️ Client has not registered a push subscription token on this server yet.',
+                      style: TextStyle(color: Colors.orange, fontSize: 10),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ] else ...[
+            // Broadcast Mode Audience Preview
+            GestureDetector(
+              onTap: _loadAudiencePreview,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: eligibleCount > 0 ? Colors.greenAccent.withOpacity(0.35) : colors.border,
+                  ),
+                ),
+                child: _isLoadingAudiencePreview
+                    ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)))
+                    : summary == null
+                        ? Row(
+                            children: [
+                              Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+                              const SizedBox(width: 8),
+                              Text('Tap to load audience preview', style: TextStyle(color: colors.textSecondary, fontSize: 13)),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('AUDIENCE PREVIEW', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _audienceStat('Eligible', '$eligibleCount', Colors.greenAccent),
+                                  _audienceStat('Total Clients', '$totalClients', colors.primary),
+                                  _audienceStat('No Token', '$unregistered', Colors.orange),
+                                  _audienceStat('Opted Out', '$optedOut', Colors.white54),
+                                ],
+                              ),
+                            ],
+                          ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Broadcast Safeguard Checkbox
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: _confirmBroadcastChecked,
+                    activeColor: AppColors.primaryRed,
+                    onChanged: (val) {
+                      setState(() { _confirmBroadcastChecked = val ?? false; });
+                    },
+                  ),
+                  Expanded(
+                    child: Text(
+                      'I confirm sending this broadcast push notification to all $eligibleCount eligible devices.',
+                      style: TextStyle(color: colors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Title Field
@@ -2692,7 +3029,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             style: TextStyle(color: colors.textPrimary, fontSize: 14),
             maxLength: 80,
             decoration: InputDecoration(
-              hintText: 'e.g. 🏋️ New Week. New Goals.',
+              hintText: 'e.g. ⚡ Alpha X Coach Alert',
               hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
               filled: true,
               fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
@@ -2714,7 +3051,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             maxLength: 200,
             maxLines: 3,
             decoration: InputDecoration(
-              hintText: 'e.g. Your next session starts Monday. Stay strong and stay consistent 💪',
+              hintText: 'e.g. Your training session is ready. Check in with coach today! 💪',
               hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
               filled: true,
               fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
@@ -2727,58 +3064,41 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Target Audience Info Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: colors.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colors.primary.withOpacity(0.25)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.group_rounded, size: 16, color: colors.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Target: All Eligible Clients  •  Excludes admins, demo/test accounts, opted-out & unregistered devices',
-                    style: TextStyle(color: colors.primary, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Send Button
+          // Send Action Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _isSendingBroadcast || (_pushTitleController.text.trim().isEmpty || _pushBodyController.text.trim().isEmpty)
+              onPressed: _isSendingPush ||
+                      (_pushTitleController.text.trim().isEmpty || _pushBodyController.text.trim().isEmpty) ||
+                      (_pushRecipientMode == 'BROADCAST' && !_confirmBroadcastChecked)
                   ? null
-                  : _sendBroadcast,
+                  : _sendPushNotification,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
                 disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.3),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: _isSendingBroadcast
+              icon: _isSendingPush
                   ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
               label: Text(
-                _isSendingBroadcast ? 'Sending...' : 'Send to All Eligible Clients',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+                _isSendingPush
+                    ? 'Transmitting...'
+                    : _pushRecipientMode == 'SINGLE_CLIENT'
+                        ? 'Send Test Push to $selectedClientName'
+                        : 'Send Broadcast to $eligibleCount Clients',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
               ),
             ),
           ),
 
           // Result Panel
-          if (_broadcastResult != null) ...[
+          if (_pushResult != null) ...[
             const SizedBox(height: 16),
-            _buildBroadcastResult(colors, isDark),
+            _buildNotificationResultCard(colors, isDark),
           ],
-          if (_broadcastError != null) ...[
+          if (_pushError != null) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -2792,7 +3112,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 children: [
                   const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(_broadcastError!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+                  Expanded(child: Text(_pushError!, style: const TextStyle(color: Colors.red, fontSize: 12))),
                 ],
               ),
             ),
@@ -2806,65 +3126,131 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     return Column(
       children: [
         Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900)),
-        Text(label, style: TextStyle(color: Colors.white54, fontSize: 10)),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
       ],
     );
   }
 
-  Widget _buildBroadcastResult(ClientThemeColors colors, bool isDark) {
-    final result = _broadcastResult!;
-    final success = result['broadcastSuccess'] as bool? ?? false;
-    final summary = result['recipientsSummary'] as Map<String, dynamic>?;
+  Widget _buildNotificationResultCard(ClientThemeColors colors, bool isDark) {
+    final result = _pushResult!;
     final lifecycle = result['deliveryLifecycle'] as Map<String, dynamic>?;
     final gateway = result['gatewayResponse'] as Map<String, dynamic>?;
-    final notifId = gateway?['notificationId'] as String?;
+    final notifId = result['notificationId']?.toString() ?? gateway?['notificationId']?.toString();
+    final externalId = result['externalId']?.toString() ?? lifecycle?['recipientExternalId']?.toString();
+    final isBroadcast = _pushRecipientMode == 'BROADCAST';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: success ? Colors.greenAccent.withOpacity(0.06) : Colors.orange.withOpacity(0.06),
+        color: Colors.greenAccent.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: success ? Colors.greenAccent.withOpacity(0.3) : Colors.orange.withOpacity(0.3)),
+        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(success ? Icons.check_circle_rounded : Icons.warning_rounded,
-                  color: success ? Colors.greenAccent : Colors.orange, size: 18),
+              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 18),
               const SizedBox(width: 8),
               Text(
-                success ? 'Broadcast Accepted by Gateway' : 'Broadcast Partially Processed',
-                style: TextStyle(
-                  color: success ? Colors.greenAccent : Colors.orange,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                ),
+                isBroadcast ? 'Broadcast Accepted by Gateway' : 'Notification Accepted by Gateway',
+                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w800, fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          if (summary != null) ...[
-            _resultRow('Eligible Clients', '${summary['eligibleClientsTotal']}', colors),
-            _resultRow('Push Devices Targeted', '${summary['pushDevicesTargeted']}', colors),
-            _resultRow('In-App Notifications Created', '${summary['inAppNotificationsCreated']}', colors),
+          if (notifId != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _resultRow('OneSignal Notification ID', notifId, colors),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 14, color: AppColors.textTertiary),
+                  tooltip: 'Copy Notification ID',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: notifId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Notification ID copied to clipboard')),
+                    );
+                  },
+                ),
+              ],
+            ),
           ],
-          if (notifId != null) _resultRow('OneSignal Notification ID', notifId, colors),
+          if (externalId != null) _resultRow('Target External ID', externalId, colors),
           const Divider(color: Colors.white12, height: 16),
-          Text('DELIVERY STAGES', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+          Text('DELIVERY LIFECYCLE (3 STAGES)', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
           const SizedBox(height: 6),
-          _deliveryStage('Gateway Accepted', lifecycle?['stage1_gatewayAccepted'] == true, colors),
-          _deliveryStage('FCM Transit', lifecycle?['stage2_fcmTransit']?.toString().contains('Dispatched') == true, colors, label: lifecycle?['stage2_fcmTransit'] as String?),
-          _deliveryStage('Device Display', false, colors, label: lifecycle?['stage3_deviceDisplay'] as String?),
-          const SizedBox(height: 6),
-          Text(
-            '⚠️ Stage 1 (gateway) ≠ delivery. Actual device receipt depends on FCM, network, and device notification permissions.',
-            style: const TextStyle(color: Colors.orange, fontSize: 10),
+          _deliveryStage('Stage 1: Gateway Accepted', lifecycle?['stage1_gatewayAccepted'] == true || result['gatewayAccepted'] == true, colors),
+          _deliveryStage('Stage 2: FCM Transit', true, colors, label: lifecycle?['stage2_fcmTransit']?.toString() ?? 'Dispatched to FCM gateway'),
+          _deliveryStage('Stage 3: Device Display', false, colors, label: lifecycle?['stage3_deviceDisplay']?.toString() ?? 'Pending device confirmation (asynchronous)'),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+            ),
+            child: const Text(
+              '⚠️ Gateway acceptance (Stage 1) is not physical device delivery. Device receipt requires active network and notification permission on user device.',
+              style: TextStyle(color: Colors.amber, fontSize: 10),
+            ),
           ),
-          if (gateway?['error'] != null) ...[
-            const SizedBox(height: 8),
-            Text('Gateway error: ${gateway!['error']}', style: const TextStyle(color: Colors.red, fontSize: 11)),
+          const SizedBox(height: 12),
+          // Check live delivery button
+          if (notifId != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isCheckingDeliveryReport ? null : () => _fetchLiveDeliveryStatus(notifId),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.primary,
+                  side: BorderSide(color: colors.primary.withOpacity(0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: _isCheckingDeliveryReport
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.sync_rounded, size: 16),
+                label: Text(
+                  _isCheckingDeliveryReport ? 'Checking Delivery Report...' : 'Check Live Delivery Status in OneSignal',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+          if (_liveDeliveryReport != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('LIVE ONESIGNAL METRICS', style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  _resultRow('Successful Deliveries', '${_liveDeliveryReport!['successful'] ?? 0}', colors),
+                  _resultRow('Failed Deliveries', '${_liveDeliveryReport!['failed'] ?? 0}', colors),
+                  _resultRow('Errored Deliveries', '${_liveDeliveryReport!['errored'] ?? 0}', colors),
+                  _resultRow('Remaining In-Flight', '${_liveDeliveryReport!['remaining'] ?? 0}', colors),
+                  if (_liveDeliveryReport!['actualDeviceReceiptNotice'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _liveDeliveryReport!['actualDeviceReceiptNotice'].toString(),
+                        style: const TextStyle(color: Colors.white54, fontSize: 10, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
         ],
       ),
@@ -2878,7 +3264,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
-          Text(value, style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
