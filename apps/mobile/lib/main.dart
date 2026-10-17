@@ -283,6 +283,20 @@ Route<dynamic>? buildAppRoute(
 
   // Verification Screen routes
   if (path == '/pending-verification') {
+    if (auth.isAuthenticated && !auth.isAdmin && auth.isApproved) {
+      if (auth.onboardingCompleted) {
+        return MaterialPageRoute(
+          builder: (_) => NavigationShell(
+            workoutRepository: workoutRepo,
+            activityRepository: activityRepo,
+            macroRepository: macroRepo,
+            weeklyProgressRepository: weeklyProgressRepo,
+          ),
+        );
+      } else {
+        return MaterialPageRoute(builder: (_) => const ClientOnboardingScreen());
+      }
+    }
     return MaterialPageRoute(builder: (_) => const PendingVerificationScreen());
   }
   if (path == '/rejected-account') {
@@ -485,6 +499,16 @@ Route<dynamic>? buildAppRoute(
 
   // Client Fitness Onboarding route
   if (path == '/onboarding') {
+    if (auth.isAuthenticated && !auth.isAdmin && auth.isApproved && auth.onboardingCompleted) {
+      return MaterialPageRoute(
+        builder: (_) => NavigationShell(
+          workoutRepository: workoutRepo,
+          activityRepository: activityRepo,
+          macroRepository: macroRepo,
+          weeklyProgressRepository: weeklyProgressRepo,
+        ),
+      );
+    }
     return MaterialPageRoute(
       builder: (_) => const ClientOnboardingScreen(),
     );

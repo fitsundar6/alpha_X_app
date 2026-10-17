@@ -35,7 +35,7 @@ class ClientOnboardingScreen extends StatefulWidget {
 
 class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
   final _authService = AuthService();
-  late int _currentStep;
+  int _currentStep = 1;
   bool _isSaving = false;
   String? _validationError;
 
@@ -74,6 +74,15 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
     _currentStep = (widget.initialStep > 1)
         ? widget.initialStep
         : (savedStep > 0 && savedStep <= _totalAssessmentSteps ? savedStep : 1);
+
+    if (_authService.onboardingCompleted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        }
+      });
+      return;
+    }
 
     _populateFromExistingProfile();
   }
@@ -338,6 +347,14 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_authService.onboardingCompleted) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primaryRed),
+        ),
+      );
+    }
     return PopScope(
       canPop: _currentStep == 1,
       onPopInvokedWithResult: (didPop, result) {
