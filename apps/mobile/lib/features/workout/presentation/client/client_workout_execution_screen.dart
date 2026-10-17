@@ -43,6 +43,14 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
   // Set of currently expanded exercise indices
   final Set<int> _expandedExerciseIndices = {0};
 
+  // Scroll controller, active exercise index, and keys for swipe navigation
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _exerciseKeys = {};
+  int _activeExerciseIndex = 0;
+  double _listDragAccumulatedX = 0.0;
+
+  GlobalKey _getExerciseKey(int index) => _exerciseKeys.putIfAbsent(index, () => GlobalKey());
+
   // Controllers for weight & reps for each set
   final Map<String, TextEditingController> _weightControllers = {};
   final Map<String, TextEditingController> _repsControllers = {};
@@ -144,6 +152,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     _restTimer?.cancel();
     _autoDismissRestTimer?.cancel();
     _disposeAllControllers();
+    _scrollController.dispose();
     widget.workoutRepository.removeListener(_onRepoChange);
     super.dispose();
   }
@@ -587,8 +596,39 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       _initAllSetControllers();
       final newIndex = widget.workoutRepository.activeSession.exercises.length - 1;
       _expandedExerciseIndices.add(newIndex);
+      _activeExerciseIndex = newIndex;
       setState(() {});
     }
+  }
+
+  // --- Exercise Swipe Navigation ---
+  void _navigateToExercise(int targetIndex) {
+    final session = widget.workoutRepository.activeSession;
+    if (targetIndex < 0 || targetIndex >= session.exercises.length) {
+      // Reached boundary (first or last exercise) - boundary respected
+      HapticFeedback.lightImpact();
+      return;
+    }
+
+    HapticFeedback.selectionClick();
+    setState(() {
+      _activeExerciseIndex = targetIndex;
+      _expandedExerciseIndices.clear();
+      _expandedExerciseIndices.add(targetIndex);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final key = _exerciseKeys[targetIndex];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.05,
+        );
+      }
+    });
   }
 
   // --- Finish Workout Confirmation Dialog ---
@@ -901,52 +941,75 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               // 2. WORKOUT TITLE & PROGRESS HEADER
               _buildWorkoutHeader(session, completedExercises, totalExercises, progressPercent, colors),
 
-              // 3. EXERCISE LIST (Expandable cards)
+              // 3. EXERCISE LIST (Expandable cards with horizontal swipe gesture support)
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                  children: [
-                    ...session.exercises.asMap().entries.map((entry) {
-                      final exIdx = entry.key;
-                      final exercise = entry.value;
-                      final isExpanded = _expandedExerciseIndices.contains(exIdx);
+                child: GestureDetector(
+                  key: const ValueKey('exercise_list_swipe_detector'),
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: (_) {
+                    _listDragAccumulatedX = 0.0;
+                  },
+                  onHorizontalDragUpdate: (details) {
+                    _listDragAccumulatedX += details.delta.dx;
+                  },
+                  onHorizontalDragEnd: (details) {
+                    final velocity = details.primaryVelocity ?? 0;
+                    if (velocity < -150 || _listDragAccumulatedX < -60) {
+                      _navigateToExercise(_activeExerciseIndex + 1);
+                    } else if (velocity > 150 || _listDragAccumulatedX > 60) {
+                      _navigateToExercise(_activeExerciseIndex - 1);
+                    }
+                    _listDragAccumulatedX = 0.0;
+                  },
+                  onHorizontalDragCancel: () {
+                    _listDragAccumulatedX = 0.0;
+                  },
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    children: [
+                      ...session.exercises.asMap().entries.map((entry) {
+                        final exIdx = entry.key;
+                        final exercise = entry.value;
+                        final isExpanded = _expandedExerciseIndices.contains(exIdx);
 
-                      return _buildExerciseCard(
-                        exerciseIndex: exIdx,
-                        exercise: exercise,
-                        isExpanded: isExpanded,
-                        colors: colors,
-                        isDark: isDark,
-                      );
-                    }),
+                        return _buildExerciseCard(
+                          exerciseIndex: exIdx,
+                          exercise: exercise,
+                          isExpanded: isExpanded,
+                          colors: colors,
+                          isDark: isDark,
+                        );
+                      }),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // 4. ADD EXERCISE BUTTON (Controlled by session permissions)
-                    if (session.permissions.allowAddExercise && !session.isLocked)
-                      Container(
-                        width: double.infinity,
-                        height: 52,
-                        margin: const EdgeInsets.only(top: 4, bottom: 20),
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: colors.surfaceCard,
-                            side: BorderSide(color: colors.border, width: 1.2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                          icon: Icon(Icons.add_circle_outline_rounded, size: 20, color: colors.textPrimary),
-                          label: Text(
-                            'Add Exercise',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: colors.textPrimary,
+                      // 4. ADD EXERCISE BUTTON (Controlled by session permissions)
+                      if (session.permissions.allowAddExercise && !session.isLocked)
+                        Container(
+                          width: double.infinity,
+                          height: 52,
+                          margin: const EdgeInsets.only(top: 4, bottom: 20),
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: colors.surfaceCard,
+                              side: BorderSide(color: colors.border, width: 1.2),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
+                            icon: Icon(Icons.add_circle_outline_rounded, size: 20, color: colors.textPrimary),
+                            label: Text(
+                              'Add Exercise',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: colors.textPrimary,
+                              ),
+                            ),
+                            onPressed: _handleAddExercise,
                           ),
-                          onPressed: _handleAddExercise,
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1240,42 +1303,66 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
     final isAllCompleted = exercise.isAllSetsCompleted;
     final exNumber = exerciseIndex + 1;
+    double cardDragAccumulatedX = 0.0;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isExpanded
-              ? (isDark ? colors.primaryRed : const Color(0xFFFF6B00)) // Accent border when expanded
-              : (isAllCompleted ? AppColors.success.withOpacity(0.5) : colors.border),
-          width: isExpanded ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      key: ValueKey('exercise_card_gesture_$exerciseIndex'),
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) {
+        cardDragAccumulatedX = 0.0;
+      },
+      onHorizontalDragUpdate: (details) {
+        cardDragAccumulatedX += details.delta.dx;
+      },
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -150 || cardDragAccumulatedX < -60) {
+          _navigateToExercise(exerciseIndex + 1);
+        } else if (velocity > 150 || cardDragAccumulatedX > 60) {
+          _navigateToExercise(exerciseIndex - 1);
+        }
+        cardDragAccumulatedX = 0.0;
+      },
+      onHorizontalDragCancel: () {
+        cardDragAccumulatedX = 0.0;
+      },
+      child: Container(
+        key: _getExerciseKey(exerciseIndex),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: colors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isExpanded
+                ? (isDark ? colors.primaryRed : const Color(0xFFFF6B00)) // Accent border when expanded
+                : (isAllCompleted ? AppColors.success.withOpacity(0.5) : colors.border),
+            width: isExpanded ? 1.5 : 1.0,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // CARD HEADER ROW
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                if (isExpanded) {
-                  _expandedExerciseIndices.remove(exerciseIndex);
-                } else {
-                  _expandedExerciseIndices.add(exerciseIndex);
-                }
-              });
-            },
-            behavior: HitTestBehavior.opaque,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // CARD HEADER ROW
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  if (isExpanded) {
+                    _expandedExerciseIndices.remove(exerciseIndex);
+                  } else {
+                    _expandedExerciseIndices.add(exerciseIndex);
+                    _activeExerciseIndex = exerciseIndex;
+                  }
+                });
+              },
+              behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
@@ -1523,8 +1610,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
           ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // --- Set Row (Set | Previous | Target | Kg Input | Reps Input | Checkbox) ---
   Widget _buildSetRow({
