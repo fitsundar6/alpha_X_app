@@ -303,7 +303,14 @@ class AuthService extends ChangeNotifier {
           _userEmail = savedEmail;
           _userPhone = session['phone']?.toString();
           _photoUrl = session['photoUrl']?.toString();
-          _onboardingCompleted = session['onboardingCompleted'] == true || session['assessmentCompleted'] == true;
+          final clientOnboardingPref = _clientId.isNotEmpty
+              ? prefs.getBool('${AppConstants.onboardingCompleteKey}_$_clientId')
+              : null;
+          final globalOnboardingPref = prefs.getBool(AppConstants.onboardingCompleteKey);
+          _onboardingCompleted = session['onboardingCompleted'] == true ||
+              session['assessmentCompleted'] == true ||
+              clientOnboardingPref == true ||
+              (clientOnboardingPref == null && globalOnboardingPref == true);
           _onboardingStep = session['onboardingStep'] is int ? session['onboardingStep'] : 0;
           _clientProfile = session['clientProfile'] is Map ? Map<String, dynamic>.from(session['clientProfile']) : {};
           _userStatus = (session['status']?.toString() ?? 'APPROVED').toUpperCase();
@@ -328,8 +335,15 @@ class AuthService extends ChangeNotifier {
               // an unrecoverable auth error (HTTP 401/403). Normal network/offline failures preserve the session!
               await refreshClientToken();
             } else {
-              // Token is currently valid; proactively check verification status in background
-              unawaited(checkVerificationStatus());
+              // If status is PENDING or onboarding is not completed, await checkVerificationStatus()
+              // so that admin approvals and backend assessment state reflect immediately on startup
+              if (_userStatus == 'PENDING' || !_onboardingCompleted) {
+                try {
+                  await checkVerificationStatus().timeout(const Duration(seconds: 4));
+                } catch (_) {}
+              } else {
+                unawaited(checkVerificationStatus());
+              }
             }
           }
 
@@ -471,6 +485,7 @@ class AuthService extends ChangeNotifier {
       'phone': phone,
       'passwordHash': ?passwordHash,
       'photoUrl': photoUrl,
+      'status': _userStatus,
       'onboardingCompleted': onboardingCompleted,
       'assessmentCompleted': onboardingCompleted,
       'onboardingStep': onboardingStep,
@@ -513,17 +528,30 @@ class AuthService extends ChangeNotifier {
     // 1. Authoritative Backend PostgreSQL (Neon DB) Registration
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/register');
-      final res = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': cleanName,
-          'email': cleanEmail,
-          'phone': cleanPhone,
-          'password': password,
-          'confirmPassword': confirmPassword,
-        }),
-      ).timeout(const Duration(seconds: 12));
+      final client = _customHttpClient;
+      final res = client != null
+          ? await client.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'name': cleanName,
+                'email': cleanEmail,
+                'phone': cleanPhone,
+                'password': password,
+                'confirmPassword': confirmPassword,
+              }),
+            )
+          : await http.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'name': cleanName,
+                'email': cleanEmail,
+                'phone': cleanPhone,
+                'password': password,
+                'confirmPassword': confirmPassword,
+              }),
+            ).timeout(const Duration(seconds: 12));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final body = jsonDecode(res.body);
@@ -624,6 +652,11 @@ class AuthService extends ChangeNotifier {
         _userEmail = cleanEmail;
         _userPhone = cleanPhone;
         _token = 'test_client_jwt_token';
+        _userStatus = 'PENDING';
+        _rejectionReason = null;
+        _rejectedAt = null;
+        _approvedAt = null;
+        _suspendedAt = null;
         _onboardingCompleted = false;
         _onboardingStep = 0;
         _clientProfile = {};
@@ -650,8 +683,12 @@ class AuthService extends ChangeNotifier {
         notifyListeners();
         return {
           'clientId': generatedClientId,
+          'status': _userStatus,
+          'isPending': true,
+          'isApproved': false,
           'message': 'Your Alpha X Gym Client ID is $generatedClientId',
           'assessmentCompleted': false,
+          'onboardingCompleted': false,
         };
       }
       final errorDetails = NetworkExceptions.handle(e, requestUrl: '${AppConstants.apiBaseUrl}/auth/register');
@@ -691,16 +728,28 @@ class AuthService extends ChangeNotifier {
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/login');
       final normalizedId = cleanId.contains('@') ? cleanId.toLowerCase() : cleanId;
-      final res = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'clientIdOrEmail': normalizedId,
-          'clientId': normalizedId,
-          'email': normalizedId,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 12));
+      final client = _customHttpClient;
+      final res = client != null
+          ? await client.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'clientIdOrEmail': normalizedId,
+                'clientId': normalizedId,
+                'email': normalizedId,
+                'password': password,
+              }),
+            )
+          : await http.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'clientIdOrEmail': normalizedId,
+                'clientId': normalizedId,
+                'email': normalizedId,
+                'password': password,
+              }),
+            ).timeout(const Duration(seconds: 12));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -729,6 +778,16 @@ class AuthService extends ChangeNotifier {
           _onboardingStep = step;
           _clientProfile = Map<String, dynamic>.from(profile);
           _isAuthenticated = true;
+
+          if (_onboardingCompleted) {
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool(AppConstants.onboardingCompleteKey, true);
+              if (_clientId.isNotEmpty) {
+                await prefs.setBool('${AppConstants.onboardingCompleteKey}_$_clientId', true);
+              }
+            } catch (_) {}
+          }
 
           await _saveClientAccountLocally(
             id: _userId,
@@ -802,7 +861,21 @@ class AuthService extends ChangeNotifier {
           _userPhone = matched['phone']?.toString();
           _photoUrl = matched['photoUrl']?.toString();
           _token = 'test_token';
+          _userStatus = (matched['status']?.toString() ?? 'APPROVED').toUpperCase();
+          _rejectionReason = matched['rejectionReason']?.toString();
+          _rejectedAt = matched['rejectedAt']?.toString();
+          _approvedAt = matched['approvedAt']?.toString();
+          _suspendedAt = matched['suspendedAt']?.toString();
           _onboardingCompleted = matched['onboardingCompleted'] == true || matched['assessmentCompleted'] == true;
+          if (_onboardingCompleted) {
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool(AppConstants.onboardingCompleteKey, true);
+              if (_clientId.isNotEmpty) {
+                await prefs.setBool('${AppConstants.onboardingCompleteKey}_$_clientId', true);
+              }
+            } catch (_) {}
+          }
           _onboardingStep = matched['onboardingStep'] is int ? matched['onboardingStep'] : 0;
           _clientProfile = matched['profile'] is Map ? Map<String, dynamic>.from(matched['profile']) : {};
           _isAuthenticated = true;
@@ -811,6 +884,12 @@ class AuthService extends ChangeNotifier {
           return {
             'role': 'CLIENT',
             'clientId': _clientId,
+            'status': _userStatus,
+            'isApproved': _userStatus == 'APPROVED',
+            'isPending': _userStatus == 'PENDING',
+            'isRejected': _userStatus == 'REJECTED',
+            'isSuspended': _userStatus == 'SUSPENDED',
+            'rejectionReason': _rejectionReason,
             'assessmentCompleted': _onboardingCompleted,
             'onboardingCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
@@ -857,25 +936,49 @@ class AuthService extends ChangeNotifier {
         if (token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
       final bodyStr = jsonEncode(payload);
+      final client = _customHttpClient;
 
-      http.Response res = await http.put(
-        Uri.parse('${AppConstants.apiBaseUrl}/client/me/profile'),
-        headers: headers,
-        body: bodyStr,
+      http.Response res = await (client != null
+          ? client.put(
+              Uri.parse('${AppConstants.apiBaseUrl}/client/me/profile'),
+              headers: headers,
+              body: bodyStr,
+            )
+          : http.put(
+              Uri.parse('${AppConstants.apiBaseUrl}/client/me/profile'),
+              headers: headers,
+              body: bodyStr,
+            )
       ).timeout(const Duration(seconds: 12));
 
-      if (res.statusCode == 404) {
-        res = await http.put(
-          Uri.parse('${AppConstants.apiBaseUrl}/auth/onboarding'),
-          headers: headers,
-          body: bodyStr,
+      if (res.statusCode == 404 || res.statusCode == 403) {
+        res = await (client != null
+            ? client.put(
+                Uri.parse('${AppConstants.apiBaseUrl}/auth/onboarding'),
+                headers: headers,
+                body: bodyStr,
+              )
+            : http.put(
+                Uri.parse('${AppConstants.apiBaseUrl}/auth/onboarding'),
+                headers: headers,
+                body: bodyStr,
+              )
         ).timeout(const Duration(seconds: 12));
       }
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final resBody = jsonDecode(res.body);
-        if (resBody['data'] != null && resBody['data']['profile'] != null) {
-          _clientProfile = Map<String, dynamic>.from(resBody['data']['profile']);
+        final resData = resBody['data'] as Map<String, dynamic>?;
+        if (resData != null) {
+          if (resData['profile'] != null) {
+            _clientProfile = Map<String, dynamic>.from(resData['profile']);
+          }
+          if (resData['onboardingStep'] is int) {
+            _onboardingStep = resData['onboardingStep'];
+          }
+          if (resData['onboardingCompleted'] == true || resData['assessmentCompleted'] == true) {
+            _onboardingCompleted = true;
+          }
         }
         savedToServer = true;
         _hasPendingAssessmentSync = false;
@@ -889,6 +992,8 @@ class AuthService extends ChangeNotifier {
             final resBody = jsonDecode(res.body);
             if (resBody is Map && resBody['error'] is Map && resBody['error']['message'] != null) {
               serverErrorMessage = resBody['error']['message'].toString();
+            } else if (resBody is Map && resBody['message'] != null) {
+              serverErrorMessage = resBody['message'].toString();
             }
           } catch (_) {}
         }
@@ -902,7 +1007,7 @@ class AuthService extends ChangeNotifier {
     // If client is submitting final assessment, server save is MANDATORY.
     if (!savedToServer) {
       if (isComplete == true) {
-        if (_isTestEnvironment) {
+        if (_isTestEnvironment && _customHttpClient == null) {
           _onboardingCompleted = true;
         } else {
           throw Exception(serverErrorMessage ?? 'Unable to save assessment. Please try again.');
@@ -914,6 +1019,16 @@ class AuthService extends ChangeNotifier {
     }
 
     // 3. Persist locally to device storage
+    if (_onboardingCompleted) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(AppConstants.onboardingCompleteKey, true);
+        if (_clientId.isNotEmpty) {
+          await prefs.setBool('${AppConstants.onboardingCompleteKey}_$_clientId', true);
+        }
+      } catch (_) {}
+    }
+
     await _saveClientAccountLocally(
       id: _userId,
       clientId: _clientId,
@@ -1239,18 +1354,33 @@ class AuthService extends ChangeNotifier {
   /// Queries backend /auth/me to refresh current verification status from PostgreSQL database.
   Future<Map<String, dynamic>> checkVerificationStatus() async {
     if (_token.isEmpty || _role == UserRole.admin) {
-      return {'status': _userStatus, 'isApproved': true};
+      return {
+        'status': _userStatus,
+        'isApproved': true,
+        'onboardingCompleted': _onboardingCompleted,
+        'assessmentCompleted': _onboardingCompleted,
+        'onboardingStep': _onboardingStep,
+      };
     }
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/me');
-      final res = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_token',
-        },
-      ).timeout(const Duration(seconds: 8));
+      final client = _customHttpClient;
+      final res = client != null
+          ? await client.get(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_token',
+              },
+            )
+          : await http.get(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_token',
+              },
+            ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
@@ -1262,6 +1392,33 @@ class AuthService extends ChangeNotifier {
           _rejectedAt = data['rejectedAt']?.toString();
           _approvedAt = data['approvedAt']?.toString();
           _suspendedAt = data['suspendedAt']?.toString();
+
+          final profile = data['profile'] is Map ? Map<String, dynamic>.from(data['profile']) : null;
+          final backendOnboardingCompleted = data['onboardingCompleted'] == true ||
+              data['assessmentCompleted'] == true ||
+              profile?['onboardingCompleted'] == true;
+
+          if (backendOnboardingCompleted) {
+            _onboardingCompleted = true;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool(AppConstants.onboardingCompleteKey, true);
+              if (_clientId.isNotEmpty) {
+                await prefs.setBool('${AppConstants.onboardingCompleteKey}_$_clientId', true);
+              }
+            } catch (_) {}
+          }
+
+          if (data['onboardingStep'] is int) {
+            _onboardingStep = data['onboardingStep'];
+          } else if (profile?['onboardingStep'] is int) {
+            _onboardingStep = profile!['onboardingStep'];
+          }
+
+          if (profile != null) {
+            _clientProfile = profile;
+          }
+
           await _saveActiveSession();
           notifyListeners();
           return {
@@ -1271,6 +1428,9 @@ class AuthService extends ChangeNotifier {
             'isRejected': _userStatus == 'REJECTED',
             'isSuspended': _userStatus == 'SUSPENDED',
             'rejectionReason': _rejectionReason,
+            'onboardingCompleted': _onboardingCompleted,
+            'assessmentCompleted': _onboardingCompleted,
+            'onboardingStep': _onboardingStep,
           };
         }
       }
@@ -1285,6 +1445,9 @@ class AuthService extends ChangeNotifier {
       'isRejected': _userStatus == 'REJECTED',
       'isSuspended': _userStatus == 'SUSPENDED',
       'rejectionReason': _rejectionReason,
+      'onboardingCompleted': _onboardingCompleted,
+      'assessmentCompleted': _onboardingCompleted,
+      'onboardingStep': _onboardingStep,
     };
   }
 

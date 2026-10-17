@@ -29,6 +29,19 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    // Check if the user is already approved before starting polling
+    if (_authService.isApproved) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_authService.onboardingCompleted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        } else {
+          _onApprovedTransition();
+        }
+      });
+      return;
+    }
+
     // Auto-poll verification status every 12 seconds in the background
     _pollingTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       _checkStatusSilently();
@@ -47,10 +60,17 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
       final result = await _authService.checkVerificationStatus();
       if (!mounted) return;
       if (result['isApproved'] == true) {
-        _onApprovedTransition();
+        _pollingTimer?.cancel();
+        if (_authService.onboardingCompleted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        } else {
+          _onApprovedTransition();
+        }
       } else if (result['isRejected'] == true) {
+        _pollingTimer?.cancel();
         Navigator.of(context).pushReplacementNamed('/rejected-account');
       } else if (result['isSuspended'] == true) {
+        _pollingTimer?.cancel();
         Navigator.of(context).pushReplacementNamed('/suspended-account');
       }
     } catch (_) {}
@@ -65,16 +85,23 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
       if (!mounted) return;
 
       if (result['isApproved'] == true) {
-        _onApprovedTransition();
+        _pollingTimer?.cancel();
+        if (_authService.onboardingCompleted) {
+          Navigator.of(context).pushReplacementNamed('/dashboard');
+        } else {
+          _onApprovedTransition();
+        }
         return;
       }
 
       if (result['isRejected'] == true) {
+        _pollingTimer?.cancel();
         Navigator.of(context).pushReplacementNamed('/rejected-account');
         return;
       }
 
       if (result['isSuspended'] == true) {
+        _pollingTimer?.cancel();
         Navigator.of(context).pushReplacementNamed('/suspended-account');
         return;
       }
@@ -119,6 +146,7 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
   }
 
   void _onApprovedTransition() {
+    _pollingTimer?.cancel();
     showDialog(
       context: context,
       barrierDismissible: false,

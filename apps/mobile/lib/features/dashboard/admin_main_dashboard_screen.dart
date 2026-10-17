@@ -2309,7 +2309,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         setState(() {
           _audiencePreview = data;
           if (_selectedPushClientId == null) {
-            final clients = widget.workoutRepository.clients;
+            final clients = widget.workoutRepository.clientsList;
             if (clients.isNotEmpty) {
               _selectedPushClientId = clients.first['id']?.toString() ?? clients.first['clientId']?.toString();
             } else {
@@ -2676,7 +2676,21 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               '📣 PUSH NOTIFICATIONS',
               style: TextStyle(
                 color: colors.textSecondary,
-          // ── Admin Push Notification Control Panel ─────────────────────────────────
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildPushNotificationPanel(colors, isDark),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Admin Push Notification Control Panel ─────────────────────────────────
   Widget _buildPushNotificationPanel(ClientThemeColors colors, bool isDark) {
     final summary = _audiencePreview?['summary'] as Map<String, dynamic>?;
     final eligibleCount = (summary?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
@@ -2684,20 +2698,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     final unregistered = (summary?['unregisteredDeviceCount'] as num?)?.toInt() ?? 0;
     final optedOut = (summary?['optedOutCount'] as num?)?.toInt() ?? 0;
 
-    final clients = widget.workoutRepository.clients;
+    final clients = widget.workoutRepository.clientsList;
     // Map of clients by their ID or clientId
     Map<String, dynamic>? selectedClient;
     if (_selectedPushClientId != null) {
-      selectedClient = clients.firstWhere(
-        (c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId),
-        orElse: () => {},
-      );
-      if (selectedClient.isEmpty && _audiencePreview?['candidates'] != null) {
+      final match = clients.where((c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId)).firstOrNull;
+      if (match != null) {
+        selectedClient = Map<String, dynamic>.from(match);
+      } else if (_audiencePreview?['candidates'] != null) {
         final candList = _audiencePreview!['candidates'] as List<dynamic>;
-        selectedClient = candList.firstWhere(
-          (c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId),
-          orElse: () => <String, dynamic>{},
-        ) as Map<String, dynamic>?;
+        final candMatch = candList.where((c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId)).firstOrNull;
+        if (candMatch != null && candMatch is Map<String, dynamic>) {
+          selectedClient = candMatch;
+        }
       }
     }
 
@@ -2932,7 +2945,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Target User UUID: $selectedClientUuid',
+                    'Target User UUID: $selectedClientUuid${selectedClientCode.isNotEmpty ? ' ($selectedClientCode)' : ''}',
                     style: TextStyle(color: colors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                   ),
                   Text(

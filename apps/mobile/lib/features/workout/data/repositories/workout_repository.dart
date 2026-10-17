@@ -128,6 +128,7 @@ class WorkoutRepository extends ChangeNotifier {
   List<WorkoutSession> get adminSessions => List.unmodifiable(_sessions);
   List<WorkoutRecord> get workoutHistory => List.unmodifiable(_workoutHistory);
   List<Map<String, String>> get clientsList => List.unmodifiable(_clients);
+  List<Map<String, String>> get clients => clientsList;
 
   void addCompletedRecordForTesting(WorkoutRecord record) {
     _workoutHistory.removeWhere((r) => r.id == record.id);
