@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -966,122 +967,134 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
         color: colors.surface,
         border: Border(bottom: BorderSide(color: colors.borderSubtle)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left: Timer, Plate, Muscle icons with labels
-          Row(
-            children: [
-              _buildTopIconButton(
-                icon: Icons.timer_outlined,
-                label: 'Timer',
-                colors: colors,
-                onTap: () => _startRestTimer(60, 'Rest Interval'),
-              ),
-              const SizedBox(width: 14),
-              _buildTopIconButton(
-                icon: Icons.calculate_outlined,
-                label: 'Plate',
-                colors: colors,
-                onTap: () => _openPlateCalculator(context, 80.0),
-              ),
-              const SizedBox(width: 14),
-              _buildTopIconButton(
-                icon: Icons.accessibility_new_rounded,
-                label: 'Muscle',
-                colors: colors,
-                onTap: () => _openTargetMuscleSheet(context),
-              ),
-            ],
-          ),
-
-          // Right: Elapsed Timer Pill + Finish Button Pill
-          Row(
-            children: [
-              // Elapsed Timer Pill (tap to pause/resume)
-              GestureDetector(
-                onTap: _togglePauseElapsedTimer,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF222222) : const Color(0xFFEBEBEB),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _isTimerPaused ? AppColors.warning : colors.border,
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final targetWidth = math.max(constraints.maxWidth, 450.0);
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: targetWidth,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Left: Timer, Plate, Muscle icons with labels
+                  Row(
                     children: [
-                      Icon(
-                        _isTimerPaused ? Icons.pause_circle_filled_rounded : Icons.timer_outlined,
-                        size: 13,
-                        color: _isTimerPaused ? AppColors.warning : colors.textPrimary,
+                      _buildTopIconButton(
+                        icon: Icons.timer_outlined,
+                        label: 'Timer',
+                        colors: colors,
+                        onTap: () => _startRestTimer(60, 'Rest Interval'),
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _formatSeconds(_elapsedSeconds),
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color: _isTimerPaused ? AppColors.warning : colors.textPrimary,
-                          letterSpacing: 0.5,
-                        ),
+                      const SizedBox(width: 14),
+                      _buildTopIconButton(
+                        icon: Icons.calculate_outlined,
+                        label: 'Plate',
+                        colors: colors,
+                        onTap: () => _openPlateCalculator(context, 80.0),
+                      ),
+                      const SizedBox(width: 14),
+                      _buildTopIconButton(
+                        icon: Icons.accessibility_new_rounded,
+                        label: 'Muscle',
+                        colors: colors,
+                        onTap: () => _openTargetMuscleSheet(context),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 10),
 
-              // Finish Button Pill or LOCKED badge
-              if (widget.workoutRepository.activeSession.isLocked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.gold),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
+                  // Right: Elapsed Timer Pill + Finish Button Pill
+                  Row(
                     children: [
-                      Icon(Icons.lock_rounded, size: 13, color: AppColors.gold),
-                      SizedBox(width: 5),
-                      Text(
-                        'LOCKED',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                          color: AppColors.gold,
+                      // Elapsed Timer Pill (tap to pause/resume)
+                      GestureDetector(
+                        onTap: _togglePauseElapsedTimer,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF222222) : const Color(0xFFEBEBEB),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: _isTimerPaused ? AppColors.warning : colors.border,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isTimerPaused ? Icons.pause_circle_filled_rounded : Icons.timer_outlined,
+                                size: 13,
+                                color: _isTimerPaused ? AppColors.warning : colors.textPrimary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _formatSeconds(_elapsedSeconds),
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  color: _isTimerPaused ? AppColors.warning : colors.textPrimary,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 10),
+
+                      // Finish Button Pill or LOCKED badge
+                      if (widget.workoutRepository.activeSession.isLocked)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.gold),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.lock_rounded, size: 13, color: AppColors.gold),
+                              SizedBox(width: 5),
+                              Text(
+                                'LOCKED',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  color: AppColors.gold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFFB800), // Vibrant amber/yellow matching reference
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          onPressed: _showFinishConfirmation,
+                          child: const Text(
+                            'Finish',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                )
-              else
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFB800), // Vibrant amber/yellow matching reference
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  ),
-                  onPressed: _showFinishConfirmation,
-                  child: const Text(
-                    'Finish',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1411,87 +1424,99 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
             // CARD BOTTOM ACTIONS: + Add Set | Swap | Rest Timer | ...
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  if (!widget.workoutRepository.activeSession.isLocked) ...[
-                    // + Add Set
-                    GestureDetector(
-                      onTap: () => _handleAddSet(exerciseIndex),
-                      behavior: HitTestBehavior.opaque,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final targetWidth = math.max(constraints.maxWidth, 370.0);
+                  return FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: targetWidth,
                       child: Row(
                         children: [
-                          Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Add Set',
-                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                          if (!widget.workoutRepository.activeSession.isLocked) ...[
+                            // + Add Set
+                            GestureDetector(
+                              onTap: () => _handleAddSet(exerciseIndex),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Add Set',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+
+                            // Swap Exercise
+                            GestureDetector(
+                              onTap: () => _handleSwapExercise(exerciseIndex),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Swap',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                          ],
+
+                          // Rest Timer Pill
+                          GestureDetector(
+                            onTap: () {
+                              final rest = exercise.restSeconds > 0 ? exercise.restSeconds : 60;
+                              _startRestTimer(rest, exercise.exerciseName);
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: colors.surfaceElevated,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: colors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.timer_outlined, size: 14, color: colors.textPrimary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _formatSeconds(exercise.restSeconds > 0 ? exercise.restSeconds : 60),
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 11, color: colors.textPrimary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          // Details / Options ...
+                          IconButton(
+                            icon: Icon(Icons.more_horiz_rounded, size: 18, color: colors.textTertiary),
+                            onPressed: () {
+                              ClientExerciseDetailSheet.show(
+                                context,
+                                workoutExercise: exercise,
+                                workoutRepository: widget.workoutRepository,
+                              );
+                            },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 14),
-
-                    // Swap Exercise
-                    GestureDetector(
-                      onTap: () => _handleSwapExercise(exerciseIndex),
-                      behavior: HitTestBehavior.opaque,
-                      child: Row(
-                        children: [
-                          Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Swap',
-                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                  ],
-
-                  // Rest Timer Pill
-                  GestureDetector(
-                    onTap: () {
-                      final rest = exercise.restSeconds > 0 ? exercise.restSeconds : 60;
-                      _startRestTimer(rest, exercise.exerciseName);
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceElevated,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: colors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.timer_outlined, size: 14, color: colors.textPrimary),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatSeconds(exercise.restSeconds > 0 ? exercise.restSeconds : 60),
-                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 11, color: colors.textPrimary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  // Details / Options ...
-                  IconButton(
-                    icon: Icon(Icons.more_horiz_rounded, size: 18, color: colors.textTertiary),
-                    onPressed: () {
-                      ClientExerciseDetailSheet.show(
-                        context,
-                        workoutExercise: exercise,
-                        workoutRepository: widget.workoutRepository,
-                      );
-                    },
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 6),
