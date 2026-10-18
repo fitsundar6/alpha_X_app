@@ -200,6 +200,35 @@ async function main() {
     if (bSeesA) throw new Error('ISOLATION BREACH: Client B can see Client A\'s workout plan!');
     console.log('✔ ISOLATION PASSED: Client B CANNOT see Client A\'s Workout Plan A');
 
+    // Unassigned Client Verification
+    const unassignedUser = await prisma.user.upsert({
+      where: { email: 'client.sync.unassigned@alphaxgym.com' },
+      update: {},
+      create: {
+        email: 'client.sync.unassigned@alphaxgym.com',
+        name: 'Client Unassigned',
+        passwordHash,
+        role: 'CLIENT',
+        clientProfile: {
+          create: {
+            clientId: 'AXG-SYNC-UNASSIGNED',
+            phone: '9876543299',
+            onboardingCompleted: true,
+          },
+        },
+      },
+      include: { clientProfile: true },
+    });
+    await prisma.workoutAssignment.deleteMany({
+      where: { clientId: unassignedUser.id },
+    });
+    const unassignedWorkouts = await workoutRepository.getClientAuthorizedSessions(unassignedUser.id);
+    console.log(`✔ Unassigned client authorized count: ${unassignedWorkouts.available.length}, recommended: ${unassignedWorkouts.recommended}`);
+    if (unassignedWorkouts.available.length !== 0 || unassignedWorkouts.recommended !== null) {
+      throw new Error('Unassigned client expected available: [] and recommended: null, but got workouts!');
+    }
+    console.log('✔ UNASSIGNED CLIENT VERIFIED: Returns empty available list and null recommended session');
+
     // -------------------------------------------------------------------------
     // STEP 4: DIET PLAN CREATION & ADMIN ASSIGNMENT
     // -------------------------------------------------------------------------

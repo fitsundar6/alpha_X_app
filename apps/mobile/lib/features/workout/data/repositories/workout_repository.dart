@@ -1472,10 +1472,14 @@ class WorkoutRepository extends ChangeNotifier {
 
             for (final fs in fetchedSessions) {
               _assignments.add(WorkoutAssignmentData(
-                id: 'assign_${fs.id}_$currentClientId',
+                id: fs.assignmentId ?? 'assign_${fs.id}_$currentClientId',
                 sessionId: fs.id,
                 clientId: currentClientId,
                 isRecommended: fs.isRecommended,
+                scheduledDate: fs.scheduledDate,
+                isLocked: fs.isLocked,
+                status: fs.status,
+                assignedAt: fs.workoutDate ?? DateTime.now(),
               ));
             }
 
@@ -1486,6 +1490,11 @@ class WorkoutRepository extends ChangeNotifier {
               }
             }
 
+            _saveToLocalStorage();
+            notifyListeners();
+          } else {
+            final currentClientId = AuthService().currentUserId;
+            _assignments.removeWhere((a) => a.clientId == currentClientId);
             _saveToLocalStorage();
             notifyListeners();
           }
@@ -1500,9 +1509,15 @@ class WorkoutRepository extends ChangeNotifier {
   WorkoutSession? getRecommendedSessionForClient(String clientId) {
     if (clientId.isEmpty) return null;
 
+    final matchClientIds = <String>{
+      clientId,
+      AuthService().currentUserId,
+      AuthService().currentClientId,
+    }.where((id) => id.isNotEmpty).toSet();
+
     // 1. Look for client-specific recommended assignment
     final clientRec = _assignments.firstWhere(
-      (a) => a.clientId == clientId && a.isRecommended,
+      (a) => a.clientId != null && matchClientIds.contains(a.clientId) && a.isRecommended,
       orElse: () => WorkoutAssignmentData(id: '', sessionId: ''),
     );
     if (clientRec.sessionId.isNotEmpty) {
@@ -1511,7 +1526,7 @@ class WorkoutRepository extends ChangeNotifier {
     }
 
     // 2. Look for any client-specific assignment (newest assignment)
-    final clientAssignments = _assignments.where((a) => a.clientId == clientId).toList();
+    final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
     if (clientAssignments.isNotEmpty) {
       final lastAssigned = clientAssignments.last;
       final s = _sessions.where((s) => s.id == lastAssigned.sessionId && s.isActive).firstOrNull;
@@ -1526,7 +1541,13 @@ class WorkoutRepository extends ChangeNotifier {
     if (clientId.isEmpty) return [];
 
     final todayIST = IstDateUtils.getTodayISTString();
-    final clientAssignments = _assignments.where((a) => a.clientId == clientId).toList();
+    final matchClientIds = <String>{
+      clientId,
+      AuthService().currentUserId,
+      AuthService().currentClientId,
+    }.where((id) => id.isNotEmpty).toSet();
+
+    final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
     if (clientAssignments.isEmpty) return [];
 
     final List<WorkoutSession> result = [];
@@ -1550,7 +1571,7 @@ class WorkoutRepository extends ChangeNotifier {
 
       // Check if session is completed & locked in history for todayIST
       final todayRecord = _workoutHistory.where((r) {
-        if (r.clientId != clientId) return false;
+        if (!matchClientIds.contains(r.clientId)) return false;
         if (r.sessionId != session.id) return false;
         final recordDate = r.scheduledDate ?? IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt);
         return recordDate == todayIST && r.isCompleted;
