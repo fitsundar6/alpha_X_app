@@ -1283,53 +1283,7 @@ export class WorkoutRepository {
         ],
       });
 
-      // Filter assignments scheduled for TODAY in IST
-      const todayAssignments = clientSpecificAssignments.filter((a) => {
-        if (!a.session || !a.session.isActive) return false;
-        return isSessionScheduledForDate(a.session, a, todayIST);
-      });
-
-      if (todayAssignments.length > 0) {
-        const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string })[] = [];
-        for (const a of todayAssignments) {
-          if (a.session && a.session.isActive) {
-            const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
-
-            // Check if this specific workout session has been completed & locked for TODAY in IST
-            const lockedRecord = await prisma.workoutRecord.findFirst({
-              where: {
-                clientId: resolvedUserId,
-                sessionId: { in: candidateIds },
-                scheduledDate: todayIST,
-                isCompleted: true,
-              },
-            });
-
-            const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
-            const statusForToday = lockedRecord ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS') : (a.status || 'ASSIGNED');
-
-            available.push({
-              ...mapPrismaSessionToStored(a.session),
-              scheduledDate: todayIST,
-              assignmentId: a.id,
-              isLocked: isLockedForToday,
-              status: statusForToday,
-              lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
-              isRecommended: a.isRecommended,
-            });
-          }
-        }
-
-        if (available.length > 0) {
-          const recItem = available.find((s) => s.isRecommended) || available[0];
-          return this.applyActiveSetOverlays({
-            recommended: recItem ? { ...recItem, isRecommended: true } : null,
-            available,
-          }, resolvedUserId);
-        }
-      }
-
-      // 2. If NO client-specific assignments match today, check ALL (global) assignments for TODAY in IST
+      // 2. Query ALL (global) active assignments
       const allAssignments = await prisma.workoutAssignment.findMany({
         where: {
           clientId: null,
@@ -1348,41 +1302,65 @@ export class WorkoutRepository {
         orderBy: { assignedAt: 'desc' },
       });
 
-      const todayAllAssignments = allAssignments.filter((a) => {
-        if (!a.session || !a.session.isActive) return false;
-        return isSessionScheduledForDate(a.session, a, todayIST);
-      });
+      // Combine client-specific and global assignments (client-specific takes precedence)
+      const clientSessionIds = new Set(clientSpecificAssignments.map((a) => a.sessionId));
+      const combinedAssignments = [
+        ...clientSpecificAssignments,
+        ...allAssignments.filter((a) => !clientSessionIds.has(a.sessionId)),
+      ].filter((a) => a.session && a.session.isActive);
 
-      if (todayAllAssignments.length > 0) {
-        const available: (StoredWorkoutSession & { isRecommended: boolean })[] = [];
-        for (const a of todayAllAssignments) {
-          if (a.session && a.session.isActive) {
-            const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
-            const lockedRecord = await prisma.workoutRecord.findFirst({
-              where: {
-                clientId: resolvedUserId,
-                sessionId: { in: candidateIds },
-                scheduledDate: todayIST,
-                isCompleted: true,
-              },
-            });
+      if (combinedAssignments.length > 0) {
+        const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string })[] = [];
 
-            const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
-            const statusForToday = lockedRecord ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS') : (a.status || 'ASSIGNED');
+        for (const a of combinedAssignments) {
+          const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
 
-            available.push({
-              ...mapPrismaSessionToStored(a.session),
+          // Check if this specific workout session has been completed & locked for TODAY in IST
+          const lockedRecord = await prisma.workoutRecord.findFirst({
+            where: {
+              clientId: resolvedUserId,
+              sessionId: { in: candidateIds },
               scheduledDate: todayIST,
-              assignmentId: a.id,
-              isLocked: isLockedForToday,
-              status: statusForToday,
-              lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
-              isRecommended: false,
-            });
-          }
+              isCompleted: true,
+            },
+          });
+
+          const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
+          const statusForToday = lockedRecord
+            ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS')
+            : (a.status || 'ASSIGNED');
+
+          available.push({
+            ...mapPrismaSessionToStored(a.session),
+            scheduledDate: a.scheduledDate || todayIST,
+            assignmentId: a.id,
+            isLocked: isLockedForToday,
+            status: statusForToday,
+            lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
+            isRecommended: a.isRecommended,
+          });
         }
+
+        // Determine recommended session for today:
+        // Priority 1: Session scheduled for TODAY in IST with isRecommended == true
+        // Priority 2: Any session scheduled for TODAY in IST
+        // Priority 3: Client-specific assigned session with isRecommended == true
+        // Priority 4: First client-specific assigned session (most recent)
+        // Priority 5: Global recommended session or first available session
+        let recItem: (typeof available)[0] | undefined;
+        const todayItems = available.filter((item) => {
+          const matchingAssignment = combinedAssignments.find((a) => a.session.id === item.id);
+          return matchingAssignment && isSessionScheduledForDate(matchingAssignment.session, matchingAssignment, todayIST);
+        });
+
+        if (todayItems.length > 0) {
+          recItem = todayItems.find((s) => s.isRecommended) || todayItems[0];
+        } else {
+          recItem = available.find((s) => s.isRecommended) || available[0];
+        }
+
         return this.applyActiveSetOverlays({
-          recommended: null,
+          recommended: recItem ? { ...recItem, isRecommended: true } : null,
           available,
         }, resolvedUserId);
       }
@@ -1395,27 +1373,31 @@ export class WorkoutRepository {
       console.warn('[WorkoutRepository] Failed to query client sessions from DB, falling back to cache:', e?.message);
     }
 
-    // In-memory fallback: strictly prioritize assignments matching today in IST
+    // In-memory fallback: active client-specific and global assignments
     const activeSessions = Array.from(this.sessions.values()).filter((s) => s.isActive);
     const clientSpecificAssignments = Array.from(this.assignments.values())
-      .filter((a) => {
-        if (!a.active || (a.clientId !== resolvedUserId && a.clientId !== clientId)) return false;
-        const session = this.sessions.get(a.sessionId);
-        if (!session || !session.isActive) return false;
-        return isSessionScheduledForDate(session, a, todayIST);
-      })
+      .filter((a) => a.active && (a.clientId === resolvedUserId || a.clientId === clientId))
       .sort((a, b) => {
         if (a.isRecommended && !b.isRecommended) return -1;
         if (!a.isRecommended && b.isRecommended) return 1;
         return b.assignedAt.localeCompare(a.assignedAt);
       });
 
-    if (clientSpecificAssignments.length > 0) {
-      const authorizedSessionIds = new Set(clientSpecificAssignments.map((a) => a.sessionId));
+    const globalAssignments = Array.from(this.assignments.values())
+      .filter((a) => a.active && a.clientId === null);
+
+    const clientSessionIds = new Set(clientSpecificAssignments.map((a) => a.sessionId));
+    const combinedMemAssignments = [
+      ...clientSpecificAssignments,
+      ...globalAssignments.filter((a) => !clientSessionIds.has(a.sessionId)),
+    ];
+
+    if (combinedMemAssignments.length > 0) {
+      const authorizedSessionIds = new Set(combinedMemAssignments.map((a) => a.sessionId));
       const authorizedSessions = activeSessions
         .filter((s) => authorizedSessionIds.has(s.id))
         .map((s) => {
-          const assign = clientSpecificAssignments.find((a) => a.sessionId === s.id);
+          const assign = combinedMemAssignments.find((a) => a.sessionId === s.id);
           const candidateIds = this.resolveSessionCandidateIds(s.id);
           const memLockedRecord = Array.from(this.records.values()).find(
             (r) => candidateIds.includes(r.sessionId || '') &&
@@ -1430,7 +1412,7 @@ export class WorkoutRepository {
 
           return {
             ...s,
-            scheduledDate: todayIST,
+            scheduledDate: assign?.scheduledDate || todayIST,
             assignmentId: assign?.id,
             isLocked: isLockedForToday ?? false,
             status: statusForToday,
@@ -1438,13 +1420,22 @@ export class WorkoutRepository {
           };
         });
 
-      const recAssign = clientSpecificAssignments.find((a) => a.isRecommended) || clientSpecificAssignments[0];
-      const recSession = authorizedSessions.find((s) => s.id === recAssign.sessionId);
+      if (authorizedSessions.length > 0) {
+        const todayMemItems = authorizedSessions.filter((item) => {
+          const assign = combinedMemAssignments.find((a) => a.sessionId === item.id);
+          return assign && isSessionScheduledForDate(item, assign, todayIST);
+        });
 
-      return this.applyActiveSetOverlays({
-        recommended: recSession ? { ...recSession, isRecommended: true } : null,
-        available: authorizedSessions,
-      }, resolvedUserId);
+        const recItem = todayMemItems.find((s) => s.isRecommended) ||
+                        todayMemItems[0] ||
+                        authorizedSessions.find((s) => s.isRecommended) ||
+                        authorizedSessions[0];
+
+        return this.applyActiveSetOverlays({
+          recommended: recItem ? { ...recItem, isRecommended: true } : null,
+          available: authorizedSessions,
+        }, resolvedUserId);
+      }
     }
 
     return {

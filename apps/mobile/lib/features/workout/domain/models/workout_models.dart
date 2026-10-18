@@ -1089,7 +1089,7 @@ class WorkoutSession {
     required this.exercises,
     List<WorkoutSection>? sections,
     WorkoutPlanVersion? planVersion,
-    this.trainingDays = const [1, 3, 5],
+    this.trainingDays = const [1, 2, 3, 4, 5, 6, 7],
     this.weeklySchedule,
     this.permissions = const ClientWorkoutPermissions(),
     this.isCompleted = false,
@@ -1345,7 +1345,7 @@ class WorkoutSession {
       trainingDays: (json['trainingDays'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
-          const [1, 3, 5],
+          const [1, 2, 3, 4, 5, 6, 7],
       weeklySchedule: json['weeklySchedule'] != null
           ? WeeklyWorkoutSchedule.fromJson(json['weeklySchedule'] as Map<String, dynamic>)
           : null,
