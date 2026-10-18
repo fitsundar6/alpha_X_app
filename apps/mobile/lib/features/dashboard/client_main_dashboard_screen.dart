@@ -29,6 +29,8 @@ import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/my
 import 'package:alpha_x_gym/features/notifications/presentation/widgets/notification_preferences_dialog.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
+import 'package:alpha_x_gym/core/services/app_version_service.dart';
+import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/features/profile/client_edit_profile_screen.dart';
 
 
@@ -77,6 +79,13 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     // Automatically synchronize assigned workouts and diet plan from shared database
     widget.workoutRepository.fetchClientWorkouts();
     widget.macroRepository.fetchAssignedDietPlan();
+
+    // Check for application updates on dashboard mount
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppVersionService.instance.promptUpdateIfNeeded(context);
+      }
+    });
   }
 
   @override
@@ -2440,6 +2449,62 @@ class ClientProfileSubScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 12),
+
+              // Application Version & Update Check
+              ListTile(
+                tileColor: colors.surfaceCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: colors.border),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.system_update_rounded, color: colors.primaryRed, size: 20),
+                ),
+                title: Text(
+                  'Alpha X Gym v${AppConstants.appVersion}',
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 13.5),
+                ),
+                subtitle: Text(
+                  'Tap to check for app updates',
+                  style: TextStyle(color: colors.textSecondary, fontSize: 11.5),
+                ),
+                trailing: Icon(Icons.arrow_forward_ios, size: 14, color: colors.textTertiary),
+                onTap: () async {
+                  AlphaXHaptics.selection();
+                  final prompted = await AppVersionService.instance.promptUpdateIfNeeded(
+                    context,
+                    forcePrompt: true,
+                  );
+                  if (!prompted && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'You are on the latest version of Alpha X Gym (v${AppConstants.appVersion})',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: colors.surfaceElevated,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: colors.border),
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
               const SizedBox(height: 12),
 
