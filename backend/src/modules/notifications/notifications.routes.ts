@@ -977,4 +977,76 @@ router.get('/admin/devices', requireAuth, requireAdmin, async (_req: Request, re
   }
 });
 
+/**
+ * GET /admin/diagnostic (Admin only)
+ * Safely inspects the OneSignal configuration health and live gateway connection.
+ * Masked: never exposes the full API key secret.
+ */
+router.get('/admin/diagnostic', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  const rawKey = (process.env.ONESIGNAL_REST_API_KEY || '').trim();
+  const rawAppId = (process.env.ONESIGNAL_APP_ID || '').trim();
+  const cleanKey = oneSignalService.getSanitizedApiKey();
+  const cleanAppId = oneSignalService.getSanitizedAppId();
+
+  let gatewayStatus = 'UNCONFIGURED';
+  let gatewayStatusCode = 0;
+  let gatewayResponse: any = null;
+
+  if (cleanAppId && cleanKey) {
+    try {
+      const checkRes = await fetch(`https://api.onesignal.com/apps/${cleanAppId}`, {
+        headers: {
+          Authorization: `Key ${cleanKey}`,
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+      gatewayStatusCode = checkRes.status;
+      const data = await checkRes.json();
+      if (checkRes.ok && data.name) {
+        gatewayStatus = 'CONNECTED_OK';
+        gatewayResponse = { appName: data.name, playersCount: data.players };
+      } else {
+        // Fallback test with Basic auth header
+        const basicRes = await fetch(`https://api.onesignal.com/apps/${cleanAppId}`, {
+          headers: {
+            Authorization: `Basic ${cleanKey}`,
+          },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (basicRes.ok) {
+          const basicData = await basicRes.json();
+          gatewayStatus = 'CONNECTED_VIA_BASIC';
+          gatewayStatusCode = basicRes.status;
+          gatewayResponse = { appName: basicData.name, playersCount: basicData.players };
+        } else {
+          gatewayStatus = `GATEWAY_REJECTED_HTTP_${gatewayStatusCode}`;
+          gatewayResponse = data;
+        }
+      }
+    } catch (err: any) {
+      gatewayStatus = `GATEWAY_FETCH_ERROR: ${err?.message}`;
+    }
+  }
+
+  sendSuccess(res, {
+    environment: process.env.NODE_ENV || 'development',
+    isVercel: Boolean(process.env.VERCEL || process.env.NOW_REGION),
+    isPreview: oneSignalService.isPreviewEnvironment(),
+    appIdConfigured: Boolean(cleanAppId),
+    appIdMasked: cleanAppId ? `${cleanAppId.slice(0, 8)}...${cleanAppId.slice(-4)}` : 'MISSING',
+    apiKeyConfigured: Boolean(cleanKey),
+    apiKeyLength: cleanKey.length,
+    apiKeyPrefix: cleanKey ? cleanKey.slice(0, 12) : 'NONE',
+    apiKeySuffix: cleanKey ? cleanKey.slice(-4) : 'NONE',
+    rawKeyHadQuotes: rawKey.startsWith('"') || rawKey.startsWith("'"),
+    rawKeyHadAuthPrefix: rawKey.startsWith('Key ') || rawKey.startsWith('Basic ') || rawKey.startsWith('Bearer '),
+    gatewayStatus,
+    gatewayStatusCode,
+    gatewayResponse,
+    guidance: gatewayStatus === 'CONNECTED_OK' || gatewayStatus === 'CONNECTED_VIA_BASIC'
+      ? 'OneSignal REST API authentication is healthy and active.'
+      : 'OneSignal rejected credentials. Verify ONESIGNAL_REST_API_KEY in Vercel project settings matches backend/.env without surrounding quotes.',
+  }, HttpStatus.OK);
+});
+
 export const notificationsRoutes = router;
