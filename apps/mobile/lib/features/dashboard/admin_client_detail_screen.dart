@@ -361,58 +361,128 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Dispatch a real OneSignal push notification to $_clientName ($_displayId) targeted by their linked OneSignal External ID.',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.link, size: 14, color: Colors.greenAccent),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Target: External ID ($_clientId)',
-                      style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontFamily: 'monospace'),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+        content: StatefulBuilder(
+          builder: (ctx, setDialogState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dispatch a real OneSignal push notification to $_clientName ($_displayId) targeted by their linked OneSignal External ID.',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white10),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link, size: 14, color: Colors.greenAccent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Target: External ID ($_clientId)',
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontFamily: 'monospace'),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Fitness Engagement Presets:',
+                  style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _presetChip(
+                      label: '💧 Hydration',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Stay Hydrated 💧';
+                          bodyController.text = 'Stay Hydrated 💧 Time to drink some water!';
+                        });
+                      },
+                    ),
+                    _presetChip(
+                      label: '🥚 Protein Goal',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Protein Check 🥚';
+                          bodyController.text = 'Protein Check 🥚 How close are you to your daily protein goal?';
+                        });
+                      },
+                    ),
+                    _presetChip(
+                      label: '💪 Motivation',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Ready to Grind? 💪';
+                          bodyController.text = "Ready to Grind? 💪 Let's make today's workout count!";
+                        });
+                      },
+                    ),
+                    _presetChip(
+                      label: '🔥 Consistency',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Stay Consistent 🔥';
+                          bodyController.text = 'Consistency beats motivation. Show up for yourself today 🔥';
+                        });
+                      },
+                    ),
+                    _presetChip(
+                      label: '😴 Recovery',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Recovery Matters 😴';
+                          bodyController.text = 'Recovery matters 😴 Get enough rest and come back stronger.';
+                        });
+                      },
+                    ),
+                    _presetChip(
+                      label: '🎯 Goal Check',
+                      onTap: () {
+                        setDialogState(() {
+                          titleController.text = 'Goal Check-In 🎯';
+                          bodyController.text = 'Small steps. Strong habits. Keep moving toward your goal!';
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bodyController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Message Body',
+                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    border: OutlineInputBorder(),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(),
-              ),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: bodyController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Message Body',
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-                border: OutlineInputBorder(),
-              ),
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
@@ -488,6 +558,25 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
         ),
       );
     }
+  }
+
+  Widget _presetChip({required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
   }
 
   Future<void> _showPushResultDialog({
