@@ -36,11 +36,23 @@ export interface BroadcastResult {
 }
 
 export class OneSignalService {
+  public getSanitizedAppId(): string {
+    return (env.ONESIGNAL_APP_ID || '').trim().replace(/^["']|["']$/g, '');
+  }
+
+  public getSanitizedApiKey(): string {
+    let key = (env.ONESIGNAL_REST_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+    if (key.startsWith('Key ')) key = key.slice(4).trim();
+    if (key.startsWith('Basic ')) key = key.slice(6).trim();
+    if (key.startsWith('Bearer ')) key = key.slice(7).trim();
+    return key;
+  }
+
   private get appId(): string {
-    return env.ONESIGNAL_APP_ID || '';
+    return this.getSanitizedAppId();
   }
   private get apiKey(): string {
-    return env.ONESIGNAL_REST_API_KEY || '';
+    return this.getSanitizedApiKey();
   }
 
   /** Check if running inside Vercel Preview deployment where live pushes are forbidden */
@@ -291,7 +303,7 @@ export class OneSignalService {
 
   private async executePost(body: any, targetId: string, title: string): Promise<SendResult> {
     try {
-      const response = await fetch(`${ONESIGNAL_API}/notifications`, {
+      let response = await fetch(`${ONESIGNAL_API}/notifications`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -300,6 +312,24 @@ export class OneSignalService {
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(8000),
       });
+
+      // If OneSignal rejected with 401 using 'Key', retry once using 'Basic' (legacy key compatibility)
+      if (response.status === 401) {
+        try {
+          const retryBasic = await fetch(`${ONESIGNAL_API}/notifications`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Basic ${this.apiKey}`,
+            },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (retryBasic.status !== 401) {
+            response = retryBasic;
+          }
+        } catch (_) {}
+      }
 
       const httpStatus = response.status;
       let result: any;
