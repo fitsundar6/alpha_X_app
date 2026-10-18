@@ -392,19 +392,19 @@ export class NotificationPolicyService {
     }
 
     // 8. DEVICE TARGET CHECK: Check if OneSignal player ID exists
-    if (!user.oneSignalPlayerId || user.oneSignalPlayerId.trim().length === 0 || skipPush) {
-      // In-app notification is recorded as SENT, but push delivery was skipped/no device
+    if (skipPush) {
+      // In-app notification is recorded as SENT, but push delivery was intentionally skipped
       await prisma.notification.update({
         where: { id: reservationId },
         data: {
           sentStatus: 'SENT',
           sentAt: new Date(),
-          errorDetails: skipPush ? 'Push intentionally skipped by request' : 'No OneSignal player ID registered on client account',
+          errorDetails: 'Push intentionally skipped by request',
         },
       });
       return {
         success: true,
-        status: skipPush ? 'SENT' : 'NO_DEVICE',
+        status: 'SENT',
         notificationId: reservationId,
       };
     }
@@ -423,11 +423,20 @@ export class NotificationPolicyService {
         },
       });
 
-      const sendResult = await oneSignalService.sendToPlayer(user.oneSignalPlayerId, {
-        title,
-        body: message,
-        data: { ...data, notificationId: reservationId, dedupKey, targetUserId: user.id },
-      });
+      const hasPlayerToken = Boolean(user.oneSignalPlayerId && user.oneSignalPlayerId.trim().length > 0);
+      const sendResult = hasPlayerToken
+        ? await oneSignalService.sendToPlayer(user.oneSignalPlayerId!, {
+            title,
+            body: message,
+            channelId: 'alpha_x_alerts',
+            data: { ...data, notificationId: reservationId, dedupKey, targetUserId: user.id },
+          })
+        : await oneSignalService.sendToUser(user.id, {
+            title,
+            body: message,
+            channelId: 'alpha_x_alerts',
+            data: { ...data, notificationId: reservationId, dedupKey, targetUserId: user.id },
+          });
 
       if (sendResult.success) {
         const oneSignalId = sendResult.response?.id || null;
@@ -589,11 +598,20 @@ export class NotificationPolicyService {
 
       // Dispatch to OneSignal
       try {
-        const sendResult = await oneSignalService.sendToPlayer(user.oneSignalPlayerId, {
-          title: notif.title,
-          body: notif.message,
-          data: { notificationId: notif.id, dedupKey: notif.dedupKey || '', targetUserId: user.id },
-        });
+        const hasPlayerToken = Boolean(user.oneSignalPlayerId && user.oneSignalPlayerId.trim().length > 0);
+        const sendResult = hasPlayerToken
+          ? await oneSignalService.sendToPlayer(user.oneSignalPlayerId!, {
+              title: notif.title,
+              body: notif.message,
+              channelId: 'alpha_x_alerts',
+              data: { notificationId: notif.id, dedupKey: notif.dedupKey || '', targetUserId: user.id },
+            })
+          : await oneSignalService.sendToUser(user.id, {
+              title: notif.title,
+              body: notif.message,
+              channelId: 'alpha_x_alerts',
+              data: { notificationId: notif.id, dedupKey: notif.dedupKey || '', targetUserId: user.id },
+            });
 
         if (sendResult.success) {
           await prisma.notification.update({
