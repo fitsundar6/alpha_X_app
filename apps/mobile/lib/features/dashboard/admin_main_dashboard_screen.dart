@@ -31,6 +31,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_client_detail_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_screen.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/food_database.dart';
+import 'package:alpha_x_gym/core/services/app_version_service.dart';
+import 'package:alpha_x_gym/core/widgets/admin_version_config_sheet.dart';
 
 class AdminMainDashboardScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
@@ -105,6 +107,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     _loadClients();
     _loadVerificationMetrics();
     _loadAudiencePreview();
+
+    // Check for application updates on admin dashboard startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppVersionService.instance.promptUpdateIfNeeded(context);
+      }
+    });
   }
 
   @override
@@ -2668,6 +2677,87 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               onTap: () async {
                 await ServerConfigDialog.show(context);
                 if (mounted) setState(() {});
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // ── Application Version & Update Management ──────────────────────
+            Text(
+              'APPLICATION VERSION & UPDATES',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: colors.surfaceCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.border),
+              ),
+              leading: Icon(Icons.system_update_rounded, color: colors.primary),
+              title: Text(
+                'Installed App Version: v${AppConstants.appVersion}',
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                'Tap to check if a new version release is available',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.arrow_forward_ios, size: 14, color: colors.textSecondary),
+              onTap: () async {
+                AlphaXHaptics.selection();
+                final prompted = await AppVersionService.instance.promptUpdateIfNeeded(
+                  context,
+                  forcePrompt: true,
+                );
+                if (!prompted && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'You are running the latest version of Alpha X Gym (v${AppConstants.appVersion})',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: colors.surfaceElevated,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(color: colors.border),
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: colors.surfaceCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: colors.border),
+              ),
+              leading: Icon(Icons.published_with_changes_rounded, color: AppColors.primaryGold),
+              title: Text(
+                'Manage App Releases & Force Updates',
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                'Set minimum required version, release notes, and toggle mandatory update locks',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.tune_rounded, size: 18, color: colors.textSecondary),
+              onTap: () async {
+                AlphaXHaptics.selection();
+                await AdminVersionConfigSheet.show(context);
               },
             ),
             const SizedBox(height: 28),

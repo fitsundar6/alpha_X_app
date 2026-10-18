@@ -60,6 +60,7 @@ import { prisma } from './config/prisma';
 import { foodPhotoCleanupService } from './modules/food/food_photo_cleanup.service';
 import cronRoutes from './modules/notifications/cron.routes';
 import { automationService } from './modules/automation/automation.service';
+import { appVersionRoutes } from './modules/app_version/app_version.routes';
 import cron from 'node-cron';
 
 const app = express();
@@ -278,6 +279,10 @@ app.use('/api/telemetry', telemetryRoutes);
 // Automation & Engagement Engine Routes
 app.use('/api/v1/automation', automationRoutes);
 app.use('/api/automation', automationRoutes);
+
+// App Version & Update Management Routes
+app.use('/api/v1/app', appVersionRoutes);
+app.use('/api/app', appVersionRoutes);
 
 // Diagnostic error simulation route (strictly enabled only in development/test environments)
 if (env.NODE_ENV !== 'production') {

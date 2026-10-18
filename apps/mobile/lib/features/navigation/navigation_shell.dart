@@ -4,6 +4,7 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/progress/data/repositories/weekly_progress_repository.dart';
+import 'package:alpha_x_gym/core/services/app_version_service.dart';
 import 'role_router.dart';
 
 class NavigationShell extends StatefulWidget {
@@ -38,6 +39,13 @@ class _NavigationShellState extends State<NavigationShell> {
     _activityRepository = widget.activityRepository ?? ActivityRepository();
     _macroRepository = widget.macroRepository ?? MacroRepository();
     _weeklyProgressRepository = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
+
+    // Check for application updates on startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppVersionService.instance.promptUpdateIfNeeded(context);
+      }
+    });
   }
 
   @override
