@@ -54,6 +54,7 @@ export interface DispatchNotificationParams {
   metadata?: Record<string, any>;
   skipPush?: boolean;
   ignoreQuietHours?: boolean;
+  ignoreRateLimit?: boolean;
 }
 
 export interface DispatchResult {
@@ -222,6 +223,8 @@ export class NotificationPolicyService {
       data = {},
       metadata = {},
       skipPush = false,
+      ignoreQuietHours = false,
+      ignoreRateLimit = false,
     } = params;
 
     // 1. Check if this dedupKey already exists
@@ -373,7 +376,8 @@ export class NotificationPolicyService {
     }
 
     // 7. POLICY CHECK: Rolling 24-Hour Push Cap (Max 2 for PROACTIVE tier)
-    if (tier === 'PROACTIVE') {
+    // Admin test dispatches and explicit ignoreRateLimit bypass the rolling cap
+    if (tier === 'PROACTIVE' && !ignoreRateLimit && source !== 'ADMIN') {
       const recentCount = await this.getRolling24HourPushCount(clientProfileId);
       if (recentCount >= 2) {
         await prisma.notification.update({

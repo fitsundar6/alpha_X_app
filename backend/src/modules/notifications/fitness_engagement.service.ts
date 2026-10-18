@@ -437,6 +437,7 @@ export class FitnessEngagementService {
       preferenceKey,
       dedupKey,
       ignoreQuietHours: force, // Force option allows admin to test even during quiet hours
+      ignoreRateLimit: force,
       data: {
         type: 'fitness_engagement',
         category,
