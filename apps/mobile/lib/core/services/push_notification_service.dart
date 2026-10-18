@@ -216,8 +216,8 @@ class PushNotificationService {
           return;
         }
 
-        debugPrint('[OneSignal] 📩 Foreground notification: "$title"');
-        event.notification.display();
+        debugPrint('[OneSignal] 📩 Foreground notification received: "$title" — allowing SDK to display with heads-up banner & sound');
+        // Do not call event.preventDefault(); allow the OneSignal SDK to display the notification natively.
         AppAutoRefreshService.instance.triggerImmediateSync(reason: 'OneSignal Push Received');
       });
 

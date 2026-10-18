@@ -80,6 +80,22 @@ export class OneSignalService {
     return Boolean(this.appId && this.apiKey);
   }
 
+  /**
+   * Assigns Android notification channel to payload.
+   * If channel is a 36-character UUID (created in OneSignal Dashboard), uses `android_channel_id`.
+   * If channel is a native string ID (created locally via Android NotificationChannel in MainActivity.kt,
+   * e.g., 'alpha_x_alerts'), uses `existing_android_channel_id` per OneSignal REST API specifications.
+   */
+  private applyAndroidChannel(basePayload: Record<string, any>, channelId?: string): void {
+    const channel = channelId || 'alpha_x_alerts';
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(channel);
+    if (isUuid) {
+      basePayload.android_channel_id = channel;
+    } else {
+      basePayload.existing_android_channel_id = channel;
+    }
+  }
+
   /** Send a push notification to one specific device by OneSignal player ID or subscription ID */
   async sendToPlayer(playerId: string, payload: NotificationPayload): Promise<SendResult> {
     if (this.isPreviewEnvironment()) {
@@ -127,9 +143,7 @@ export class OneSignalService {
       ios_sound: 'default',
       priority: 10,
     };
-    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
-      basePayload.android_channel_id = payload.channelId;
-    }
+    this.applyAndroidChannel(basePayload, payload.channelId);
 
     // Try sending with include_subscription_ids (OneSignal v5 standard)
     const resultV5 = await this.executePost({
@@ -203,9 +217,7 @@ export class OneSignalService {
       ios_sound: 'default',
       priority: 10,
     };
-    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
-      basePayload.android_channel_id = payload.channelId;
-    }
+    this.applyAndroidChannel(basePayload, payload.channelId);
 
     // First attempt using include_subscription_ids (OneSignal v5 standard)
     const resultV5 = await this.executePost({
@@ -279,9 +291,7 @@ export class OneSignalService {
       ios_sound: 'default',
       priority: 10,
     };
-    if (payload.channelId && payload.channelId !== 'alpha_x_alerts') {
-      basePayload.android_channel_id = payload.channelId;
-    }
+    this.applyAndroidChannel(basePayload, payload.channelId);
 
     // Modern OneSignal v5 targeting by external ID alias
     const bodyV5 = {
@@ -349,11 +359,14 @@ export class OneSignalService {
       }
 
       if (!response.ok || result.errors) {
-        // Automatic recovery: If OneSignal rejects because android_channel_id does not exist, strip and retry immediately
-        if (body.android_channel_id && (JSON.stringify(result.errors || {}).includes('android_channel_id') || httpStatus === 400)) {
-          console.warn(`[ONESIGNAL] Channel "${body.android_channel_id}" not found in OneSignal dashboard. Retrying without android_channel_id...`);
+        // Automatic recovery: If OneSignal rejects specifically because channel does not exist, strip and retry immediately
+        const errorStr = JSON.stringify(result.errors || {});
+        const hasChannelField = body.android_channel_id || body.existing_android_channel_id;
+        if (hasChannelField && (errorStr.includes('channel') || (httpStatus === 400 && errorStr.toLowerCase().includes('channel')))) {
+          console.warn(`[ONESIGNAL] Channel rejected by OneSignal (${errorStr}). Retrying without channel parameter...`);
           const fallbackBody = { ...body };
           delete fallbackBody.android_channel_id;
+          delete fallbackBody.existing_android_channel_id;
           return this.executePost(fallbackBody, targetId, title);
         }
 
