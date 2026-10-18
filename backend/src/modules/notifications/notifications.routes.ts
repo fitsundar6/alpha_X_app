@@ -18,6 +18,7 @@ import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { aiNotificationEngine } from './ai_notifications.service';
 import { oneSignalService } from './onesignal.service';
+import { fitnessEngagementService, EngagementCategory } from './fitness_engagement.service';
 
 const router = Router();
 
@@ -1047,6 +1048,103 @@ router.get('/admin/diagnostic', requireAuth, requireAdmin, async (_req: Request,
       ? 'OneSignal REST API authentication is healthy and active.'
       : 'OneSignal rejected credentials. Verify ONESIGNAL_REST_API_KEY in Vercel project settings matches backend/.env without surrounding quotes.',
   }, HttpStatus.OK);
+});
+
+// =========================================================================
+// AUTOMATED FITNESS ENGAGEMENT NOTIFICATION ADMIN CONTROLS
+// =========================================================================
+
+/**
+ * GET /admin/fitness-engagement/settings
+ * Admin retrieves automated fitness engagement configuration and schedules.
+ */
+router.get('/admin/fitness-engagement/settings', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const settings = await fitnessEngagementService.getSettings();
+    sendSuccess(res, settings, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'FETCH_SETTINGS_FAILED', err?.message || 'Failed to fetch fitness engagement settings', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * PATCH /admin/fitness-engagement/settings
+ * Admin updates automated fitness engagement configuration, categories, and schedules.
+ */
+router.patch('/admin/fitness-engagement/settings', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const adminId = (req as any).user?.id || 'master-admin';
+  try {
+    const updated = await fitnessEngagementService.updateSettings(req.body, adminId);
+    sendSuccess(res, updated, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'UPDATE_SETTINGS_FAILED', err?.message || 'Failed to update fitness engagement settings', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/fitness-engagement/test
+ * Admin sends a test engagement notification to ONE explicitly selected test client.
+ * Strictly prevents broadcast to all clients.
+ */
+router.post('/admin/fitness-engagement/test', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const adminId = (req as any).user?.id || 'master-admin';
+  const { clientId, category, force = false } = req.body;
+
+  if (!clientId || typeof clientId !== 'string' || clientId.trim().length === 0) {
+    sendError(res, 'VALIDATION_ERROR', 'clientId (Client UUID, AXG-ID, or email) is required', HttpStatus.BAD_REQUEST);
+    return;
+  }
+
+  const validCategories: EngagementCategory[] = [
+    'HYDRATION',
+    'PROTEIN_GOAL',
+    'WORKOUT_MOTIVATION',
+    'CONSISTENCY',
+    'RECOVERY',
+    'GOAL_CHECK_IN',
+  ];
+
+  if (!category || !validCategories.includes(category as EngagementCategory)) {
+    sendError(
+      res,
+      'VALIDATION_ERROR',
+      `Valid category is required. Options: ${validCategories.join(', ')}`,
+      HttpStatus.BAD_REQUEST
+    );
+    return;
+  }
+
+  try {
+    const result = await fitnessEngagementService.sendTestEngagementNotification(
+      adminId,
+      clientId.trim(),
+      category as EngagementCategory,
+      Boolean(force)
+    );
+
+    if (!result.success && result.status === 'CLIENT_NOT_FOUND') {
+      sendError(res, 'NOT_FOUND', result.error || 'Client not found', HttpStatus.NOT_FOUND);
+      return;
+    }
+
+    sendSuccess(res, result, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'TEST_DISPATCH_FAILED', err?.message || 'Failed to dispatch test notification', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+/**
+ * POST /admin/fitness-engagement/run-sweep
+ * Admin manually triggers a fitness engagement sweep for a specific category or all.
+ */
+router.post('/admin/fitness-engagement/run-sweep', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const { category, dryRun = false } = req.body;
+  try {
+    const result = await fitnessEngagementService.runEngagementSweep(category as EngagementCategory, Boolean(dryRun));
+    sendSuccess(res, result, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'SWEEP_FAILED', err?.message || 'Engagement sweep failed', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
 });
 
 export const notificationsRoutes = router;

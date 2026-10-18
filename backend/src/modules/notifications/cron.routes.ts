@@ -27,6 +27,7 @@ import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { aiNotificationEngine } from './ai_notifications.service';
 import { notificationPolicyService } from './notification_policy.service';
 import { automationService } from '../automation/automation.service';
+import { fitnessEngagementService } from './fitness_engagement.service';
 
 const router = Router();
 
@@ -273,8 +274,9 @@ router.get('/daily-automation', verifyCronSecret, async (req: Request, res: Resp
 // Preserves distinct execution times and never runs all three together.
 router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) => {
   const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+  const job = (req.query.job as string) || 'auto';
 
-  if (isDryRun) {
+  if (isDryRun && job === 'auto') {
     const diagnostics = await aiNotificationEngine.runDryRunDiagnostics('DISPATCHER');
     sendSuccess(res, diagnostics, HttpStatus.OK);
     return;
@@ -283,8 +285,6 @@ router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) 
   if (!enforcePreviewSafety(res, isDryRun)) {
     return;
   }
-
-  const job = (req.query.job as string) || 'auto';
 
   try {
     if (job === 'morning') {
@@ -308,6 +308,13 @@ router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) 
     if (job === 'evening') {
       const result = await aiNotificationEngine.runEveningCheckInSweep();
       sendSuccess(res, { executed: 'evening', result }, HttpStatus.OK);
+      return;
+    }
+
+    if (job === 'engagement') {
+      const category = req.query.category as any;
+      const result = await fitnessEngagementService.runEngagementSweep(category, isDryRun);
+      sendSuccess(res, { executed: 'engagement', result }, HttpStatus.OK);
       return;
     }
 
@@ -346,9 +353,37 @@ router.get('/dispatcher', verifyCronSecret, async (req: Request, res: Response) 
       }
     }
 
-    sendError(res, 'BAD_REQUEST', `Unknown job "${job}". Valid options: morning, missed, evening, auto`, HttpStatus.BAD_REQUEST);
+    sendError(res, 'BAD_REQUEST', `Unknown job "${job}". Valid options: morning, missed, evening, automation, engagement, auto`, HttpStatus.BAD_REQUEST);
   } catch (err: any) {
     sendError(res, 'DISPATCH_ERROR', err?.message || 'Dispatcher failed', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+});
+
+// ── GET /fitness-engagement-sweep ─────────────────────────────────────────────
+// Automated Fitness Engagement Sweep (Hydration, Protein, Workout Motivation, Consistency, Recovery, Goal Check-in)
+router.get('/fitness-engagement-sweep', verifyCronSecret, async (req: Request, res: Response) => {
+  const isDryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+  const category = req.query.category as any;
+
+  if (!enforcePreviewSafety(res, isDryRun)) {
+    return;
+  }
+
+  try {
+    console.log(`[CRON_ROUTE] Authenticated trigger: Fitness Engagement Sweep (Category: ${category || 'ALL_SCHEDULED'})`);
+    const result = await fitnessEngagementService.runEngagementSweep(category, isDryRun);
+    sendSuccess(
+      res,
+      {
+        sweep: 'FITNESS_ENGAGEMENT',
+        timezone: 'Asia/Kolkata',
+        result,
+      },
+      HttpStatus.OK
+    );
+  } catch (err: any) {
+    console.error('[CRON_ROUTE] Fitness engagement sweep error:', err?.message);
+    sendError(res, 'CRON_EXECUTION_FAILED', err?.message || 'Fitness engagement sweep failed', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 });
 
