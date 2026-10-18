@@ -37,11 +37,20 @@ export interface BroadcastResult {
 
 export class OneSignalService {
   public getSanitizedAppId(): string {
-    return (env.ONESIGNAL_APP_ID || '').trim().replace(/^["']|["']$/g, '');
+    let appId = (env.ONESIGNAL_APP_ID || '').trim();
+    if (appId.includes('=')) {
+      appId = appId.slice(appId.indexOf('=') + 1).trim();
+    }
+    return appId.replace(/^["']|["']$/g, '').trim();
   }
 
   public getSanitizedApiKey(): string {
-    let key = (env.ONESIGNAL_REST_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+    let key = (env.ONESIGNAL_REST_API_KEY || '').trim();
+    // If user pasted the entire "ONESIGNAL_REST_API_KEY=os_v2_app_..." line into Vercel
+    if (key.includes('=')) {
+      key = key.slice(key.indexOf('=') + 1).trim();
+    }
+    key = key.replace(/^["']|["']$/g, '').trim();
     if (key.startsWith('Key ')) key = key.slice(4).trim();
     if (key.startsWith('Basic ')) key = key.slice(6).trim();
     if (key.startsWith('Bearer ')) key = key.slice(7).trim();
