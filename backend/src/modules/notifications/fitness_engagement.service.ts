@@ -466,7 +466,8 @@ export class FitnessEngagementService {
    */
   async runEngagementSweep(
     specificCategory?: EngagementCategory,
-    dryRun: boolean = false
+    dryRun: boolean = false,
+    force: boolean = false
   ): Promise<EngagementSweepResult> {
     const settings = await this.getSettings();
 
@@ -607,6 +608,7 @@ export class FitnessEngagementService {
 
         const { type, preferenceKey } = this.mapCategoryToPolicyFields(category);
 
+        const dedupKeyToUse = force ? `${dedupKey}:${Date.now()}` : dedupKey;
         const dispatchRes = await notificationPolicyService.dispatch({
           userId: client.id,
           clientProfileId: profile.id,
@@ -616,11 +618,13 @@ export class FitnessEngagementService {
           type,
           category,
           priority: 'NORMAL',
-          source: 'AI_COACH',
+          source: force ? 'ADMIN' : 'AI_COACH',
           triggerRule: `ENGAGEMENT_${category}`,
           tier: 'PROACTIVE',
           preferenceKey,
-          dedupKey,
+          dedupKey: dedupKeyToUse,
+          ignoreQuietHours: force,
+          ignoreRateLimit: force,
           data: {
             type: 'fitness_engagement',
             category,
@@ -628,6 +632,12 @@ export class FitnessEngagementService {
             date: dateStr,
           },
         });
+
+        console.log(
+          `[ENGAGEMENT LIVE] Dispatch ${category} to ${client.name} (${profile.clientId}) -> ${dispatchRes.status} ${
+            dispatchRes.status === 'SENT' ? '✅' : '⚠️'
+          }`
+        );
 
         if (dispatchRes.status === 'SENT') {
           totalSent++;

@@ -70,7 +70,7 @@ async function main() {
   console.log(`  Category:    ${selectedCategory || 'ALL_CONFIGURED_FOR_CURRENT_HOUR'}`);
   console.log('======================================================================\n');
 
-  const result = await fitnessEngagementService.runEngagementSweep(selectedCategory, isDryRun);
+  const result = await fitnessEngagementService.runEngagementSweep(selectedCategory, isDryRun, isForce);
 
   console.log('\n----------------------------------------------------------------------');
   console.log('SWEEP EXECUTION SUMMARY');
