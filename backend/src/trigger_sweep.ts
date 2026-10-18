@@ -37,9 +37,10 @@ async function main() {
     console.log('======================================================================\n');
 
     const result = await fitnessEngagementService.sendTestEngagementNotification(
-      category,
+      'CLI_ADMIN',
       targetClient,
-      isForce || true // default force true for single direct test push so admin can test any hour
+      category,
+      true // force: true allows admin test push anytime, even during quiet hours
     );
 
     console.log('\n----------------------------------------------------------------------');
