@@ -1,5 +1,42 @@
 import { prisma } from '../../config/prisma';
-import { getTodayISTDateString, toISTDateString, isSessionScheduledForDate } from '../../utils/istDate';
+import {
+  getTodayISTDateString,
+  toISTDateString,
+  isSessionScheduledForDate,
+  getTodayISTWeekday,
+  getISTDateForWeekday,
+  getWeekdayFromDayName,
+  parseWeekdaysFromScheduleString,
+  getWeekdayFromISTDateString,
+} from '../../utils/istDate';
+
+export interface StoredWorkoutSplitDay {
+  id?: string;
+  sessionId?: string;
+  dayOfWeek: string;
+  dayIndex: number;
+  name: string;
+  workoutType: string;
+  targetMuscleGroup: string;
+  estimatedDurationMinutes: number;
+  isRestDay: boolean;
+  notes?: string | null;
+  exercises: StoredSessionExercise[];
+}
+
+export interface StoredWorkoutSplitPlan {
+  id: string;
+  title: string;
+  splitType: string;
+  description?: string | null;
+  frequencyPerWeek: number;
+  clientId?: string | null;
+  clientIds?: string[];
+  clientName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  days: StoredWorkoutSplitDay[];
+}
 
 export interface StoredSessionExercise {
   id: string;
@@ -124,6 +161,30 @@ export interface StoredWorkoutRecord {
   exerciseRecords: StoredWorkoutExerciseRecord[];
 }
 
+function toISO(val: any, fallback?: string): string {
+  if (!val) return fallback || '';
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') return val;
+  try {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? (fallback || '') : d.toISOString();
+  } catch {
+    return fallback || '';
+  }
+}
+
+function toISONullable(val: any): string | null {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') return val;
+  try {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 function mapPrismaSessionToStored(s: any): StoredWorkoutSession {
   return {
     id: s.id,
@@ -134,16 +195,16 @@ function mapPrismaSessionToStored(s: any): StoredWorkoutSession {
     estimatedDurationMinutes: s.estimatedDurationMinutes,
     description: s.description,
     isActive: s.isActive,
-    startDate: s.startDate ? s.startDate.toISOString() : null,
-    endDate: s.endDate ? s.endDate.toISOString() : null,
+    startDate: toISONullable(s.startDate),
+    endDate: toISONullable(s.endDate),
     recurringSchedule: s.recurringSchedule,
     availabilityType: (s.availabilityType as any) || 'ALL',
     createdById: s.createdById,
-    createdAt: s.createdAt ? s.createdAt.toISOString() : new Date().toISOString(),
-    updatedAt: s.updatedAt ? s.updatedAt.toISOString() : new Date().toISOString(),
+    createdAt: toISO(s.createdAt, new Date().toISOString()),
+    updatedAt: toISO(s.updatedAt, new Date().toISOString()),
     scheduledDate: s.scheduledDate || null,
     isLocked: s.isLocked ?? false,
-    lockedAt: s.lockedAt ? s.lockedAt.toISOString() : null,
+    lockedAt: toISONullable(s.lockedAt),
     status: s.status || 'ASSIGNED',
     assignmentId: s.assignmentId || null,
     exercises: (s.exercises || []).map((ex: any) => {
@@ -231,14 +292,14 @@ function mapPrismaAssignmentToStored(a: any): StoredWorkoutAssignment {
     clientId: a.clientId,
     isRecommended: a.isRecommended,
     assignedById: a.assignedById,
-    assignedAt: a.assignedAt ? a.assignedAt.toISOString() : new Date().toISOString(),
+    assignedAt: toISO(a.assignedAt, new Date().toISOString()),
     scheduledDate: a.scheduledDate || toISTDateString(a.assignedAt),
     active: a.active,
     status: a.status || (a.isLocked ? 'LOCKED' : a.completedAt ? 'COMPLETED' : 'ASSIGNED'),
-    completedAt: a.completedAt ? a.completedAt.toISOString() : null,
+    completedAt: toISONullable(a.completedAt),
     isLocked: a.isLocked ?? false,
-    lockedAt: a.lockedAt ? a.lockedAt.toISOString() : null,
-    unlockedAt: a.unlockedAt ? a.unlockedAt.toISOString() : null,
+    lockedAt: toISONullable(a.lockedAt),
+    unlockedAt: toISONullable(a.unlockedAt),
     unlockedById: a.unlockedById ?? null,
     unlockReason: a.unlockReason ?? null,
   };
@@ -252,8 +313,8 @@ function mapPrismaRecordToStored(r: any): StoredWorkoutRecord {
     assignmentId: r.assignmentId ?? null,
     sessionTitle: r.sessionTitle,
     workoutType: r.workoutType,
-    startedAt: r.startedAt ? r.startedAt.toISOString() : new Date().toISOString(),
-    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    startedAt: toISO(r.startedAt, new Date().toISOString()),
+    completedAt: toISONullable(r.completedAt),
     durationSeconds: r.durationSeconds,
     totalVolume: r.totalVolume,
     completedSetsCount: r.completedSetsCount,
@@ -262,15 +323,15 @@ function mapPrismaRecordToStored(r: any): StoredWorkoutRecord {
     averageRir: r.averageRir,
     isCompleted: r.isCompleted,
     isLocked: r.isLocked ?? (r.isCompleted ? true : false),
-    lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
-    unlockedAt: r.unlockedAt ? r.unlockedAt.toISOString() : null,
+    lockedAt: toISONullable(r.lockedAt),
+    unlockedAt: toISONullable(r.unlockedAt),
     unlockedById: r.unlockedById ?? null,
     unlockReason: r.unlockReason ?? null,
     scheduledDate: r.scheduledDate || toISTDateString(r.startedAt),
     personalRecords: r.personalRecordsJson ? JSON.parse(r.personalRecordsJson) : [],
     notes: r.notes,
-    createdAt: r.createdAt ? r.createdAt.toISOString() : new Date().toISOString(),
-    updatedAt: r.updatedAt ? r.updatedAt.toISOString() : new Date().toISOString(),
+    createdAt: toISO(r.createdAt, new Date().toISOString()),
+    updatedAt: toISO(r.updatedAt, new Date().toISOString()),
     exerciseRecords: (r.exerciseRecords || []).map((er: any) => ({
       exerciseId: er.exerciseId,
       exerciseName: er.exerciseName,
@@ -315,6 +376,8 @@ export class WorkoutRepository {
   }> = new Map();
   private isInitialized = false;
   private activeSaveLocks: Map<string, Promise<StoredWorkoutRecord>> = new Map();
+  private splitPlans: Map<string, StoredWorkoutSplitPlan> = new Map();
+  private clientSplitMap: Map<string, string> = new Map();
 
   // Real registered clients are queried dynamically from PostgreSQL via workoutService.getClientsList()
   public clientsList: { id: string; name: string; email: string; status: string }[] = [];
@@ -935,6 +998,8 @@ export class WorkoutRepository {
           ...ex,
           id: exId,
           sessionId: id,
+          exerciseName: ex.exerciseName || ex.name || `Exercise ${idx + 1}`,
+          exerciseId: ex.exerciseId || `ex_${id}_${idx + 1}`,
           orderIndex: ex.orderIndex ?? idx,
           numberOfSets: numSets,
           setCount: numSets,
@@ -976,7 +1041,7 @@ export class WorkoutRepository {
             data: {
               sessionId: id,
               exerciseId: ex.exerciseId || `ex_${idx + 1}`,
-              exerciseName: ex.exerciseName || 'Exercise',
+              exerciseName: ex.exerciseName || (ex as any).name || 'Exercise',
               category: ex.category || 'General',
               orderIndex: ex.orderIndex ?? idx,
               supersetTag: ex.supersetTag || null,
@@ -1253,12 +1318,14 @@ export class WorkoutRepository {
   }
 
   // --- Client Operations (Strictly Scoped by Date & Auth) ---
-  async getClientAuthorizedSessions(clientId: string): Promise<{
+  async getClientAuthorizedSessions(clientId: string, simulatedDateOrDay?: string): Promise<{
     recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null;
     available: (StoredWorkoutSession & { isRecommended: boolean })[];
   }> {
     const resolvedUserId = await this.resolveUserId(clientId);
-    const todayIST = getTodayISTDateString();
+    const todayIST = simulatedDateOrDay && simulatedDateOrDay.includes('-')
+      ? simulatedDateOrDay
+      : getTodayISTDateString();
 
     try {
       // 1. Query client-specific assignments
@@ -1315,14 +1382,14 @@ export class WorkoutRepository {
         for (const a of combinedAssignments) {
           const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
 
-          // Check if this specific workout session has been completed & locked for TODAY in IST
+          // Check if this workout session has been completed & locked
           const lockedRecord = await prisma.workoutRecord.findFirst({
             where: {
               clientId: resolvedUserId,
               sessionId: { in: candidateIds },
-              scheduledDate: todayIST,
               isCompleted: true,
             },
+            orderBy: { completedAt: 'desc' },
           });
 
           const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
@@ -1342,21 +1409,66 @@ export class WorkoutRepository {
         }
 
         // Determine recommended session for today:
-        // Priority 1: Session scheduled for TODAY in IST with isRecommended == true
-        // Priority 2: Any session scheduled for TODAY in IST
-        // Priority 3: Client-specific assigned session with isRecommended == true
-        // Priority 4: First client-specific assigned session (most recent)
-        // Priority 5: Global recommended session or first available session
+        // Scheduling rules (Section 4 & 5):
+        // 1. Identify all scheduled days for this client in the current cycle / week.
+        // 2. Progression check: If any prior scheduled workout day in the current cycle is incomplete,
+        //    that prior incomplete workout remains the required/eligible session!
+        //    Subsequent days remain locked with status 'PREVIOUS_SESSION_REQUIRED'.
+        // 3. If all prior scheduled workouts are completed (or none exist):
+        //    - If today has a scheduled session:
+        //        - If completed & locked: recItem = today's session (isLocked = true, status = 'COMPLETED')
+        //        - If not completed: recItem = today's session (isLocked = false, isRecommended = true)
+        //    - If today has NO scheduled session (Rest Day):
+        //        - recItem = null! (Do NOT pick available[0]!)
+        const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+          ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
+          : getTodayISTWeekday();
+
+        const getScheduledWeekday = (item: typeof available[0]) => {
+          const matchingAssignment = combinedAssignments.find((a) => a.session.id === item.id);
+          if (!matchingAssignment) return null;
+          const recurringDays = parseWeekdaysFromScheduleString(matchingAssignment.session.recurringSchedule);
+          if (recurringDays.length > 0) return recurringDays[0];
+          if (matchingAssignment.scheduledDate) return getWeekdayFromISTDateString(matchingAssignment.scheduledDate);
+          return null;
+        };
+
+        const priorScheduledItems = available
+          .map((item) => ({ item, weekday: getScheduledWeekday(item) }))
+          .filter((x): x is { item: typeof available[0]; weekday: number } => x.weekday !== null && x.weekday < todayWeekday)
+          .sort((a, b) => a.weekday - b.weekday);
+
+        const priorIncomplete = priorScheduledItems.find((x) => !x.item.isLocked && x.item.status !== 'COMPLETED');
+
         let recItem: (typeof available)[0] | undefined;
+
         const todayItems = available.filter((item) => {
           const matchingAssignment = combinedAssignments.find((a) => a.session.id === item.id);
-          return matchingAssignment && isSessionScheduledForDate(matchingAssignment.session, matchingAssignment, todayIST);
+          if (!matchingAssignment) return false;
+          if (simulatedDateOrDay && !simulatedDateOrDay.includes('-')) {
+            return (matchingAssignment.session.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase());
+          }
+          return isSessionScheduledForDate(matchingAssignment.session, matchingAssignment, todayIST);
         });
 
-        if (todayItems.length > 0) {
-          recItem = todayItems.find((s) => s.isRecommended) || todayItems[0];
+        if (todayItems.length === 0) {
+          // REST DAY: No workout scheduled for today. Do not display another day's workout.
+          recItem = undefined;
+        } else if (priorIncomplete) {
+          // A prior required workout is incomplete! That prior session remains the required/eligible session.
+          recItem = priorIncomplete.item;
+
+          // Lock any subsequent sessions to prevent premature unlocking
+          for (const s of available) {
+            const w = getScheduledWeekday(s);
+            if (w !== null && w > priorIncomplete.weekday && !s.isLocked && s.status !== 'COMPLETED') {
+              s.isLocked = true;
+              s.status = 'PREVIOUS_SESSION_REQUIRED';
+            }
+          }
         } else {
-          recItem = available.find((s) => s.isRecommended) || available[0];
+          // All prior workouts completed (or Day 1): recommend today's scheduled workout
+          recItem = todayItems.find((s) => s.isRecommended) || todayItems[0];
         }
 
         return this.applyActiveSetOverlays({
@@ -1364,11 +1476,6 @@ export class WorkoutRepository {
           available,
         }, resolvedUserId);
       }
-
-      return {
-        recommended: null,
-        available: [],
-      };
     } catch (e: any) {
       console.warn('[WorkoutRepository] Failed to query client sessions from DB, falling back to cache:', e?.message);
     }
@@ -1402,7 +1509,6 @@ export class WorkoutRepository {
           const memLockedRecord = Array.from(this.records.values()).find(
             (r) => candidateIds.includes(r.sessionId || '') &&
                    (r.clientId === resolvedUserId || r.clientId === clientId) &&
-                   r.scheduledDate === todayIST &&
                    r.isCompleted &&
                    r.isLocked
           );
@@ -1421,15 +1527,51 @@ export class WorkoutRepository {
         });
 
       if (authorizedSessions.length > 0) {
+        const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+          ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
+          : getTodayISTWeekday();
+        const getMemScheduledWeekday = (item: typeof authorizedSessions[0]) => {
+          const assign = combinedMemAssignments.find((a) => a.sessionId === item.id);
+          if (!assign) return null;
+          const recurringDays = parseWeekdaysFromScheduleString(item.recurringSchedule);
+          if (recurringDays.length > 0) return recurringDays[0];
+          if (assign.scheduledDate) return getWeekdayFromISTDateString(assign.scheduledDate);
+          return null;
+        };
+
+        const priorMemScheduled = authorizedSessions
+          .map((item) => ({ item, weekday: getMemScheduledWeekday(item) }))
+          .filter((x): x is { item: typeof authorizedSessions[0]; weekday: number } => x.weekday !== null && x.weekday < todayWeekday)
+          .sort((a, b) => a.weekday - b.weekday);
+
+        const priorMemIncomplete = priorMemScheduled.find((x) => !x.item.isLocked && x.item.status !== 'COMPLETED');
+
+        let recItem: (typeof authorizedSessions)[0] | undefined;
+
         const todayMemItems = authorizedSessions.filter((item) => {
           const assign = combinedMemAssignments.find((a) => a.sessionId === item.id);
-          return assign && isSessionScheduledForDate(item, assign, todayIST);
+          if (!assign) return false;
+          if (simulatedDateOrDay && !simulatedDateOrDay.includes('-')) {
+            return (item.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase());
+          }
+          return isSessionScheduledForDate(item, assign, todayIST);
         });
 
-        const recItem = todayMemItems.find((s) => s.isRecommended) ||
-                        todayMemItems[0] ||
-                        authorizedSessions.find((s) => s.isRecommended) ||
-                        authorizedSessions[0];
+        if (todayMemItems.length === 0) {
+          // REST DAY: No workout scheduled for today. Do not display another day's workout.
+          recItem = undefined;
+        } else if (priorMemIncomplete) {
+          recItem = priorMemIncomplete.item;
+          for (const s of authorizedSessions) {
+            const w = getMemScheduledWeekday(s);
+            if (w !== null && w > priorMemIncomplete.weekday && !s.isLocked && s.status !== 'COMPLETED') {
+              s.isLocked = true;
+              s.status = 'PREVIOUS_SESSION_REQUIRED';
+            }
+          }
+        } else {
+          recItem = todayMemItems.find((s) => s.isRecommended) || todayMemItems[0];
+        }
 
         return this.applyActiveSetOverlays({
           recommended: recItem ? { ...recItem, isRecommended: true } : null,
@@ -1588,6 +1730,17 @@ export class WorkoutRepository {
       };
       this.records.set(id, memRecord);
 
+      if (data.sessionId && (data.isCompleted ?? true)) {
+        for (const assign of this.assignments.values()) {
+          if ((assign.clientId === resolvedUserId || assign.clientId === clientId) && candidateIds.includes(assign.sessionId)) {
+            assign.status = 'COMPLETED';
+            assign.completedAt = now;
+            assign.isLocked = true;
+            assign.lockedAt = now;
+          }
+        }
+      }
+
       try {
         const created = await prisma.workoutRecord.create({
           data: {
@@ -1655,6 +1808,21 @@ export class WorkoutRepository {
                 clientId: resolvedUserId,
                 sessionId: { in: candidateIds },
                 isCompleted: false,
+              },
+            });
+          } catch (_) {}
+
+          try {
+            await prisma.workoutAssignment.updateMany({
+              where: {
+                clientId: resolvedUserId,
+                sessionId: { in: candidateIds },
+              },
+              data: {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                isLocked: true,
+                lockedAt: new Date(),
               },
             });
           } catch (_) {}
@@ -2266,6 +2434,475 @@ export class WorkoutRepository {
       recommended: overlaidRec,
       available: overlaidAvailable,
     };
+  }
+
+  async saveWorkoutSplit(data: any, authorId: string): Promise<StoredWorkoutSplitPlan> {
+    const splitId = data.id || `split_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const splitTitle = data.title || 'Weekly Workout Split';
+    const splitType = data.splitType || 'Custom';
+    const description = data.description || null;
+    const frequency = Number(data.frequencyPerWeek) || 6;
+    const targetClientIds: string[] = [];
+    if (data.clientId) targetClientIds.push(data.clientId);
+    if (Array.isArray(data.clientIds)) {
+      for (const cid of data.clientIds) {
+        if (cid && !targetClientIds.includes(cid)) targetClientIds.push(cid);
+      }
+    }
+
+    const resolvedClientIds: string[] = [];
+    for (const cid of targetClientIds) {
+      const resolved = await this.resolveUserId(cid);
+      if (resolved && !resolvedClientIds.includes(resolved)) resolvedClientIds.push(resolved);
+    }
+    const resolvedClientId = resolvedClientIds[0] || null;
+    const todayWeekday = getTodayISTWeekday();
+
+    const storedDays: StoredWorkoutSplitDay[] = [];
+
+    // If clients are specified, deactivate previous active assignments
+    for (const rCid of resolvedClientIds) {
+      try {
+        await prisma.workoutAssignment.updateMany({
+          where: { clientId: rCid, active: true },
+          data: { active: false },
+        });
+      } catch (_) {}
+    }
+
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const rawInputDays: any[] = Array.isArray(data.days) ? data.days : [];
+
+    // Construct canonical 7 days: sort by Monday-Sunday order and insert Rest Day for unassigned days
+    const inputDays: any[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dayName = dayNames[i];
+      const found = rawInputDays.find((d: any) => d.dayOfWeek?.toLowerCase() === dayName.toLowerCase());
+      if (found) {
+        inputDays.push({ ...found, dayIndex: i + 1, dayOfWeek: dayName });
+      } else {
+        inputDays.push({
+          dayOfWeek: dayName,
+          dayIndex: i + 1,
+          name: `${dayName} — Rest & Recovery`,
+          isRestDay: true,
+          exercises: [],
+        });
+      }
+    }
+
+    for (let idx = 0; idx < inputDays.length; idx++) {
+      const d = inputDays[idx];
+      const dayIndex = d.dayIndex ?? (idx + 1);
+      const dayOfWeek = d.dayOfWeek || 'Monday';
+      const isRestDay = Boolean(d.isRestDay);
+      const weekdayNum = getWeekdayFromDayName(dayOfWeek);
+      const scheduledDate = getISTDateForWeekday(weekdayNum);
+      const isToday = weekdayNum === todayWeekday;
+
+      if (isRestDay) {
+        storedDays.push({
+          id: d.id || `split_day_${splitId}_${dayIndex}`,
+          dayOfWeek,
+          dayIndex,
+          name: d.name || `${dayOfWeek} — Rest & Recovery`,
+          workoutType: 'Rest',
+          targetMuscleGroup: 'Recovery',
+          estimatedDurationMinutes: 0,
+          isRestDay: true,
+          notes: d.notes || 'Scheduled rest & active recovery day.',
+          exercises: [],
+        });
+        continue;
+      }
+
+      const dayTitle = d.name || `${splitTitle} — ${dayOfWeek}`;
+      const dayWorkoutType = d.workoutType || 'Strength';
+      const dayTargetMuscle = d.targetMuscleGroup || 'Full Body';
+      const dayDuration = Number(d.estimatedDurationMinutes) || 45;
+      const dayNotes = d.notes || null;
+      const dayExercises = Array.isArray(d.exercises) ? d.exercises : [];
+
+      let session: any = null;
+
+      // Check if updating existing session for this day
+      if (d.sessionId) {
+        try {
+          session = await prisma.workoutSession.findUnique({
+            where: { id: d.sessionId },
+          });
+        } catch (_) {}
+      }
+
+      if (session) {
+        // Update existing session
+        try {
+          await prisma.workoutSession.update({
+            where: { id: session.id },
+            data: {
+              title: dayTitle,
+              workoutType: dayWorkoutType,
+              targetMuscleGroup: dayTargetMuscle,
+              estimatedDurationMinutes: dayDuration,
+              description: dayNotes || `${dayTitle} [SPLIT:${splitId}]`,
+              recurringSchedule: dayOfWeek,
+              updatedAt: new Date(),
+            },
+          });
+
+          // Delete existing exercises & templates to replace cleanly
+          await prisma.workoutSessionExercise.deleteMany({
+            where: { sessionId: session.id },
+          });
+        } catch (_) {}
+      } else {
+        // Create new session
+        const sessionId = d.sessionId || `ws_${splitId}_day_${dayIndex}_${Date.now()}`;
+        try {
+          session = await prisma.workoutSession.create({
+            data: {
+              id: sessionId,
+              title: dayTitle,
+              workoutType: dayWorkoutType,
+              targetMuscleGroup: dayTargetMuscle,
+              difficulty: data.difficulty || 'Intermediate',
+              estimatedDurationMinutes: dayDuration,
+              description: dayNotes || `${dayTitle} [SPLIT:${splitId}]`,
+              recurringSchedule: dayOfWeek,
+              createdById: authorId,
+              isActive: true,
+              availabilityType: resolvedClientId ? 'INDIVIDUAL' : 'ALL',
+            },
+          });
+        } catch (_) {
+          session = { id: sessionId, title: dayTitle };
+        }
+      }
+
+      // Create session exercises and templates
+      const createdExercises: StoredSessionExercise[] = [];
+      for (let exIdx = 0; exIdx < dayExercises.length; exIdx++) {
+        const ex = dayExercises[exIdx];
+        const exName = ex.exerciseName || ex.name || `Exercise ${exIdx + 1}`;
+        const exId = ex.exerciseId || `ex_${session.id}_${exIdx + 1}`;
+        const numSets = Number(ex.numberOfSets || ex.sets || ex.setCount) || 3;
+        const targetReps = String(ex.targetReps || ex.reps || '8–12');
+        const targetWeight = ex.targetWeight !== undefined && ex.targetWeight !== null ? Number(ex.targetWeight) : null;
+        const restSec = Number(ex.restSeconds || ex.rest) || 90;
+        const rir = ex.targetRir !== undefined && ex.targetRir !== null ? Number(ex.targetRir) : 2;
+        const rpe = ex.targetRpe !== undefined && ex.targetRpe !== null ? Number(ex.targetRpe) : 8.0;
+        const tempo = ex.tempo || '3-1-1-0';
+        const setType = ex.setType || 'WORKING';
+
+        let createdSessionEx: any = null;
+        try {
+          createdSessionEx = await prisma.workoutSessionExercise.create({
+            data: {
+              sessionId: session.id,
+              exerciseId: exId,
+              exerciseName: exName,
+              category: ex.category || dayWorkoutType || 'Strength',
+              orderIndex: exIdx,
+              supersetTag: ex.supersetTag || null,
+              numberOfSets: numSets,
+              targetReps,
+              targetWeight,
+              restSeconds: restSec,
+              targetRir: rir,
+              targetRpe: rpe,
+              tempo,
+              setType,
+              adminInstruction: ex.adminInstruction || ex.notes || null,
+            },
+          });
+
+          for (let s = 1; s <= numSets; s++) {
+            await prisma.workoutSetTemplate.create({
+              data: {
+                sessionExerciseId: createdSessionEx.id,
+                setNumber: s,
+                setType,
+                targetWeight,
+                targetRepsMin: typeof targetReps === 'string' && targetReps.includes('–')
+                  ? (parseInt(targetReps.split('–')[0]) || 8)
+                  : (parseInt(targetReps) || 8),
+                targetRepsMax: typeof targetReps === 'string' && targetReps.includes('–')
+                  ? (parseInt(targetReps.split('–')[1]) || 12)
+                  : (parseInt(targetReps) || 12),
+                targetRir: rir,
+                targetRpe: rpe,
+                tempo,
+              },
+            });
+          }
+        } catch (_) {}
+
+        createdExercises.push({
+          id: createdSessionEx?.id || `se_${session.id}_${exIdx}`,
+          sessionId: session.id,
+          exerciseId: exId,
+          exerciseName: exName,
+          category: ex.category || dayWorkoutType || 'Strength',
+          orderIndex: exIdx,
+          supersetTag: ex.supersetTag || null,
+          numberOfSets: numSets,
+          targetReps,
+          targetWeight,
+          restSeconds: restSec,
+          targetRir: rir,
+          targetRpe: rpe,
+          tempo,
+          setType,
+          adminInstruction: ex.adminInstruction || ex.notes || null,
+        });
+      }
+
+      // Memory session cache update
+      const storedSession: StoredWorkoutSession = {
+        id: session.id,
+        title: dayTitle,
+        workoutType: dayWorkoutType,
+        targetMuscleGroup: dayTargetMuscle,
+        difficulty: data.difficulty || 'Intermediate',
+        estimatedDurationMinutes: dayDuration,
+        description: dayNotes || `${dayTitle} [SPLIT:${splitId}]`,
+        isActive: true,
+        recurringSchedule: dayOfWeek,
+        availabilityType: resolvedClientId ? 'INDIVIDUAL' : 'ALL',
+        createdById: authorId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        exercises: createdExercises,
+      };
+      this.sessions.set(session.id, storedSession);
+
+      // Assign to clients if specified
+      if (resolvedClientIds.length > 0) {
+        for (const rCid of resolvedClientIds) {
+          try {
+            const userExists = await prisma.user.findUnique({
+              where: { id: rCid },
+              select: { id: true },
+            });
+            if (userExists) {
+              await prisma.workoutAssignment.create({
+                data: {
+                  sessionId: session.id,
+                  clientId: rCid,
+                  assignedById: authorId,
+                  isRecommended: isToday || dayIndex === 1,
+                  active: true,
+                  scheduledDate,
+                  status: 'ASSIGNED',
+                },
+              });
+            }
+          } catch (_) {}
+
+          this.assignments.set(`as_${session.id}_${rCid}`, {
+            id: `as_${session.id}_${rCid}`,
+            sessionId: session.id,
+            clientId: rCid,
+            assignedById: authorId,
+            isRecommended: isToday || dayIndex === 1,
+            active: true,
+            scheduledDate,
+            status: 'ASSIGNED',
+            assignedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      storedDays.push({
+        id: session.id,
+        sessionId: session.id,
+        dayOfWeek,
+        dayIndex,
+        name: dayTitle,
+        workoutType: dayWorkoutType,
+        targetMuscleGroup: dayTargetMuscle,
+        estimatedDurationMinutes: dayDuration,
+        isRestDay: false,
+        notes: dayNotes,
+        exercises: createdExercises,
+      });
+    }
+
+    const splitPlan: StoredWorkoutSplitPlan = {
+      id: splitId,
+      title: splitTitle,
+      splitType,
+      description,
+      frequencyPerWeek: frequency,
+      clientId: resolvedClientId,
+      clientIds: resolvedClientIds,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      days: storedDays,
+    };
+
+    this.splitPlans.set(splitId, splitPlan);
+    for (const cid of resolvedClientIds) {
+      this.clientSplitMap.set(cid, splitId);
+    }
+    if (resolvedClientId) {
+      this.clientSplitMap.set(resolvedClientId, splitId);
+    }
+
+    return splitPlan;
+  }
+
+  async getClientWorkoutSplit(clientId: string): Promise<StoredWorkoutSplitPlan | null> {
+    const resolvedUserId = await this.resolveUserId(clientId);
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    // 1. Fetch active client assignments
+    let assignments: any[] = [];
+    try {
+      assignments = await prisma.workoutAssignment.findMany({
+        where: { clientId: resolvedUserId, active: true },
+        include: {
+          session: {
+            include: {
+              exercises: {
+                include: { setTemplates: true },
+                orderBy: { orderIndex: 'asc' },
+              },
+            },
+          },
+        },
+      });
+    } catch (_) {}
+
+    if (!assignments || assignments.length === 0) {
+      assignments = Array.from(this.assignments.values())
+        .filter((a) => a.active && (a.clientId === resolvedUserId || a.clientId === clientId))
+        .map((a) => ({
+          ...a,
+          session: this.sessions.get(a.sessionId),
+        }));
+    }
+
+    if (!assignments || assignments.length === 0) {
+      return null;
+    }
+
+    const days: StoredWorkoutSplitDay[] = [];
+
+    for (let i = 0; i < 7; i++) {
+      const dayName = dayNames[i];
+      const weekdayNum = i + 1;
+
+      // Find assignment matching this dayOfWeek
+      const match = assignments.find((a) => {
+        if (!a.session) return false;
+        const schedule = (a.session.recurringSchedule || '').toLowerCase();
+        if (schedule.includes(dayName.toLowerCase())) return true;
+        if (a.scheduledDate) {
+          const w = getWeekdayFromISTDateString(a.scheduledDate);
+          if (w === weekdayNum) return true;
+        }
+        return false;
+      });
+
+      if (match && match.session) {
+        const stored = mapPrismaSessionToStored(match.session);
+        days.push({
+          id: match.session.id,
+          sessionId: match.session.id,
+          dayOfWeek: dayName,
+          dayIndex: weekdayNum,
+          name: match.session.title,
+          workoutType: match.session.workoutType,
+          targetMuscleGroup: match.session.targetMuscleGroup,
+          estimatedDurationMinutes: match.session.estimatedDurationMinutes,
+          isRestDay: false,
+          notes: match.session.description,
+          exercises: stored.exercises,
+        });
+      } else {
+        days.push({
+          id: `split_day_rest_${weekdayNum}`,
+          dayOfWeek: dayName,
+          dayIndex: weekdayNum,
+          name: 'Rest Day',
+          workoutType: 'Rest',
+          targetMuscleGroup: 'Recovery',
+          estimatedDurationMinutes: 0,
+          isRestDay: true,
+          notes: 'Rest & recovery day.',
+          exercises: [],
+        });
+      }
+    }
+
+    const firstActive = days.find((d) => !d.isRestDay);
+    const splitId = this.clientSplitMap.get(resolvedUserId) || this.clientSplitMap.get(clientId);
+    const existingPlan = splitId ? this.splitPlans.get(splitId) : null;
+    const splitTitle = existingPlan?.title || (firstActive ? `${firstActive.name.split('—')[0].trim()} Split` : 'Personalized Workout Split');
+
+    return {
+      id: existingPlan?.id || `split_${resolvedUserId}`,
+      title: splitTitle,
+      splitType: existingPlan?.splitType || 'Custom',
+      description: existingPlan?.description,
+      frequencyPerWeek: days.filter((d) => !d.isRestDay).length,
+      clientId: resolvedUserId,
+      clientIds: existingPlan?.clientIds || [resolvedUserId],
+      createdAt: existingPlan?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      days,
+    };
+  }
+
+  async updateWorkoutSplitDay(splitId: string, dayId: string, dayData: any): Promise<StoredWorkoutSession | null> {
+    const cleanDayId = dayId.startsWith('split_day_') ? dayId.replace('split_day_', '') : dayId;
+    let sessionId = dayData.sessionId || cleanDayId;
+    let existingSession = await this.getSessionById(sessionId);
+
+    if (!existingSession && cleanDayId !== dayId) {
+      existingSession = await this.getSessionById(dayId);
+    }
+
+    if (!existingSession) {
+      const allSessions = await this.getAllSessions();
+      existingSession = allSessions.find((s) =>
+        s.id === sessionId ||
+        s.id === dayId ||
+        s.id === cleanDayId ||
+        s.id.includes(cleanDayId) ||
+        cleanDayId.includes(s.id) ||
+        (s.description?.includes(splitId) && (s.recurringSchedule === dayData.dayOfWeek || (dayData.dayOfWeek && s.title.toLowerCase().includes(dayData.dayOfWeek.toLowerCase()))))
+      ) || null;
+      if (existingSession) sessionId = existingSession.id;
+    }
+
+    if (!existingSession) return null;
+
+    const updated = await this.updateSession(sessionId, {
+      ...dayData,
+      title: dayData.name || dayData.title || existingSession.title,
+      workoutType: dayData.workoutType || existingSession.workoutType,
+      targetMuscleGroup: dayData.targetMuscleGroup || existingSession.targetMuscleGroup,
+      recurringSchedule: dayData.dayOfWeek || existingSession.recurringSchedule,
+      exercises: dayData.exercises || existingSession.exercises,
+    });
+
+    if (this.splitPlans.has(splitId)) {
+      const plan = this.splitPlans.get(splitId)!;
+      const day = plan.days.find((d) => d.id === sessionId || d.sessionId === sessionId || d.id === dayId || d.dayOfWeek === dayData.dayOfWeek);
+      if (day) {
+        if (dayData.name) day.name = dayData.name;
+        if (dayData.targetMuscleGroup) day.targetMuscleGroup = dayData.targetMuscleGroup;
+        if (dayData.exercises) day.exercises = updated?.exercises || dayData.exercises;
+      }
+    }
+
+    return updated;
+  }
+
+  async getWorkoutSplitById(splitId: string): Promise<StoredWorkoutSplitPlan | null> {
+    return this.splitPlans.get(splitId) || null;
   }
 }
 

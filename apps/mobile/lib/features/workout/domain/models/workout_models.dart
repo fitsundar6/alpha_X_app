@@ -1741,3 +1741,167 @@ class PlateCalculationResult {
     required this.remainderKg,
   });
 }
+
+class WorkoutSplitDay {
+  final String id;
+  final String? sessionId;
+  final String dayOfWeek;
+  final int dayIndex;
+  final String name;
+  final String workoutType;
+  final String targetMuscleGroup;
+  final int estimatedDurationMinutes;
+  final bool isRestDay;
+  final String? notes;
+  final List<WorkoutExercise> exercises;
+
+  const WorkoutSplitDay({
+    required this.id,
+    this.sessionId,
+    required this.dayOfWeek,
+    required this.dayIndex,
+    required this.name,
+    this.workoutType = 'Strength',
+    this.targetMuscleGroup = 'Full Body',
+    this.estimatedDurationMinutes = 45,
+    this.isRestDay = false,
+    this.notes,
+    this.exercises = const [],
+  });
+
+  WorkoutSplitDay copyWith({
+    String? id,
+    String? sessionId,
+    String? dayOfWeek,
+    int? dayIndex,
+    String? name,
+    String? workoutType,
+    String? targetMuscleGroup,
+    int? estimatedDurationMinutes,
+    bool? isRestDay,
+    String? notes,
+    List<WorkoutExercise>? exercises,
+  }) {
+    return WorkoutSplitDay(
+      id: id ?? this.id,
+      sessionId: sessionId ?? this.sessionId,
+      dayOfWeek: dayOfWeek ?? this.dayOfWeek,
+      dayIndex: dayIndex ?? this.dayIndex,
+      name: name ?? this.name,
+      workoutType: workoutType ?? this.workoutType,
+      targetMuscleGroup: targetMuscleGroup ?? this.targetMuscleGroup,
+      estimatedDurationMinutes: estimatedDurationMinutes ?? this.estimatedDurationMinutes,
+      isRestDay: isRestDay ?? this.isRestDay,
+      notes: notes ?? this.notes,
+      exercises: exercises ?? this.exercises,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      if (sessionId != null) 'sessionId': sessionId,
+      'dayOfWeek': dayOfWeek,
+      'dayIndex': dayIndex,
+      'name': name,
+      'workoutType': workoutType,
+      'targetMuscleGroup': targetMuscleGroup,
+      'estimatedDurationMinutes': estimatedDurationMinutes,
+      'isRestDay': isRestDay,
+      if (notes != null) 'notes': notes,
+      'exercises': exercises.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  factory WorkoutSplitDay.fromJson(Map<String, dynamic> json) {
+    return WorkoutSplitDay(
+      id: json['id'] as String? ?? 'day_${json['dayOfWeek'] ?? '1'}',
+      sessionId: json['sessionId'] as String?,
+      dayOfWeek: json['dayOfWeek'] as String? ?? 'Monday',
+      dayIndex: (json['dayIndex'] as num?)?.toInt() ?? 1,
+      name: json['name'] as String? ?? json['dayOfWeek'] as String? ?? 'Workout Day',
+      workoutType: json['workoutType'] as String? ?? 'Strength',
+      targetMuscleGroup: json['targetMuscleGroup'] as String? ?? 'Full Body',
+      estimatedDurationMinutes: (json['estimatedDurationMinutes'] as num?)?.toInt() ?? 45,
+      isRestDay: json['isRestDay'] as bool? ?? false,
+      notes: json['notes'] as String?,
+      exercises: (json['exercises'] as List<dynamic>?)
+              ?.map((e) => WorkoutExercise.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+class WorkoutSplitPlan {
+  final String id;
+  final String title;
+  final String splitType;
+  final String? description;
+  final int frequencyPerWeek;
+  final String? clientId;
+  final String? clientName;
+  final List<WorkoutSplitDay> days;
+
+  const WorkoutSplitPlan({
+    required this.id,
+    required this.title,
+    this.splitType = 'Custom',
+    this.description,
+    this.frequencyPerWeek = 6,
+    this.clientId,
+    this.clientName,
+    this.days = const [],
+  });
+
+  WorkoutSplitPlan copyWith({
+    String? id,
+    String? title,
+    String? splitType,
+    String? description,
+    int? frequencyPerWeek,
+    String? clientId,
+    String? clientName,
+    List<WorkoutSplitDay>? days,
+  }) {
+    return WorkoutSplitPlan(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      splitType: splitType ?? this.splitType,
+      description: description ?? this.description,
+      frequencyPerWeek: frequencyPerWeek ?? this.frequencyPerWeek,
+      clientId: clientId ?? this.clientId,
+      clientName: clientName ?? this.clientName,
+      days: days ?? this.days,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'splitType': splitType,
+      if (description != null) 'description': description,
+      'frequencyPerWeek': frequencyPerWeek,
+      if (clientId != null) 'clientId': clientId,
+      if (clientName != null) 'clientName': clientName,
+      'days': days.map((d) => d.toJson()).toList(),
+    };
+  }
+
+  factory WorkoutSplitPlan.fromJson(Map<String, dynamic> json) {
+    return WorkoutSplitPlan(
+      id: json['id'] as String? ?? 'split_${DateTime.now().millisecondsSinceEpoch}',
+      title: json['title'] as String? ?? 'Workout Split',
+      splitType: json['splitType'] as String? ?? 'Custom',
+      description: json['description'] as String?,
+      frequencyPerWeek: (json['frequencyPerWeek'] as num?)?.toInt() ?? 6,
+      clientId: json['clientId'] as String?,
+      clientName: json['clientName'] as String?,
+      days: (json['days'] as List<dynamic>?)
+              ?.map((d) => WorkoutSplitDay.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+}

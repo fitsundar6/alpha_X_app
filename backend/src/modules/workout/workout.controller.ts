@@ -28,13 +28,64 @@ export class WorkoutController {
       payload = JSON.parse(proposal.finalDataJson || proposal.proposedDataJson || '{}');
     } catch {}
 
+    const isMultiDay = Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 1;
+
+    if (isMultiDay) {
+      const days = payload.weeklySchedule.map((d: any, idx: number) => ({
+        dayOfWeek: d.day || d.dayName || d.weekday || 'Monday',
+        dayIndex: idx + 1,
+        name: d.sessionTitle || d.title || `${payload.title || 'Split'} — ${d.day || 'Day ' + (idx + 1)}`,
+        workoutType: d.workoutType || payload.workoutType || 'Strength',
+        targetMuscleGroup: d.targetMuscleGroup || d.focus || 'Full Body',
+        estimatedDurationMinutes: Number(d.estimatedDurationMinutes) || 45,
+        isRestDay: Boolean(d.isRestDay),
+        notes: d.description || null,
+        exercises: (d.exercises || []).map((ex: any, exIdx: number) => ({
+          exerciseId: ex.exerciseId || `ex_draft_${idx}_${exIdx + 1}`,
+          exerciseName: ex.exerciseName || ex.name || 'Exercise',
+          category: ex.category || 'General',
+          orderIndex: exIdx,
+          numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+          targetReps: String(ex.targetReps || ex.reps || '8–12'),
+          targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+          restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+          targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+          targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+          tempo: ex.tempo || '3-1-1-0',
+          adminInstruction: ex.notes || null,
+        })),
+      }));
+
+      const split = await workoutService.createWorkoutSplit({
+        id: `split_${proposal.id}`,
+        title: payload.title || proposal.title || 'AI Workout Split',
+        clientId: proposal.clientId,
+        days,
+      }, adminId);
+
+      if (proposal.status === 'PENDING' || proposal.status === 'EDITED') {
+        await prisma.aIProposal.update({
+          where: { id: proposal.id },
+          data: {
+            status: 'APPROVED',
+            approvedAt: new Date(),
+            approvedById: adminId,
+            approvedByName: adminName,
+          },
+        });
+      }
+
+      const firstActiveDay = split.days.find((d) => !d.isRestDay && d.sessionId);
+      if (firstActiveDay && firstActiveDay.sessionId) {
+        return workoutService.getSessionById(firstActiveDay.sessionId);
+      }
+    }
+
     let rawExercises: any[] = [];
     if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
       rawExercises = payload.exercises;
     } else if (Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
-      for (const day of payload.weeklySchedule) {
-        if (Array.isArray(day.exercises)) rawExercises.push(...day.exercises);
-      }
+      rawExercises = payload.weeklySchedule[0].exercises || [];
     }
 
     const session = await workoutService.createSession(
@@ -148,6 +199,19 @@ export class WorkoutController {
     }
 
     const adminId = req.user!.id;
+
+    if (Array.isArray(req.body.days) && req.body.days.length > 1) {
+      const split = await workoutService.createWorkoutSplit(req.body, adminId);
+      sendSuccess(
+        res,
+        split,
+        HttpStatus.CREATED,
+        `Created workout split "${split.title}" with ${split.days.length} days`,
+        { id: split.id, title: split.title, daysCount: split.days.length }
+      );
+      return;
+    }
+
     const newSession = await workoutService.createSession(parsed.data, adminId);
     sendSuccess(
       res,
@@ -166,6 +230,19 @@ export class WorkoutController {
 
   async updateSession(req: Request, res: Response): Promise<void> {
     const id = String(req.params.id);
+
+    if (Array.isArray(req.body.days) && req.body.days.length > 1) {
+      const split = await workoutService.createWorkoutSplit(req.body, req.user!.id);
+      sendSuccess(
+        res,
+        split,
+        HttpStatus.OK,
+        `Updated workout split "${split.title}" with ${split.days.length} days`,
+        { id: split.id, title: split.title, daysCount: split.days.length }
+      );
+      return;
+    }
+
     const parsed = updateSessionSchema.safeParse(req.body);
     if (!parsed.success) {
       const errorMsg = parsed.error.errors.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ');
@@ -744,6 +821,105 @@ export class WorkoutController {
       completions,
       HttpStatus.OK,
       `Fetched ${completions.length} active set completion records for session "${sessionId}"`
+    );
+  }
+
+  // --- Split Management Endpoints ---
+  async createWorkoutSplit(req: Request, res: Response): Promise<void> {
+    const adminId = req.user!.id;
+    const split = await workoutService.createWorkoutSplit(req.body, adminId);
+    sendSuccess(
+      res,
+      split,
+      HttpStatus.CREATED,
+      `Created workout split "${split.title}" with ${split.days.length} days`,
+      { id: split.id, title: split.title, daysCount: split.days.length }
+    );
+  }
+
+  async getWorkoutSplitById(req: Request, res: Response): Promise<void> {
+    const splitId = String(req.params.id);
+    const split = await workoutService.getClientWorkoutSplit(splitId);
+    sendSuccess(
+      res,
+      split,
+      HttpStatus.OK,
+      split ? `Retrieved workout split "${split.title}"` : 'Split not found'
+    );
+  }
+
+  async getClientWorkoutSplit(req: Request, res: Response): Promise<void> {
+    const clientId = String(req.params.clientId);
+    const split = await workoutService.getClientWorkoutSplit(clientId);
+    if (!split) {
+      sendSuccess(
+        res,
+        null,
+        HttpStatus.OK,
+        `No active workout split found for client "${clientId}"`
+      );
+      return;
+    }
+    sendSuccess(
+      res,
+      split,
+      HttpStatus.OK,
+      `Retrieved workout split "${split.title}" for client "${clientId}"`,
+      { id: split.id, title: split.title, daysCount: split.days.length }
+    );
+  }
+
+  async getMyWorkoutSplit(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const split = await workoutService.getClientWorkoutSplit(clientId);
+    sendSuccess(
+      res,
+      split,
+      HttpStatus.OK,
+      split ? `Retrieved workout split "${split.title}"` : 'No active workout split assigned'
+    );
+  }
+
+  async updateWorkoutSplitDay(req: Request, res: Response): Promise<void> {
+    const splitId = String(req.params.id);
+    const dayId = String(req.params.dayId);
+    const updated = await workoutService.updateWorkoutSplitDay(splitId, dayId, req.body);
+    if (!updated) {
+      sendError(
+        res,
+        'NOT_FOUND',
+        `Workout session for day "${dayId}" not found in split "${splitId}"`,
+        HttpStatus.NOT_FOUND
+      );
+      return;
+    }
+    sendSuccess(
+      res,
+      updated,
+      HttpStatus.OK,
+      `Updated workout day "${updated.title}" in split "${splitId}"`,
+      { id: updated.id, title: updated.title, exercisesCount: updated.exercises.length }
+    );
+  }
+
+  async assignWorkoutSplit(req: Request, res: Response): Promise<void> {
+    const splitId = String(req.params.id);
+    const adminId = req.user!.id;
+    const ok = await workoutService.assignWorkoutSplit(splitId, req.body, adminId);
+    if (!ok) {
+      sendError(
+        res,
+        'ASSIGNMENT_FAILED',
+        `Failed to assign workout split "${splitId}"`,
+        HttpStatus.BAD_REQUEST
+      );
+      return;
+    }
+    sendSuccess(
+      res,
+      { success: true, splitId },
+      HttpStatus.OK,
+      `Workout split "${splitId}" assigned successfully`
     );
   }
 }

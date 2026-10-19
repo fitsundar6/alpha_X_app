@@ -25,6 +25,41 @@ export const exerciseInputSchema = z.object({
   adminInstruction: z.string().optional().nullable(),
 });
 
+export const workoutSplitDaySchema = z.object({
+  dayId: z.string().optional(),
+  dayOfWeek: z.coerce.number().int().min(1).max(7),
+  dayName: z.string(),
+  weekday: z.string().optional(),
+  sessionTitle: z.string().min(1, 'Day workout title is required'),
+  workoutType: z.string().default('Strength'),
+  targetMuscleGroup: z.string().optional().nullable().default('Full Body'),
+  estimatedDurationMinutes: z.coerce.number().int().min(1).max(1440).default(45),
+  isRestDay: z.boolean().default(false),
+  exercises: z.array(exerciseInputSchema).optional().default([]),
+});
+
+export const createWorkoutSplitSchema = z.object({
+  id: z.string().optional(),
+  splitId: z.string().optional(),
+  title: z.string().min(1, 'Split title is required'),
+  description: z.string().optional().nullable(),
+  workoutType: z.string().default('Strength'),
+  targetMuscleGroup: z.string().optional().nullable().default('Full Body'),
+  difficulty: z.string().default('Intermediate'),
+  daysPerWeek: z.coerce.number().int().min(1).max(7).optional().default(6),
+  clientId: z.string().optional().nullable(),
+  days: z.array(workoutSplitDaySchema).min(1, 'At least one day is required in split'),
+});
+
+export const assignSplitSchema = z.object({
+  splitId: z.string().optional(),
+  split: createWorkoutSplitSchema.optional(),
+  assignmentType: z.enum(['ALL', 'SELECTED', 'INDIVIDUAL']),
+  clientIds: z.array(z.string()).optional().default([]),
+  individualClientId: z.string().optional().nullable(),
+  isRecommended: z.boolean().default(false),
+});
+
 export const createSessionSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1, 'Session title is required'),
@@ -38,11 +73,16 @@ export const createSessionSchema = z.object({
   endDate: z.string().optional().nullable(),
   recurringSchedule: z.string().optional().nullable(),
   availabilityType: z.string().default('ALL'),
+  splitId: z.string().optional().nullable(),
+  dayOfWeek: z.coerce.number().int().optional().nullable(),
+  weeklySchedule: z.any().optional().nullable(),
+  days: z.array(workoutSplitDaySchema).optional(),
   exercises: z.array(exerciseInputSchema).optional().default([]),
 });
 
 export const updateSessionSchema = createSessionSchema.partial().extend({
   exercises: z.array(exerciseInputSchema).optional(),
+  days: z.array(workoutSplitDaySchema).optional(),
 });
 
 export const assignSessionSchema = z.object({

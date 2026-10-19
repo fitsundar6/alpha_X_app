@@ -1155,15 +1155,10 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
 
     if (_isMultiDay) {
       updatedPayload['weeklySchedule'] = _editableDays;
-      final flattened = <Map<String, dynamic>>[];
-      for (final day in _editableDays) {
-        if (day['exercises'] is List) {
-          for (final ex in (day['exercises'] as List)) {
-            if (ex is Map) flattened.add(Map<String, dynamic>.from(ex));
-          }
-        }
+      // Preserve day isolation: do NOT concatenate all days into a single flat exercises list!
+      if (_editableDays.isNotEmpty && _editableDays[0]['exercises'] is List) {
+        updatedPayload['exercises'] = _editableDays[0]['exercises'];
       }
-      updatedPayload['exercises'] = flattened;
     } else {
       updatedPayload['exercises'] = _editableExercises;
     }

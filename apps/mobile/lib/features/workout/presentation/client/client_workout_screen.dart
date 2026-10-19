@@ -90,6 +90,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     final activeSession = widget.workoutRepository.activeSession;
     final recommended = widget.workoutRepository.getRecommendedSessionForClient(clientId);
     final available = widget.workoutRepository.getAuthorizedSessionsForClient(clientId);
+    final hasAssignedWorkouts = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
 
     final filteredSessions = _selectedCategory == 'All'
         ? available
@@ -100,6 +101,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 s.title.toLowerCase().contains(cat);
           }).toList();
 
+    // Avoid displaying a duplicate card for the same workout that is already featured as Recommended Hero
+    final nonHeroSessions = filteredSessions.where((s) => s.id != recommended?.id).toList();
+
+    final isRestDay = hasAssignedWorkouts && recommended == null && available.isEmpty && !hasActive;
     final hasAnyWorkouts = available.isNotEmpty || recommended != null || hasActive;
 
     final content = RefreshIndicator(
@@ -117,7 +122,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             _buildActiveResumeBanner(activeSession, colors, isDark),
           ],
 
-          if (!hasAnyWorkouts) ...[
+          if (isRestDay) ...[
+            // REST DAY STATE (Client has an assigned split, but today is a designated recovery day!)
+            _buildRestDayState(colors, isDark),
+          ] else if (!hasAnyWorkouts) ...[
             // ZERO WORKOUTS ASSIGNED STATE (Never fallback to default/generic!)
             _buildNoWorkoutAssignedState(colors, isDark),
           ] else ...[
@@ -130,7 +138,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ],
 
             // Section 2: Horizontal Filter Chips
-            if (available.isNotEmpty) ...[
+            if (nonHeroSessions.isNotEmpty) ...[
               _sectionTitle('PRESCRIBED PROGRAMS', colors),
               const SizedBox(height: 10),
               SingleChildScrollView(
@@ -192,24 +200,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               ),
               const SizedBox(height: 14),
 
-              if (filteredSessions.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceCard,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: colors.border),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'No workouts matching "$_selectedCategory". Tap "All" to view all assigned sessions.',
-                      style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              else
-                ...filteredSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
+              ...nonHeroSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
             ],
           ],
         ],
@@ -424,6 +415,207 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestDayState(ClientThemeColors colors, bool isDark) {
+    final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: colors.surfaceCard,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Status pill badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: accentLime.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: accentLime.withOpacity(0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bedtime_rounded, size: 14, color: accentLime),
+                  const SizedBox(width: 6),
+                  Text(
+                    'REST & RECOVERY DAY',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
+                      color: accentLime,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Active Recovery & Muscle Repair',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: colors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'No workout scheduled for today in your training split. Your muscles rebuild and adapt during rest periods.',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: colors.textSecondary,
+                height: 1.45,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+
+            // Recovery Pillars Cards
+            _buildRecoveryPillarRow(
+              icon: Icons.water_drop_rounded,
+              iconColor: const Color(0xFF38BDF8),
+              title: 'Hydration Target',
+              subtitle: 'Aim for 3.5L of water to aid metabolic recovery',
+              colors: colors,
+            ),
+            const SizedBox(height: 12),
+            _buildRecoveryPillarRow(
+              icon: Icons.nightlight_round,
+              iconColor: const Color(0xFFA78BFA),
+              title: 'Sleep & Adaptation',
+              subtitle: 'Prioritize 8+ hours of quality sleep tonight',
+              colors: colors,
+            ),
+            const SizedBox(height: 12),
+            _buildRecoveryPillarRow(
+              icon: Icons.directions_walk_rounded,
+              iconColor: const Color(0xFF34D399),
+              title: 'Light Movement',
+              subtitle: 'Optional 20-30 min walk or gentle mobility work',
+              colors: colors,
+            ),
+            const SizedBox(height: 26),
+
+            // Action Buttons
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.surfaceElevated,
+                  foregroundColor: colors.textPrimary,
+                  shape: const StadiumBorder(),
+                  side: BorderSide(color: colors.border),
+                  elevation: 0,
+                ),
+                icon: Icon(Icons.history_rounded, size: 18, color: accentLime),
+                label: Text(
+                  'VIEW WORKOUT HISTORY',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    letterSpacing: 0.8,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                onPressed: () {
+                  AlphaXHaptics.tap();
+                  _openWorkoutHistory();
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              icon: Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+              label: Text(
+                'Check for Updates',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textSecondary,
+                ),
+              ),
+              onPressed: () async {
+                AlphaXHaptics.selection();
+                await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecoveryPillarRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required ClientThemeColors colors,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

@@ -3,6 +3,8 @@ import {
   StoredWorkoutSession,
   StoredWorkoutAssignment,
   StoredWorkoutRecord,
+  StoredWorkoutSplitPlan,
+  StoredWorkoutSplitDay,
 } from './workout.repository';
 import { prisma } from '../../config/prisma';
 import { maskEmail, maskPhone } from '../../utils/pii_mask';
@@ -292,6 +294,40 @@ export class WorkoutService {
 
   async getActiveSetCompletions(clientId: string, sessionId: string) {
     return workoutRepository.getActiveSetCompletions(clientId, sessionId);
+  }
+
+  // --- Workout Split Operations ---
+  async createWorkoutSplit(data: any, adminId: string): Promise<StoredWorkoutSplitPlan> {
+    return workoutRepository.saveWorkoutSplit(data, adminId);
+  }
+
+  async getClientWorkoutSplit(clientId: string): Promise<StoredWorkoutSplitPlan | null> {
+    return workoutRepository.getClientWorkoutSplit(clientId);
+  }
+
+  async getWorkoutSplitById(splitId: string): Promise<StoredWorkoutSplitPlan | null> {
+    return workoutRepository.getWorkoutSplitById(splitId);
+  }
+
+  async updateWorkoutSplitDay(splitId: string, dayId: string, dayData: any): Promise<StoredWorkoutSession | null> {
+    return workoutRepository.updateWorkoutSplitDay(splitId, dayId, dayData);
+  }
+
+  async assignWorkoutSplit(splitId: string, params: { clientIds?: string[]; isRecommended?: boolean }, adminId: string): Promise<boolean> {
+    const split = await workoutRepository.getClientWorkoutSplit(params.clientIds?.[0] || '');
+    if (!split) return false;
+    for (const d of split.days) {
+      if (d.sessionId) {
+        await this.assignSession({
+          sessionId: d.sessionId,
+          assignmentType: 'SELECTED',
+          clientIds: params.clientIds,
+          isRecommended: params.isRecommended,
+          assignedById: adminId,
+        });
+      }
+    }
+    return true;
   }
 }
 
