@@ -30,9 +30,9 @@ void main() {
       expect(find.text('FINISH WORKOUT DEMO'), findsNothing);
       expect(find.byIcon(Icons.sports_gymnastics_rounded), findsNothing);
 
-      // 2. Verify "ADMIN LOGIN" is present and cleanly rendered
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
-      expect(find.byKey(const Key('admin_login_link_button')), findsOneWidget);
+      // 2. Verify "ADMIN LOGIN" is hidden from client login screen
+      expect(find.text('ADMIN LOGIN'), findsNothing);
+      expect(find.byKey(const Key('admin_login_link_button')), findsNothing);
 
       // 3. Verify "Forgot Password?" link is clearly present
       expect(find.text('Forgot Password?'), findsOneWidget);
@@ -84,7 +84,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Forgot Password?'), findsOneWidget);
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
+      expect(find.text('ADMIN LOGIN'), findsNothing);
       expect(find.text('FINISH WORKOUT DEMO'), findsNothing);
 
       // Large screen test (e.g. tablet or modern flagship)
@@ -98,7 +98,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Forgot Password?'), findsOneWidget);
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
+      expect(find.text('ADMIN LOGIN'), findsNothing);
       expect(find.text('FINISH WORKOUT DEMO'), findsNothing);
     });
   });

@@ -139,10 +139,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Confirm presence of primary actions
+      // Confirm presence of primary actions and hidden ADMIN LOGIN
       expect(find.text('CLIENT LOGIN'), findsOneWidget);
       expect(find.text('CREATE ACCOUNT'), findsOneWidget);
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
+      expect(find.text('ADMIN LOGIN'), findsNothing);
 
       // Confirm SafeArea has bottom: true and maintainBottomViewPadding
       final safeAreaFinder = find.byType(SafeArea);
@@ -151,10 +151,10 @@ void main() {
       expect(safeAreaWidget.bottom, isTrue);
       expect(safeAreaWidget.maintainBottomViewPadding, isTrue);
 
-      // Check distance of ADMIN LOGIN from bottom edge of viewport
-      final adminLoginCenter = tester.getCenter(find.text('ADMIN LOGIN'));
+      // Check distance of CREATE ACCOUNT from bottom edge of viewport
+      final createAccountCenter = tester.getCenter(find.text('CREATE ACCOUNT'));
       const logicalScreenHeight = 844.0; // logical height
-      expect(adminLoginCenter.dy, lessThanOrEqualTo(logicalScreenHeight - 34.0));
+      expect(createAccountCenter.dy, lessThanOrEqualTo(logicalScreenHeight - 34.0));
       expect(tester.takeException(), isNull);
     });
   });

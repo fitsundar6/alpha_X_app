@@ -176,7 +176,7 @@ void main() {
       expect(find.text('Admin Mode'), findsNothing);
     });
 
-    testWidgets('TEST 8: LoginScreen renders CLIENT LOGIN and ADMIN LOGIN options', (tester) async {
+    testWidgets('TEST 8: LoginScreen renders CLIENT LOGIN and hides ADMIN LOGIN', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: LoginScreen(),
@@ -186,7 +186,7 @@ void main() {
 
       expect(find.text('CLIENT LOGIN'), findsOneWidget);
       expect(find.text('CREATE ACCOUNT'), findsOneWidget);
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
+      expect(find.text('ADMIN LOGIN'), findsNothing);
       expect(find.text('MEMBER & ATHLETE PORTAL'), findsOneWidget);
     });
 

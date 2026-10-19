@@ -85,61 +85,13 @@ class PushNotificationService {
   }
 
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-  bool _dialogShown = false;
 
-  /// Whether a push subscription ID is a real server-assigned ID (not local- placeholder)
-  bool _isRegistered(String? id) =>
-      id != null && id.isNotEmpty && !id.startsWith('local-');
-
-  /// Displays the required Push Subscription Verification Dialog once registered
-  void _maybeShowIntegrationCompleteDialog(BuildContext context, String? subscriptionId) {
-    if (_isRegistered(subscriptionId) && !_dialogShown) {
-      _dialogShown = true;
-      showIntegrationCompleteDialog(context);
-    }
-  }
-
-  /// Sets up push subscription observer to confirm registration and present verification dialog
+  /// Optional subscription observer hook preserved for backwards compatibility.
+  /// Unwanted SDK demo/setup popup has been removed. Push token registration,
+  /// automatic backend synchronization, and native permission handling are managed
+  /// seamlessly in [initialize] and [onUserLogin].
   void setupPushSubscriptionObserver([BuildContext? context]) {
-    if (!_isSupportedPlatform) return;
-
-    OneSignal.User.pushSubscription.addObserver((state) {
-      final ctx = context ?? navigatorKey.currentContext;
-      if (ctx != null) {
-        _maybeShowIntegrationCompleteDialog(ctx, state.current.id);
-      }
-    });
-
-    final currentId = OneSignal.User.pushSubscription.id;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = context ?? navigatorKey.currentContext;
-      if (ctx != null) {
-        _maybeShowIntegrationCompleteDialog(ctx, currentId);
-      }
-    });
-  }
-
-  /// Shows the official OneSignal Integration Complete Dialog
-  void showIntegrationCompleteDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Your OneSignal SDK integration is complete!'),
-        content: const Text(
-          'You can now send Push Notifications & In-App Messages through OneSignal. Tap below to enable push notifications.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              requestPermission();
-            },
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
+    // Demo/sample integration dialog has been disabled.
   }
 
   /// Requests push notification permission (prompted on button tap or app launch)

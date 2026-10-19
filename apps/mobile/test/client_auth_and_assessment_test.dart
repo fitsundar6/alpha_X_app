@@ -168,7 +168,7 @@ void main() {
       expect(find.text('LOG IN TO YOUR ACCOUNT'), findsOneWidget);
       expect(find.text('LOGIN'), findsOneWidget);
       expect(find.text('CREATE NEW ACCOUNT'), findsOneWidget);
-      expect(find.text('ADMIN LOGIN'), findsOneWidget);
+      expect(find.text('ADMIN LOGIN'), findsNothing);
       expect(find.text('Continue as Guest'), findsNothing);
     });
 
