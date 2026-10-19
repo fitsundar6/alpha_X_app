@@ -2160,7 +2160,6 @@ export class WorkoutRepository {
   async getActiveSetCompletions(clientId: string, sessionId: string): Promise<any[]> {
     const resolvedUserId = await this.resolveUserId(clientId);
     const candidateIds = this.resolveSessionCandidateIds(sessionId);
-    const todayIST = getTodayISTDateString();
 
     try {
       const activeRecord = await prisma.workoutRecord.findFirst({
@@ -2168,13 +2167,13 @@ export class WorkoutRepository {
           clientId: resolvedUserId,
           sessionId: { in: candidateIds },
           isCompleted: false,
-          scheduledDate: todayIST,
         },
         include: {
           exerciseRecords: {
             include: { setRecords: true },
           },
         },
+        orderBy: { startedAt: 'desc' },
       });
 
       if (activeRecord) {
@@ -2197,13 +2196,12 @@ export class WorkoutRepository {
       }
     } catch (_) {}
 
-    // In-memory fallback: strictly scoped to todayIST
+    // In-memory fallback: active in-progress records for candidateIds
     const results: any[] = [];
     for (const sid of candidateIds) {
-      const prefixWithDate = `${resolvedUserId}_${sid}_${todayIST}_`;
-      const prefixLegacy = `${resolvedUserId}_${sid}_`;
+      const prefix = `${resolvedUserId}_${sid}_`;
       for (const [k, v] of this.activeSetRecords.entries()) {
-        if (k.startsWith(prefixWithDate) || (k.startsWith(prefixLegacy) && !k.includes('_202'))) {
+        if (k.startsWith(prefix)) {
           results.push(v);
         }
       }

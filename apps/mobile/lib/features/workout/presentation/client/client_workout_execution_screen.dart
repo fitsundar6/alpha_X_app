@@ -226,34 +226,46 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     _repsControllers.clear();
   }
 
+  String _setControllerKey(int exIdx, int setIdx, String setId, [String? exerciseId]) {
+    final exKey = (exerciseId != null && exerciseId.isNotEmpty) ? exerciseId : 'ex_$exIdx';
+    return '${exKey}_${setId}_$setIdx';
+  }
+
+  TextEditingController _getOrCreateWeightController(int exIdx, int setIdx, ExerciseSet s, [String? exerciseId]) {
+    final key = _setControllerKey(exIdx, setIdx, s.id, exerciseId);
+    return _weightControllers.putIfAbsent(key, () {
+      final String weightText;
+      if (s.isCompleted && s.actualWeight != null && s.actualWeight! > 0) {
+        final w = s.actualWeight!;
+        weightText = w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(1);
+      } else {
+        weightText = '';
+      }
+      return TextEditingController(text: weightText);
+    });
+  }
+
+  TextEditingController _getOrCreateRepsController(int exIdx, int setIdx, ExerciseSet s, [String? exerciseId]) {
+    final key = _setControllerKey(exIdx, setIdx, s.id, exerciseId);
+    return _repsControllers.putIfAbsent(key, () {
+      final String repsText;
+      if (s.isCompleted && s.actualReps != null && s.actualReps! > 0) {
+        repsText = s.actualReps!.toString();
+      } else {
+        repsText = '';
+      }
+      return TextEditingController(text: repsText);
+    });
+  }
+
   void _initAllSetControllers() {
     final session = widget.workoutRepository.activeSession;
     for (int exIdx = 0; exIdx < session.exercises.length; exIdx++) {
       final exercise = session.exercises[exIdx];
       for (int setIdx = 0; setIdx < exercise.sets.length; setIdx++) {
         final s = exercise.sets[setIdx];
-        final key = s.id;
-
-        if (!_weightControllers.containsKey(key)) {
-          final String weightText;
-          if (s.isCompleted && s.actualWeight != null && s.actualWeight! > 0) {
-            final w = s.actualWeight!;
-            weightText = w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(1);
-          } else {
-            weightText = '';
-          }
-          _weightControllers[key] = TextEditingController(text: weightText);
-        }
-
-        if (!_repsControllers.containsKey(key)) {
-          final String repsText;
-          if (s.isCompleted && s.actualReps != null && s.actualReps! > 0) {
-            repsText = s.actualReps!.toString();
-          } else {
-            repsText = '';
-          }
-          _repsControllers[key] = TextEditingController(text: repsText);
-        }
+        _getOrCreateWeightController(exIdx, setIdx, s, exercise.id);
+        _getOrCreateRepsController(exIdx, setIdx, s, exercise.id);
       }
     }
   }
@@ -276,8 +288,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     final prevSet = exercise.sets[setIndex - 1];
 
     // 1. Check if user entered values into previous set's controllers
-    final enteredWeightStr = _weightControllers[prevSet.id]?.text.trim() ?? '';
-    final enteredRepsStr = _repsControllers[prevSet.id]?.text.trim() ?? '';
+    final prevKey = _setControllerKey(exerciseIndex, setIndex - 1, prevSet.id, exercise.id);
+    final enteredWeightStr = _weightControllers[prevKey]?.text.trim() ?? '';
+    final enteredRepsStr = _repsControllers[prevKey]?.text.trim() ?? '';
     final enteredWeight = double.tryParse(enteredWeightStr);
     final enteredReps = int.tryParse(enteredRepsStr);
 
@@ -310,8 +323,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     if (setIndex >= exercise.sets.length) return;
 
     final s = exercise.sets[setIndex];
-    final weightStr = _weightControllers[s.id]?.text.trim() ?? '';
-    final repsStr = _repsControllers[s.id]?.text.trim() ?? '';
+    final key = _setControllerKey(exerciseIndex, setIndex, s.id, exercise.id);
+    final weightStr = _weightControllers[key]?.text.trim() ?? '';
+    final repsStr = _repsControllers[key]?.text.trim() ?? '';
 
     final weight = double.tryParse(weightStr);
     final reps = int.tryParse(repsStr);
@@ -358,8 +372,9 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       setState(() {});
     } else {
       // Complete set immediately
-      final weightStr = _weightControllers[s.id]?.text.trim() ?? '';
-      final repsStr = _repsControllers[s.id]?.text.trim() ?? '';
+      final key = _setControllerKey(exerciseIndex, setIndex, s.id, exercise.id);
+      final weightStr = _weightControllers[key]?.text.trim() ?? '';
+      final repsStr = _repsControllers[key]?.text.trim() ?? '';
 
       final suggestion = _getSuggestionForSet(
         exerciseIndex: exerciseIndex,
@@ -387,12 +402,12 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
 
       // Update controller text immediately so UI shows actual applied values
       if (weightStr == '0') {
-        _weightControllers[s.id]?.text = '0';
+        _weightControllers[key]?.text = '0';
       } else if (weight > 0) {
-        _weightControllers[s.id]?.text = weight % 1 == 0 ? weight.toInt().toString() : weight.toStringAsFixed(1);
+        _weightControllers[key]?.text = weight % 1 == 0 ? weight.toInt().toString() : weight.toStringAsFixed(1);
       }
       if (reps > 0) {
-        _repsControllers[s.id]?.text = reps.toString();
+        _repsControllers[key]?.text = reps.toString();
       }
 
       widget.workoutRepository.updateSetActual(
@@ -1351,6 +1366,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
           children: [
             // CARD HEADER ROW
             GestureDetector(
+              key: ValueKey('exercise_header_$exerciseIndex'),
               onTap: () {
                 HapticFeedback.selectionClick();
                 setState(() {
@@ -1439,6 +1455,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                     isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                     color: colors.textTertiary,
                     size: 22,
+                    key: ValueKey('exercise_chevron_$exerciseIndex'),
                   ),
                 ],
               ),
@@ -1623,8 +1640,11 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     required ClientThemeColors colors,
     required bool isDark,
   }) {
-    final weightCtrl = _weightControllers[set.id];
-    final repsCtrl = _repsControllers[set.id];
+    final exercise = widget.workoutRepository.activeSession.exercises.length > exerciseIndex
+        ? widget.workoutRepository.activeSession.exercises[exerciseIndex]
+        : null;
+    final weightCtrl = _getOrCreateWeightController(exerciseIndex, setIndex, set, exercise?.id);
+    final repsCtrl = _getOrCreateRepsController(exerciseIndex, setIndex, set, exercise?.id);
 
     // Previous text formatting
     final String previousText;
@@ -1962,30 +1982,32 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
             // Timer indicator
             Icon(Icons.timer_outlined, color: colors.primaryRed, size: 22),
             const SizedBox(width: 8),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _restExerciseName.isNotEmpty ? _restExerciseName.toUpperCase() : 'REST',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: colors.textTertiary,
-                    letterSpacing: 0.6,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _restExerciseName.isNotEmpty ? _restExerciseName.toUpperCase() : 'REST',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textTertiary,
+                      letterSpacing: 0.6,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  _formatSeconds(_restSecondsRemaining),
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: colors.primaryRed,
+                  Text(
+                    _formatSeconds(_restSecondsRemaining),
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: colors.primaryRed,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(width: 12),
 
