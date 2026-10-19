@@ -64,12 +64,65 @@ class WorkoutAssignmentData {
 }
 
 
+class PendingSetSync {
+  final String sessionId;
+  final String exerciseId;
+  final int setNumber;
+  final bool isCompleted;
+  final double? actualWeight;
+  final int? actualReps;
+  final double? actualRpe;
+  final int? actualRir;
+  final String scheduledDate;
+  final int clientTimestamp;
+
+  const PendingSetSync({
+    required this.sessionId,
+    required this.exerciseId,
+    required this.setNumber,
+    required this.isCompleted,
+    this.actualWeight,
+    this.actualReps,
+    this.actualRpe,
+    this.actualRir,
+    required this.scheduledDate,
+    required this.clientTimestamp,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'exerciseId': exerciseId,
+    'setNumber': setNumber,
+    'isCompleted': isCompleted,
+    'actualWeight': actualWeight,
+    'actualReps': actualReps,
+    'actualRpe': actualRpe,
+    'actualRir': actualRir,
+    'scheduledDate': scheduledDate,
+    'clientTimestamp': clientTimestamp,
+  };
+
+  factory PendingSetSync.fromJson(Map<String, dynamic> json) => PendingSetSync(
+    sessionId: json['sessionId'] as String? ?? '',
+    exerciseId: json['exerciseId'] as String? ?? '',
+    setNumber: (json['setNumber'] as num?)?.toInt() ?? 1,
+    isCompleted: json['isCompleted'] as bool? ?? true,
+    actualWeight: (json['actualWeight'] as num?)?.toDouble(),
+    actualReps: (json['actualReps'] as num?)?.toInt(),
+    actualRpe: (json['actualRpe'] as num?)?.toDouble(),
+    actualRir: (json['actualRir'] as num?)?.toInt(),
+    scheduledDate: json['scheduledDate'] as String? ?? '',
+    clientTimestamp: (json['clientTimestamp'] as num?)?.toInt() ?? 0,
+  );
+}
+
 class WorkoutRepository extends ChangeNotifier {
   static const String _storageKeySessions = 'alpha_x_workout_sessions';
   static const String _storageKeyAssignments = 'alpha_x_workout_assignments';
   static const String _storageKeyHistory = 'alpha_x_workout_history';
   static const String _storageKeyChangeRequests = 'alpha_x_change_requests';
   static const String _storageKeyPendingSync = 'alpha_x_pending_workout_records';
+  static const String _storageKeyPendingSetCompletions = 'alpha_x_pending_set_completions';
   static const String _storageKeyActiveSession = 'alpha_x_workout_active_session_state';
   static const String _storageKeyActiveSessionTimestamp = 'alpha_x_workout_active_session_timestamp';
   static const String _storageKeyActiveSessionDuration = 'alpha_x_workout_active_session_duration';
@@ -84,6 +137,7 @@ class WorkoutRepository extends ChangeNotifier {
   final List<WorkoutAssignmentData> _assignments = [];
   final List<WorkoutRecord> _workoutHistory = [];
   final List<WorkoutRecord> _pendingSyncRecords = [];
+  final List<PendingSetSync> _pendingSetCompletions = [];
   final List<ExerciseChangeRequest> _changeRequests = [];
   final List<ExerciseSwapRecord> _currentSessionSwaps = [];
 
@@ -136,12 +190,31 @@ class WorkoutRepository extends ChangeNotifier {
     notifyListeners();
   }
   int get pendingSyncCount => _pendingSyncRecords.length;
+  int get pendingSetCompletionsCount => _pendingSetCompletions.length;
   DateTime? get activeSessionSavedAt => _activeSessionSavedAt;
   bool get hasActiveSavedSession {
     if (!_hasRestoredActiveSession) return false;
     if (_activeSession.isCompleted) return false;
     if (_activeSession.isLocked) return false;
     if (_activeSession.status == 'COMPLETED' || _activeSession.status == 'ABANDONED') return false;
+    final currentUid = AuthService().currentUserId;
+    if (currentUid.isNotEmpty &&
+        _activeSession.assignedClientId != null &&
+        _activeSession.assignedClientId!.isNotEmpty &&
+        _activeSession.assignedClientId != currentUid) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Authoritative check: Returns true strictly when a client is actively training in an
+  /// in-progress workout session. When true, background refreshes, schedule/date changes,
+  /// or admin assignment changes must NEVER replace or mutate the active session.
+  bool get isWorkoutInProgress {
+    if (!_hasRestoredActiveSession) return false;
+    if (_activeSession.isCompleted) return false;
+    if (_activeSession.isLocked) return false;
+    if (_activeSession.status != 'IN_PROGRESS') return false;
     final currentUid = AuthService().currentUserId;
     if (currentUid.isNotEmpty &&
         _activeSession.assignedClientId != null &&
@@ -1053,7 +1126,7 @@ class WorkoutRepository extends ChangeNotifier {
         ),
       );
       _sessions[index] = versionedSession;
-      if (_activeSession.id == session.id) {
+      if (_activeSession.id == session.id && !isWorkoutInProgress) {
         _activeSession = versionedSession;
       }
       _saveToLocalStorage();
@@ -1161,7 +1234,7 @@ class WorkoutRepository extends ChangeNotifier {
   Future<bool> deleteSession(String sessionId) async {
     _sessions.removeWhere((s) => s.id == sessionId);
     _assignments.removeWhere((a) => a.sessionId == sessionId);
-    if (_activeSession.id == sessionId && _sessions.isNotEmpty) {
+    if (_activeSession.id == sessionId && !isWorkoutInProgress && _sessions.isNotEmpty) {
       _activeSession = _sessions.first;
     }
     _saveToLocalStorage();
@@ -1483,10 +1556,14 @@ class WorkoutRepository extends ChangeNotifier {
               ));
             }
 
-            if (_sessions.isNotEmpty) {
-              final rec = getRecommendedSessionForClient(currentClientId);
-              if (rec != null) {
-                _activeSession = rec;
+            final isTrainingActive = isWorkoutInProgress || hasActiveSavedSession;
+
+            if (!isTrainingActive) {
+              if (_sessions.isNotEmpty) {
+                final rec = getRecommendedSessionForClient(currentClientId);
+                if (rec != null) {
+                  _activeSession = rec;
+                }
               }
             }
 
@@ -1619,14 +1696,13 @@ class WorkoutRepository extends ChangeNotifier {
 
   WorkoutSession? getTodaySessionForClient(String clientId) {
     if (clientId.isEmpty) return null;
-    final todayIST = IstDateUtils.getTodayISTString();
 
-    // 1. If user already has an active IN_PROGRESS session that is NOT locked and matches today, return that active session
+    // 1. If user already has an active IN_PROGRESS session that is NOT locked, return that active session.
+    // An active session remains locked to its originally started workout and must NEVER be replaced by the current date/next day!
     if (hasActiveSavedSession &&
         _activeSession.status == 'IN_PROGRESS' &&
         !_activeSession.isLocked &&
-        (_activeSession.scheduledDate == null || _activeSession.scheduledDate == todayIST) &&
-        (_activeSession.assignedClientId == clientId || _activeSession.assignedClientId == null)) {
+        (_activeSession.assignedClientId == clientId || _activeSession.assignedClientId == null || _activeSession.assignedClientId!.isEmpty)) {
       return _activeSession;
     }
 
@@ -1650,6 +1726,17 @@ class WorkoutRepository extends ChangeNotifier {
 
     final targetClientId = clientId ?? session.assignedClientId ?? AuthService().currentUserId;
     final todayIST = session.scheduledDate ?? IstDateUtils.getTodayISTString();
+
+    // Guard: If the session is already active in progress for this client, preserve it!
+    // Never restart or wipe sets/elapsed time of an already active in-progress session.
+    if (hasActiveSavedSession &&
+        _activeSession.status == 'IN_PROGRESS' &&
+        !_activeSession.isLocked &&
+        (_activeSession.id == session.id || _activeSession.assignedWorkoutId == session.id) &&
+        (_activeSession.assignedClientId == targetClientId || targetClientId.isEmpty)) {
+      debugPrint('[WorkoutRepository] Session ${session.id} is already active in progress. Preserving active state.');
+      return;
+    }
 
     // Check if already completed and locked in history for today
     final alreadyCompletedToday = _workoutHistory.any((r) {
@@ -2630,6 +2717,15 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
+      final pendingSetsRaw = prefs.getString(_storageKeyPendingSetCompletions);
+      if (pendingSetsRaw != null && pendingSetsRaw.isNotEmpty) {
+        final list = jsonDecode(pendingSetsRaw) as List<dynamic>;
+        _pendingSetCompletions.clear();
+        for (final item in list) {
+          _pendingSetCompletions.add(PendingSetSync.fromJson(item as Map<String, dynamic>));
+        }
+      }
+
       // Restore active in-progress workout session for current authenticated user
       final currentUid = AuthService().currentUserId;
       if (currentUid.isNotEmpty) {
@@ -2671,22 +2767,21 @@ class WorkoutRepository extends ChangeNotifier {
       if (activeRaw != null && activeRaw.isNotEmpty) {
         final activeMap = jsonDecode(activeRaw) as Map<String, dynamic>;
         final restored = WorkoutSession.fromJson(activeMap);
-        final todayIST = IstDateUtils.getTodayISTString();
-
         final sessionDate = restored.scheduledDate ?? IstDateUtils.toISTDateString(restored.startedAt);
-        final isForToday = sessionDate.isEmpty || sessionDate == todayIST;
 
+        // Do not require sessionDate == todayIST for an in-progress workout session!
+        // A client starting a session before midnight must stay locked to their session and not have it discarded.
         final isCompletedInHistory = _workoutHistory.any((r) =>
             r.clientId == clientId &&
-            r.sessionId == restored.id &&
-            (r.scheduledDate == todayIST || IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt) == todayIST) &&
-            r.isCompleted);
+            (r.sessionId == restored.id || r.sessionId == restored.assignedWorkoutId) &&
+            r.isCompleted &&
+            (r.scheduledDate == sessionDate ||
+             IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt) == sessionDate));
 
         final age = DateTime.now().difference(restored.startedAt);
         if (!restored.isCompleted &&
             !restored.isLocked &&
             !isCompletedInHistory &&
-            isForToday &&
             (restored.status == 'IN_PROGRESS' || restored.status == 'NOT_STARTED') &&
             age.inHours < 24) {
           _activeSession = restored;
@@ -2697,7 +2792,7 @@ class WorkoutRepository extends ChangeNotifier {
           }
           notifyListeners();
         } else {
-          // If the session was from yesterday, completed, or locked, clean it up so it is never accidentally reopened
+          // If the session was completed, locked, or stale (>24 hours), clean it up so it is never accidentally reopened
           await discardActiveSession(userId: clientId);
         }
       }
@@ -2790,6 +2885,7 @@ class WorkoutRepository extends ChangeNotifier {
       await prefs.setString(_storageKeyChangeRequests, jsonEncode(requestsList));
 
       await _savePendingSyncRecords();
+      await _savePendingSetCompletions();
     } catch (_) {}
   }
 
@@ -2799,6 +2895,33 @@ class WorkoutRepository extends ChangeNotifier {
       final pendingList = _pendingSyncRecords.map((r) => r.toJson()).toList();
       await prefs.setString(_storageKeyPendingSync, jsonEncode(pendingList));
     } catch (_) {}
+  }
+
+  Future<void> _savePendingSetCompletions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _pendingSetCompletions.map((p) => p.toJson()).toList();
+      await prefs.setString(_storageKeyPendingSetCompletions, jsonEncode(list));
+    } catch (_) {}
+  }
+
+  void _addOrUpdatePendingSetSync(PendingSetSync item) {
+    _pendingSetCompletions.removeWhere((p) =>
+        p.sessionId == item.sessionId &&
+        p.exerciseId == item.exerciseId &&
+        p.setNumber == item.setNumber);
+    _pendingSetCompletions.add(item);
+    _savePendingSetCompletions();
+    notifyListeners();
+  }
+
+  void _removePendingSetSync(String sessionId, String exerciseId, int setNumber) {
+    _pendingSetCompletions.removeWhere((p) =>
+        p.sessionId == sessionId &&
+        p.exerciseId == exerciseId &&
+        p.setNumber == setNumber);
+    _savePendingSetCompletions();
+    notifyListeners();
   }
 
   void _addPendingSyncRecord(WorkoutRecord record) {
@@ -2816,6 +2939,8 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   /// Push individual set completion state immediately to the backend REST API / database.
+  /// If the network request fails or device is offline, it is safely queued locally
+  /// so that no completed sets are ever lost or uncompleted upon refresh.
   Future<bool> syncSetCompletionToBackend({
     required String sessionId,
     required String exerciseId,
@@ -2825,8 +2950,11 @@ class WorkoutRepository extends ChangeNotifier {
     int? actualReps,
     double? actualRpe,
     int? actualRir,
+    String? scheduledDate,
     String? authToken,
   }) async {
+    final effectiveDate = scheduledDate ?? _activeSession.scheduledDate ?? IstDateUtils.getTodayISTString();
+
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/set-completion');
       final token = authToken ??
@@ -2843,7 +2971,7 @@ class WorkoutRepository extends ChangeNotifier {
         'actualReps': actualReps,
         'actualRpe': actualRpe,
         'actualRir': actualRir,
-        'scheduledDate': _activeSession.scheduledDate ?? IstDateUtils.getTodayISTString(),
+        'scheduledDate': effectiveDate,
       };
 
       final response = await _httpClient
@@ -2859,14 +2987,85 @@ class WorkoutRepository extends ChangeNotifier {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         debugPrint('[WorkoutRepository] Successfully synced set completion ($exerciseId Set $setNumber: $isCompleted) to database.');
+        _removePendingSetSync(sessionId, exerciseId, setNumber);
         return true;
       } else {
         debugPrint('[WorkoutRepository] Backend set sync response ${response.statusCode}: ${response.body}');
+        final pendingItem = PendingSetSync(
+          sessionId: sessionId,
+          exerciseId: exerciseId,
+          setNumber: setNumber,
+          isCompleted: isCompleted,
+          actualWeight: actualWeight,
+          actualReps: actualReps,
+          actualRpe: actualRpe,
+          actualRir: actualRir,
+          scheduledDate: effectiveDate,
+          clientTimestamp: DateTime.now().millisecondsSinceEpoch,
+        );
+        _addOrUpdatePendingSetSync(pendingItem);
         return false;
       }
     } catch (e) {
-      debugPrint('[WorkoutRepository] Notice during set completion sync: $e');
+      debugPrint('[WorkoutRepository] Offline or notice during set completion sync: $e');
+      final pendingItem = PendingSetSync(
+        sessionId: sessionId,
+        exerciseId: exerciseId,
+        setNumber: setNumber,
+        isCompleted: isCompleted,
+        actualWeight: actualWeight,
+        actualReps: actualReps,
+        actualRpe: actualRpe,
+        actualRir: actualRir,
+        scheduledDate: effectiveDate,
+        clientTimestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      _addOrUpdatePendingSetSync(pendingItem);
       return false;
+    }
+  }
+
+  /// Synchronize all pending offline set completions with the backend
+  Future<void> syncPendingSetCompletionsWithBackend() async {
+    if (_pendingSetCompletions.isEmpty) return;
+    final toSync = List<PendingSetSync>.from(_pendingSetCompletions);
+    for (final item in toSync) {
+      try {
+        final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/${item.sessionId}/set-completion');
+        final token = AuthService().currentToken.isNotEmpty
+            ? AuthService().currentToken
+            : (_isTestEnvironment ? 'alpha_x_mock_token_for_client' : '');
+
+        final payload = {
+          'sessionId': item.sessionId,
+          'exerciseId': item.exerciseId,
+          'setNumber': item.setNumber,
+          'isCompleted': item.isCompleted,
+          'actualWeight': item.actualWeight,
+          'actualReps': item.actualReps,
+          'actualRpe': item.actualRpe,
+          'actualRir': item.actualRir,
+          'scheduledDate': item.scheduledDate,
+        };
+
+        final response = await _httpClient
+            .post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          _removePendingSetSync(item.sessionId, item.exerciseId, item.setNumber);
+        }
+      } catch (e) {
+        debugPrint('[WorkoutRepository] Retry set sync error: $e');
+        break;
+      }
     }
   }
 
@@ -2911,6 +3110,10 @@ class WorkoutRepository extends ChangeNotifier {
 
   /// Synchronize all pending offline workout records with the backend
   Future<void> syncPendingRecordsWithBackend({String? authToken}) async {
+    // 1. Sync any pending set completions first
+    await syncPendingSetCompletionsWithBackend();
+
+    // 2. Sync full workout records
     if (_pendingSyncRecords.isEmpty) return;
     final toSync = List<WorkoutRecord>.from(_pendingSyncRecords);
     for (final record in toSync) {
