@@ -1583,6 +1583,17 @@ class WorkoutRepository extends ChangeNotifier {
   }
 
   // --- Client Discovery & Access Scoping ---
+  bool hasAssignedWorkoutsForClient(String clientId) {
+    if (clientId.isEmpty) return false;
+    final matchClientIds = <String>{
+      clientId,
+      AuthService().currentUserId,
+      AuthService().currentClientId,
+    }.where((id) => id.isNotEmpty).toSet();
+
+    return _assignments.any((a) => a.clientId != null && matchClientIds.contains(a.clientId));
+  }
+
   WorkoutSession? getRecommendedSessionForClient(String clientId) {
     if (clientId.isEmpty) return null;
 
@@ -1592,25 +1603,76 @@ class WorkoutRepository extends ChangeNotifier {
       AuthService().currentClientId,
     }.where((id) => id.isNotEmpty).toSet();
 
-    // 1. Look for client-specific recommended assignment
-    final clientRec = _assignments.firstWhere(
-      (a) => a.clientId != null && matchClientIds.contains(a.clientId) && a.isRecommended,
-      orElse: () => WorkoutAssignmentData(id: '', sessionId: ''),
-    );
-    if (clientRec.sessionId.isNotEmpty) {
-      final s = _sessions.where((s) => s.id == clientRec.sessionId && s.isActive).firstOrNull;
-      if (s != null) return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
+    // 0. Active session lock: If client currently has an active IN_PROGRESS session that is NOT locked,
+    // preserve and return that exact session! Never switch to another workout mid-session!
+    if (hasActiveSavedSession &&
+        _activeSession.status == 'IN_PROGRESS' &&
+        !_activeSession.isLocked &&
+        (_activeSession.assignedClientId == null ||
+         _activeSession.assignedClientId!.isEmpty ||
+         matchClientIds.contains(_activeSession.assignedClientId))) {
+      return _activeSession;
     }
 
-    // 2. Look for any client-specific assignment (newest assignment)
+    final todayIST = IstDateUtils.getTodayISTString();
+    final todayWeekday = IstDateUtils.getTodayISTWeekday();
+
     final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
-    if (clientAssignments.isNotEmpty) {
-      final lastAssigned = clientAssignments.last;
-      final s = _sessions.where((s) => s.id == lastAssigned.sessionId && s.isActive).firstOrNull;
-      if (s != null) return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
+    if (clientAssignments.isEmpty) return null;
+
+    // 1. Progression check: Check if there is an incomplete scheduled session prior to today in current cycle
+    final priorIncomplete = <WorkoutSession>[];
+    for (final assignment in clientAssignments) {
+      final s = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
+      if (s == null) continue;
+
+      final recurringDays = IstDateUtils.parseWeekdaysFromScheduleString(s.recurringSchedule);
+      int? itemWeekday;
+      if (recurringDays.isNotEmpty) {
+        itemWeekday = recurringDays.first;
+      } else if (assignment.scheduledDate != null) {
+        itemWeekday = IstDateUtils.getWeekdayFromISTDateString(assignment.scheduledDate!);
+      }
+
+      if (itemWeekday != null && itemWeekday < todayWeekday) {
+        final isCompletedInHistory = _workoutHistory.any((r) =>
+          matchClientIds.contains(r.clientId) &&
+          r.sessionId == s.id &&
+          r.isCompleted &&
+          (r.scheduledDate == null || r.scheduledDate == assignment.scheduledDate)
+        );
+        if (!isCompletedInHistory && !assignment.isLocked && assignment.status != 'COMPLETED') {
+          priorIncomplete.add(s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id));
+        }
+      }
     }
 
-    // DO NOT fall back to global or seeded default workout!
+    if (priorIncomplete.isNotEmpty) {
+      // Prior required session remains the eligible workout until completed!
+      return priorIncomplete.first;
+    }
+
+    // 2. All prior days completed: check if there is an active session scheduled for TODAY in IST
+    for (final assignment in clientAssignments) {
+      final s = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
+      if (s == null) continue;
+
+      final isScheduledToday = IstDateUtils.isSessionScheduledForDate(
+        recurringSchedule: s.recurringSchedule,
+        trainingDays: s.trainingDays,
+        sessionStartDate: s.startDate,
+        sessionEndDate: s.endDate,
+        assignmentScheduledDate: assignment.scheduledDate,
+        assignmentAssignedAt: assignment.assignedAt,
+        targetDateIST: todayIST,
+      );
+
+      if (isScheduledToday) {
+        return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
+      }
+    }
+
+    // 3. REST DAY: No workout scheduled for today in IST (Never fallback to another day's workout!)
     return null;
   }
 
@@ -3365,4 +3427,189 @@ class WorkoutRepository extends ChangeNotifier {
     return false;
   }
 
+  /// Fetches client's canonical 7-day workout split
+  Future<WorkoutSplitPlan?> fetchClientWorkoutSplit(String clientId) async {
+    final token = await AuthService().getValidToken();
+    if (token.isEmpty && !_isTestEnvironment) return null;
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/admin/clients/$clientId/split');
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          return WorkoutSplitPlan.fromJson(decoded['data'] as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] fetchClientWorkoutSplit error: $e');
+    }
+
+    // In-memory reconstruction fallback for offline / test environments
+    final clientAssignments = _assignments.where((a) => a.clientId == clientId && a.status != 'CANCELLED').toList();
+    if (clientAssignments.isEmpty) return null;
+
+    final days = <WorkoutSplitDay>[];
+    final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    for (int i = 0; i < 7; i++) {
+      final dayName = dayNames[i];
+      final match = clientAssignments.where((a) {
+        final s = _sessions.where((sess) => sess.id == a.sessionId).firstOrNull;
+        if (s == null) return false;
+        return (s.recurringSchedule ?? '').toLowerCase().contains(dayName.toLowerCase());
+      }).firstOrNull;
+
+      if (match != null) {
+        final s = _sessions.firstWhere((sess) => sess.id == match.sessionId);
+        days.add(WorkoutSplitDay(
+          id: 'split_day_${s.id}',
+          sessionId: s.id,
+          dayOfWeek: dayName,
+          dayIndex: i + 1,
+          name: s.title,
+          workoutType: s.workoutType,
+          targetMuscleGroup: s.targetMuscleGroup,
+          estimatedDurationMinutes: s.estimatedDurationMinutes,
+          isRestDay: false,
+          notes: s.description,
+          exercises: s.exercises,
+        ));
+      } else {
+        days.add(WorkoutSplitDay(
+          id: 'split_day_rest_${i + 1}',
+          dayOfWeek: dayName,
+          dayIndex: i + 1,
+          name: 'Rest Day',
+          workoutType: 'Rest',
+          targetMuscleGroup: 'Recovery',
+          estimatedDurationMinutes: 0,
+          isRestDay: true,
+          notes: 'Rest & recovery day.',
+          exercises: const [],
+        ));
+      }
+    }
+
+    return WorkoutSplitPlan(
+      id: 'split_$clientId',
+      title: 'Workout Split',
+      clientId: clientId,
+      days: days,
+    );
+  }
+
+  /// Saves or creates a canonical workout split
+  Future<WorkoutSplitPlan?> saveWorkoutSplit(WorkoutSplitPlan split) async {
+    final token = await AuthService().getValidToken();
+    if (token.isEmpty && !_isTestEnvironment) return null;
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/admin/splits');
+      final response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(split.toJson()),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['success'] == true && decoded['data'] != null) {
+          final savedSplit = WorkoutSplitPlan.fromJson(decoded['data'] as Map<String, dynamic>);
+          await fetchAdminSessions();
+          return savedSplit;
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] saveWorkoutSplit error: $e');
+    }
+
+    // In-memory update for offline / test environments
+    for (final day in split.days) {
+      if (!day.isRestDay) {
+        final session = WorkoutSession(
+          id: day.sessionId ?? 'ws_${split.id}_${day.dayIndex}',
+          title: day.name,
+          workoutType: day.workoutType,
+          targetMuscleGroup: day.targetMuscleGroup,
+          estimatedDurationMinutes: day.estimatedDurationMinutes,
+          recurringSchedule: day.dayOfWeek,
+          description: day.notes,
+          exercises: day.exercises,
+          assignedClientIds: split.clientId != null ? [split.clientId!] : const [],
+        );
+        final existingIdx = _sessions.indexWhere((s) => s.id == session.id);
+        if (existingIdx != -1) {
+          _sessions[existingIdx] = session;
+        } else {
+          _sessions.add(session);
+        }
+
+        if (split.clientId != null) {
+          _assignments.removeWhere((a) => a.clientId == split.clientId && a.sessionId == session.id);
+          _assignments.add(WorkoutAssignmentData(
+            id: 'assign_${session.id}_${split.clientId}',
+            sessionId: session.id,
+            clientId: split.clientId,
+            isRecommended: day.dayIndex == 1,
+            assignedAt: DateTime.now(),
+            status: 'ASSIGNED',
+          ));
+        }
+      }
+    }
+    notifyListeners();
+    return split;
+  }
+
+  /// Updates a specific day's workout within a split without touching other days
+  Future<bool> updateWorkoutSplitDay(String splitId, String dayId, WorkoutSplitDay day) async {
+    final token = await AuthService().getValidToken();
+    if (token.isEmpty && !_isTestEnvironment) return false;
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/admin/splits/$splitId/days/$dayId');
+      final response = await _httpClient.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(day.toJson()),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        await fetchAdminSessions();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] updateWorkoutSplitDay error: $e');
+    }
+
+    // In-memory update
+    final targetId = day.sessionId ?? dayId;
+    final idx = _sessions.indexWhere((s) => s.id == targetId || s.id.contains(dayId));
+    if (idx != -1) {
+      _sessions[idx] = _sessions[idx].copyWith(
+        title: day.name,
+        targetMuscleGroup: day.targetMuscleGroup,
+        workoutType: day.workoutType,
+        estimatedDurationMinutes: day.estimatedDurationMinutes,
+        exercises: day.exercises,
+        recurringSchedule: day.dayOfWeek,
+      );
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
 }

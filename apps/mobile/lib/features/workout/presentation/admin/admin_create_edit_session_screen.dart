@@ -8,6 +8,7 @@ import 'package:alpha_x_gym/features/exercise/presentation/widgets/exercise_pick
 class AdminCreateEditSessionScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final WorkoutSession? sessionToEdit;
+  final WorkoutSplitPlan? splitToEdit;
   final String? clientIdToAssign;
   final VoidCallback? onSaved;
 
@@ -15,6 +16,7 @@ class AdminCreateEditSessionScreen extends StatefulWidget {
     super.key,
     required this.workoutRepository,
     this.sessionToEdit,
+    this.splitToEdit,
     this.clientIdToAssign,
     this.onSaved,
   });
@@ -41,6 +43,25 @@ class _AdminCreateEditSessionScreenState
   String _availabilityType = 'ALL';
   DateTime? _startDate;
   DateTime? _endDate;
+
+  // Split-Mode Day Isolation State
+  bool _isSplitMode = true;
+  final List<String> _splitDays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  String _selectedSplitDay = 'Monday';
+  final Map<String, List<WorkoutExercise>> _dayExercises = {};
+  final Map<String, String> _dayTitles = {};
+  final Map<String, String> _dayMuscleGroups = {};
+  final Map<String, String> _dayWorkoutTypes = {};
+  final Map<String, bool> _dayIsRest = {};
+  final Map<String, String?> _daySessionIds = {};
 
   // Sections, Exercises, Permissions, Weekly Schedule
   List<WorkoutSection> _sections = [];
@@ -80,7 +101,39 @@ class _AdminCreateEditSessionScreenState
     _recurringScheduleController =
         TextEditingController(text: s?.recurringSchedule ?? '');
 
-    if (s != null) {
+    // Initialize canonical day-wise split structures
+    for (final day in _splitDays) {
+      _dayExercises[day] = [];
+      _dayTitles[day] = _getDayDefaultTitle(day);
+      _dayMuscleGroups[day] = _getDayDefaultMuscle(day);
+      _dayWorkoutTypes[day] = 'Strength';
+      _dayIsRest[day] = day == 'Sunday';
+      _daySessionIds[day] = null;
+    }
+
+    if (widget.splitToEdit != null) {
+      _isSplitMode = true;
+      for (final d in widget.splitToEdit!.days) {
+        _dayExercises[d.dayOfWeek] = List.from(d.exercises);
+        _dayTitles[d.dayOfWeek] = d.name;
+        _dayMuscleGroups[d.dayOfWeek] = d.targetMuscleGroup;
+        _dayWorkoutTypes[d.dayOfWeek] = d.workoutType;
+        _dayIsRest[d.dayOfWeek] = d.isRestDay;
+        _daySessionIds[d.dayOfWeek] = d.sessionId;
+      }
+      _exercises = List.from(_dayExercises[_selectedSplitDay] ?? []);
+      _titleController.text = _dayTitles[_selectedSplitDay] ?? '';
+      _targetMuscleGroupController.text = _dayMuscleGroups[_selectedSplitDay] ?? '';
+      _selectedWorkoutType = _dayWorkoutTypes[_selectedSplitDay] ?? 'Strength';
+    } else if (s != null) {
+      final day = s.recurringSchedule ?? 'Monday';
+      _selectedSplitDay = _splitDays.contains(day) ? day : 'Monday';
+      _dayExercises[_selectedSplitDay] = List.from(s.exercises);
+      _dayTitles[_selectedSplitDay] = s.title;
+      _dayMuscleGroups[_selectedSplitDay] = s.targetMuscleGroup;
+      _dayWorkoutTypes[_selectedSplitDay] = s.workoutType;
+      _daySessionIds[_selectedSplitDay] = s.id;
+
       _selectedWorkoutType = s.workoutType;
       _selectedDifficulty = s.difficulty;
       _isActive = s.isActive;
@@ -177,6 +230,10 @@ class _AdminCreateEditSessionScreenState
         ),
       ];
     }
+
+    if (widget.clientIdToAssign != null && widget.splitToEdit == null) {
+      _loadExistingClientSplit();
+    }
   }
 
   @override
@@ -187,6 +244,257 @@ class _AdminCreateEditSessionScreenState
     _descriptionController.dispose();
     _recurringScheduleController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadExistingClientSplit() async {
+    if (widget.clientIdToAssign == null) return;
+    try {
+      final split = await widget.workoutRepository.fetchClientWorkoutSplit(widget.clientIdToAssign!);
+      if (split != null && mounted) {
+        setState(() {
+          for (final d in split.days) {
+            _dayExercises[d.dayOfWeek] = List.from(d.exercises);
+            _dayTitles[d.dayOfWeek] = d.name;
+            _dayMuscleGroups[d.dayOfWeek] = d.targetMuscleGroup;
+            _dayWorkoutTypes[d.dayOfWeek] = d.workoutType;
+            _dayIsRest[d.dayOfWeek] = d.isRestDay;
+            _daySessionIds[d.dayOfWeek] = d.sessionId;
+          }
+          _exercises = List.from(_dayExercises[_selectedSplitDay] ?? []);
+          _titleController.text = _dayTitles[_selectedSplitDay] ?? '';
+          _targetMuscleGroupController.text = _dayMuscleGroups[_selectedSplitDay] ?? '';
+          _selectedWorkoutType = _dayWorkoutTypes[_selectedSplitDay] ?? 'Strength';
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onSelectSplitDay(String newDay) {
+    if (newDay == _selectedSplitDay) return;
+    // 1. Preserve current active day exercises & titles
+    _dayExercises[_selectedSplitDay] = List.from(_exercises);
+    _dayTitles[_selectedSplitDay] = _titleController.text.trim();
+    _dayMuscleGroups[_selectedSplitDay] = _targetMuscleGroupController.text.trim();
+    _dayWorkoutTypes[_selectedSplitDay] = _selectedWorkoutType;
+
+    // 2. Switch to selected day
+    setState(() {
+      _selectedSplitDay = newDay;
+      _exercises = List.from(_dayExercises[newDay] ?? []);
+      _titleController.text = _dayTitles[newDay]?.isNotEmpty == true
+          ? _dayTitles[newDay]!
+          : _getDayDefaultTitle(newDay);
+      _targetMuscleGroupController.text = _dayMuscleGroups[newDay]?.isNotEmpty == true
+          ? _dayMuscleGroups[newDay]!
+          : _getDayDefaultMuscle(newDay);
+      _selectedWorkoutType = _dayWorkoutTypes[newDay] ?? 'Strength';
+      _recurringScheduleController.text = newDay;
+    });
+  }
+
+  String _getDayDefaultTitle(String day) {
+    switch (day.toLowerCase()) {
+      case 'monday':
+        return 'Monday — Push Day';
+      case 'tuesday':
+        return 'Tuesday — Pull Day';
+      case 'wednesday':
+        return 'Wednesday — Legs Day';
+      case 'thursday':
+        return 'Thursday — Push Day 2';
+      case 'friday':
+        return 'Friday — Pull Day 2';
+      case 'saturday':
+        return 'Saturday — Legs Day 2';
+      case 'sunday':
+        return 'Sunday — Rest & Recovery';
+      default:
+        return '$day Workout';
+    }
+  }
+
+  String _getDayDefaultMuscle(String day) {
+    switch (day.toLowerCase()) {
+      case 'monday':
+      case 'thursday':
+        return 'Chest • Shoulders • Triceps';
+      case 'tuesday':
+      case 'friday':
+        return 'Back • Biceps • Rear Delts';
+      case 'wednesday':
+      case 'saturday':
+        return 'Quads • Hamstrings • Calves';
+      case 'sunday':
+        return 'Active Recovery & Mobility';
+      default:
+        return 'Full Body';
+    }
+  }
+
+  Widget _buildSplitDaySelector() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.calendar_month, color: AppColors.primaryRed, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'WORKOUT SPLIT DAYS',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Text(
+                    _isSplitMode ? '7-Day Split' : 'Single Workout',
+                    style: TextStyle(
+                      color: _isSplitMode ? AppColors.primaryRed : AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Switch.adaptive(
+                    value: _isSplitMode,
+                    activeColor: AppColors.primaryRed,
+                    onChanged: (val) {
+                      setState(() => _isSplitMode = val);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (_isSplitMode) ...[
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _splitDays.map((day) {
+                  final isSelected = day == _selectedSplitDay;
+                  final isRest = _dayIsRest[day] ?? false;
+                  final exCount = (_dayExercises[day] ?? []).length;
+                  final shortName = day.substring(0, 3);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () => _onSelectSplitDay(day),
+                      borderRadius: BorderRadius.circular(12),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primaryRed
+                              : (isRest ? AppColors.background : AppColors.surfaceCard),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primaryRed : AppColors.border,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              shortName.toUpperCase(),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isRest ? 'Rest' : '$exCount ex',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.9)
+                                    : (isRest ? AppColors.textSecondary : AppColors.primaryRed),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    (_dayIsRest[_selectedSplitDay] ?? false) ? Icons.bedtime : Icons.fitness_center,
+                    size: 16,
+                    color: AppColors.primaryRed,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Editing: $_selectedSplitDay (${_exercises.length} exercises)',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Text(
+                        'Rest Day',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(width: 4),
+                      Checkbox(
+                        value: _dayIsRest[_selectedSplitDay] ?? false,
+                        activeColor: AppColors.primaryRed,
+                        onChanged: (val) {
+                          setState(() {
+                            _dayIsRest[_selectedSplitDay] = val ?? false;
+                            if (val == true) {
+                              _titleController.text = '$_selectedSplitDay — Rest & Recovery';
+                              _targetMuscleGroupController.text = 'Active Recovery • Mobility';
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _onReorderExercises(int oldIndex, int newIndex) {
@@ -374,6 +682,80 @@ class _AdminCreateEditSessionScreenState
   Future<void> _saveSession() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // 1. Sync current active day exercises
+    _dayExercises[_selectedSplitDay] = List.from(_exercises);
+    _dayTitles[_selectedSplitDay] = _titleController.text.trim();
+    _dayMuscleGroups[_selectedSplitDay] = _targetMuscleGroupController.text.trim();
+    _dayWorkoutTypes[_selectedSplitDay] = _selectedWorkoutType;
+
+    if (_isSplitMode) {
+      final totalExCount = _dayExercises.values.fold(0, (acc, list) => acc + list.length);
+      if (totalExCount == 0 && !_dayIsRest.values.any((r) => r)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add exercises to at least one workout day in the split.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+
+      final splitDays = <WorkoutSplitDay>[];
+      for (int i = 0; i < _splitDays.length; i++) {
+        final dayName = _splitDays[i];
+        final dayExs = _dayExercises[dayName] ?? [];
+        final isRest = _dayIsRest[dayName] ?? (dayExs.isEmpty);
+
+        splitDays.add(WorkoutSplitDay(
+          id: 'split_day_${dayName.toLowerCase()}',
+          sessionId: _daySessionIds[dayName],
+          dayOfWeek: dayName,
+          dayIndex: i + 1,
+          name: _dayTitles[dayName]?.isNotEmpty == true
+              ? _dayTitles[dayName]!
+              : (isRest ? 'Rest Day' : '$dayName Workout'),
+          workoutType: _dayWorkoutTypes[dayName] ?? 'Strength',
+          targetMuscleGroup: _dayMuscleGroups[dayName]?.isNotEmpty == true
+              ? _dayMuscleGroups[dayName]!
+              : (isRest ? 'Recovery' : 'Full Body'),
+          estimatedDurationMinutes: int.tryParse(_durationController.text.trim()) ?? 45,
+          isRestDay: isRest,
+          notes: _descriptionController.text.trim(),
+          exercises: isRest ? const [] : dayExs,
+        ));
+      }
+
+      final split = WorkoutSplitPlan(
+        id: widget.splitToEdit?.id ?? 'split_${DateTime.now().millisecondsSinceEpoch}',
+        title: _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'Weekly Workout Split',
+        splitType: 'Custom',
+        description: _descriptionController.text.trim(),
+        frequencyPerWeek: splitDays.where((d) => !d.isRestDay).length,
+        clientId: widget.clientIdToAssign,
+        days: splitDays,
+      );
+
+      await widget.workoutRepository.saveWorkoutSplit(split);
+
+      widget.onSaved?.call();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.clientIdToAssign != null
+                ? 'Workout split saved and assigned to athlete day-by-day!'
+                : 'Workout split plan saved successfully.',
+          ),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+
+      Navigator.of(context).pop();
+      return;
+    }
+
     if (_exercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -487,6 +869,10 @@ class _AdminCreateEditSessionScreenState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Day-Wise Split Selector
+            _buildSplitDaySelector(),
+            const SizedBox(height: 16),
+
             // 1. Basic Plan Overview
             _sectionHeader('1. WORKOUT PLAN OVERVIEW'),
             const SizedBox(height: 12),

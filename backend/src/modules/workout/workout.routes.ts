@@ -24,6 +24,13 @@ adminRouter.delete(['/sessions/:id', '/workouts/:id'], (req, res) => workoutCont
 adminRouter.post(['/sessions/:id/assign', '/workouts/:id/assign'], (req, res) => workoutController.assignSession(req, res));
 adminRouter.delete(['/assignments/:assignmentId', '/workouts/assignments/:assignmentId'], (req, res) => workoutController.unassign(req, res));
 
+// Workout Split Management
+adminRouter.post('/splits', (req, res) => workoutController.createWorkoutSplit(req, res));
+adminRouter.get('/splits/:id', (req, res) => workoutController.getWorkoutSplitById(req, res));
+adminRouter.put('/splits/:id/days/:dayId', (req, res) => workoutController.updateWorkoutSplitDay(req, res));
+adminRouter.post('/splits/:id/assign', (req, res) => workoutController.assignWorkoutSplit(req, res));
+adminRouter.get('/clients/:clientId/split', (req, res) => workoutController.getClientWorkoutSplit(req, res));
+
 // Session Unlock / Release (Admin Only with Reason Audit)
 adminRouter.post('/unlock-session', (req, res) => workoutController.unlockSession(req, res));
 adminRouter.post(['/sessions/:id/unlock', '/workouts/:id/unlock'], (req, res) => {
@@ -48,6 +55,7 @@ clientRouter.use(requireAuth, requireRoles([UserRole.CLIENT]), requireApprovedUs
 // Client Session Discovery & Overview
 clientRouter.get('/sessions', (req, res) => workoutController.getClientSessions(req, res));
 clientRouter.get('/sessions/:id', (req, res) => workoutController.getClientSessionById(req, res));
+clientRouter.get('/split', (req, res) => workoutController.getMyWorkoutSplit(req, res));
 
 // Performance Tracking & Recording
 clientRouter.get('/previous-performance', (req, res) => workoutController.getPreviousPerformance(req, res));

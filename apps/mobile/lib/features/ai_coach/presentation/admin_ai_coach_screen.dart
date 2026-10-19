@@ -333,11 +333,11 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
     List<dynamic> rawExercises = [];
     if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
       rawExercises = payload['exercises'] as List;
-    } else if (payload['weeklySchedule'] is List) {
-      for (final day in (payload['weeklySchedule'] as List)) {
-        if (day is Map && day['exercises'] is List) {
-          rawExercises.addAll(day['exercises'] as List);
-        }
+    } else if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) {
+      // Isolate day: do NOT combine all days from weeklySchedule into one 30-exercise session!
+      final firstDay = (payload['weeklySchedule'] as List).first;
+      if (firstDay is Map && firstDay['exercises'] is List) {
+        rawExercises = firstDay['exercises'] as List;
       }
     } else if (payload['workoutPlan']?['sessions'] is List && (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
       final firstSession = (payload['workoutPlan']['sessions'] as List).first;
