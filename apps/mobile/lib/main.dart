@@ -153,9 +153,6 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
       notificationRepository: NotificationRepository(),
     );
 
-    // Register Push Subscription Verification Observer for OneSignal
-    PushNotificationService.instance.setupPushSubscriptionObserver();
-
     // Automatically update daily activity tracking & sync with backend when workout is completed
     _workoutRepository.onWorkoutCompleted = (record) {
       final minutes = (record.durationSeconds / 60).round().clamp(1, 300);

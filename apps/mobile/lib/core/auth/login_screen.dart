@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_logo_animation.dart';
-import 'package:alpha_x_gym/core/widgets/server_config_dialog.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_button.dart';
 import 'auth_service.dart';
 import 'create_account_screen.dart';
@@ -51,7 +50,6 @@ class _LoginScreenState extends State<LoginScreen>
   late final Animation<double> _bgFadeAnimation;
   late final Animation<double> _cardFadeAnimation;
   late final Animation<Offset> _cardSlideAnimation;
-  late final Animation<double> _topBarFadeAnimation;
   late final Animation<Alignment> _heroAlignmentAnimation;
   late final Animation<double> _heroScaleAnimation;
   late final Animation<double> _heroOpacityAnimation;
@@ -87,11 +85,6 @@ class _LoginScreenState extends State<LoginScreen>
         parent: _animController,
         curve: const Interval(0.826, 1.000, curve: Curves.easeOutCubic),
       ),
-    );
-
-    _topBarFadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: const Interval(0.870, 1.000, curve: Curves.easeOut),
     );
 
     // Continuous Hero Logo Glide: moves from center (0.0, -0.18) to upper spotlight (0.0, -0.62)
@@ -312,28 +305,7 @@ class _LoginScreenState extends State<LoginScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Top Bar: Server Settings (unobtrusive, safe from notches)
-                  FadeTransition(
-                    opacity: _topBarFadeAnimation,
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4, right: 16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.35),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withOpacity(0.12)),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 20),
-                            tooltip: 'Server Settings',
-                            onPressed: () => ServerConfigDialog.show(context),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+
 
                   // Expanded space keeping upper section completely open for spotlight & logo
                   Expanded(
@@ -665,31 +637,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-
-                                  // Dedicated Admin Login Action Link (With SafeArea insets to prevent iOS home indicator collision)
-                                  const SizedBox(height: 4),
-                                  Wrap(
-                                    alignment: WrapAlignment.center,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    children: [
-                                      TextButton.icon(
-                                        key: const Key('admin_login_link_button'),
-                                        onPressed: () => Navigator.of(context).pushReplacementNamed('/admin/login'),
-                                        icon: const Icon(Icons.shield_outlined, size: 14, color: _goldAccent),
-                                        label: Text(
-                                          'ADMIN LOGIN',
-                                          style: GoogleFonts.poppins(
-                                            color: _goldAccent,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.8,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 12),
                                 ],
                               ),
                             ),
