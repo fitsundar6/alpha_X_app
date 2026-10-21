@@ -331,14 +331,14 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
     final description = payload['description']?.toString() ?? proposal.summary;
 
     List<dynamic> rawExercises = [];
-    if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
-      rawExercises = payload['exercises'] as List;
-    } else if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) {
+    if (payload['weeklySchedule'] is List && (payload['weeklySchedule'] as List).isNotEmpty) {
       // Isolate day: do NOT combine all days from weeklySchedule into one 30-exercise session!
       final firstDay = (payload['weeklySchedule'] as List).first;
       if (firstDay is Map && firstDay['exercises'] is List) {
         rawExercises = firstDay['exercises'] as List;
       }
+    } else if (payload['exercises'] is List && (payload['exercises'] as List).isNotEmpty) {
+      rawExercises = payload['exercises'] as List;
     } else if (payload['workoutPlan']?['sessions'] is List && (payload['workoutPlan']['sessions'] as List).isNotEmpty) {
       final firstSession = (payload['workoutPlan']['sessions'] as List).first;
       if (firstSession['exercises'] is List) {
@@ -499,7 +499,8 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
     final clientId = proposal.clientId ?? _selectedClientId;
 
     if (proposal.type == AiProposalType.workout) {
-      if (widget.workoutRepository == null) {
+      final isMultiDay = proposal.payload['weeklySchedule'] is List && (proposal.payload['weeklySchedule'] as List).length > 1;
+      if (widget.workoutRepository == null || isMultiDay) {
         _showEditProposalDialog(proposal);
         return;
       }

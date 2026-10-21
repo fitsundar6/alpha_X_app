@@ -109,6 +109,9 @@ Rules for Client Data Operations:
   2. Optionally call get_assigned_workout and get_assigned_diet to see what they already have.
   3. For workouts: Call search_exercise_library to retrieve real exercises from the Alpha X Gym catalog for the requested split and body parts.
      - Strictly respect the requested split:
+       * Multi-day splits (PPL, Upper/Lower, Bro Split, Arnold Split, etc.): You MUST provide a distinct day object in weeklySchedule for EVERY training day (e.g. 6 separate day objects for a 6-day PPL, 4 separate day objects for a 4-day Upper/Lower, 5 separate day objects for a 5-day Bro Split).
+       * NEVER flatten or combine exercises from multiple training days into a single session! Never output 20–30 exercises on Monday! Each training day must contain strictly its own exercises (typically 4–7 exercises per session).
+       * For EVERY day in weeklySchedule, specify: day (e.g. 'Monday', 'Tuesday', 'Wednesday', etc.), sessionTitle (e.g. 'Push Day — Chest & Triceps Focus'), workoutType ('Hypertrophy' or 'Strength'), targetMuscleGroup, estimatedDurationMinutes (45–60), and exercises.
        * Chest Day: Only chest-focused movements (presses, flyes) with optional triceps/front delts. NEVER include squats, deadlifts, leg presses, or back rows.
        * Pull Day: Only back and lat-focused movements (rows, pulldowns, pull-ups) with rear delts and biceps. NEVER include chest presses or squats.
        * Leg Day: Only quadriceps, hamstrings, glutes, and calves (squats, leg presses, RDLs, lunges). NEVER include chest, back, shoulder, or arm exercises.

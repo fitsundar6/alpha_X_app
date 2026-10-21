@@ -161,6 +161,29 @@ export interface StoredWorkoutRecord {
   exerciseRecords: StoredWorkoutExerciseRecord[];
 }
 
+export interface ClientExerciseReplacement {
+  originalExerciseId: string;
+  originalExerciseName?: string;
+  replacementExerciseId: string;
+  replacementExerciseName: string;
+  category?: string;
+  primaryMusclesDisplay?: string;
+  secondaryMusclesDisplay?: string;
+  trainerNote?: string;
+  numberOfSets?: number;
+  targetReps?: string;
+  targetWeight?: number | null;
+  customSets?: any[];
+}
+
+export interface ClientSessionOverrideData {
+  replacements?: ClientExerciseReplacement[];
+  addedExercises?: any[];
+  removedExerciseIds?: string[];
+  customSetsByExercise?: Record<string, any[]>;
+  customSetCounts?: Record<string, number>;
+}
+
 function toISO(val: any, fallback?: string): string {
   if (!val) return fallback || '';
   if (val instanceof Date) return val.toISOString();
@@ -378,6 +401,7 @@ export class WorkoutRepository {
   private activeSaveLocks: Map<string, Promise<StoredWorkoutRecord>> = new Map();
   private splitPlans: Map<string, StoredWorkoutSplitPlan> = new Map();
   private clientSplitMap: Map<string, string> = new Map();
+  private clientSessionOverrides: Map<string, ClientSessionOverrideData> = new Map();
 
   // Real registered clients are queried dynamically from PostgreSQL via workoutService.getClientsList()
   public clientsList: { id: string; name: string; email: string; status: string }[] = [];
@@ -1056,16 +1080,24 @@ export class WorkoutRepository {
               exerciseNotes: ex.exerciseNotes || null,
               adminInstruction: ex.adminInstruction || null,
               setTemplates: {
-                create: Array.from({ length: numSets }, (_, setIdx) => ({
-                  setNumber: setIdx + 1,
-                  setType: ex.setType === 'Warm-up' ? 'WARMUP' : 'WORKING',
-                  targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
-                  targetRepsMin: 8,
-                  targetRepsMax: 12,
-                  targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
-                  targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
-                  tempo: ex.tempo || '3-1-1-0',
-                })),
+                create: Array.from({ length: numSets }, (_, setIdx) => {
+                  let templateSetType = 'WORKING';
+                  const sType = String(ex.setType || '').toUpperCase();
+                  if (sType.includes('WARM')) templateSetType = 'WARMUP';
+                  else if (sType.includes('DROP')) templateSetType = 'DROP_SET';
+                  else if (sType.includes('FAIL')) templateSetType = 'FAILURE';
+                  else if (sType.includes('REST') || sType.includes('PAUSE')) templateSetType = 'REST_PAUSE';
+                  return {
+                    setNumber: setIdx + 1,
+                    setType: templateSetType,
+                    targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+                    targetRepsMin: 8,
+                    targetRepsMax: 12,
+                    targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+                    targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+                    tempo: ex.tempo || '3-1-1-0',
+                  };
+                }),
               },
             },
           });
@@ -2050,7 +2082,8 @@ export class WorkoutRepository {
 
     // 2. Fetch session definition to know target counts
     const session = await this.getSessionById(resolvedSessionId);
-    const sessionEx = session?.exercises.find((e) => e.id === payload.exerciseId || e.exerciseId === payload.exerciseId);
+    const sessionWithOverrides = session ? await this.applyClientOverridesToSession(session, resolvedUserId) : null;
+    const sessionEx = (sessionWithOverrides || session)?.exercises.find((e) => e.id === payload.exerciseId || e.exerciseId === payload.exerciseId);
     const totalRequiredSets = Number(sessionEx?.numberOfSets) || (sessionEx?.sets ? sessionEx.sets.length : 3);
 
     // 3. PostgreSQL persistence via Prisma
@@ -2416,19 +2449,391 @@ export class WorkoutRepository {
     };
   }
 
+  // --- Client Session Customizations & Persistent Exercise Overrides ---
+  async getClientSessionOverride(
+    clientId: string,
+    sessionId: string,
+    dayOfWeek?: string
+  ): Promise<ClientSessionOverrideData | null> {
+    const resolvedUserId = await this.resolveUserId(clientId);
+    const memKey = `${resolvedUserId}_${sessionId}`;
+    const cached = this.clientSessionOverrides.get(memKey);
+
+    try {
+      const dbOverride = await prisma.clientSessionOverride.findFirst({
+        where: {
+          clientId: resolvedUserId,
+          OR: [
+            { sessionId },
+            ...(dayOfWeek ? [{ dayOfWeek }] : []),
+          ],
+        },
+      });
+
+      if (dbOverride && dbOverride.overrides) {
+        const parsed = (typeof dbOverride.overrides === 'string'
+          ? JSON.parse(dbOverride.overrides)
+          : dbOverride.overrides) as ClientSessionOverrideData;
+        this.clientSessionOverrides.set(memKey, parsed);
+        return parsed;
+      }
+    } catch (e: any) {
+      console.warn('[WorkoutRepository] Failed to query clientSessionOverride from DB:', e?.message);
+    }
+
+    return cached || null;
+  }
+
+  async saveClientSessionOverride(
+    clientId: string,
+    sessionId: string,
+    data: ClientSessionOverrideData,
+    dayOfWeek?: string
+  ): Promise<ClientSessionOverrideData> {
+    const resolvedUserId = await this.resolveUserId(clientId);
+    const memKey = `${resolvedUserId}_${sessionId}`;
+    this.clientSessionOverrides.set(memKey, data);
+
+    try {
+      await prisma.clientSessionOverride.upsert({
+        where: {
+          clientId_sessionId: {
+            clientId: resolvedUserId,
+            sessionId,
+          },
+        },
+        create: {
+          clientId: resolvedUserId,
+          sessionId,
+          dayOfWeek: dayOfWeek || null,
+          overrides: data as any,
+        },
+        update: {
+          dayOfWeek: dayOfWeek || undefined,
+          overrides: data as any,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (e: any) {
+      console.warn('[WorkoutRepository] Failed to save clientSessionOverride to DB:', e?.message);
+    }
+
+    return data;
+  }
+
+  async replaceExerciseInSession(
+    clientId: string,
+    sessionId: string,
+    replacement: ClientExerciseReplacement,
+    dayOfWeek?: string
+  ): Promise<ClientSessionOverrideData> {
+    const current = (await this.getClientSessionOverride(clientId, sessionId, dayOfWeek)) || {
+      replacements: [],
+      addedExercises: [],
+      removedExerciseIds: [],
+    };
+
+    const replacements = (current.replacements || []).filter(
+      (r) =>
+        r.originalExerciseId !== replacement.originalExerciseId &&
+        r.replacementExerciseId !== replacement.replacementExerciseId
+    );
+    replacements.push(replacement);
+
+    const removedExerciseIds = (current.removedExerciseIds || []).filter(
+      (id) => id !== replacement.originalExerciseId && id !== replacement.replacementExerciseId
+    );
+
+    const updated: ClientSessionOverrideData = {
+      ...current,
+      replacements,
+      removedExerciseIds,
+    };
+
+    return this.saveClientSessionOverride(clientId, sessionId, updated, dayOfWeek);
+  }
+
+  async addExerciseToSessionOverride(
+    clientId: string,
+    sessionId: string,
+    exercise: any,
+    dayOfWeek?: string
+  ): Promise<ClientSessionOverrideData> {
+    const current = (await this.getClientSessionOverride(clientId, sessionId, dayOfWeek)) || {
+      replacements: [],
+      addedExercises: [],
+      removedExerciseIds: [],
+    };
+
+    const exerciseId = exercise.exerciseId || exercise.id;
+    const addedExercises = (current.addedExercises || []).filter(
+      (ex) => (ex.exerciseId || ex.id) !== exerciseId
+    );
+    addedExercises.push(exercise);
+
+    const updated: ClientSessionOverrideData = {
+      ...current,
+      addedExercises,
+    };
+
+    return this.saveClientSessionOverride(clientId, sessionId, updated, dayOfWeek);
+  }
+
+  async removeExerciseFromSessionOverride(
+    clientId: string,
+    sessionId: string,
+    exerciseId: string,
+    dayOfWeek?: string
+  ): Promise<ClientSessionOverrideData> {
+    const current = (await this.getClientSessionOverride(clientId, sessionId, dayOfWeek)) || {
+      replacements: [],
+      addedExercises: [],
+      removedExerciseIds: [],
+    };
+
+    const addedExercises = (current.addedExercises || []).filter(
+      (ex) => (ex.exerciseId || ex.id) !== exerciseId
+    );
+
+    const replacements = (current.replacements || []).filter(
+      (r) => r.replacementExerciseId !== exerciseId && r.originalExerciseId !== exerciseId
+    );
+
+    const removedExerciseIds = Array.from(new Set([...(current.removedExerciseIds || []), exerciseId]));
+
+    const updated: ClientSessionOverrideData = {
+      ...current,
+      addedExercises,
+      replacements,
+      removedExerciseIds,
+    };
+
+    return this.saveClientSessionOverride(clientId, sessionId, updated, dayOfWeek);
+  }
+
+  async resetExerciseInSessionOverride(
+    clientId: string,
+    sessionId: string,
+    exerciseId: string
+  ): Promise<ClientSessionOverrideData | null> {
+    const current = await this.getClientSessionOverride(clientId, sessionId);
+    if (!current) return null;
+
+    const replacements = (current.replacements || []).filter(
+      (r) => r.replacementExerciseId !== exerciseId && r.originalExerciseId !== exerciseId
+    );
+    const addedExercises = (current.addedExercises || []).filter(
+      (ex) => (ex.exerciseId || ex.id) !== exerciseId
+    );
+    const removedExerciseIds = (current.removedExerciseIds || []).filter((id) => id !== exerciseId);
+
+    const updated: ClientSessionOverrideData = {
+      ...current,
+      replacements,
+      addedExercises,
+      removedExerciseIds,
+    };
+
+    if (
+      (!updated.replacements || updated.replacements.length === 0) &&
+      (!updated.addedExercises || updated.addedExercises.length === 0) &&
+      (!updated.removedExerciseIds || updated.removedExerciseIds.length === 0) &&
+      !updated.customSetsByExercise &&
+      !updated.customSetCounts
+    ) {
+      await this.resetSessionOverride(clientId, sessionId);
+      return null;
+    }
+
+    return this.saveClientSessionOverride(clientId, sessionId, updated);
+  }
+
+  async resetSessionOverride(clientId: string, sessionId: string): Promise<boolean> {
+    const resolvedUserId = await this.resolveUserId(clientId);
+    const memKey = `${resolvedUserId}_${sessionId}`;
+    this.clientSessionOverrides.delete(memKey);
+
+    try {
+      await prisma.clientSessionOverride.deleteMany({
+        where: {
+          clientId: resolvedUserId,
+          sessionId,
+        },
+      });
+      return true;
+    } catch (e: any) {
+      console.warn('[WorkoutRepository] Failed to delete clientSessionOverride from DB:', e?.message);
+      return false;
+    }
+  }
+
+  async applyClientOverridesToSession(
+    session: StoredWorkoutSession,
+    clientId: string
+  ): Promise<StoredWorkoutSession> {
+    if (!session || !session.exercises) return session;
+    const resolvedUserId = await this.resolveUserId(clientId);
+    const override = await this.getClientSessionOverride(
+      resolvedUserId,
+      session.id,
+      session.recurringSchedule || undefined
+    );
+
+    if (!override) return session;
+
+    const removedIds = new Set(override.removedExerciseIds || []);
+    const replacementsMap = new Map<string, ClientExerciseReplacement>();
+    for (const r of override.replacements || []) {
+      replacementsMap.set(r.originalExerciseId, r);
+    }
+
+    const seenExerciseIds = new Set<string>();
+    const updatedExercises: StoredSessionExercise[] = [];
+
+    // Process base exercises
+    for (let i = 0; i < session.exercises.length; i++) {
+      const ex = session.exercises[i];
+      if (removedIds.has(ex.exerciseId) || removedIds.has(ex.id)) {
+        continue; // user removed this exercise
+      }
+
+      const replacement = replacementsMap.get(ex.exerciseId) || replacementsMap.get(ex.id);
+      if (replacement) {
+        const replacementId = replacement.replacementExerciseId;
+        if (seenExerciseIds.has(replacementId)) continue; // prevent duplicates
+        seenExerciseIds.add(replacementId);
+
+        const customSets = replacement.customSets && replacement.customSets.length > 0
+          ? replacement.customSets.map((s, idx) => ({
+              ...s,
+              id: s.id || `set_${replacementId}_${idx + 1}`,
+              setNumber: s.setNumber ?? (idx + 1),
+              isCompleted: false,
+            }))
+          : (ex.sets || []).map((s, idx) => ({
+              ...s,
+              id: `set_${replacementId}_${idx + 1}`,
+              setNumber: idx + 1,
+              targetWeight: replacement.targetWeight !== undefined && replacement.targetWeight !== null ? Number(replacement.targetWeight) : s.targetWeight,
+              targetReps: replacement.targetReps || s.targetReps,
+              isCompleted: false,
+            }));
+
+        updatedExercises.push({
+          ...ex,
+          id: `ex_${replacementId}_${ex.id}`,
+          exerciseId: replacementId,
+          exerciseName: replacement.replacementExerciseName,
+          category: replacement.category || ex.category,
+          primaryMusclesDisplay: replacement.primaryMusclesDisplay || (ex as any).primaryMusclesDisplay,
+          secondaryMusclesDisplay: replacement.secondaryMusclesDisplay || (ex as any).secondaryMusclesDisplay,
+          trainerNote: replacement.trainerNote || (ex as any).trainerNote || ex.exerciseNotes,
+          exerciseNotes: replacement.trainerNote || ex.exerciseNotes || null,
+          targetReps: replacement.targetReps || ex.targetReps,
+          targetWeight: replacement.targetWeight !== undefined && replacement.targetWeight !== null ? Number(replacement.targetWeight) : ex.targetWeight,
+          numberOfSets: replacement.numberOfSets || customSets.length || ex.numberOfSets,
+          sets: customSets,
+          isCustomReplacement: true,
+          originalExerciseId: ex.exerciseId,
+          originalExerciseName: ex.exerciseName,
+        } as any);
+      } else {
+        if (seenExerciseIds.has(ex.exerciseId)) continue;
+        seenExerciseIds.add(ex.exerciseId);
+
+        const customSets = override.customSetsByExercise?.[ex.exerciseId] || override.customSetsByExercise?.[ex.id];
+        if (customSets && customSets.length > 0) {
+          updatedExercises.push({
+            ...ex,
+            numberOfSets: customSets.length,
+            sets: customSets,
+          });
+        } else {
+          updatedExercises.push(ex);
+        }
+      }
+    }
+
+    // Process added exercises
+    for (const added of override.addedExercises || []) {
+      const addedId = added.exerciseId || added.id;
+      if (!addedId || seenExerciseIds.has(addedId)) continue;
+      seenExerciseIds.add(addedId);
+
+      const numSets = Number(added.numberOfSets) || (Array.isArray(added.sets) ? added.sets.length : 3);
+      const addedSets = Array.isArray(added.sets) && added.sets.length > 0
+        ? added.sets.map((s: any, idx: number) => ({
+            id: s.id || `set_${addedId}_${idx + 1}`,
+            setNumber: s.setNumber ?? (idx + 1),
+            setType: s.setType || 'WORKING',
+            targetRepsMin: s.targetRepsMin ?? 8,
+            targetRepsMax: s.targetRepsMax ?? 12,
+            targetReps: s.targetReps || '8–12',
+            targetWeight: s.targetWeight !== undefined && s.targetWeight !== null ? Number(s.targetWeight) : 0,
+            targetRpe: s.targetRpe ?? 8.0,
+            targetRir: s.targetRir ?? 2,
+            restSeconds: s.restSeconds || added.restSeconds || 90,
+            tempo: s.tempo || '3-1-1-0',
+            isCompleted: false,
+          }))
+        : Array.from({ length: numSets }, (_, idx) => ({
+            id: `set_${addedId}_${idx + 1}`,
+            setNumber: idx + 1,
+            setType: 'WORKING',
+            targetRepsMin: 8,
+            targetRepsMax: 12,
+            targetReps: added.targetReps || '8–12',
+            targetWeight: added.targetWeight !== undefined && added.targetWeight !== null ? Number(added.targetWeight) : 0,
+            targetRpe: 8.0,
+            targetRir: 2,
+            restSeconds: added.restSeconds || 90,
+            tempo: '3-1-1-0',
+            isCompleted: false,
+          }));
+
+      updatedExercises.push({
+        id: `custom_ex_${addedId}_${Date.now()}`,
+        exerciseId: addedId,
+        exerciseName: added.exerciseName || added.name || 'Custom Exercise',
+        category: added.category || 'Custom',
+        orderIndex: updatedExercises.length,
+        numberOfSets: numSets,
+        targetReps: added.targetReps || '8–12',
+        targetWeight: added.targetWeight !== undefined && added.targetWeight !== null ? Number(added.targetWeight) : 0,
+        restSeconds: added.restSeconds || 90,
+        targetRir: 2,
+        targetRpe: 8.0,
+        tempo: '3-1-1-0',
+        setType: 'WORKING',
+        exerciseNotes: added.trainerNote || added.notes || null,
+        trainerNote: added.trainerNote || null,
+        sets: addedSets,
+        isCustomAdded: true,
+      } as any);
+    }
+
+    return {
+      ...session,
+      exercises: updatedExercises,
+      hasClientCustomization: true,
+    } as any;
+  }
+
   private async applyActiveSetOverlays<T extends StoredWorkoutSession>(
     result: { recommended: (T & { isRecommended: boolean }) | null; available: T[] },
     clientId: string
   ): Promise<{ recommended: (T & { isRecommended: boolean }) | null; available: T[] }> {
     const overlaidAvailable: T[] = [];
     for (const s of result.available) {
-      const overlaid = await this.overlayActiveSetsOnSession(s, clientId);
-      overlaidAvailable.push({ ...s, ...overlaid });
+      const withOverrides = await this.applyClientOverridesToSession(s, clientId);
+      const overlaid = await this.overlayActiveSetsOnSession(withOverrides, clientId);
+      overlaidAvailable.push({ ...withOverrides, ...overlaid } as T);
     }
     let overlaidRec: (T & { isRecommended: boolean }) | null = null;
     if (result.recommended) {
-      const baseRec = await this.overlayActiveSetsOnSession(result.recommended, clientId);
-      overlaidRec = { ...result.recommended, ...baseRec, isRecommended: result.recommended.isRecommended };
+      const withOverrides = await this.applyClientOverridesToSession(result.recommended, clientId);
+      const baseRec = await this.overlayActiveSetsOnSession(withOverrides, clientId);
+      overlaidRec = { ...withOverrides, ...baseRec, isRecommended: result.recommended.isRecommended } as (T & { isRecommended: boolean });
     }
     return {
       recommended: overlaidRec,
@@ -2473,17 +2878,59 @@ export class WorkoutRepository {
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const rawInputDays: any[] = Array.isArray(data.days) ? data.days : [];
 
+    const defaultPatternByCount: Record<number, string[]> = {
+      2: ['Monday', 'Thursday'],
+      3: ['Monday', 'Wednesday', 'Friday'],
+      4: ['Monday', 'Tuesday', 'Thursday', 'Friday'],
+      5: ['Monday', 'Tuesday', 'Wednesday', 'Friday', 'Saturday'],
+      6: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      7: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    };
+    const defaultPattern = defaultPatternByCount[rawInputDays.length] || dayNames;
+
     // Construct canonical 7 days: sort by Monday-Sunday order and insert Rest Day for unassigned days
     const inputDays: any[] = [];
     for (let i = 0; i < 7; i++) {
       const dayName = dayNames[i];
-      const found = rawInputDays.find((d: any) => d.dayOfWeek?.toLowerCase() === dayName.toLowerCase());
-      if (found) {
-        inputDays.push({ ...found, dayIndex: i + 1, dayOfWeek: dayName });
+      const targetWeekdayNum = i + 1;
+
+      // 1. Try explicit weekday string match (guard against numeric dayOfWeek like 1,2,3)
+      let found = rawInputDays.find((d: any) => {
+        const rawVal = d.dayOfWeek ?? d.dayName ?? d.day ?? '';
+        const raw = String(rawVal).toLowerCase();
+        // Skip pure-numeric strings (e.g. "1") — those are weekday numbers, handled in step 2
+        if (/^\d+$/.test(raw)) return false;
+        return raw.includes(dayName.toLowerCase());
+      });
+
+      // 2. Try explicit dayIndex / dayNumber / numeric dayOfWeek match
+      if (!found) {
+        found = rawInputDays.find((d: any) =>
+          d.dayIndex === targetWeekdayNum ||
+          d.dayNumber === targetWeekdayNum ||
+          Number(d.dayOfWeek) === targetWeekdayNum
+        );
+      }
+
+      // 3. Try standard pattern index match if split days were passed without weekday names
+      if (!found && defaultPattern.includes(dayName)) {
+        const patternIdx = defaultPattern.indexOf(dayName);
+        if (patternIdx !== -1 && rawInputDays[patternIdx]) {
+          found = rawInputDays[patternIdx];
+        }
+      }
+
+      if (found && !found.isRestDay) {
+        inputDays.push({
+          ...found,
+          dayIndex: targetWeekdayNum,
+          dayOfWeek: dayName,
+          name: found.sessionTitle || found.title || found.name || `${splitTitle} — ${dayName}`,
+        });
       } else {
         inputDays.push({
           dayOfWeek: dayName,
-          dayIndex: i + 1,
+          dayIndex: targetWeekdayNum,
           name: `${dayName} — Rest & Recovery`,
           isRestDay: true,
           exercises: [],
@@ -2516,7 +2963,7 @@ export class WorkoutRepository {
         continue;
       }
 
-      const dayTitle = d.name || `${splitTitle} — ${dayOfWeek}`;
+      const dayTitle = d.sessionTitle || d.title || d.name || `${splitTitle} — ${dayOfWeek}`;
       const dayWorkoutType = d.workoutType || 'Strength';
       const dayTargetMuscle = d.targetMuscleGroup || 'Full Body';
       const dayDuration = Number(d.estimatedDurationMinutes) || 45;
@@ -2806,7 +3253,8 @@ export class WorkoutRepository {
       });
 
       if (match && match.session) {
-        const stored = mapPrismaSessionToStored(match.session);
+        let stored = mapPrismaSessionToStored(match.session);
+        stored = await this.applyClientOverridesToSession(stored, resolvedUserId);
         days.push({
           id: match.session.id,
           sessionId: match.session.id,
@@ -2877,7 +3325,22 @@ export class WorkoutRepository {
       if (existingSession) sessionId = existingSession.id;
     }
 
-    if (!existingSession) return null;
+    if (!existingSession) {
+      existingSession = await this.createSession({
+        id: sessionId.startsWith('ws_') ? sessionId : `ws_${splitId}_${cleanDayId}`,
+        title: dayData.name || dayData.title || dayData.sessionTitle || `${dayData.dayOfWeek || cleanDayId} Workout`,
+        workoutType: dayData.workoutType || 'Strength',
+        targetMuscleGroup: dayData.targetMuscleGroup || 'Full Body',
+        difficulty: dayData.difficulty || 'Intermediate',
+        estimatedDurationMinutes: dayData.estimatedDurationMinutes || 45,
+        description: dayData.description || `Session for ${dayData.dayOfWeek || cleanDayId} in split ${splitId}`,
+        recurringSchedule: dayData.dayOfWeek || cleanDayId,
+        isActive: true,
+        availabilityType: 'ALL',
+        exercises: dayData.exercises || [],
+      });
+      sessionId = existingSession.id;
+    }
 
     const updated = await this.updateSession(sessionId, {
       ...dayData,
@@ -2894,7 +3357,10 @@ export class WorkoutRepository {
       if (day) {
         if (dayData.name) day.name = dayData.name;
         if (dayData.targetMuscleGroup) day.targetMuscleGroup = dayData.targetMuscleGroup;
+        if (dayData.workoutType) day.workoutType = dayData.workoutType;
+        if (dayData.estimatedDurationMinutes) day.estimatedDurationMinutes = dayData.estimatedDurationMinutes;
         if (dayData.exercises) day.exercises = updated?.exercises || dayData.exercises;
+        day.sessionId = sessionId;
       }
     }
 

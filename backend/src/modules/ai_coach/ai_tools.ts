@@ -1,5 +1,5 @@
 import { prisma } from '../../config/prisma';
-import { getTodayISTDateString, getTodayISTWeekday, getWeekdayFromDayName, getISTDateForWeekday } from '../../utils/istDate';
+import { getTodayISTDateString, getTodayISTWeekday, getWeekdayFromDayName, getWeekdayName, getISTDateForWeekday } from '../../utils/istDate';
 import { aiNotificationEngine } from '../notifications/ai_notifications.service';
 
 export interface DataCompletenessReport {
@@ -1155,15 +1155,16 @@ export class AiTools {
         // Create a distinct WorkoutSession for EACH day of the weekly split
         for (let dayIdx = 0; dayIdx < payload.weeklySchedule.length; dayIdx++) {
           const day = payload.weeklySchedule[dayIdx];
-          const dayName = day.day || day.dayName || day.weekday || 'Monday';
-          const sessionTitle = day.sessionTitle || day.title || `${baseTitle} — ${dayName}`;
+          const rawDayName = day.dayOfWeek || day.day || day.dayName || day.weekday || '';
+          const weekdayNum = getWeekdayFromDayName(rawDayName, dayIdx + 1);
+          const canonicalWeekday = getWeekdayName(weekdayNum);
+          const sessionTitle = day.sessionTitle || day.title || `${baseTitle} — ${canonicalWeekday}`;
           const targetMuscleGroup = day.targetMuscleGroup || day.focus || 'Full Body';
           const workoutType = day.workoutType || payload.workoutType || 'Hypertrophy';
           const estimatedDurationMinutes = Number(day.estimatedDurationMinutes) || Number(payload.estimatedDurationMinutes) || 50;
           const dayExercises: any[] = Array.isArray(day.exercises) ? day.exercises : [];
 
           // Compute scheduled date for this weekday in IST
-          const weekdayNum = getWeekdayFromDayName(dayName);
           const dayScheduledDate = getISTDateForWeekday(weekdayNum);
           const isToday = weekdayNum === todayWeekday;
 
@@ -1176,7 +1177,7 @@ export class AiTools {
               difficulty: payload.difficulty || 'Intermediate',
               estimatedDurationMinutes,
               description: day.description || `${sessionTitle} (${targetMuscleGroup}) — Part of ${baseTitle} weekly split.`,
-              recurringSchedule: dayName,
+              recurringSchedule: canonicalWeekday,
               createdById: adminId,
               isActive: true,
               availabilityType: assignmentType,

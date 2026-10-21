@@ -3,6 +3,9 @@ import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
+import 'package:alpha_x_gym/features/exercise/presentation/widgets/exercise_picker_dialog.dart';
+import 'admin_create_edit_session_screen.dart';
 import 'admin_proposal_assignment_dialog.dart';
 
 /// Dedicated Admin Workout Proposals Screen.
@@ -1189,19 +1192,53 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     }
   }
 
-  void _addExercise() {
-    setState(() {
-      _editableExercises.add({
-        'exerciseId': 'ex_custom_${DateTime.now().millisecondsSinceEpoch}',
-        'exerciseName': 'New Exercise',
-        'sets': 3,
-        'targetReps': '8-12',
-        'targetWeight': 20.0,
-        'restSeconds': 90,
-        'targetRir': 2,
-        'category': 'Strength',
-        'notes': '',
+  void _addExercise() async {
+    final picked = await ExercisePickerDialog.show(context);
+    if (picked != null) {
+      setState(() {
+        _editableExercises.add({
+          'exerciseId': picked.id,
+          'exerciseName': picked.displayName,
+          'sets': 3,
+          'targetReps': '8-12',
+          'targetWeight': 20.0,
+          'restSeconds': 90,
+          'targetRir': 2,
+          'targetRpe': 8.0,
+          'tempo': '3-1-1-0',
+          'category': picked.category,
+          'notes': picked.defaultTrainerNote,
+        });
+        _isDirty = true;
       });
+    }
+  }
+
+  void _replaceExercise(int exIdx) async {
+    if (exIdx < 0 || exIdx >= _editableExercises.length) return;
+    final picked = await ExercisePickerDialog.show(context);
+    if (picked != null) {
+      setState(() {
+        final oldEx = _editableExercises[exIdx];
+        _editableExercises[exIdx] = {
+          ...oldEx,
+          'exerciseId': picked.id,
+          'exerciseName': picked.displayName,
+          'category': picked.category,
+          'notes': (oldEx['notes'] != null && oldEx['notes'].toString().isNotEmpty)
+              ? oldEx['notes']
+              : picked.defaultTrainerNote,
+        };
+        _isDirty = true;
+      });
+    }
+  }
+
+  void _moveExercise(int oldIdx, int newIdx) {
+    if (newIdx < 0 || newIdx >= _editableExercises.length) return;
+    setState(() {
+      final item = _editableExercises.removeAt(oldIdx);
+      _editableExercises.insert(newIdx, item);
       _isDirty = true;
     });
   }
@@ -1213,21 +1250,60 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     });
   }
 
-  void _addExerciseToDay(int dayIdx) {
-    setState(() {
-      final day = _editableDays[dayIdx];
-      final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
-      dayExList.add({
-        'exerciseId': 'ex_custom_${DateTime.now().millisecondsSinceEpoch}',
-        'exerciseName': 'New Exercise',
-        'sets': 3,
-        'targetReps': '8-12',
-        'targetWeight': 20.0,
-        'restSeconds': 90,
-        'targetRir': 2,
-        'category': day['workoutType'] ?? 'Strength',
-        'notes': '',
+  void _addExerciseToDay(int dayIdx) async {
+    final picked = await ExercisePickerDialog.show(context);
+    if (picked != null) {
+      setState(() {
+        final day = _editableDays[dayIdx];
+        final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+        dayExList.add({
+          'exerciseId': picked.id,
+          'exerciseName': picked.displayName,
+          'sets': 3,
+          'targetReps': '8-12',
+          'targetWeight': 20.0,
+          'restSeconds': 90,
+          'targetRir': 2,
+          'targetRpe': 8.0,
+          'tempo': '3-1-1-0',
+          'category': picked.category,
+          'notes': picked.defaultTrainerNote,
+        });
+        _isDirty = true;
       });
+    }
+  }
+
+  void _replaceExerciseInDay(int dayIdx, int exIdx) async {
+    final day = _editableDays[dayIdx];
+    final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+    if (exIdx < 0 || exIdx >= dayExList.length) return;
+
+    final picked = await ExercisePickerDialog.show(context);
+    if (picked != null) {
+      setState(() {
+        final oldEx = dayExList[exIdx];
+        dayExList[exIdx] = {
+          ...oldEx,
+          'exerciseId': picked.id,
+          'exerciseName': picked.displayName,
+          'category': picked.category,
+          'notes': (oldEx['notes'] != null && oldEx['notes'].toString().isNotEmpty)
+              ? oldEx['notes']
+              : picked.defaultTrainerNote,
+        };
+        _isDirty = true;
+      });
+    }
+  }
+
+  void _moveExerciseInDay(int dayIdx, int oldIdx, int newIdx) {
+    final day = _editableDays[dayIdx];
+    final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+    if (newIdx < 0 || newIdx >= dayExList.length) return;
+    setState(() {
+      final item = dayExList.removeAt(oldIdx);
+      dayExList.insert(newIdx, item);
       _isDirty = true;
     });
   }
@@ -1239,6 +1315,86 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
       dayExList.removeAt(exIdx);
       _isDirty = true;
     });
+  }
+
+  void _openDayInSessionBuilder(int dayIdx) async {
+    final day = _editableDays[dayIdx];
+    final dayName = day['day'] ?? day['dayName'] ?? day['weekday'] ?? 'Day ${dayIdx + 1}';
+    final sessionTitle = day['sessionTitle'] ?? day['title'] ?? '$dayName Workout';
+    final splitCat = day['splitCategory'] ?? day['category'] ?? 'Strength';
+    final targetMuscles = day['targetMuscleGroup'] ?? 'Full Body';
+    final duration = day['estimatedDurationMinutes'] ?? 50;
+    final exercisesData = (day['exercises'] as List<Map<String, dynamic>>?) ?? [];
+
+    final workoutExercises = exercisesData.asMap().entries.map((entry) {
+      final i = entry.key;
+      final e = entry.value;
+      final setsCount = (e['sets'] is int) ? e['sets'] as int : (int.tryParse(e['sets']?.toString() ?? '3') ?? 3);
+      final weight = (e['targetWeight'] is num) ? (e['targetWeight'] as num).toDouble() : (double.tryParse(e['targetWeight']?.toString() ?? '20') ?? 20.0);
+      final rest = (e['restSeconds'] is int) ? e['restSeconds'] as int : (int.tryParse(e['restSeconds']?.toString() ?? '90') ?? 90);
+      final rpe = (e['targetRpe'] is num) ? (e['targetRpe'] as num).toDouble() : (double.tryParse(e['targetRpe']?.toString() ?? '8') ?? 8.0);
+      final rir = (e['targetRir'] is int) ? e['targetRir'] as int : (int.tryParse(e['targetRir']?.toString() ?? '2') ?? 2);
+      final repsStr = e['targetReps']?.toString() ?? e['reps']?.toString() ?? '8-12';
+      int minReps = 8, maxReps = 12;
+      if (repsStr.contains('-') || repsStr.contains('–')) {
+        final p = repsStr.split(RegExp(r'[-–]'));
+        minReps = int.tryParse(p[0].trim()) ?? 8;
+        maxReps = int.tryParse(p[1].trim()) ?? minReps;
+      }
+
+      return WorkoutExercise(
+        id: 'we_prop_${dayIdx}_$i',
+        exerciseId: e['exerciseId']?.toString() ?? 'ex_prop_${dayIdx}_$i',
+        exerciseName: e['exerciseName']?.toString() ?? e['name']?.toString() ?? 'Exercise',
+        category: e['category']?.toString() ?? splitCat.toString(),
+        primaryMusclesDisplay: e['primaryMuscles']?.toString() ?? targetMuscles.toString(),
+        secondaryMusclesDisplay: e['secondaryMuscles']?.toString() ?? '',
+        restSeconds: rest,
+        trainerNote: e['notes']?.toString() ?? '',
+        tempo: e['tempo']?.toString() ?? '3-1-1-0',
+        supersetTag: e['supersetTag']?.toString(),
+        sets: List.generate(
+          setsCount,
+          (sIdx) => ExerciseSet(
+            id: 'set_${dayIdx}_${i}_${sIdx + 1}',
+            setNumber: sIdx + 1,
+            targetWeight: weight,
+            targetRepsMin: minReps,
+            targetRepsMax: maxReps,
+            targetRpe: rpe,
+            targetRir: rir,
+          ),
+        ),
+      );
+    }).toList();
+
+    final draftSession = WorkoutSession(
+      id: 'ai_draft_${widget.proposal.id}_day_$dayIdx',
+      title: sessionTitle.toString(),
+      workoutType: splitCat.toString(),
+      targetMuscleGroup: targetMuscles.toString(),
+      difficulty: 'Intermediate',
+      estimatedDurationMinutes: duration is int ? duration : (int.tryParse(duration.toString()) ?? 50),
+      recurringSchedule: dayName.toString(),
+      assignedClientIds: widget.proposal.clientId != null ? [widget.proposal.clientId!] : const [],
+      exercises: workoutExercises,
+    );
+
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminCreateEditSessionScreen(
+          workoutRepository: widget.workoutRepository,
+          sessionToEdit: draftSession,
+          clientIdToAssign: widget.proposal.clientId,
+          startInSplitMode: false,
+          onSaved: () {},
+        ),
+      ),
+    );
+
+    if (saved == true && mounted) {
+      widget.onProposalUpdated();
+    }
   }
 
   @override
@@ -1553,16 +1709,45 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        splitCat.toString().toUpperCase(),
-                        style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                    PopupMenuButton<String>(
+                      tooltip: 'Change workout category',
+                      initialValue: splitCat.toString(),
+                      onSelected: (val) {
+                        setState(() {
+                          day['splitCategory'] = val;
+                          day['category'] = val;
+                          _isDirty = true;
+                        });
+                      },
+                      itemBuilder: (ctx) => [
+                        'Push',
+                        'Pull',
+                        'Legs',
+                        'Upper',
+                        'Lower',
+                        'Full Body',
+                        'Strength',
+                        'Conditioning',
+                        'Cardio',
+                        'Mobility',
+                      ].map((c) => PopupMenuItem(value: c, child: Text(c))).toList(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              splitCat.toString().toUpperCase(),
+                              style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                            const Icon(Icons.arrow_drop_down, size: 12, color: Colors.white70),
+                          ],
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -1582,22 +1767,44 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  sessionTitle.toString(),
+                const SizedBox(height: 6),
+                TextFormField(
+                  initialValue: sessionTitle.toString(),
                   style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 4),
+                    border: InputBorder.none,
+                    hintText: 'Session title (e.g. Monday Push)...',
+                    hintStyle: TextStyle(color: AppColors.textTertiary),
+                  ),
+                  onChanged: (val) {
+                    day['sessionTitle'] = val;
+                    day['title'] = val;
+                    setState(() => _isDirty = true);
+                  },
                 ),
-                const SizedBox(height: 4),
                 Row(
                   children: [
                     const Icon(Icons.accessibility_new, size: 12, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Text(
-                        'Target: $targetMuscles',
+                      child: TextFormField(
+                        initialValue: targetMuscles.toString(),
                         style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 2),
+                          border: InputBorder.none,
+                          prefixText: 'Target: ',
+                          prefixStyle: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          hintText: 'e.g. Chest • Shoulders • Triceps',
+                          hintStyle: TextStyle(color: AppColors.textTertiary),
+                        ),
+                        onChanged: (val) {
+                          day['targetMuscleGroup'] = val;
+                          setState(() => _isDirty = true);
+                        },
                       ),
                     ),
                   ],
@@ -1620,8 +1827,19 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                 const Spacer(),
                 TextButton.icon(
                   style: TextButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.open_in_new, size: 13),
+                  label: const Text('Builder', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () => _openDayInSessionBuilder(dayIdx),
+                ),
+                const SizedBox(width: 4),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
                     foregroundColor: splitColor,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.add, size: 14),
@@ -1639,7 +1857,7 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               children: exercises.asMap().entries.map((exEntry) {
                 final exIdx = exEntry.key;
                 final ex = exEntry.value;
-                return _buildExerciseEditCardForDay(dayIdx, exIdx, ex);
+                return _buildExerciseEditCardForDay(dayIdx, exIdx, ex, exercises.length);
               }).toList(),
             ),
           ),
@@ -1648,7 +1866,7 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     );
   }
 
-  Widget _buildExerciseEditCardForDay(int dayIdx, int exIdx, Map<String, dynamic> ex) {
+  Widget _buildExerciseEditCardForDay(int dayIdx, int exIdx, Map<String, dynamic> ex, int totalCount) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -1682,9 +1900,34 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                 ),
               ),
               IconButton(
+                icon: const Icon(Icons.arrow_upward, size: 16, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Move Up',
+                onPressed: exIdx > 0 ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx - 1) : null,
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.arrow_downward, size: 16, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Move Down',
+                onPressed: exIdx < totalCount - 1 ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx + 1) : null,
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                icon: const Icon(Icons.swap_horiz, size: 18, color: AppColors.primaryRed),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Replace Exercise from Library',
+                onPressed: () => _replaceExerciseInDay(dayIdx, exIdx),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
                 icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                tooltip: 'Remove Exercise',
                 onPressed: () => _removeExerciseFromDay(dayIdx, exIdx),
               ),
             ],
@@ -1709,6 +1952,30 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               const SizedBox(width: 6),
               _numericField('Rest (s)', ex['restSeconds']?.toString() ?? ex['rest']?.toString() ?? '90', (v) {
                 ex['restSeconds'] = int.tryParse(v) ?? 90;
+                setState(() => _isDirty = true);
+              }),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              _textField('Tempo', ex['tempo']?.toString() ?? '3-1-1-0', (v) {
+                ex['tempo'] = v;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _numericField('RPE', ex['targetRpe']?.toString() ?? '8.0', (v) {
+                ex['targetRpe'] = double.tryParse(v) ?? 8.0;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _numericField('RIR', ex['targetRir']?.toString() ?? '2', (v) {
+                ex['targetRir'] = int.tryParse(v) ?? 2;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 6),
+              _textField('Superset', ex['supersetTag']?.toString() ?? '', (v) {
+                ex['supersetTag'] = v.trim().isEmpty ? null : v.trim().toUpperCase();
                 setState(() => _isDirty = true);
               }),
             ],
@@ -1752,7 +2019,34 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                 ),
               ),
               IconButton(
+                icon: const Icon(Icons.arrow_upward, size: 18, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Move Up',
+                onPressed: index > 0 ? () => _moveExercise(index, index - 1) : null,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.arrow_downward, size: 18, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Move Down',
+                onPressed: index < _editableExercises.length - 1 ? () => _moveExercise(index, index + 1) : null,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.primaryRed),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Replace Exercise from Library',
+                onPressed: () => _replaceExercise(index),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
                 icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Remove Exercise',
                 onPressed: () => _removeExercise(index),
               ),
             ],
@@ -1777,6 +2071,30 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               const SizedBox(width: 8),
               _numericField('Rest (s)', ex['restSeconds']?.toString() ?? ex['rest']?.toString() ?? '90', (v) {
                 ex['restSeconds'] = int.tryParse(v) ?? 90;
+                setState(() => _isDirty = true);
+              }),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _textField('Tempo', ex['tempo']?.toString() ?? '3-1-1-0', (v) {
+                ex['tempo'] = v;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 8),
+              _numericField('RPE', ex['targetRpe']?.toString() ?? '8.0', (v) {
+                ex['targetRpe'] = double.tryParse(v) ?? 8.0;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 8),
+              _numericField('RIR', ex['targetRir']?.toString() ?? '2', (v) {
+                ex['targetRir'] = int.tryParse(v) ?? 2;
+                setState(() => _isDirty = true);
+              }),
+              const SizedBox(width: 8),
+              _textField('Superset', ex['supersetTag']?.toString() ?? '', (v) {
+                ex['supersetTag'] = v.trim().isEmpty ? null : v.trim().toUpperCase();
                 setState(() => _isDirty = true);
               }),
             ],

@@ -104,9 +104,13 @@ export function parseWeekdaysFromScheduleString(scheduleStr?: string | null): nu
 
 /**
  * Resolves day name (e.g. "Monday", "tue", "Day 1") to ISO weekday number (1=Mon ... 7=Sun).
+ * Accepts an optional fallback index (1=Mon ... 7=Sun) if the string does not specify a weekday.
  */
-export function getWeekdayFromDayName(dayName?: string | null): number {
-  if (!dayName) return 1;
+export function getWeekdayFromDayName(dayName?: string | null, fallbackIndex?: number): number {
+  if (!dayName && fallbackIndex !== undefined && fallbackIndex >= 1 && fallbackIndex <= 7) {
+    return fallbackIndex;
+  }
+  if (!dayName) return fallbackIndex !== undefined && fallbackIndex >= 1 && fallbackIndex <= 7 ? fallbackIndex : 1;
   const s = dayName.toLowerCase();
   if (s.includes('mon')) return 1;
   if (s.includes('tue')) return 2;
@@ -120,8 +124,21 @@ export function getWeekdayFromDayName(dayName?: string | null): number {
     const num = parseInt(m[1], 10);
     if (num >= 1 && num <= 7) return num;
   }
+  if (fallbackIndex !== undefined && fallbackIndex >= 1 && fallbackIndex <= 7) {
+    return fallbackIndex;
+  }
   return 1;
 }
+
+/**
+ * Converts ISO weekday number (1=Mon ... 7=Sun) to canonical weekday string ("Monday" ... "Sunday").
+ */
+export function getWeekdayName(weekdayNum: number): string {
+  const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const idx = Math.max(1, Math.min(7, Math.floor(weekdayNum))) - 1;
+  return names[idx] || 'Monday';
+}
+
 
 /**
  * Returns the IST date string (yyyy-MM-dd) for a given target weekday (1=Mon ... 7=Sun)
