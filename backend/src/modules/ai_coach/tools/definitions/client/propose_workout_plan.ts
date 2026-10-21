@@ -11,6 +11,7 @@ import { prisma } from '../../../../../config/prisma';
 import { clientDataService } from '../client/client_data.service';
 import { logServerError } from '../../../../../utils/serverLogger';
 import { workoutIntentService } from '../../../workout_intent.service';
+import { getWeekdayFromDayName, getWeekdayName } from '../../../../../utils/istDate';
 
 export interface ProposeWorkoutPlanInput {
   clientIdentifier: string;       // Name, AXG-XXXX, or UUID
@@ -181,6 +182,14 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
         Array.isArray(rawAny.exercises) &&
         rawAny.exercises.length > 0
       ) {
+        if (rawAny.exercises.length > 10) {
+          return {
+            success: false,
+            source: 'ALPHA_X_DATABASE',
+            error: 'FLATTENED_PLAN_ERROR',
+            message: `Malformed plan: received ${rawAny.exercises.length} exercises in a single flat list. Multi-day workout splits must specify distinct days in weeklySchedule.`,
+          };
+        }
         args.weeklySchedule = [
           {
             day: rawAny.day || 'Workout Day',
@@ -327,17 +336,23 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
     // Update weekly schedule exercises with validated items while preserving day structure
     let validatedIdx = 0;
     const validatedWeeklySchedule = args.weeklySchedule.map((day, dIdx) => {
-      const dayId = day.id || day.dayId || `day_${dIdx + 1}`;
-      const dayName = day.day || day.dayName || day.weekday || `Day ${dIdx + 1}`;
+      const rawDayName = day.day || day.dayName || day.weekday || '';
+      const weekdayNum = getWeekdayFromDayName(rawDayName, dIdx + 1);
+      const canonicalWeekday = getWeekdayName(weekdayNum);
+      const dayName = canonicalWeekday;
       const splitCat = day.splitCategory || day.category || (day.sessionTitle && day.sessionTitle.includes('Pull') ? 'Pull' : (day.sessionTitle && day.sessionTitle.includes('Leg') ? 'Legs' : 'Push'));
+      const dayId = day.id || day.dayId || `day_${dIdx + 1}_${canonicalWeekday.toLowerCase()}`;
 
       return {
         ...day,
         id: dayId,
         dayId,
+        dayNumber: dIdx + 1,
+        dayIndex: dIdx + 1,
         day: dayName,
         dayName,
         weekday: dayName,
+        dayOfWeek: dayName,
         splitCategory: splitCat,
         category: splitCat,
         sessionTitle: day.sessionTitle || day.title || `${splitCat} Day`,
@@ -387,7 +402,9 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
       isMultiDaySplit,
       totalDays: validatedWeeklySchedule.length,
       weeklySchedule: validatedWeeklySchedule,
-      exercises: validatedExercises,
+      // For multi-day splits, do NOT put all 30 flattened exercises into top-level exercises!
+      // This protects legacy consumers from mistaking the entire multi-day split for a 30-exercise Monday session.
+      exercises: isMultiDaySplit ? (validatedWeeklySchedule[0]?.exercises || []) : validatedExercises,
       generatedAt: new Date().toISOString(),
       generatedByAdminId: context.adminId,
     };

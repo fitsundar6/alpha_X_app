@@ -296,6 +296,34 @@ export class WorkoutService {
     return workoutRepository.getActiveSetCompletions(clientId, sessionId);
   }
 
+  // --- Client Session Customizations & Persistent Overrides ---
+  async getClientSessionOverride(clientId: string, sessionId: string, dayOfWeek?: string) {
+    return workoutRepository.getClientSessionOverride(clientId, sessionId, dayOfWeek);
+  }
+
+  async saveClientSessionOverride(clientId: string, sessionId: string, data: any, dayOfWeek?: string) {
+    return workoutRepository.saveClientSessionOverride(clientId, sessionId, data, dayOfWeek);
+  }
+
+  async replaceExerciseInSession(clientId: string, sessionId: string, replacement: any, dayOfWeek?: string) {
+    return workoutRepository.replaceExerciseInSession(clientId, sessionId, replacement, dayOfWeek);
+  }
+
+  async addExerciseToSessionOverride(clientId: string, sessionId: string, exercise: any, dayOfWeek?: string) {
+    return workoutRepository.addExerciseToSessionOverride(clientId, sessionId, exercise, dayOfWeek);
+  }
+
+  async removeExerciseFromSessionOverride(clientId: string, sessionId: string, exerciseId: string, dayOfWeek?: string) {
+    return workoutRepository.removeExerciseFromSessionOverride(clientId, sessionId, exerciseId, dayOfWeek);
+  }
+
+  async resetSessionOverride(clientId: string, sessionId: string, exerciseId?: string) {
+    if (exerciseId) {
+      return workoutRepository.resetExerciseInSessionOverride(clientId, sessionId, exerciseId);
+    }
+    return workoutRepository.resetSessionOverride(clientId, sessionId);
+  }
+
   // --- Workout Split Operations ---
   async createWorkoutSplit(data: any, adminId: string): Promise<StoredWorkoutSplitPlan> {
     return workoutRepository.saveWorkoutSplit(data, adminId);

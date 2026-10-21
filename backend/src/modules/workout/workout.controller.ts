@@ -3,6 +3,7 @@ import { HttpStatus } from '../../constants/httpStatus';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { workoutService } from './workout.service';
 import { prisma } from '../../config/prisma';
+import { getWeekdayFromDayName, getWeekdayName } from '../../utils/istDate';
 import {
   createSessionSchema,
   updateSessionSchema,
@@ -31,30 +32,35 @@ export class WorkoutController {
     const isMultiDay = Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 1;
 
     if (isMultiDay) {
-      const days = payload.weeklySchedule.map((d: any, idx: number) => ({
-        dayOfWeek: d.day || d.dayName || d.weekday || 'Monday',
-        dayIndex: idx + 1,
-        name: d.sessionTitle || d.title || `${payload.title || 'Split'} — ${d.day || 'Day ' + (idx + 1)}`,
-        workoutType: d.workoutType || payload.workoutType || 'Strength',
-        targetMuscleGroup: d.targetMuscleGroup || d.focus || 'Full Body',
-        estimatedDurationMinutes: Number(d.estimatedDurationMinutes) || 45,
-        isRestDay: Boolean(d.isRestDay),
-        notes: d.description || null,
-        exercises: (d.exercises || []).map((ex: any, exIdx: number) => ({
-          exerciseId: ex.exerciseId || `ex_draft_${idx}_${exIdx + 1}`,
-          exerciseName: ex.exerciseName || ex.name || 'Exercise',
-          category: ex.category || 'General',
-          orderIndex: exIdx,
-          numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
-          targetReps: String(ex.targetReps || ex.reps || '8–12'),
-          targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
-          restSeconds: Number(ex.restSeconds || ex.rest) || 90,
-          targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
-          targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
-          tempo: ex.tempo || '3-1-1-0',
-          adminInstruction: ex.notes || null,
-        })),
-      }));
+      const days = payload.weeklySchedule.map((d: any, idx: number) => {
+        const rawDay = d.dayOfWeek || d.day || d.dayName || d.weekday || '';
+        const weekdayNum = getWeekdayFromDayName(rawDay, idx + 1);
+        const dayOfWeek = getWeekdayName(weekdayNum);
+        return {
+          dayOfWeek,
+          dayIndex: idx + 1,
+          name: d.sessionTitle || d.title || `${payload.title || 'Split'} — ${dayOfWeek}`,
+          workoutType: d.workoutType || payload.workoutType || 'Strength',
+          targetMuscleGroup: d.targetMuscleGroup || d.focus || 'Full Body',
+          estimatedDurationMinutes: Number(d.estimatedDurationMinutes) || 45,
+          isRestDay: Boolean(d.isRestDay),
+          notes: d.description || null,
+          exercises: (d.exercises || []).map((ex: any, exIdx: number) => ({
+            exerciseId: ex.exerciseId || `ex_draft_${idx}_${exIdx + 1}`,
+            exerciseName: ex.exerciseName || ex.name || 'Exercise',
+            category: ex.category || 'General',
+            orderIndex: exIdx,
+            numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
+            targetReps: String(ex.targetReps || ex.reps || '8–12'),
+            targetWeight: ex.targetWeight ? Number(ex.targetWeight) : null,
+            restSeconds: Number(ex.restSeconds || ex.rest) || 90,
+            targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
+            targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
+            tempo: ex.tempo || '3-1-1-0',
+            adminInstruction: ex.notes || null,
+          })),
+        };
+      });
 
       const split = await workoutService.createWorkoutSplit({
         id: `split_${proposal.id}`,
@@ -82,10 +88,10 @@ export class WorkoutController {
     }
 
     let rawExercises: any[] = [];
-    if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
-      rawExercises = payload.exercises;
-    } else if (Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
+    if (Array.isArray(payload.weeklySchedule) && payload.weeklySchedule.length > 0) {
       rawExercises = payload.weeklySchedule[0].exercises || [];
+    } else if (Array.isArray(payload.exercises) && payload.exercises.length > 0) {
+      rawExercises = payload.exercises;
     }
 
     const session = await workoutService.createSession(
@@ -617,6 +623,167 @@ export class WorkoutController {
       session,
       HttpStatus.OK,
       `Loaded workout session "${id}" ("${session.title}") for client "${clientId}"`
+    );
+  }
+
+  // --- Client Session Customizations & Persistent Overrides ---
+  async getClientSessionOverride(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const dayOfWeek = req.query.dayOfWeek as string | undefined;
+
+    const override = await workoutService.getClientSessionOverride(clientId, sessionId, dayOfWeek);
+    sendSuccess(
+      res,
+      override || {},
+      HttpStatus.OK,
+      `Retrieved session customizations for session "${sessionId}"`
+    );
+  }
+
+  async saveClientSessionOverride(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const dayOfWeek = (req.body.dayOfWeek || req.query.dayOfWeek) as string | undefined;
+
+    const saved = await workoutService.saveClientSessionOverride(clientId, sessionId, req.body, dayOfWeek);
+    sendSuccess(
+      res,
+      saved,
+      HttpStatus.OK,
+      `Saved workout customizations for session "${sessionId}"`
+    );
+  }
+
+  async replaceExerciseInSession(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const {
+      originalExerciseId,
+      replacementExerciseId,
+      replacementExerciseName,
+      category,
+      primaryMusclesDisplay,
+      secondaryMusclesDisplay,
+      trainerNote,
+      numberOfSets,
+      targetReps,
+      targetWeight,
+      customSets,
+      dayOfWeek,
+    } = req.body;
+
+    if (!originalExerciseId || !replacementExerciseId || !replacementExerciseName) {
+      sendError(
+        res,
+        'BAD_REQUEST',
+        'originalExerciseId, replacementExerciseId, and replacementExerciseName are required',
+        HttpStatus.BAD_REQUEST
+      );
+      return;
+    }
+
+    const updated = await workoutService.replaceExerciseInSession(
+      clientId,
+      sessionId,
+      {
+        originalExerciseId,
+        originalExerciseName: req.body.originalExerciseName,
+        replacementExerciseId,
+        replacementExerciseName,
+        category,
+        primaryMusclesDisplay,
+        secondaryMusclesDisplay,
+        trainerNote,
+        numberOfSets,
+        targetReps,
+        targetWeight,
+        customSets,
+      },
+      dayOfWeek
+    );
+
+    sendSuccess(
+      res,
+      updated,
+      HttpStatus.OK,
+      `Replaced exercise "${originalExerciseId}" with "${replacementExerciseName}" in session "${sessionId}" and saved for future sessions`
+    );
+  }
+
+  async addExerciseToSessionOverride(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const { exercise, dayOfWeek } = req.body;
+
+    if (!exercise || (!exercise.exerciseId && !exercise.id)) {
+      sendError(
+        res,
+        'BAD_REQUEST',
+        'Valid exercise object is required',
+        HttpStatus.BAD_REQUEST
+      );
+      return;
+    }
+
+    const updated = await workoutService.addExerciseToSessionOverride(
+      clientId,
+      sessionId,
+      exercise,
+      dayOfWeek
+    );
+
+    sendSuccess(
+      res,
+      updated,
+      HttpStatus.OK,
+      `Added exercise "${exercise.exerciseName || exercise.name}" to session "${sessionId}" and saved for future sessions`
+    );
+  }
+
+  async removeExerciseFromSessionOverride(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const { exerciseId, dayOfWeek } = req.body;
+
+    if (!exerciseId) {
+      sendError(
+        res,
+        'BAD_REQUEST',
+        'exerciseId is required',
+        HttpStatus.BAD_REQUEST
+      );
+      return;
+    }
+
+    const updated = await workoutService.removeExerciseFromSessionOverride(
+      clientId,
+      sessionId,
+      exerciseId,
+      dayOfWeek
+    );
+
+    sendSuccess(
+      res,
+      updated,
+      HttpStatus.OK,
+      `Removed exercise "${exerciseId}" from session "${sessionId}" and saved for future sessions`
+    );
+  }
+
+  async resetSessionOverride(req: Request, res: Response): Promise<void> {
+    const clientId = req.user!.id;
+    const sessionId = String(req.params.id);
+    const exerciseId = req.query.exerciseId as string | undefined;
+
+    const result = await workoutService.resetSessionOverride(clientId, sessionId, exerciseId);
+    sendSuccess(
+      res,
+      result,
+      HttpStatus.OK,
+      exerciseId
+        ? `Reset exercise "${exerciseId}" to admin prescribed default in session "${sessionId}"`
+        : `Reset session "${sessionId}" to admin prescribed default template`
     );
   }
 

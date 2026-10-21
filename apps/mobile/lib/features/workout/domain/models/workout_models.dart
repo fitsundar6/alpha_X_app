@@ -786,6 +786,10 @@ class WorkoutExercise {
   final ExerciseSwapRecord? swapRecord;
   final int? durationSeconds;
   final double? distanceMeters;
+  final bool isCustomReplacement;
+  final String? originalExerciseId;
+  final String? originalExerciseName;
+  final bool isCustomAdded;
 
   const WorkoutExercise({
     required this.id,
@@ -810,6 +814,10 @@ class WorkoutExercise {
     this.swapRecord,
     this.durationSeconds,
     this.distanceMeters,
+    this.isCustomReplacement = false,
+    this.originalExerciseId,
+    this.originalExerciseName,
+    this.isCustomAdded = false,
   });
 
   bool get isAllSetsCompleted => sets.isNotEmpty && sets.every((s) => s.isCompleted);
@@ -858,6 +866,10 @@ class WorkoutExercise {
     ExerciseSwapRecord? swapRecord,
     int? durationSeconds,
     double? distanceMeters,
+    bool? isCustomReplacement,
+    String? originalExerciseId,
+    String? originalExerciseName,
+    bool? isCustomAdded,
   }) {
     return WorkoutExercise(
       id: id ?? this.id,
@@ -882,6 +894,10 @@ class WorkoutExercise {
       swapRecord: swapRecord ?? this.swapRecord,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       distanceMeters: distanceMeters ?? this.distanceMeters,
+      isCustomReplacement: isCustomReplacement ?? this.isCustomReplacement,
+      originalExerciseId: originalExerciseId ?? this.originalExerciseId,
+      originalExerciseName: originalExerciseName ?? this.originalExerciseName,
+      isCustomAdded: isCustomAdded ?? this.isCustomAdded,
     );
   }
 
@@ -912,6 +928,10 @@ class WorkoutExercise {
       'swapRecord': swapRecord?.toJson(),
       'durationSeconds': durationSeconds,
       'distanceMeters': distanceMeters,
+      'isCustomReplacement': isCustomReplacement,
+      'originalExerciseId': originalExerciseId,
+      'originalExerciseName': originalExerciseName,
+      'isCustomAdded': isCustomAdded,
     };
   }
 
@@ -1021,6 +1041,10 @@ class WorkoutExercise {
           : null,
       durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
       distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
+      isCustomReplacement: json['isCustomReplacement'] as bool? ?? false,
+      originalExerciseId: json['originalExerciseId'] as String?,
+      originalExerciseName: json['originalExerciseName'] as String?,
+      isCustomAdded: json['isCustomAdded'] as bool? ?? false,
     );
   }
 }
@@ -1064,6 +1088,7 @@ class WorkoutSession {
   final DateTime? unlockedAt;
   final String? unlockedById;
   final String? unlockReason;
+  final bool hasClientCustomization;
 
   String? get userId => assignedClientId;
 
@@ -1107,6 +1132,7 @@ class WorkoutSession {
     this.unlockedAt,
     this.unlockedById,
     this.unlockReason,
+    this.hasClientCustomization = false,
   })  : targetMuscleGroup = targetMuscleGroup ?? focus ?? 'Full Body',
         startedAt = startedAt ?? DateTime.now(),
         sections = sections ?? _defaultSections(),
@@ -1219,6 +1245,7 @@ class WorkoutSession {
     DateTime? unlockedAt,
     String? unlockedById,
     String? unlockReason,
+    bool? hasClientCustomization,
   }) {
     return WorkoutSession(
       id: id ?? this.id,
@@ -1259,6 +1286,7 @@ class WorkoutSession {
       unlockedAt: unlockedAt ?? this.unlockedAt,
       unlockedById: unlockedById ?? this.unlockedById,
       unlockReason: unlockReason ?? this.unlockReason,
+      hasClientCustomization: hasClientCustomization ?? this.hasClientCustomization,
     );
   }
 
@@ -1303,6 +1331,7 @@ class WorkoutSession {
       'unlockedAt': unlockedAt?.toIso8601String(),
       'unlockedById': unlockedById,
       'unlockReason': unlockReason,
+      'hasClientCustomization': hasClientCustomization,
     };
   }
 
@@ -1367,6 +1396,7 @@ class WorkoutSession {
       unlockedAt: json['unlockedAt'] != null ? DateTime.tryParse(json['unlockedAt'] as String) : null,
       unlockedById: json['unlockedById'] as String?,
       unlockReason: json['unlockReason'] as String?,
+      hasClientCustomization: json['hasClientCustomization'] as bool? ?? false,
     );
   }
 }

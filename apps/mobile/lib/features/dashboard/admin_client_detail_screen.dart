@@ -13,6 +13,7 @@ import 'package:alpha_x_gym/features/progress/presentation/screens/client_transf
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_create_edit_diet_plan_screen.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_assign_session_dialog.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_meal_photo_viewer_dialog.dart';
 import 'package:alpha_x_gym/core/services/app_auto_refresh_service.dart';
 import 'dart:convert';
@@ -62,6 +63,10 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
   bool _isLoadingWorkouts = false;
   List<WorkoutRecord> _workoutRecords = [];
 
+  // Assigned workout split for this client
+  WorkoutSplitPlan? _clientWorkoutSplit;
+  bool _isLoadingSplit = false;
+
   // Nutrition State
   DateTime _selectedNutritionDate = DateTime.now();
   bool _isLoadingNutrition = false;
@@ -95,6 +100,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
 
     _loadLiveProfile();
     _loadWorkoutHistory();
+    _loadClientWorkoutSplit();
     _loadNutritionSummary();
   }
 
@@ -124,6 +130,19 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
       // Keep cached client data safely
     } finally {
       if (mounted) setState(() => _isLoadingProfile = false);
+    }
+  }
+
+  Future<void> _loadClientWorkoutSplit() async {
+    if (!mounted) return;
+    setState(() => _isLoadingSplit = true);
+    try {
+      final split = await widget.workoutRepository.fetchClientWorkoutSplit(_clientId);
+      if (mounted) setState(() => _clientWorkoutSplit = split);
+    } catch (_) {
+      // Non-fatal: split section will show empty state
+    } finally {
+      if (mounted) setState(() => _isLoadingSplit = false);
     }
   }
 
@@ -1251,28 +1270,96 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
   }
 
   // ==========================================
-  // CORE SECTION 2: WORKOUT (ACTUAL PERFORMANCE)
   // ==========================================
-  Widget _buildWorkoutTab(ClientThemeColors colors) {
-    if (_isLoadingWorkouts && _workoutRecords.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryRed));
+  // CORE SECTION 2: WORKOUT (ASSIGNED PLAN + PERFORMANCE)
+  // ==========================================
+
+  /// Opens [AdminCreateEditSessionScreen] for one individual split day.
+  /// Only that session is mutated — other days are untouched.
+  void _openEditSplitDay(WorkoutSplitDay day) async {
+    // 1. Resolve WorkoutSession from cache or by fetching
+    WorkoutSession? session = day.sessionId != null
+        ? widget.workoutRepository.adminSessions
+            .where((s) => s.id == day.sessionId)
+            .firstOrNull
+        : null;
+
+    if (session == null && day.sessionId != null) {
+      session = await widget.workoutRepository.getSessionById(day.sessionId!);
+      if (!mounted) return;
     }
 
+    // 2. If not materialized, synthesize session from day so admin can edit independently
+    session ??= WorkoutSession(
+      id: day.sessionId ?? 'ws_${_clientWorkoutSplit?.id ?? _clientId}_${day.dayOfWeek}',
+      title: day.name,
+      workoutType: day.workoutType,
+      targetMuscleGroup: day.targetMuscleGroup,
+      difficulty: 'Intermediate',
+      estimatedDurationMinutes: day.estimatedDurationMinutes > 0 ? day.estimatedDurationMinutes : 45,
+      description: day.notes,
+      recurringSchedule: day.dayOfWeek,
+      assignedClientIds: [_clientId],
+      isRecommended: day.dayIndex == 1,
+      exercises: List.from(day.exercises),
+    );
+
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminCreateEditSessionScreen(
+          workoutRepository: widget.workoutRepository,
+          sessionToEdit: session,
+          parentSplit: _clientWorkoutSplit,
+          splitDay: day,
+          clientIdToAssign: _clientId,
+          startInSplitMode: false,
+          onSaved: () {},
+        ),
+      ),
+    );
+
+    if (saved == true && mounted) {
+      _loadClientWorkoutSplit();
+      widget.workoutRepository.fetchAdminSessions(forceRefresh: true);
+    }
+  }
+
+  /// Opens [AdminCreateEditSessionScreen] in full-split mode for this client.
+  void _openEditFullSplit() async {
+    final split = _clientWorkoutSplit;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AdminCreateEditSessionScreen(
+          workoutRepository: widget.workoutRepository,
+          splitToEdit: split,
+          clientIdToAssign: _clientId,
+          onSaved: () {},
+        ),
+      ),
+    );
+    if (saved == true && mounted) {
+      _loadClientWorkoutSplit();
+      widget.workoutRepository.fetchAdminSessions(forceRefresh: true);
+    }
+  }
+
+  Widget _buildWorkoutTab(ClientThemeColors colors) {
     final totalVolume = _workoutRecords.fold(0.0, (acc, r) => acc + r.totalVolume);
     final totalHours = (_workoutRecords.fold(0, (acc, r) => acc + r.durationSeconds) / 3600).toStringAsFixed(1);
 
-    // Active assignments for this client
-    final assignments = widget.workoutRepository.assignments
-        .where((a) => a.clientId == null || a.clientId == _clientId || a.clientId == _displayId)
-        .toList();
-
     return RefreshIndicator(
       color: colors.primary,
-      onRefresh: _loadWorkoutHistory,
+      onRefresh: () async {
+        await Future.wait([_loadWorkoutHistory(), _loadClientWorkoutSplit()]);
+      },
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Stat Summary Bar
+          // ── CURRENT WORKOUT PLAN SECTION ──────────────────────────────
+          _buildCurrentPlanSection(colors),
+          const SizedBox(height: 24),
+
+          // ── PERFORMANCE STATS BAR ─────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1291,7 +1378,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
           ),
           const SizedBox(height: 18),
 
-          // Action Bar: Assign Session
+          // ── LOGGED SESSION HISTORY ────────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1306,14 +1393,23 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
               ),
               TextButton.icon(
                 icon: const Icon(Icons.add, size: 16, color: AppColors.primaryRed),
-                label: const Text('+ ASSIGN SESSION', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 11)),
+                label: const Text('+ ASSIGN SESSION',
+                    style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11)),
                 onPressed: _openAssignWorkoutDialog,
               ),
             ],
           ),
           const SizedBox(height: 8),
 
-          if (_workoutRecords.isEmpty)
+          if (_isLoadingWorkouts && _workoutRecords.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primaryRed)),
+            )
+          else if (_workoutRecords.isEmpty)
             Container(
               padding: const EdgeInsets.all(28),
               margin: const EdgeInsets.only(top: 10),
@@ -1328,7 +1424,8 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                   const SizedBox(height: 12),
                   Text(
                     'No Workout Logs Yet',
-                    style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
+                    style: GoogleFonts.poppins(
+                        color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -1341,71 +1438,312 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                     style: ElevatedButton.styleFrom(backgroundColor: colors.primary),
                     onPressed: _openAssignWorkoutDialog,
                     icon: const Icon(Icons.assignment, size: 16, color: Colors.white),
-                    label: const Text('ASSIGN WORKOUT NOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    label: const Text('ASSIGN WORKOUT NOW',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
               ),
             )
           else
             ..._workoutRecords.map((record) => _buildWorkoutRecordCard(record, colors)),
+        ],
+      ),
+    );
+  }
 
-          if (assignments.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Text(
-              'ACTIVE ASSIGNMENTS (${assignments.length})',
-              style: GoogleFonts.poppins(
-                color: colors.textTertiary,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 10),
-            ...assignments.map((assign) {
-              final session = widget.workoutRepository.adminSessions
-                  .where((s) => s.id == assign.sessionId)
-                  .firstOrNull;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colors.surfaceCard,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: assign.isRecommended ? colors.primary : colors.border,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    if (assign.isRecommended)
-                      const Icon(Icons.star, size: 16, color: AppColors.gold),
-                    if (assign.isRecommended) const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        session?.title ?? 'Session ${assign.sessionId}',
+  // ──────────────────────────────────────────────────────────────────────
+  // CURRENT WORKOUT PLAN — editable split card
+  // ──────────────────────────────────────────────────────────────────────
+  Widget _buildCurrentPlanSection(ClientThemeColors colors) {
+    if (_isLoadingSplit) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: colors.surfaceCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colors.border),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryRed),
+        ),
+      );
+    }
+
+    final split = _clientWorkoutSplit;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primaryRed.withOpacity(0.35),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month_rounded,
+                    size: 18, color: AppColors.primaryRed),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        split != null
+                            ? (split.title.isNotEmpty ? split.title : 'WORKOUT PLAN')
+                            : 'WORKOUT PLAN',
                         style: GoogleFonts.poppins(
                           color: colors.textPrimary,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w900,
                           fontSize: 13,
+                          letterSpacing: 0.8,
                         ),
                       ),
+                      if (split != null)
+                        Text(
+                          '${split.days.where((d) => !d.isRestDay).length} training days/week',
+                          style: GoogleFonts.poppins(
+                              color: colors.textSecondary, fontSize: 11),
+                        ),
+                    ],
+                  ),
+                ),
+                // Edit full split button
+                if (split != null)
+                  TextButton.icon(
+                    onPressed: _openEditFullSplit,
+                    icon: const Icon(Icons.edit_note_rounded,
+                        size: 15, color: AppColors.primaryRed),
+                    label: const Text('EDIT PLAN',
+                        style: TextStyle(
+                            color: AppColors.primaryRed,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     ),
+                  ),
+              ],
+            ),
+          ),
+
+          const Divider(color: AppColors.border, height: 1),
+
+          if (split == null)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Icon(Icons.fitness_center_outlined,
+                      size: 36, color: AppColors.textTertiary),
+                  const SizedBox(height: 10),
+                  Text(
+                    'No Workout Plan Assigned',
+                    style: GoogleFonts.poppins(
+                      color: colors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Generate an AI plan from the AI Coach tab, or assign a session manually.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                        color: colors.textTertiary, fontSize: 11),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryRed,
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    onPressed: _openEditFullSplit,
+                    icon: const Icon(Icons.add, size: 15, color: Colors.white),
+                    label: const Text('CREATE WORKOUT PLAN',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11)),
+                  ),
+                ],
+              ),
+            )
+          else
+            // Day-by-day split cards
+            ...split.days.map((day) => _buildSplitDayEditCard(day, colors)),
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSplitDayEditCard(WorkoutSplitDay day, ClientThemeColors colors) {
+    final isRest = day.isRestDay;
+    final exCount = day.exercises.length;
+
+    // Determine color accent per day
+    final Color dayAccent = _dayAccentColor(day.dayOfWeek);
+
+    return InkWell(
+      onTap: () => _openEditSplitDay(day),
+      borderRadius: BorderRadius.circular(0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        decoration: BoxDecoration(
+          border: const Border(
+            bottom: BorderSide(color: AppColors.border, width: 0.6),
+          ),
+          color: isRest ? Colors.transparent : null,
+        ),
+        child: Row(
+          children: [
+            // Day chip
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isRest
+                    ? AppColors.surfaceElevated
+                    : dayAccent.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isRest ? AppColors.border : dayAccent.withOpacity(0.5),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  day.dayOfWeek.substring(0, 3).toUpperCase(),
+                  style: TextStyle(
+                    color: isRest ? AppColors.textDisabled : dayAccent,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Name + muscle group
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    day.name,
+                    style: GoogleFonts.poppins(
+                      color: isRest
+                          ? colors.textTertiary
+                          : colors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    isRest
+                        ? 'Rest & Recovery (Tap to add session)'
+                        : '$exCount exercise${exCount == 1 ? '' : 's'} • ${day.targetMuscleGroup}',
+                    style: GoogleFonts.poppins(
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            // Edit button or rest label
+            if (isRest)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
                     Text(
-                      assign.isRecommended ? 'RECOMMENDED' : 'ASSIGNED',
+                      'REST',
                       style: TextStyle(
-                        color: assign.isRecommended ? AppColors.gold : colors.textSecondary,
+                        color: AppColors.textDisabled,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.edit_outlined,
+                        size: 11, color: AppColors.textSecondary),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryRed.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.primaryRed.withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.edit_outlined,
+                        size: 13, color: AppColors.primaryRed),
+                    SizedBox(width: 4),
+                    Text(
+                      'EDIT',
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
                 ),
-              );
-            }),
+              ),
           ],
-        ],
+        ),
       ),
     );
+  }
+
+  Color _dayAccentColor(String dayOfWeek) {
+    switch (dayOfWeek.toLowerCase()) {
+      case 'monday':
+        return Colors.orangeAccent;
+      case 'tuesday':
+        return Colors.lightBlueAccent;
+      case 'wednesday':
+        return Colors.greenAccent;
+      case 'thursday':
+        return Colors.deepOrangeAccent;
+      case 'friday':
+        return Colors.purpleAccent;
+      case 'saturday':
+        return Colors.tealAccent;
+      default:
+        return AppColors.textSecondary;
+    }
   }
 
   Widget _buildWorkoutRecordCard(WorkoutRecord record, ClientThemeColors colors) {

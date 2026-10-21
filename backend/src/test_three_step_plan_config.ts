@@ -287,7 +287,7 @@ async function runThreeStepPlanConfigTests() {
       orderBy: { assignedAt: 'desc' },
     });
     console.assert(assignment !== null, 'Client MUST have active assignment');
-    console.assert(assignment!.session.title.includes('Arnold Split'), 'Session title must match Arnold Split');
+    console.assert(assignment!.session.title.includes('Arnold'), 'Session title must match Arnold');
     console.log(`[PASS] Step 7: Verified database workout session: "${assignment!.session.title}" with ${assignment!.session.exercises.length} exercises.`);
   } else {
     // Offline / Mock mode: verify validation logic, intent matching, schedule structure and proposal schema

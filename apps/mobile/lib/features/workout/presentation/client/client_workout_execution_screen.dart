@@ -535,7 +535,74 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
     setState(() {});
   }
 
-  // --- Swap Exercise ---
+  // --- Delete Set with Undo ---
+  void _handleDeleteSet(int exerciseIndex, int setIndex) {
+    if (widget.workoutRepository.activeSession.isLocked) return;
+    final session = widget.workoutRepository.activeSession;
+    if (exerciseIndex >= session.exercises.length) return;
+    final exercise = session.exercises[exerciseIndex];
+    if (setIndex >= exercise.sets.length) return;
+
+    final deletedSet = exercise.sets[setIndex];
+    HapticFeedback.lightImpact();
+
+    final success = widget.workoutRepository.deleteSet(exerciseIndex, setIndex);
+    if (!success) return;
+
+    _initAllSetControllers();
+    setState(() {});
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Set ${setIndex + 1} deleted.'),
+        backgroundColor: const Color(0xFF2C2C2E),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppColors.primary,
+          onPressed: () {
+            widget.workoutRepository.insertSet(exerciseIndex, setIndex, deletedSet);
+            _initAllSetControllers();
+            setState(() {});
+          },
+        ),
+      ),
+    );
+  }
+
+  // --- Exercise Swipe Navigation ---
+  void _navigateToExercise(int targetIndex) {
+    final session = widget.workoutRepository.activeSession;
+    if (targetIndex < 0 || targetIndex >= session.exercises.length) {
+      // Reached boundary (first or last exercise) - boundary respected
+      HapticFeedback.lightImpact();
+      return;
+    }
+
+    HapticFeedback.selectionClick();
+    setState(() {
+      _activeExerciseIndex = targetIndex;
+      _expandedExerciseIndices.clear();
+      _expandedExerciseIndices.add(targetIndex);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final key = _exerciseKeys[targetIndex];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.05,
+        );
+      }
+    });
+  }
+
+  // --- Swap / Replace Exercise ---
   Future<void> _handleSwapExercise(int exerciseIndex) async {
     if (widget.workoutRepository.activeSession.isLocked) return;
     final session = widget.workoutRepository.activeSession;
@@ -553,10 +620,13 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       if (success) {
         _initAllSetControllers();
         setState(() {});
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Swapped to "${selected.name}" for today\'s session.'),
+            content: Text('Replaced with "${selected.name}". Saved for all future occurrences.'),
             backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -579,6 +649,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
         primaryMusclesDisplay: selected.primaryMuscles.map((m) => m.displayName).join(' • '),
         secondaryMusclesDisplay: selected.secondaryMuscles.map((m) => m.displayName).join(' • '),
         trainerNote: selected.defaultTrainerNote,
+        isCustomAdded: true,
         sets: [
           const ExerciseSet(
             id: 'set_new_1',
@@ -611,40 +682,322 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       _initAllSetControllers();
       final newIndex = widget.workoutRepository.activeSession.exercises.length - 1;
       _expandedExerciseIndices.add(newIndex);
-      _activeExerciseIndex = newIndex;
       setState(() {});
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added "${selected.name}". Saved for all future occurrences.'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
-  // --- Exercise Swipe Navigation ---
-  void _navigateToExercise(int targetIndex) {
+  // --- Exercise Action Sheet (Triggered by Swipe or Options Menu) ---
+  Future<void> _showExerciseActionSheet(int exerciseIndex) async {
+    if (widget.workoutRepository.activeSession.isLocked) return;
     final session = widget.workoutRepository.activeSession;
-    if (targetIndex < 0 || targetIndex >= session.exercises.length) {
-      // Reached boundary (first or last exercise) - boundary respected
-      HapticFeedback.lightImpact();
-      return;
-    }
+    if (exerciseIndex >= session.exercises.length) return;
+    final exercise = session.exercises[exerciseIndex];
+    final isCustomized = exercise.isCustomReplacement || exercise.isCustomAdded;
 
-    HapticFeedback.selectionClick();
-    setState(() {
-      _activeExerciseIndex = targetIndex;
-      _expandedExerciseIndices.clear();
-      _expandedExerciseIndices.add(targetIndex);
-    });
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final sheetBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+        final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
+        final textSecondary = isDark ? const Color(0xFFAAAAAA) : const Color(0xFF666666);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final key = _exerciseKeys[targetIndex];
-      if (key?.currentContext != null) {
-        Scrollable.ensureVisible(
-          key!.currentContext!,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOutCubic,
-          alignment: 0.05,
+        return Material(
+          color: sheetBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  exercise.exerciseName,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (exercise.isCustomReplacement && exercise.originalExerciseName != null)
+                  Text(
+                    'Replaced: ${exercise.originalExerciseName}',
+                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.blue),
+                  )
+                else if (exercise.isCustomAdded)
+                  Text(
+                    'Custom added exercise',
+                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.purpleAccent),
+                  )
+                else
+                  Text(
+                    '${exercise.category} · ${exercise.sets.length} sets',
+                    style: GoogleFonts.poppins(fontSize: 12, color: textSecondary),
+                  ),
+                const SizedBox(height: 16),
+
+                // 1. Skip / Resume Exercise
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      exercise.isSkipped ? Icons.play_arrow_rounded : Icons.skip_next_rounded,
+                      color: Colors.amber,
+                    ),
+                  ),
+                  title: Text(
+                    exercise.isSkipped ? 'Resume Exercise' : 'Skip Exercise for Today',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: textPrimary),
+                  ),
+                  subtitle: Text(
+                    exercise.isSkipped ? 'Unmark skip and continue working out' : 'Skip this exercise for today without deleting it',
+                    style: GoogleFonts.poppins(fontSize: 11, color: textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (exercise.isSkipped) {
+                      widget.workoutRepository.unskipExercise(exerciseIndex);
+                      setState(() {});
+                    } else {
+                      widget.workoutRepository.skipExercise(exerciseIndex);
+                      setState(() {});
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Skipped "${exercise.exerciseName}" for today.'),
+                          behavior: SnackBarBehavior.floating,
+                          action: SnackBarAction(
+                            label: 'UNDO',
+                            onPressed: () {
+                              widget.workoutRepository.unskipExercise(exerciseIndex);
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+
+                // 2. Replace Exercise
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.swap_horiz_rounded, color: Colors.blue),
+                  ),
+                  title: Text(
+                    'Replace Exercise',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: textPrimary),
+                  ),
+                  subtitle: Text(
+                    'Swap with another exercise from library (saved for future)',
+                    style: GoogleFonts.poppins(fontSize: 11, color: textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleSwapExercise(exerciseIndex);
+                  },
+                ),
+
+                // 3. Remove Exercise from Session
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  ),
+                  title: Text(
+                    'Remove from Session',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.red),
+                  ),
+                  subtitle: Text(
+                    'Remove from today and future occurrences',
+                    style: GoogleFonts.poppins(fontSize: 11, color: textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmAndRemoveExercise(exerciseIndex, exercise);
+                  },
+                ),
+
+                // 4. Reset to Coach Template (if customized)
+                if (isCustomized)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.restart_alt_rounded, color: Colors.teal),
+                    ),
+                    title: Text(
+                      'Reset to Coach Template',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.teal),
+                    ),
+                    subtitle: Text(
+                      'Restore the admin-assigned original exercise',
+                      style: GoogleFonts.poppins(fontSize: 11, color: textSecondary),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final exId = exercise.originalExerciseId ?? exercise.exerciseId;
+                      await widget.workoutRepository.resetExerciseCustomization(session.id, exId);
+                      _initAllSetControllers();
+                      setState(() {});
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Reset to coach template exercise.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+
+                // 5. Exercise Details
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.info_outline_rounded, color: textPrimary),
+                  ),
+                  title: Text(
+                    'Exercise Details & History',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: textPrimary),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ClientExerciseDetailSheet.show(
+                      context,
+                      workoutExercise: exercise,
+                      workoutRepository: widget.workoutRepository,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         );
-      }
-    });
+      },
+    );
   }
+
+  // --- Confirm and Remove Exercise with Undo ---
+  void _confirmAndRemoveExercise(int exerciseIndex, WorkoutExercise exercise) {
+    HapticFeedback.lightImpact();
+    final success = widget.workoutRepository.removeExerciseFromActiveSession(exerciseIndex);
+    if (!success) return;
+
+    _initAllSetControllers();
+    setState(() {});
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Removed "${exercise.exerciseName}".'),
+        backgroundColor: const Color(0xFF2C2C2E),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppColors.primary,
+          onPressed: () {
+            widget.workoutRepository.insertExerciseIntoActiveSession(exerciseIndex, exercise);
+            _initAllSetControllers();
+            setState(() {});
+          },
+        ),
+      ),
+    );
+  }
+
+  // --- Confirm Restore Session to Coach Template ---
+  Future<void> _confirmRestoreSessionTemplate(String sessionId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore Original Plan?'),
+        content: const Text(
+          'This will reset all exercise replacements and custom additions back to the coach\'s original prescribed template for this workout session.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Restore Original', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final success = await widget.workoutRepository.resetSessionCustomizations(sessionId);
+      if (success) {
+        _initAllSetControllers();
+        setState(() {});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Restored to coach\'s original workout plan.'),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+
 
   // --- Finish Workout Confirmation Dialog ---
   bool _isFinishingWorkout = false;
@@ -956,7 +1309,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
               // 2. WORKOUT TITLE & PROGRESS HEADER
               _buildWorkoutHeader(session, completedExercises, totalExercises, progressPercent, colors),
 
-              // 3. EXERCISE LIST (Expandable cards with horizontal swipe gesture support)
+              // 3. EXERCISE LIST
               Expanded(
                 child: GestureDetector(
                   key: const ValueKey('exercise_list_swipe_detector'),
@@ -1222,16 +1575,37 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Text(
-                  session.title,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                    color: colors.textPrimary,
-                    letterSpacing: -0.3,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        session.title,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          color: colors.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (session.hasClientCustomization || session.exercises.any((e) => e.isCustomReplacement || e.isCustomAdded)) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                        ),
+                        child: const Text(
+                          'CUSTOMIZED',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               PopupMenuButton<String>(
@@ -1243,10 +1617,23 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                     Navigator.of(context).pop();
                   } else if (val == 'info') {
                     _openTargetMuscleSheet(context);
+                  } else if (val == 'restore_original') {
+                    _confirmRestoreSessionTemplate(session.id);
                   }
                 },
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(value: 'info', child: Text('Workout Details')),
+                  if (session.hasClientCustomization || session.exercises.any((e) => e.isCustomReplacement || e.isCustomAdded))
+                    const PopupMenuItem(
+                      value: 'restore_original',
+                      child: Row(
+                        children: [
+                          Icon(Icons.restart_alt_rounded, size: 18, color: Colors.amber),
+                          SizedBox(width: 8),
+                          Text('Restore Original Plan', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
                   const PopupMenuItem(value: 'discard', child: Text('Discard Workout', style: TextStyle(color: AppColors.error))),
                 ],
               ),
@@ -1341,295 +1728,399 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
       onHorizontalDragCancel: () {
         cardDragAccumulatedX = 0.0;
       },
-      child: Container(
-        key: _getExerciseKey(exerciseIndex),
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: colors.surfaceCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isExpanded
-                ? (isDark ? colors.primaryRed : const Color(0xFFFF6B00)) // Accent border when expanded
-                : (isAllCompleted ? AppColors.success.withOpacity(0.5) : colors.border),
-            width: isExpanded ? 1.5 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Opacity(
+        opacity: exercise.isSkipped ? 0.65 : 1.0,
+        child: Container(
+          key: _getExerciseKey(exerciseIndex),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: colors.surfaceCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isExpanded
+                  ? (isDark ? colors.primaryRed : const Color(0xFFFF6B00)) // Accent border when expanded
+                  : (isAllCompleted ? AppColors.success.withOpacity(0.5) : colors.border),
+              width: isExpanded ? 1.5 : 1.0,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // CARD HEADER ROW
-            GestureDetector(
-              key: ValueKey('exercise_header_$exerciseIndex'),
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() {
-                  if (isExpanded) {
-                    _expandedExerciseIndices.remove(exerciseIndex);
-                  } else {
-                    _expandedExerciseIndices.add(exerciseIndex);
-                    _activeExerciseIndex = exerciseIndex;
-                  }
-                });
-              },
-              behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  // Exercise Number
-                  Text(
-                    '$exNumber',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Exercise Name (tapping name opens Exercise Detail Sheet)
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        ClientExerciseDetailSheet.show(
-                          context,
-                          workoutExercise: exercise,
-                          workoutRepository: widget.workoutRepository,
-                        );
-                      },
-                      child: Text(
-                        exercise.exerciseName,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // CARD HEADER ROW
+              GestureDetector(
+                key: ValueKey('exercise_header_$exerciseIndex'),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (isExpanded) {
+                      _expandedExerciseIndices.remove(exerciseIndex);
+                    } else {
+                      _expandedExerciseIndices.add(exerciseIndex);
+                      _activeExerciseIndex = exerciseIndex;
+                    }
+                  });
+                },
+                onLongPress: () => _showExerciseActionSheet(exerciseIndex),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      // Exercise Number
+                      Text(
+                        '$exNumber',
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: colors.textPrimary,
+                          fontSize: 14,
+                          color: colors.textSecondary,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ),
+                      const SizedBox(width: 14),
 
-                  // EXERCISE COMPLETION: Double-tick ✓✓ badge indicating Exercise Completed
-                  if (isAllCompleted) ...[
-                    Container(
-                      key: ValueKey('exercise_completed_badge_${exercise.id}'),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.success, width: 1.2),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.done_all_rounded,
-                            size: 16,
-                            color: AppColors.success,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '✓✓ Completed',
+                      // Exercise Name (tapping name opens Exercise Detail Sheet)
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            ClientExerciseDetailSheet.show(
+                              context,
+                              workoutExercise: exercise,
+                              workoutRepository: widget.workoutRepository,
+                            );
+                          },
+                          child: Text(
+                            exercise.exerciseName,
                             style: GoogleFonts.poppins(
-                              fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.success,
+                              fontSize: 15,
+                              color: colors.textPrimary,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
 
-                  // Chevron Expand / Collapse Icon
-                  Icon(
-                    isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: colors.textTertiary,
-                    size: 22,
-                    key: ValueKey('exercise_chevron_$exerciseIndex'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // EXPANDED CONTENT AREA (Table + Actions)
-          if (isExpanded) ...[
-            Divider(height: 1, color: colors.borderSubtle),
-
-            // TABLE HEADER: Set | Previous | Target | Kg | Reps | Checkbox
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    child: Text('Set', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text('Previous', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text('Target', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                  SizedBox(
-                    width: 52,
-                    child: Center(
-                      child: Text('Kg', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    width: 52,
-                    child: Center(
-                      child: Text('Reps', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                  const SizedBox(width: 38), // Space for completion circle
-                ],
-              ),
-            ),
-            Divider(height: 1, color: colors.borderSubtle.withOpacity(0.5)),
-
-            // SET ROWS
-            ...exercise.sets.asMap().entries.map((setEntry) {
-              final setIdx = setEntry.key;
-              final set = setEntry.value;
-
-              // Previous data from real history for this set
-              ExerciseSet? prevSet;
-              if (previousSets != null && setIdx < previousSets.length) {
-                prevSet = previousSets[setIdx];
-              }
-
-              return _buildSetRow(
-                exerciseIndex: exerciseIndex,
-                setIndex: setIdx,
-                set: set,
-                previousSet: prevSet,
-                colors: colors,
-                isDark: isDark,
-              );
-            }),
-
-            const SizedBox(height: 10),
-
-            // CARD BOTTOM ACTIONS: + Add Set | Swap | Rest Timer | ...
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final targetWidth = math.max(constraints.maxWidth, 370.0);
-                  return FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: targetWidth,
-                      child: Row(
-                        children: [
-                          if (!widget.workoutRepository.activeSession.isLocked) ...[
-                            // + Add Set
-                            GestureDetector(
-                              onTap: () => _handleAddSet(exerciseIndex),
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Add Set',
-                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-
-                            // Swap Exercise
-                            GestureDetector(
-                              onTap: () => _handleSwapExercise(exerciseIndex),
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Swap',
-                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                          ],
-
-                          // Rest Timer Pill
-                          GestureDetector(
-                            onTap: () {
-                              final rest = exercise.restSeconds > 0 ? exercise.restSeconds : 60;
-                              _startRestTimer(rest, exercise.exerciseName);
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: colors.surfaceElevated,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.timer_outlined, size: 14, color: colors.textPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _formatSeconds(exercise.restSeconds > 0 ? exercise.restSeconds : 60),
-                                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 11, color: colors.textPrimary),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      // SKIPPED BADGE
+                      if (exercise.isSkipped) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.amber, width: 1.0),
                           ),
-
-                          const Spacer(),
-
-                          // Details / Options ...
-                          IconButton(
-                            icon: Icon(Icons.more_horiz_rounded, size: 18, color: colors.textTertiary),
-                            onPressed: () {
-                              ClientExerciseDetailSheet.show(
-                                context,
-                                workoutExercise: exercise,
-                                workoutRepository: widget.workoutRepository,
-                              );
-                            },
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.skip_next_rounded, size: 13, color: Colors.amber),
+                              const SizedBox(width: 3),
+                              Text(
+                                'SKIPPED',
+                                style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.amber),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+
+                      // CUSTOMIZED REPLACEMENT BADGE
+                      if (exercise.isCustomReplacement) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            'Customized',
+                            style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.blue),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+
+                      // CUSTOM ADDED BADGE
+                      if (exercise.isCustomAdded) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.purple.withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            '+ Added',
+                            style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.purpleAccent),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+
+                      // EXERCISE COMPLETION: Double-tick ✓✓ badge indicating Exercise Completed
+                      if (isAllCompleted && !exercise.isSkipped) ...[
+                        Container(
+                          key: ValueKey('exercise_completed_badge_${exercise.id}'),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.success, width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.done_all_rounded,
+                                size: 16,
+                                color: AppColors.success,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '✓✓ Completed',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+
+                      // Chevron Expand / Collapse Icon
+                      Icon(
+                        isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                        color: colors.textTertiary,
+                        size: 22,
+                        key: ValueKey('exercise_chevron_$exerciseIndex'),
                       ),
-                    ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // RESUME BANNER IF SKIPPED
+              if (exercise.isSkipped && isExpanded)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 16, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Skipped for today. Sets won\'t be logged.',
+                          style: GoogleFonts.poppins(fontSize: 11, color: colors.textSecondary),
+                        ),
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(50, 24),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () {
+                          widget.workoutRepository.unskipExercise(exerciseIndex);
+                          setState(() {});
+                        },
+                        child: Text(
+                          'Resume',
+                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // EXPANDED CONTENT AREA (Table + Actions)
+              if (isExpanded) ...[
+                Divider(height: 1, color: colors.borderSubtle),
+
+                // TABLE HEADER: Set | Previous | Target | Kg | Reps | Checkbox | Delete
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 28,
+                        child: Text('Set', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text('Previous', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text('Target', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                      SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: Text('Kg', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: Text('Reps', style: TextStyle(color: colors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 36), // Space for completion circle
+                      const SizedBox(width: 26), // Space for delete button
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: colors.borderSubtle.withOpacity(0.5)),
+
+                // SET ROWS
+                ...exercise.sets.asMap().entries.map((setEntry) {
+                  final setIdx = setEntry.key;
+                  final set = setEntry.value;
+
+                  // Previous data from real history for this set
+                  ExerciseSet? prevSet;
+                  if (previousSets != null && setIdx < previousSets.length) {
+                    prevSet = previousSets[setIdx];
+                  }
+
+                  return _buildSetRow(
+                    exerciseIndex: exerciseIndex,
+                    setIndex: setIdx,
+                    set: set,
+                    previousSet: prevSet,
+                    colors: colors,
+                    isDark: isDark,
                   );
-                },
-              ),
-            ),
-            const SizedBox(height: 6),
-          ],
-        ],
+                }),
+
+                const SizedBox(height: 10),
+
+                // CARD BOTTOM ACTIONS: + Add Set | Replace | Rest Timer | ...
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!widget.workoutRepository.activeSession.isLocked) ...[
+                                    // + Add Set
+                                    GestureDetector(
+                                      onTap: () => _handleAddSet(exerciseIndex),
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.add_circle_outline_rounded, size: 16, color: colors.textPrimary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Add Set',
+                                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+
+                                    // Replace Exercise
+                                    GestureDetector(
+                                      onTap: () => _handleSwapExercise(exerciseIndex),
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.swap_horiz_rounded, size: 18, color: colors.textPrimary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Replace',
+                                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 12, color: colors.textPrimary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                  ],
+
+                                  // Rest Timer Pill
+                                  GestureDetector(
+                                    onTap: () {
+                                      final rest = exercise.restSeconds > 0 ? exercise.restSeconds : 60;
+                                      _startRestTimer(rest, exercise.exerciseName);
+                                    },
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: colors.surfaceElevated,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: colors.border),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.timer_outlined, size: 14, color: colors.textPrimary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _formatSeconds(exercise.restSeconds > 0 ? exercise.restSeconds : 60),
+                                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 11, color: colors.textPrimary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              // Details / Options ...
+                              IconButton(
+                                icon: Icon(Icons.more_horiz_rounded, size: 18, color: colors.textTertiary),
+                                onPressed: () {
+                                  _showExerciseActionSheet(exerciseIndex);
+                                },
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ],
+          ),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // --- Set Row (Set | Previous | Target | Kg Input | Reps Input | Checkbox) ---
   Widget _buildSetRow({
@@ -1885,6 +2376,25 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                   : null, // ☐ empty box
             ),
           ),
+          const SizedBox(width: 6),
+
+          // DELETE SET BUTTON
+          if (!widget.workoutRepository.activeSession.isLocked)
+            GestureDetector(
+              key: ValueKey('delete_set_button_${exerciseIndex}_$setIndex'),
+              onTap: () => _handleDeleteSet(exerciseIndex, setIndex),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 24,
+                height: 28,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: colors.textTertiary.withOpacity(0.7),
+                ),
+              ),
+            ),
         ],
       ),
     );

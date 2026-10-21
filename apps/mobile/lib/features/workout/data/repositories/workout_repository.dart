@@ -225,16 +225,27 @@ class WorkoutRepository extends ChangeNotifier {
     return true;
   }
 
-  /// Adds an exercise dynamically to the currently active workout session.
+  /// Adds an exercise dynamically to the currently active workout session and persists for future occurrences.
   void addExerciseToActiveSession(WorkoutExercise exercise) {
     if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
-    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises)..add(exercise);
-    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    final markedExercise = exercise.copyWith(isCustomAdded: true);
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises)..add(markedExercise);
+    _activeSession = _activeSession.copyWith(
+      exercises: updatedExercises,
+      hasClientCustomization: true,
+    );
     final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
     if (uid.isNotEmpty) {
       saveActiveSessionToLocalStorage(userId: uid);
     }
     notifyListeners();
+
+    // Persist custom added exercise to backend for future occurrences
+    syncExerciseAdditionToBackend(
+      sessionId: _activeSession.id,
+      exercise: markedExercise,
+      dayOfWeek: _activeSession.recurringSchedule,
+    );
   }
 
   /// Fetches real registered clients exclusively from the shared backend database (PostgreSQL).
@@ -1048,6 +1059,7 @@ class WorkoutRepository extends ChangeNotifier {
           'exerciseName': e.exerciseName,
           'category': e.category,
           'orderIndex': session.exercises.indexOf(e),
+          'supersetTag': e.supersetTag,
           'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
           'setCount': e.sets.isNotEmpty ? e.sets.length : 3,
           'sets': e.sets.map((s) => s.toJson()).toList(),
@@ -1057,7 +1069,17 @@ class WorkoutRepository extends ChangeNotifier {
           'targetRir': e.sets.isNotEmpty ? e.sets.first.targetRir : 2,
           'targetRpe': e.sets.isNotEmpty ? e.sets.first.targetRpe : 8.0,
           'tempo': e.tempo,
-          'setType': e.sets.isNotEmpty && e.sets.first.setType == SetType.warmup ? 'Warm-up' : 'Working',
+          'setType': e.sets.isNotEmpty
+              ? (e.sets.first.setType == SetType.warmup
+                  ? 'Warm-up'
+                  : e.sets.first.setType == SetType.dropSet
+                      ? 'Drop Set'
+                      : e.sets.first.setType == SetType.failure
+                          ? 'Failure'
+                          : e.sets.first.setType == SetType.restPause
+                              ? 'Rest-Pause'
+                              : 'Working')
+              : 'Working',
           'exerciseNotes': e.trainerNote,
           'adminInstruction': e.trainerNote,
         }).toList(),
@@ -1151,6 +1173,7 @@ class WorkoutRepository extends ChangeNotifier {
           'exerciseName': e.exerciseName,
           'category': e.category,
           'orderIndex': session.exercises.indexOf(e),
+          'supersetTag': e.supersetTag,
           'numberOfSets': e.sets.isNotEmpty ? e.sets.length : 3,
           'setCount': e.sets.isNotEmpty ? e.sets.length : 3,
           'sets': e.sets.map((s) => s.toJson()).toList(),
@@ -1160,7 +1183,17 @@ class WorkoutRepository extends ChangeNotifier {
           'targetRir': e.sets.isNotEmpty ? e.sets.first.targetRir : 2,
           'targetRpe': e.sets.isNotEmpty ? e.sets.first.targetRpe : 8.0,
           'tempo': e.tempo,
-          'setType': e.sets.isNotEmpty && e.sets.first.setType == SetType.warmup ? 'Warm-up' : 'Working',
+          'setType': e.sets.isNotEmpty
+              ? (e.sets.first.setType == SetType.warmup
+                  ? 'Warm-up'
+                  : e.sets.first.setType == SetType.dropSet
+                      ? 'Drop Set'
+                      : e.sets.first.setType == SetType.failure
+                          ? 'Failure'
+                          : e.sets.first.setType == SetType.restPause
+                              ? 'Rest-Pause'
+                              : 'Working')
+              : 'Working',
           'exerciseNotes': e.trainerNote,
           'adminInstruction': e.trainerNote,
         }).toList(),
@@ -1190,7 +1223,26 @@ class WorkoutRepository extends ChangeNotifier {
         }
       }
 
-      if (response.statusCode == 200) return true;
+      if (response.statusCode == 200) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded['data'] != null && decoded['data'] is Map<String, dynamic>) {
+            final serverSession = WorkoutSession.fromJson(decoded['data'] as Map<String, dynamic>);
+            final idx = _sessions.indexWhere((s) => s.id == session.id || s.id == serverSession.id);
+            if (idx != -1) {
+              _sessions[idx] = serverSession;
+            } else {
+              _sessions.add(serverSession);
+            }
+            if (_activeSession.id == session.id && !isWorkoutInProgress) {
+              _activeSession = serverSession;
+            }
+            _saveToLocalStorage();
+            notifyListeners();
+          }
+        } catch (_) {}
+        return true;
+      }
       if (response.statusCode == 404) {
         // Fallback: If session does not exist on server to update, auto-create it
         return await createSession(session);
@@ -1201,6 +1253,44 @@ class WorkoutRepository extends ChangeNotifier {
       debugPrint('[WorkoutRepository] updateSession sync error: $e');
       return false;
     }
+  }
+
+  /// Fetches an individual WorkoutSession by ID, checking local memory and remote API.
+  Future<WorkoutSession?> getSessionById(String sessionId, {bool forceRefresh = false}) async {
+    final cached = _sessions.where((s) => s.id == sessionId).firstOrNull;
+    if (cached != null && !forceRefresh) return cached;
+
+    final token = await AuthService().getValidToken();
+    if (token.isEmpty && !_isTestEnvironment) return cached;
+
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/workouts/$sessionId');
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded['data'] != null && decoded['data'] is Map<String, dynamic>) {
+          final serverSession = WorkoutSession.fromJson(decoded['data'] as Map<String, dynamic>);
+          final idx = _sessions.indexWhere((s) => s.id == serverSession.id);
+          if (idx != -1) {
+            _sessions[idx] = serverSession;
+          } else {
+            _sessions.add(serverSession);
+          }
+          notifyListeners();
+          return serverSession;
+        }
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] getSessionById error: $e');
+    }
+    return cached;
   }
 
   void duplicateSession(String sessionId) {
@@ -2055,7 +2145,15 @@ class WorkoutRepository extends ChangeNotifier {
     if (setIndex >= exercise.sets.length) return false;
 
     final targetSet = exercise.sets[setIndex];
-    if (targetSet.isCompleted) return false;
+    if (targetSet.isCompleted) {
+      // Unsync completion from backend if it was marked complete
+      syncSetCompletionToBackend(
+        sessionId: _activeSession.id,
+        exerciseId: exercise.exerciseId.isNotEmpty ? exercise.exerciseId : exercise.id,
+        setNumber: targetSet.setNumber,
+        isCompleted: false,
+      );
+    }
 
     final updatedSets = List<ExerciseSet>.from(exercise.sets)..removeAt(setIndex);
     for (int i = 0; i < updatedSets.length; i++) {
@@ -2071,27 +2169,91 @@ class WorkoutRepository extends ChangeNotifier {
     return true;
   }
 
+  bool insertSet(int exerciseIndex, int setIndex, ExerciseSet set) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
+    if (exerciseIndex >= _activeSession.exercises.length) return false;
+    final exercise = _activeSession.exercises[exerciseIndex];
+    final updatedSets = List<ExerciseSet>.from(exercise.sets);
+    final insertIdx = setIndex.clamp(0, updatedSets.length);
+    updatedSets.insert(insertIdx, set);
+    for (int i = 0; i < updatedSets.length; i++) {
+      updatedSets[i] = updatedSets[i].copyWith(setNumber: i + 1);
+    }
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises);
+    updatedExercises[exerciseIndex] = exercise.copyWith(sets: updatedSets);
+    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
+    notifyListeners();
+    return true;
+  }
+
+  void unskipExercise(int exerciseIndex) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return;
+    if (exerciseIndex >= _activeSession.exercises.length) return;
+    final exercise = _activeSession.exercises[exerciseIndex];
+    final updatedExercise = exercise.copyWith(
+      isSkipped: false,
+      skipReason: null,
+    );
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises);
+    updatedExercises[exerciseIndex] = updatedExercise;
+    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    saveActiveSessionToLocalStorage();
+    notifyListeners();
+  }
+
+  bool removeExerciseFromActiveSession(int exerciseIndex) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
+    if (exerciseIndex >= _activeSession.exercises.length) return false;
+    final exercise = _activeSession.exercises[exerciseIndex];
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises)..removeAt(exerciseIndex);
+    _activeSession = _activeSession.copyWith(
+      exercises: updatedExercises,
+      hasClientCustomization: true,
+    );
+    final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
+    if (uid.isNotEmpty) {
+      saveActiveSessionToLocalStorage(userId: uid);
+    }
+    notifyListeners();
+
+    // Sync removal to backend
+    syncExerciseRemovalToBackend(
+      sessionId: _activeSession.id,
+      exerciseId: exercise.originalExerciseId ?? (exercise.exerciseId.isNotEmpty ? exercise.exerciseId : exercise.id),
+      dayOfWeek: _activeSession.recurringSchedule,
+    );
+    return true;
+  }
+
+  bool insertExerciseIntoActiveSession(int exerciseIndex, WorkoutExercise exercise) {
+    if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
+    final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises);
+    final idx = exerciseIndex.clamp(0, updatedExercises.length);
+    updatedExercises.insert(idx, exercise);
+    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
+    if (uid.isNotEmpty) {
+      saveActiveSessionToLocalStorage(userId: uid);
+    }
+    notifyListeners();
+    if (exercise.isCustomAdded) {
+      syncExerciseAdditionToBackend(
+        sessionId: _activeSession.id,
+        exercise: exercise,
+        dayOfWeek: _activeSession.recurringSchedule,
+      );
+    }
+    return true;
+  }
+
   bool swapExercise(int exerciseIndex, String newExerciseId) {
     if (_activeSession.isLocked || _activeSession.isCompleted || _activeSession.status == 'COMPLETED') return false;
     if (exerciseIndex >= _activeSession.exercises.length) return false;
 
-    // Check client swap permissions
-    if (!_activeSession.permissions.allowExerciseSwap) {
-      return false;
-    }
-
     final currentEx = _activeSession.exercises[exerciseIndex];
     final newExercise = ExerciseRepository.getById(newExerciseId);
     if (newExercise == null) return false;
-
-    // Biomechanical check: must be approved alternative or same primary muscle
-    final isApproved = currentEx.approvedAlternativeIds.contains(newExerciseId) ||
-        ExerciseRepository.getApprovedAlternatives(currentEx.exerciseId).any((a) => a.id == newExerciseId) ||
-        newExercise.category.toLowerCase() == currentEx.category.toLowerCase();
-
-    if (!isApproved) {
-      return false;
-    }
 
     final swapRecord = ExerciseSwapRecord(
       id: 'swap_${DateTime.now().millisecondsSinceEpoch}',
@@ -2115,6 +2277,9 @@ class WorkoutRepository extends ChangeNotifier {
           ? newExercise.defaultTrainerNote
           : currentEx.trainerNote,
       swapRecord: swapRecord,
+      isCustomReplacement: true,
+      originalExerciseId: currentEx.originalExerciseId ?? currentEx.exerciseId,
+      originalExerciseName: currentEx.originalExerciseName ?? currentEx.exerciseName,
       approvedAlternativeIds: [
         currentEx.exerciseId,
         ...newExercise.approvedAlternativeIds.where((id) => id != currentEx.exerciseId),
@@ -2124,9 +2289,31 @@ class WorkoutRepository extends ChangeNotifier {
     final updatedExercises = List<WorkoutExercise>.from(_activeSession.exercises);
     updatedExercises[exerciseIndex] = updatedExercise;
 
-    _activeSession = _activeSession.copyWith(exercises: updatedExercises);
+    _activeSession = _activeSession.copyWith(
+      exercises: updatedExercises,
+      hasClientCustomization: true,
+    );
     saveActiveSessionToLocalStorage();
     notifyListeners();
+
+    // Persist customization for future occurrences to backend
+    syncExerciseReplacementToBackend(
+      sessionId: _activeSession.id,
+      originalExerciseId: currentEx.originalExerciseId ?? currentEx.exerciseId,
+      originalExerciseName: currentEx.originalExerciseName ?? currentEx.exerciseName,
+      replacementExerciseId: newExercise.id,
+      replacementExerciseName: newExercise.displayName,
+      category: newExercise.category,
+      primaryMusclesDisplay: updatedExercise.primaryMusclesDisplay,
+      secondaryMusclesDisplay: updatedExercise.secondaryMusclesDisplay,
+      trainerNote: updatedExercise.trainerNote,
+      numberOfSets: updatedExercise.sets.length,
+      targetReps: updatedExercise.sets.isNotEmpty ? updatedExercise.sets.first.targetRepsDisplay : '8–12',
+      targetWeight: updatedExercise.sets.isNotEmpty ? updatedExercise.sets.first.targetWeight : null,
+      customSets: updatedExercise.sets.map((s) => s.toJson()).toList(),
+      dayOfWeek: _activeSession.recurringSchedule,
+    );
+
     return true;
   }
 
@@ -3611,5 +3798,195 @@ class WorkoutRepository extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  /// Persists an exercise replacement to backend PostgreSQL so that all future occurrences
+  /// of this workout session automatically use the user's preferred exercise.
+  Future<bool> syncExerciseReplacementToBackend({
+    required String sessionId,
+    required String originalExerciseId,
+    String? originalExerciseName,
+    required String replacementExerciseId,
+    required String replacementExerciseName,
+    String? category,
+    String? primaryMusclesDisplay,
+    String? secondaryMusclesDisplay,
+    String? trainerNote,
+    int? numberOfSets,
+    String? targetReps,
+    double? targetWeight,
+    List<dynamic>? customSets,
+    String? dayOfWeek,
+  }) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/override/replace');
+      final token = await AuthService().getValidToken();
+
+      final payload = {
+        'originalExerciseId': originalExerciseId,
+        'originalExerciseName': originalExerciseName,
+        'replacementExerciseId': replacementExerciseId,
+        'replacementExerciseName': replacementExerciseName,
+        'category': category,
+        'primaryMusclesDisplay': primaryMusclesDisplay,
+        'secondaryMusclesDisplay': secondaryMusclesDisplay,
+        'trainerNote': trainerNote,
+        'numberOfSets': numberOfSets,
+        'targetReps': targetReps,
+        'targetWeight': targetWeight,
+        'customSets': customSets,
+        'dayOfWeek': dayOfWeek,
+      };
+
+      final response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint('[WorkoutRepository] Persisted exercise replacement $originalExerciseId -> $replacementExerciseName for session $sessionId');
+        return true;
+      } else {
+        debugPrint('[WorkoutRepository] Failed to persist replacement: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[WorkoutRepository] syncExerciseReplacementToBackend error: $e');
+      return false;
+    }
+  }
+
+  /// Persists a custom added exercise to backend PostgreSQL for future session occurrences.
+  Future<bool> syncExerciseAdditionToBackend({
+    required String sessionId,
+    required WorkoutExercise exercise,
+    String? dayOfWeek,
+  }) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/override/add-exercise');
+      final token = await AuthService().getValidToken();
+
+      final payload = {
+        'exercise': exercise.toJson(),
+        'dayOfWeek': dayOfWeek,
+      };
+
+      final response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        debugPrint('[WorkoutRepository] Persisted custom exercise addition ${exercise.exerciseName} for session $sessionId');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] syncExerciseAdditionToBackend error: $e');
+      return false;
+    }
+  }
+
+  /// Persists removing an exercise from future occurrences of this session.
+  Future<bool> syncExerciseRemovalToBackend({
+    required String sessionId,
+    required String exerciseId,
+    String? dayOfWeek,
+  }) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/override/remove-exercise');
+      final token = await AuthService().getValidToken();
+
+      final payload = {
+        'exerciseId': exerciseId,
+        'dayOfWeek': dayOfWeek,
+      };
+
+      final response = await _httpClient.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 10));
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] syncExerciseRemovalToBackend error: $e');
+      return false;
+    }
+  }
+
+  /// Resets all customizations for a session back to the admin\'s original template.
+  Future<bool> resetSessionCustomizations(String sessionId) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/override');
+      final token = await AuthService().getValidToken();
+
+      final response = await _httpClient.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        await fetchClientWorkouts(forceRefresh: true);
+        final restored = _sessions.firstWhere((s) => s.id == sessionId, orElse: () => _activeSession);
+        _activeSession = restored;
+        final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
+        if (uid.isNotEmpty) {
+          saveActiveSessionToLocalStorage(userId: uid);
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] resetSessionCustomizations error: $e');
+      return false;
+    }
+  }
+
+  /// Resets a single customized exercise back to the admin\'s original prescribed exercise.
+  Future<bool> resetExerciseCustomization(String sessionId, String exerciseId) async {
+    try {
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/client/sessions/$sessionId/override?exerciseId=$exerciseId');
+      final token = await AuthService().getValidToken();
+
+      final response = await _httpClient.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        await fetchClientWorkouts(forceRefresh: true);
+        final restored = _sessions.firstWhere((s) => s.id == sessionId, orElse: () => _activeSession);
+        _activeSession = restored;
+        final uid = _activeSession.assignedClientId ?? AuthService().currentUserId;
+        if (uid.isNotEmpty) {
+          saveActiveSessionToLocalStorage(userId: uid);
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[WorkoutRepository] resetExerciseCustomization error: $e');
+      return false;
+    }
   }
 }

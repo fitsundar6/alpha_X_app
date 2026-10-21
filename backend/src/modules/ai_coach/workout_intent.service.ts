@@ -2231,6 +2231,92 @@ export class WorkoutIntentService {
       });
     }
 
+    // Multi-day split validation:
+    if (isMultiDay || splitResult.isMultiDayTemplate) {
+      // 1. Flattening check: single-day output with excessive exercises for multi-day split
+      if ((!weeklySchedule || weeklySchedule.length <= 1) && validated.length >= 10 && splitResult.isMultiDayTemplate) {
+        return {
+          isValid: false,
+          error: `Malformed plan: received ${validated.length} exercises flattened into a single day for multi-day split "${splitResult.displayName}". Each training day must be separate.`,
+          validatedExercises: validated,
+        };
+      }
+
+      if (weeklySchedule && weeklySchedule.length > 1) {
+        // 2. Duplicate day check (check if all non-empty days have identical exercise lists)
+        const daysWithExercises = weeklySchedule.filter((d: any) => Array.isArray(d.exercises) && d.exercises.length > 0);
+        if (daysWithExercises.length > 1) {
+          const firstDayKeys = daysWithExercises[0].exercises.map((e: any) => (e.name || e.exerciseName || '').toLowerCase().trim()).sort().join('|');
+          const allIdentical = firstDayKeys.length > 0 && daysWithExercises.every((d: any) => {
+            const keys = d.exercises.map((e: any) => (e.name || e.exerciseName || '').toLowerCase().trim()).sort().join('|');
+            return keys === firstDayKeys;
+          });
+          if (allIdentical) {
+            return {
+              isValid: false,
+              error: `Duplicate plan error: all workout days contain identical exercises instead of separate day-specific sessions.`,
+              validatedExercises: validated,
+            };
+          }
+        }
+
+        // 3. Day-by-Day Muscle Group & Exercise Count Validation
+        for (const day of weeklySchedule) {
+          const dayTitle = (day.sessionTitle || day.title || day.day || '').toLowerCase();
+          const dayCat = (day.splitCategory || day.category || '').toLowerCase();
+          const dayFocus = (day.targetMuscleGroup || '').toLowerCase();
+          const dayExercises: any[] = Array.isArray(day.exercises) ? day.exercises : [];
+
+          if (dayExercises.length > 12) {
+            return {
+              isValid: false,
+              error: `Session "${day.sessionTitle || day.day}" has ${dayExercises.length} exercises (expected 3–9 exercises per session). Plan appears to be flattened across multiple days.`,
+              validatedExercises: validated,
+            };
+          }
+
+          // Determine disallowed muscle groups for this specific day
+          let dayDisallowed: string[] = [];
+          if (Array.isArray(day.disallowedBodyParts) && day.disallowedBodyParts.length > 0) {
+            dayDisallowed = day.disallowedBodyParts;
+          } else if (splitResult.split === 'FULL_BODY' || dayTitle.includes('full body') || dayCat.includes('full')) {
+            dayDisallowed = [];
+          } else if (dayTitle.includes('push') || dayCat.includes('push')) {
+            dayDisallowed = ['Back', 'Biceps', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs'];
+          } else if (dayTitle.includes('pull') || dayCat.includes('pull')) {
+            dayDisallowed = ['Chest', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs', 'Triceps'];
+          } else if (dayTitle.includes('leg') || dayTitle.includes('lower body') || (dayCat.includes('lower') && !dayCat.includes('upper'))) {
+            dayDisallowed = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'];
+          } else if (dayTitle.includes('upper') || (dayCat.includes('upper') && !dayCat.includes('lower'))) {
+            dayDisallowed = ['Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs'];
+          } else if (dayTitle.includes('chest') && !dayTitle.includes('back')) {
+            dayDisallowed = ['Back', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs', 'Biceps'];
+          } else if (dayTitle.includes('back') && !dayTitle.includes('chest')) {
+            dayDisallowed = ['Chest', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs', 'Triceps'];
+          } else if (dayTitle.includes('shoulder') && !dayTitle.includes('leg') && !dayTitle.includes('chest') && !dayTitle.includes('back')) {
+            dayDisallowed = ['Chest', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs', 'Back'];
+          } else if (dayTitle.includes('arm') && !dayTitle.includes('shoulder') && !dayTitle.includes('leg')) {
+            dayDisallowed = ['Chest', 'Back', 'Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Legs'];
+          }
+
+          if (dayDisallowed.length > 0) {
+            for (const ex of dayExercises) {
+              const exName = (ex.name || ex.exerciseName || '').trim();
+              const matchedDb = nameMap.get(exName.toLowerCase()) || idMap.get(ex.exerciseId);
+              const bodyPart = matchedDb?.bodyPart || ex.bodyPart || '';
+              if (dayDisallowed.some(dis => dis.toLowerCase() === bodyPart.toLowerCase())) {
+                return {
+                  isValid: false,
+                  error: `Invalid exercise selection for ${day.sessionTitle || day.day}: "${exName}" (${bodyPart}) does not belong in this session.`,
+                  validatedExercises: validated,
+                };
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Only enforce strict single-day disallow checks if it's NOT a multi-day plan and NOT a multi-day template
     if (!isMultiDay && !splitResult.isMultiDayTemplate && splitResult.split !== 'FULL_BODY' && splitResult.split !== 'GENERAL') {
       const disallowedCount = validated.filter((v) =>

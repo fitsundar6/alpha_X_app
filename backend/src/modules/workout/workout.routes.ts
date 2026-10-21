@@ -57,6 +57,14 @@ clientRouter.get('/sessions', (req, res) => workoutController.getClientSessions(
 clientRouter.get('/sessions/:id', (req, res) => workoutController.getClientSessionById(req, res));
 clientRouter.get('/split', (req, res) => workoutController.getMyWorkoutSplit(req, res));
 
+// Client Session Customizations & Persistent Overrides
+clientRouter.get('/sessions/:id/override', (req, res) => workoutController.getClientSessionOverride(req, res));
+clientRouter.post('/sessions/:id/override', (req, res) => workoutController.saveClientSessionOverride(req, res));
+clientRouter.post('/sessions/:id/override/replace', (req, res) => workoutController.replaceExerciseInSession(req, res));
+clientRouter.post('/sessions/:id/override/add-exercise', (req, res) => workoutController.addExerciseToSessionOverride(req, res));
+clientRouter.post('/sessions/:id/override/remove-exercise', (req, res) => workoutController.removeExerciseFromSessionOverride(req, res));
+clientRouter.delete('/sessions/:id/override', (req, res) => workoutController.resetSessionOverride(req, res));
+
 // Performance Tracking & Recording
 clientRouter.get('/previous-performance', (req, res) => workoutController.getPreviousPerformance(req, res));
 clientRouter.post(['/records', '/save'], (req, res) => workoutController.recordWorkout(req, res));
@@ -72,5 +80,7 @@ router.post(['/records', '/save'], requireAuth, requireApprovedUser, (req, res) 
 router.post(['/sessions/:id/set-completion', '/set-completion'], requireAuth, requireApprovedUser, (req, res) => workoutController.toggleSetCompletion(req, res));
 router.get('/sessions/:id/set-completions', requireAuth, requireApprovedUser, (req, res) => workoutController.getActiveSetCompletions(req, res));
 
+export const workoutAdminRouter = adminRouter;
 export const workoutRoutes = router;
+
 

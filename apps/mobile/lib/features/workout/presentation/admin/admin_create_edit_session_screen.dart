@@ -9,6 +9,9 @@ class AdminCreateEditSessionScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
   final WorkoutSession? sessionToEdit;
   final WorkoutSplitPlan? splitToEdit;
+  final WorkoutSplitPlan? parentSplit;
+  final WorkoutSplitDay? splitDay;
+  final bool? startInSplitMode;
   final String? clientIdToAssign;
   final VoidCallback? onSaved;
 
@@ -17,6 +20,9 @@ class AdminCreateEditSessionScreen extends StatefulWidget {
     required this.workoutRepository,
     this.sessionToEdit,
     this.splitToEdit,
+    this.parentSplit,
+    this.splitDay,
+    this.startInSplitMode,
     this.clientIdToAssign,
     this.onSaved,
   });
@@ -43,9 +49,10 @@ class _AdminCreateEditSessionScreenState
   String _availabilityType = 'ALL';
   DateTime? _startDate;
   DateTime? _endDate;
+  bool _isSaving = false;
 
   // Split-Mode Day Isolation State
-  bool _isSplitMode = true;
+  bool _isSplitMode = false;
   final List<String> _splitDays = [
     'Monday',
     'Tuesday',
@@ -111,8 +118,30 @@ class _AdminCreateEditSessionScreenState
       _daySessionIds[day] = null;
     }
 
+    // Determine initial split mode
     if (widget.splitToEdit != null) {
       _isSplitMode = true;
+    } else if (widget.splitDay != null || widget.sessionToEdit != null) {
+      _isSplitMode = false;
+    } else if (widget.startInSplitMode != null) {
+      _isSplitMode = widget.startInSplitMode!;
+    } else {
+      _isSplitMode = false;
+    }
+
+    // Populate from parent split days if available (to maintain split boundary context)
+    if (widget.parentSplit != null) {
+      for (final d in widget.parentSplit!.days) {
+        _dayExercises[d.dayOfWeek] = List.from(d.exercises);
+        _dayTitles[d.dayOfWeek] = d.name;
+        _dayMuscleGroups[d.dayOfWeek] = d.targetMuscleGroup;
+        _dayWorkoutTypes[d.dayOfWeek] = d.workoutType;
+        _dayIsRest[d.dayOfWeek] = d.isRestDay;
+        _daySessionIds[d.dayOfWeek] = d.sessionId;
+      }
+    }
+
+    if (widget.splitToEdit != null) {
       for (final d in widget.splitToEdit!.days) {
         _dayExercises[d.dayOfWeek] = List.from(d.exercises);
         _dayTitles[d.dayOfWeek] = d.name;
@@ -125,6 +154,35 @@ class _AdminCreateEditSessionScreenState
       _titleController.text = _dayTitles[_selectedSplitDay] ?? '';
       _targetMuscleGroupController.text = _dayMuscleGroups[_selectedSplitDay] ?? '';
       _selectedWorkoutType = _dayWorkoutTypes[_selectedSplitDay] ?? 'Strength';
+    } else if (widget.splitDay != null) {
+      final sd = widget.splitDay!;
+      _selectedSplitDay = sd.dayOfWeek;
+      _dayExercises[_selectedSplitDay] = List.from(sd.exercises);
+      _dayTitles[_selectedSplitDay] = sd.name;
+      _dayMuscleGroups[_selectedSplitDay] = sd.targetMuscleGroup;
+      _dayWorkoutTypes[_selectedSplitDay] = sd.workoutType;
+      _dayIsRest[_selectedSplitDay] = sd.isRestDay;
+      _daySessionIds[_selectedSplitDay] = sd.sessionId;
+
+      _titleController.text = sd.name;
+      _targetMuscleGroupController.text = sd.targetMuscleGroup;
+      _selectedWorkoutType = sd.workoutType;
+      _durationController.text = (sd.estimatedDurationMinutes > 0 ? sd.estimatedDurationMinutes : 45).toString();
+      _descriptionController.text = sd.notes ?? '';
+      _recurringScheduleController.text = sd.dayOfWeek;
+      _exercises = List.from(sd.exercises);
+
+      if (s != null) {
+        _selectedDifficulty = s.difficulty;
+        _isActive = s.isActive;
+        _availabilityType = s.availabilityType;
+        _startDate = s.startDate;
+        _endDate = s.endDate;
+        _sections = List.from(s.sections);
+        _permissions = s.permissions;
+        _weeklySchedule = s.weeklySchedule ?? const WeeklyWorkoutSchedule();
+        _trainingDays = List.from(s.trainingDays);
+      }
     } else if (s != null) {
       final day = s.recurringSchedule ?? 'Monday';
       _selectedSplitDay = _splitDays.contains(day) ? day : 'Monday';
@@ -231,7 +289,11 @@ class _AdminCreateEditSessionScreenState
       ];
     }
 
-    if (widget.clientIdToAssign != null && widget.splitToEdit == null) {
+    if (widget.clientIdToAssign != null &&
+        widget.splitToEdit == null &&
+        widget.sessionToEdit == null &&
+        widget.splitDay == null &&
+        widget.parentSplit == null) {
       _loadExistingClientSplit();
     }
   }
@@ -505,6 +567,43 @@ class _AdminCreateEditSessionScreenState
     });
   }
 
+  void _moveExercise(int oldIndex, int newIndex) {
+    if (newIndex < 0 || newIndex >= _exercises.length) return;
+    setState(() {
+      final item = _exercises.removeAt(oldIndex);
+      _exercises.insert(newIndex, item);
+    });
+  }
+
+  void _replaceExerciseWithLibrary(int index) async {
+    if (index < 0 || index >= _exercises.length) return;
+    final picked = await ExercisePickerDialog.show(context);
+    if (picked != null) {
+      final existing = _exercises[index];
+      final replaced = existing.copyWith(
+        exerciseId: picked.id,
+        exerciseName: picked.displayName,
+        category: picked.category,
+        primaryMusclesDisplay: picked.primaryMusclesDisplay,
+        secondaryMusclesDisplay: picked.secondaryMusclesDisplay,
+        trainerNote: existing.trainerNote.isNotEmpty
+            ? existing.trainerNote
+            : picked.defaultTrainerNote,
+        approvedAlternativeIds: picked.approvedAlternativeIds,
+      );
+      setState(() {
+        _exercises[index] = replaced;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Replaced with "${picked.displayName}"'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+    }
+  }
+
   void _pickExerciseFromDatabase() async {
     final picked = await ExercisePickerDialog.show(context);
     if (picked != null) {
@@ -681,61 +780,171 @@ class _AdminCreateEditSessionScreenState
 
   Future<void> _saveSession() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSaving) return;
 
-    // 1. Sync current active day exercises
-    _dayExercises[_selectedSplitDay] = List.from(_exercises);
-    _dayTitles[_selectedSplitDay] = _titleController.text.trim();
-    _dayMuscleGroups[_selectedSplitDay] = _targetMuscleGroupController.text.trim();
-    _dayWorkoutTypes[_selectedSplitDay] = _selectedWorkoutType;
+    setState(() => _isSaving = true);
 
-    if (_isSplitMode) {
-      final totalExCount = _dayExercises.values.fold(0, (acc, list) => acc + list.length);
-      if (totalExCount == 0 && !_dayIsRest.values.any((r) => r)) {
+    try {
+      // 1. Sync current active day exercises & titles
+      _dayExercises[_selectedSplitDay] = List.from(_exercises);
+      _dayTitles[_selectedSplitDay] = _titleController.text.trim();
+      _dayMuscleGroups[_selectedSplitDay] = _targetMuscleGroupController.text.trim();
+      _dayWorkoutTypes[_selectedSplitDay] = _selectedWorkoutType;
+
+      if (_isSplitMode) {
+        final totalExCount = _dayExercises.values.fold(0, (acc, list) => acc + list.length);
+        if (totalExCount == 0 && !_dayIsRest.values.any((r) => r)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please add exercises to at least one workout day in the split.'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+          return;
+        }
+
+        final splitDays = <WorkoutSplitDay>[];
+        for (int i = 0; i < _splitDays.length; i++) {
+          final dayName = _splitDays[i];
+          final dayExs = _dayExercises[dayName] ?? [];
+          final isRest = _dayIsRest[dayName] ?? (dayExs.isEmpty);
+
+          splitDays.add(WorkoutSplitDay(
+            id: 'split_day_${dayName.toLowerCase()}',
+            sessionId: _daySessionIds[dayName],
+            dayOfWeek: dayName,
+            dayIndex: i + 1,
+            name: _dayTitles[dayName]?.isNotEmpty == true
+                ? _dayTitles[dayName]!
+                : (isRest ? 'Rest Day' : '$dayName Workout'),
+            workoutType: _dayWorkoutTypes[dayName] ?? 'Strength',
+            targetMuscleGroup: _dayMuscleGroups[dayName]?.isNotEmpty == true
+                ? _dayMuscleGroups[dayName]!
+                : (isRest ? 'Recovery' : 'Full Body'),
+            estimatedDurationMinutes: int.tryParse(_durationController.text.trim()) ?? 45,
+            isRestDay: isRest,
+            notes: _descriptionController.text.trim(),
+            exercises: isRest ? const [] : dayExs,
+          ));
+        }
+
+        final split = WorkoutSplitPlan(
+          id: widget.splitToEdit?.id ?? widget.parentSplit?.id ?? 'split_${DateTime.now().millisecondsSinceEpoch}',
+          title: _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'Weekly Workout Split',
+          splitType: 'Custom',
+          description: _descriptionController.text.trim(),
+          frequencyPerWeek: splitDays.where((d) => !d.isRestDay).length,
+          clientId: widget.clientIdToAssign ?? widget.splitToEdit?.clientId ?? widget.parentSplit?.clientId,
+          days: splitDays,
+        );
+
+        await widget.workoutRepository.saveWorkoutSplit(split);
+
+        widget.onSaved?.call();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.clientIdToAssign != null
+                  ? 'Workout split saved and assigned to athlete day-by-day!'
+                  : 'Workout split plan saved successfully.',
+            ),
+            backgroundColor: AppColors.primaryRed,
+          ),
+        );
+
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      // Single Session / Split Day Mode
+      final isRest = _dayIsRest[_selectedSplitDay] ?? false;
+      if (!isRest && _exercises.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please add exercises to at least one workout day in the split.'),
+            content: Text('Please add at least one exercise to the session.'),
             backgroundColor: AppColors.warning,
           ),
         );
         return;
       }
 
-      final splitDays = <WorkoutSplitDay>[];
-      for (int i = 0; i < _splitDays.length; i++) {
-        final dayName = _splitDays[i];
-        final dayExs = _dayExercises[dayName] ?? [];
-        final isRest = _dayIsRest[dayName] ?? (dayExs.isEmpty);
+      final duration = int.tryParse(_durationController.text.trim()) ?? 45;
+      final isDraftSession = widget.sessionToEdit != null && widget.sessionToEdit!.id.startsWith('ai_draft_');
+      final isEditing = widget.sessionToEdit != null && !isDraftSession;
+      final sessionId = widget.sessionToEdit != null
+          ? widget.sessionToEdit!.id
+          : (widget.splitDay?.sessionId ?? 'ws_${DateTime.now().millisecondsSinceEpoch}');
 
-        splitDays.add(WorkoutSplitDay(
-          id: 'split_day_${dayName.toLowerCase()}',
-          sessionId: _daySessionIds[dayName],
-          dayOfWeek: dayName,
-          dayIndex: i + 1,
-          name: _dayTitles[dayName]?.isNotEmpty == true
-              ? _dayTitles[dayName]!
-              : (isRest ? 'Rest Day' : '$dayName Workout'),
-          workoutType: _dayWorkoutTypes[dayName] ?? 'Strength',
-          targetMuscleGroup: _dayMuscleGroups[dayName]?.isNotEmpty == true
-              ? _dayMuscleGroups[dayName]!
-              : (isRest ? 'Recovery' : 'Full Body'),
-          estimatedDurationMinutes: int.tryParse(_durationController.text.trim()) ?? 45,
-          isRestDay: isRest,
-          notes: _descriptionController.text.trim(),
-          exercises: isRest ? const [] : dayExs,
-        ));
-      }
-
-      final split = WorkoutSplitPlan(
-        id: widget.splitToEdit?.id ?? 'split_${DateTime.now().millisecondsSinceEpoch}',
-        title: _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'Weekly Workout Split',
-        splitType: 'Custom',
+      final session = WorkoutSession(
+        id: sessionId,
+        title: _titleController.text.trim().isNotEmpty
+            ? _titleController.text.trim()
+            : '$_selectedSplitDay Session',
+        workoutType: _selectedWorkoutType,
+        targetMuscleGroup: _targetMuscleGroupController.text.trim().isNotEmpty
+            ? _targetMuscleGroupController.text.trim()
+            : 'Full Body',
+        difficulty: _selectedDifficulty,
+        estimatedDurationMinutes: duration,
         description: _descriptionController.text.trim(),
-        frequencyPerWeek: splitDays.where((d) => !d.isRestDay).length,
-        clientId: widget.clientIdToAssign,
-        days: splitDays,
+        isActive: _isActive,
+        startDate: _startDate,
+        endDate: _endDate,
+        recurringSchedule: _selectedSplitDay,
+        availabilityType: _availabilityType,
+        assignedClientIds: widget.clientIdToAssign != null
+            ? [widget.clientIdToAssign!]
+            : (widget.sessionToEdit?.assignedClientIds ?? const []),
+        isRecommended: widget.sessionToEdit?.isRecommended ?? false,
+        startedAt: widget.sessionToEdit?.startedAt ?? DateTime.now(),
+        exercises: List.from(_exercises),
+        sections: List.from(_sections),
+        permissions: _permissions,
+        weeklySchedule: _weeklySchedule,
+        trainingDays: List.from(_trainingDays),
+        planVersion: widget.sessionToEdit?.planVersion,
       );
 
-      await widget.workoutRepository.saveWorkoutSplit(split);
+      if (isEditing) {
+        await widget.workoutRepository.updateSession(session);
+      } else {
+        await widget.workoutRepository.createSession(session);
+      }
+
+      // If editing a specific day within an existing parent split plan
+      if (widget.parentSplit != null) {
+        final dayOfWeek = widget.splitDay?.dayOfWeek ?? _selectedSplitDay;
+        final dayId = widget.splitDay?.id ?? 'split_day_${dayOfWeek.toLowerCase()}';
+        final splitDay = WorkoutSplitDay(
+          id: dayId,
+          sessionId: session.id,
+          dayOfWeek: dayOfWeek,
+          dayIndex: widget.splitDay?.dayIndex ?? (_splitDays.indexOf(dayOfWeek) + 1),
+          name: session.title,
+          workoutType: session.workoutType,
+          targetMuscleGroup: session.targetMuscleGroup,
+          estimatedDurationMinutes: session.estimatedDurationMinutes,
+          isRestDay: isRest,
+          notes: session.description,
+          exercises: isRest ? const [] : session.exercises,
+        );
+
+        await widget.workoutRepository.updateWorkoutSplitDay(
+          widget.parentSplit!.id,
+          dayId,
+          splitDay,
+        );
+      } else if (widget.clientIdToAssign != null && widget.clientIdToAssign!.isNotEmpty) {
+        await widget.workoutRepository.assignSession(
+          sessionId: session.id,
+          assignmentType: 'INDIVIDUAL',
+          individualClientId: widget.clientIdToAssign,
+          isRecommended: true,
+        );
+      }
 
       widget.onSaved?.call();
 
@@ -744,95 +953,33 @@ class _AdminCreateEditSessionScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.clientIdToAssign != null
-                ? 'Workout split saved and assigned to athlete day-by-day!'
-                : 'Workout split plan saved successfully.',
+            widget.parentSplit != null
+                ? 'Updated $_selectedSplitDay session in athlete workout plan!'
+                : widget.clientIdToAssign != null
+                    ? 'Workout plan saved and assigned to athlete!'
+                    : isEditing
+                        ? 'Workout session updated.'
+                        : 'Workout session created successfully.',
           ),
           backgroundColor: AppColors.primaryRed,
         ),
       );
 
-      Navigator.of(context).pop();
-      return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving workout: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
-
-    if (_exercises.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one exercise to the session.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
-
-    final duration =
-        int.tryParse(_durationController.text.trim()) ?? 45;
-    final isDraftSession = widget.sessionToEdit != null && widget.sessionToEdit!.id.startsWith('ai_draft_');
-    final isEditing = widget.sessionToEdit != null && !isDraftSession;
-    final sessionId = widget.sessionToEdit != null
-        ? widget.sessionToEdit!.id
-        : 'ws_${DateTime.now().millisecondsSinceEpoch}';
-
-    final session = WorkoutSession(
-      id: sessionId,
-      title: _titleController.text.trim(),
-      workoutType: _selectedWorkoutType,
-      targetMuscleGroup: _targetMuscleGroupController.text.trim(),
-      difficulty: _selectedDifficulty,
-      estimatedDurationMinutes: duration,
-      description: _descriptionController.text.trim(),
-      isActive: _isActive,
-      startDate: _startDate,
-      endDate: _endDate,
-      recurringSchedule: _recurringScheduleController.text.trim().isNotEmpty
-          ? _recurringScheduleController.text.trim()
-          : null,
-      availabilityType: _availabilityType,
-      assignedClientIds: widget.sessionToEdit?.assignedClientIds ?? const [],
-      isRecommended: widget.sessionToEdit?.isRecommended ?? false,
-      startedAt: widget.sessionToEdit?.startedAt ?? DateTime.now(),
-      exercises: List.from(_exercises),
-      sections: List.from(_sections),
-      permissions: _permissions,
-      weeklySchedule: _weeklySchedule,
-      trainingDays: List.from(_trainingDays),
-      planVersion: widget.sessionToEdit?.planVersion,
-    );
-
-    if (isEditing) {
-      await widget.workoutRepository.updateSession(session);
-    } else {
-      await widget.workoutRepository.createSession(session);
-    }
-
-    if (widget.clientIdToAssign != null && widget.clientIdToAssign!.isNotEmpty) {
-      await widget.workoutRepository.assignSession(
-        sessionId: session.id,
-        assignmentType: 'INDIVIDUAL',
-        individualClientId: widget.clientIdToAssign,
-        isRecommended: true,
-      );
-    }
-
-    widget.onSaved?.call();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          widget.clientIdToAssign != null
-              ? 'Workout plan saved and assigned to athlete!'
-              : isEditing
-                  ? 'Workout session and plan version updated.'
-                  : 'Workout session created successfully.',
-        ),
-        backgroundColor: AppColors.primaryRed,
-      ),
-    );
-
-    Navigator.of(context).pop();
   }
 
   @override
@@ -843,7 +990,11 @@ class _AdminCreateEditSessionScreenState
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(
-          isEditing ? 'EDIT WORKOUT PLAN' : 'WORKOUT BUILDER',
+          widget.splitDay != null
+              ? 'EDIT ${widget.splitDay!.dayOfWeek.toUpperCase()} SESSION'
+              : isEditing
+                  ? 'EDIT WORKOUT PLAN'
+                  : 'WORKOUT BUILDER',
           style: const TextStyle(
             fontWeight: FontWeight.w900,
             letterSpacing: 1.1,
@@ -851,17 +1002,29 @@ class _AdminCreateEditSessionScreenState
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: _saveSession,
-            child: const Text(
-              'SAVE',
-              style: TextStyle(
-                color: AppColors.primaryRed,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-          ),
+          _isSaving
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryRed,
+                    ),
+                  ),
+                )
+              : TextButton(
+                  onPressed: _saveSession,
+                  child: const Text(
+                    'SAVE',
+                    style: TextStyle(
+                      color: AppColors.primaryRed,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
         ],
       ),
       body: Form(
@@ -1133,12 +1296,25 @@ class _AdminCreateEditSessionScreenState
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onPressed: _saveSession,
-              icon: const Icon(Icons.save, color: Colors.white),
+              onPressed: _isSaving ? null : _saveSession,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save, color: Colors.white),
               label: Text(
-                isEditing
-                    ? 'UPDATE WORKOUT PLAN (V${(widget.sessionToEdit?.planVersion.versionNumber ?? 1) + 1})'
-                    : 'CREATE WORKOUT PLAN',
+                _isSaving
+                    ? 'SAVING...'
+                    : widget.splitDay != null
+                        ? 'SAVE ${widget.splitDay!.dayOfWeek.toUpperCase()} SESSION'
+                        : isEditing
+                            ? 'UPDATE WORKOUT PLAN (V${(widget.sessionToEdit?.planVersion.versionNumber ?? 1) + 1})'
+                            : 'CREATE WORKOUT PLAN',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -1403,6 +1579,21 @@ class _AdminCreateEditSessionScreenState
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
+              icon: const Icon(Icons.arrow_upward, size: 18, color: AppColors.textSecondary),
+              tooltip: 'Move Up',
+              onPressed: index > 0 ? () => _moveExercise(index, index - 1) : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.arrow_downward, size: 18, color: AppColors.textSecondary),
+              tooltip: 'Move Down',
+              onPressed: index < _exercises.length - 1 ? () => _moveExercise(index, index + 1) : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.primaryRed),
+              tooltip: 'Replace with Library Exercise',
+              onPressed: () => _replaceExerciseWithLibrary(index),
+            ),
+            IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18, color: AppColors.textSecondary),
               tooltip: 'Duplicate Exercise',
               onPressed: () => _duplicateExercise(index),
@@ -1452,6 +1643,12 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
   late TextEditingController _supersetTagController;
   late TextEditingController _adminNoteController;
 
+  String? _pickedExerciseId;
+  String? _pickedCategory;
+  String? _pickedPrimaryMuscles;
+  String? _pickedSecondaryMuscles;
+  List<String>? _pickedAlternatives;
+
   SetType _selectedSetType = SetType.working;
   AdvancedTrainingMethod _selectedMethod = AdvancedTrainingMethod.straightSets;
   WorkoutSectionType _selectedSectionType = WorkoutSectionType.mainWorkout;
@@ -1461,6 +1658,12 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
     super.initState();
     final ex = widget.existingExercise;
     final firstSet = ex?.sets.firstOrNull;
+
+    _pickedExerciseId = ex?.exerciseId;
+    _pickedCategory = ex?.category;
+    _pickedPrimaryMuscles = ex?.primaryMusclesDisplay;
+    _pickedSecondaryMuscles = ex?.secondaryMusclesDisplay;
+    _pickedAlternatives = ex?.approvedAlternativeIds;
 
     _nameController = TextEditingController(text: ex?.exerciseName ?? '');
     _setsController =
@@ -1512,8 +1715,15 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
     final picked = await ExercisePickerDialog.show(context);
     if (picked != null) {
       setState(() {
+        _pickedExerciseId = picked.id;
+        _pickedCategory = picked.category;
+        _pickedPrimaryMuscles = picked.primaryMusclesDisplay;
+        _pickedSecondaryMuscles = picked.secondaryMusclesDisplay;
+        _pickedAlternatives = picked.approvedAlternativeIds;
         _nameController.text = picked.displayName;
-        _adminNoteController.text = picked.defaultTrainerNote;
+        if (_adminNoteController.text.trim().isEmpty) {
+          _adminNoteController.text = picked.defaultTrainerNote;
+        }
       });
     }
   }
@@ -1570,13 +1780,14 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
     final exercise = WorkoutExercise(
       id: widget.existingExercise?.id ??
           'we_${DateTime.now().millisecondsSinceEpoch}',
-      exerciseId: widget.existingExercise?.exerciseId ??
+      exerciseId: _pickedExerciseId ??
+          widget.existingExercise?.exerciseId ??
           'ex_custom_${DateTime.now().millisecondsSinceEpoch}',
       exerciseName: name,
-      category: widget.existingExercise?.category ?? 'General',
-      primaryMusclesDisplay:
+      category: _pickedCategory ?? widget.existingExercise?.category ?? 'General',
+      primaryMusclesDisplay: _pickedPrimaryMuscles ??
           widget.existingExercise?.primaryMusclesDisplay ?? 'Primary Muscles',
-      secondaryMusclesDisplay:
+      secondaryMusclesDisplay: _pickedSecondaryMuscles ??
           widget.existingExercise?.secondaryMusclesDisplay ?? '',
       supersetTag: superset,
       sectionType: _selectedSectionType,
@@ -1584,7 +1795,7 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
       restSeconds: rest,
       trainerNote: _adminNoteController.text.trim(),
       tempo: _tempoController.text.trim(),
-      approvedAlternativeIds:
+      approvedAlternativeIds: _pickedAlternatives ??
           widget.existingExercise?.approvedAlternativeIds ?? const [],
       sets: generatedSets,
     );

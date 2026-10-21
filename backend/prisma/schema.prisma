@@ -49,6 +49,7 @@ model User {
   assignedClients  ClientProfile[]        @relation("TrainerClients")
   assignments      WorkoutAssignment[]    @relation("ClientAssignments")
   workoutRecords   WorkoutRecord[]        @relation("ClientWorkoutRecords")
+  sessionOverrides ClientSessionOverride[] @relation("ClientSessionOverrides")
   verificationLogs UserVerificationLog[]  @relation("UserVerificationLogs")
   passwordResetCodes PasswordResetCode[]  @relation("UserPasswordResetCodes")
 
@@ -342,6 +343,7 @@ model WorkoutSession {
   exercises   WorkoutSessionExercise[]
   assignments WorkoutAssignment[]
   records     WorkoutRecord[]
+  overrides   ClientSessionOverride[]  @relation("WorkoutSessionOverrides")
 
   @@map("workout_sessions")
 }
@@ -414,6 +416,23 @@ model WorkoutAssignment {
   @@index([clientId])
   @@index([scheduledDate])
   @@map("workout_assignments")
+}
+
+model ClientSessionOverride {
+  id        String         @id @default(uuid())
+  clientId  String
+  client    User           @relation("ClientSessionOverrides", fields: [clientId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   WorkoutSession @relation("WorkoutSessionOverrides", fields: [sessionId], references: [id], onDelete: Cascade)
+  dayOfWeek String?
+  overrides Json           @default("{}")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([clientId, sessionId])
+  @@index([clientId])
+  @@index([sessionId])
+  @@map("client_session_overrides")
 }
 
 model WorkoutRecord {

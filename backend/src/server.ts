@@ -38,7 +38,7 @@ process.on('uncaughtException', (err: Error) => {
 
 import { activityRoutes } from './modules/activity/activity.routes';
 import { authRoutes } from './modules/auth/auth.routes';
-import { workoutRoutes } from './modules/workout/workout.routes';
+import { workoutRoutes, workoutAdminRouter } from './modules/workout/workout.routes';
 import { exerciseRoutes } from './modules/exercise/exercise.routes';
 import { exerciseService } from './modules/exercise/exercise.service';
 import { foodRoutes } from './modules/food/food.routes';
@@ -253,6 +253,8 @@ app.use('/api/transformation-photos', transformationPhotoRoutes);
 // Master Administrator Operations & Authentication (requireAdmin)
 app.use('/api/admin', adminRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/admin', workoutAdminRouter);
+app.use('/api/v1/admin', workoutAdminRouter);
 
 // Master Alpha X AI Coach Operations
 app.use('/api/admin/ai-coach', aiCoachRoutes);
