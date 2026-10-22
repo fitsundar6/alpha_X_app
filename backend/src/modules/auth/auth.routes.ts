@@ -753,7 +753,7 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
 
     // Verify client password with bcrypt
     if (!dbUser.passwordHash) {
-      sendError(res, 'INVALID_CREDENTIALS', 'No password set for this account. Please contact gym administration.', HttpStatus.UNAUTHORIZED, undefined, undefined, {
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid Client ID or password. Please check your credentials and try again.', HttpStatus.UNAUTHORIZED, undefined, undefined, {
         activity: 'Client Login Authentication',
         resourceId: dbUser.id,
         resourceType: 'ClientAccount',
