@@ -189,9 +189,23 @@ jobs:
     needs: [build-ios, build-android]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.version.outputs.tag }}
     permissions:
       contents: write
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Resolve Release Version
+        id: version
+        run: |
+          # Extract version from pubspec.yaml (e.g. "version: 1.2.3+45" -> "v1.2.3")
+          RAW=$(grep '^version:' apps/mobile/pubspec.yaml | head -1 | awk '{print $2}' | cut -d'+' -f1)
+          TAG="v${RAW:-1.0.0}-build.${{ github.run_number }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Resolved release tag: $TAG"
+
       - name: Download iOS IPA Artifact
         uses: actions/download-artifact@v4
         with:
@@ -213,8 +227,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Alpha X Gym v1.0.0 (Production Release)"
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Alpha X Gym ${{ steps.version.outputs.tag }} (Production Release)"
           body: |
             ## Alpha X Gym — Production Release (v1.0.0)
 
