@@ -953,8 +953,9 @@ router.post('/clients/:id/diet-plans', async (req: Request, res: Response) => {
 
     // Admin attribution
     const adminUser = (req as any).user || {};
-    const adminId = adminUser.id || 'admin_alex_stone';
-    const adminName = adminUser.name || 'Alex Stone';
+    const defaultAdminId = env.ADMIN_ID || `admin_${(env.ADMIN_EMAIL || 'alphax').split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
+    const adminId = adminUser.id || defaultAdminId;
+    const adminName = adminUser.name || 'Alpha X Administrator';
 
     // Deactivate previous active diet plans for this client (Preserve history)
     await prisma.dietPlan.updateMany({
