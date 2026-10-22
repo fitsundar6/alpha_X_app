@@ -116,7 +116,7 @@ export class AdminAuthService {
     };
   } {
     const adminEmail = this.getAdminEmail();
-    const id = 'admin_alex_stone';
+    const id = env.ADMIN_ID || `admin_${adminEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
     const name = 'Alpha X Administrator';
     const role = UserRole.ADMIN;
 

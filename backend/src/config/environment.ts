@@ -29,6 +29,7 @@ const envSchema = z.object({
   // Master Administrator Email & Password Credentials
   // Exactly ONE authorized master admin account
   ADMIN_EMAIL: z.string().email().default('admin@alphaxgym.com'),
+  ADMIN_ID: z.string().optional(),
   ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD must be at least 8 characters if provided').optional(),
   ADMIN_PASSWORD_HASH: z.string().optional(),
   // Email & SMTP Configuration for Password Recovery

@@ -19,6 +19,8 @@ import { calculatePersonalizedDietMacros } from './diet_calculator';
 
 const router = Router();
 
+const defaultAdminId = env.ADMIN_ID || `admin_${(env.ADMIN_EMAIL || 'alphax').split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
+
 // Enforce Admin Authentication on all AI Coach routes
 router.use(requireAuth, requireAdmin);
 
@@ -40,7 +42,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   }
 
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
   const requestId = `req_ai_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
   // 2. Resolve or initialize isolated conversation for the authenticated Admin
@@ -286,7 +288,7 @@ router.post('/chat', async (req: Request, res: Response) => {
  */
 router.post('/new-chat', async (req: Request, res: Response) => {
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
 
   const newConv = conversationStore.create(adminId);
   sendSuccess(res, {
@@ -303,7 +305,7 @@ router.post('/new-chat', async (req: Request, res: Response) => {
 router.post('/clear-client', async (req: Request, res: Response) => {
   const { conversationId } = req.body;
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
 
   const { conversation } = conversationService.resolveConversation(adminId, conversationId);
   clientContextService.clearClient(conversation);
@@ -327,7 +329,7 @@ router.post('/select-client', async (req: Request, res: Response) => {
   }
 
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
 
   const { conversation } = conversationService.resolveConversation(adminId, conversationId);
   const resolveResult = await clientContextService.resolveAndSetClient(conversation, clientId.trim());
@@ -473,7 +475,7 @@ router.post('/proposals/:id/approve', async (req: Request, res: Response) => {
 
   try {
     const adminUser = (req as any).user || {};
-    const adminId = adminUser.id || 'admin_alex_stone';
+    const adminId = adminUser.id || defaultAdminId;
     const adminName = adminUser.name || 'Admin Alex';
 
     const approved = await aiTools.approveProposal(proposalId, adminId, adminName, {
@@ -506,7 +508,7 @@ router.post('/proposals/:id/reject', async (req: Request, res: Response) => {
 
   try {
     const adminUser = (req as any).user || {};
-    const adminId = adminUser.id || 'admin_alex_stone';
+    const adminId = adminUser.id || defaultAdminId;
 
     const rejected = await aiTools.rejectProposal(proposalId, adminId, reason);
     sendSuccess(res, {
@@ -534,7 +536,7 @@ const handleEditProposal = async (req: Request, res: Response) => {
 
   try {
     const adminUser = (req as any).user || {};
-    const adminId = adminUser.id || 'admin_alex_stone';
+    const adminId = adminUser.id || defaultAdminId;
 
     const edited = await aiTools.editProposal(proposalId, adminId, editedPayload);
     sendSuccess(res, {
@@ -556,7 +558,7 @@ router.post('/proposals/:id/edit', handleEditProposal);
  */
 router.get('/history', async (req: Request, res: Response) => {
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
 
   try {
     const memoryConversations = conversationStore.getByAdmin(adminId);
@@ -750,7 +752,7 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
 
   const { profileId, clientId, name } = resolved.client;
   const adminUser = (req as any).user || {};
-  const adminId = adminUser.id || 'admin_alex_stone';
+  const adminId = adminUser.id || defaultAdminId;
   const effectiveConvId = conversationId || `conv_gen_${Date.now()}`;
 
   // Read full client profile

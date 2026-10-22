@@ -834,7 +834,6 @@ class AiCoachRepository extends ChangeNotifier {
               '• Athlete performance analysis and check-in reviews\n'
               '• Exercise selection and coaching cues\n'
               '• Gym operations and client management\n\n'
-              'Technical Context: The local Alpha X backend API runs on port 5000 (http://localhost:5000/api/v1 for desktop/web, or your LAN IP http://192.168.1.5:5000/api/v1 for physical mobile devices), and cloud on https://alpha-x-app.vercel.app/api/v1. Do not invent non-existent domains like api.alphaxgym.com.\n\n'
               'Respond like a professional strength and conditioning coach. '
               'Be concise, evidence-based, and actionable. '
               'When creating workout or diet proposals, format them clearly with sets, '

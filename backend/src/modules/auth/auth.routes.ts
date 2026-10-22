@@ -29,16 +29,73 @@ const forgotPasswordRateLimiter = rateLimit({
   },
 });
 
+// Dedicated brute-force rate limiter for login endpoints (stricter than general 300/15min)
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Max 10 login attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many login attempts. Please wait 15 minutes before trying again.',
+    },
+  },
+});
+
+// Rate limiter for registration to prevent spam account creation
+const registerRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Max 5 registrations per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many registration attempts. Please try again later.',
+    },
+  },
+});
+
 /**
- * Generates the next sequential unique Client ID in format AXG-XXXX (e.g. AXG-0001)
+ * Generates the next sequential unique Client ID in format AXG-XXXX (e.g. AXG-0001).
  * Permanent, immutable string identifier.
+ * Uses highest existing ID to avoid collisions and supports optional database transaction client.
  */
-export async function generateNextClientId(): Promise<string> {
-  const count = await prisma.clientProfile.count();
-  let candidateNum = count + 1;
+export async function generateNextClientId(tx?: any): Promise<string> {
+  const db = tx || prisma;
+  // Fetch the latest profiles ordered descending by clientId to get the highest numeric AXG-XXXX
+  const latestProfiles = await db.clientProfile.findMany({
+    where: { clientId: { startsWith: 'AXG-' } },
+    select: { clientId: true },
+    orderBy: { clientId: 'desc' },
+    take: 50,
+  });
+
+  let maxNum = 0;
+  for (const profile of latestProfiles) {
+    if (profile.clientId) {
+      const match = profile.clientId.match(/^AXG-(\d+)$/i);
+      if (match) {
+        const parsed = parseInt(match[1], 10);
+        if (!isNaN(parsed) && parsed > maxNum) {
+          maxNum = parsed;
+        }
+      }
+    }
+  }
+
+  if (maxNum === 0) {
+    const totalCount = await db.clientProfile.count();
+    maxNum = totalCount;
+  }
+
+  let candidateNum = maxNum + 1;
   while (true) {
     const candidateId = `AXG-${String(candidateNum).padStart(4, '0')}`;
-    const existing = await prisma.clientProfile.findUnique({
+    const existing = await db.clientProfile.findUnique({
       where: { clientId: candidateId },
     });
     if (!existing) {
@@ -143,7 +200,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
     let user: any = null;
     let clientId: string | null = null;
     if (isMasterAdmin) {
-      user = { id: 'admin_alex_stone', email: env.ADMIN_EMAIL, role: UserRole.ADMIN, name: 'Alpha X Administrator' };
+      const adminId = env.ADMIN_ID || `admin_${env.ADMIN_EMAIL.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
+      user = { id: adminId, email: env.ADMIN_EMAIL, role: UserRole.ADMIN, name: 'Alpha X Administrator' };
       clientId = 'AXG-ADMIN';
     } else {
       user = await prisma.user.findUnique({
@@ -197,7 +255,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
  * System automatically generates a unique, permanent sequential Client ID: AXG-XXXX (e.g. AXG-0001).
  * Returns generated Client ID and instructions to keep it safe for future login.
  */
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerRateLimiter, async (req: Request, res: Response) => {
   const { name, email, phone, password, confirmPassword } = req.body;
 
   // 1. Validation
@@ -291,50 +349,66 @@ router.post('/register', async (req: Request, res: Response) => {
       return;
     }
 
-    // 3. Generate unique sequential Client ID: AXG-XXXX
-    const uniqueClientId = await generateNextClientId();
-
-    // 4. Securely hash password with bcrypt (Never plain text!)
+    // 3. Securely hash password with bcrypt (Never plain text!)
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 5. Create real Client Account in shared PostgreSQL database with default PENDING verification status
-    const newUser = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        passwordHash,
-        name: cleanName,
-        role: UserRole.CLIENT,
-        status: UserStatus.PENDING,
-        clientProfile: {
-          create: {
-            clientId: uniqueClientId,
-            phone: cleanPhone,
-            dailyStepGoal: 6000,
-            dailySteps: 6000,
-            onboardingCompleted: false,
-            onboardingStep: 0,
-            notificationPref: {
+    // 4. Generate unique sequential Client ID (AXG-XXXX) with concurrency retry
+    let newUser: any;
+    let uniqueClientId = '';
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        uniqueClientId = await generateNextClientId();
+
+        // Create real Client Account in shared PostgreSQL database with default PENDING verification status
+        newUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            passwordHash,
+            name: cleanName,
+            role: UserRole.CLIENT,
+            status: UserStatus.PENDING,
+            clientProfile: {
               create: {
-                timezone: 'Asia/Kolkata',
-                quietHoursStart: 21,
-                quietHoursEnd: 7,
-                workoutReminders: true,
-                nutritionReminders: true,
-                weeklyCheckInReminders: true,
-                activityReminders: true,
-                membershipAlerts: true,
-                aiEngagementEnabled: true,
+                clientId: uniqueClientId,
+                phone: cleanPhone,
+                dailyStepGoal: 6000,
+                dailySteps: 6000,
+                onboardingCompleted: false,
+                onboardingStep: 0,
+                notificationPref: {
+                  create: {
+                    timezone: 'Asia/Kolkata',
+                    quietHoursStart: 21,
+                    quietHoursEnd: 7,
+                    workoutReminders: true,
+                    nutritionReminders: true,
+                    weeklyCheckInReminders: true,
+                    activityReminders: true,
+                    membershipAlerts: true,
+                    aiEngagementEnabled: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      include: {
-        clientProfile: {
-          include: { notificationPref: true },
-        },
-      },
-    });
+          include: {
+            clientProfile: {
+              include: { notificationPref: true },
+            },
+          },
+        });
+        break;
+      } catch (createErr: any) {
+        if (createErr?.code === 'P2002' && (createErr?.meta?.target?.includes('clientId') || String(createErr?.message).includes('clientId'))) {
+          continue;
+        }
+        throw createErr;
+      }
+    }
+
+    if (!newUser) {
+      throw new Error('Failed to generate a unique Client ID after multiple attempts');
+    }
 
     const clientProfile = newUser.clientProfile!;
 
@@ -491,47 +565,64 @@ router.post('/google', async (req: Request, res: Response) => {
       return;
     }
 
-    // New Google client -> auto-generate unique sequential Client ID (AXG-XXXX) with PENDING status
-    const uniqueClientId = await generateNextClientId();
+    // New Google client -> auto-generate unique sequential Client ID (AXG-XXXX) with concurrency retry
+    let newUser: any;
+    let uniqueClientId = '';
     const cleanName = (name || 'Athlete Member').trim();
 
-    const newUser = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        name: cleanName,
-        googleUid: cleanGoogleUid,
-        role: UserRole.CLIENT,
-        status: UserStatus.PENDING,
-        clientProfile: {
-          create: {
-            clientId: uniqueClientId,
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        uniqueClientId = await generateNextClientId();
+
+        newUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            name: cleanName,
             googleUid: cleanGoogleUid,
-            dailyStepGoal: 6000,
-            dailySteps: 6000,
-            onboardingCompleted: false,
-            onboardingStep: 0,
-            notificationPref: {
+            role: UserRole.CLIENT,
+            status: UserStatus.PENDING,
+            clientProfile: {
               create: {
-                timezone: 'Asia/Kolkata',
-                quietHoursStart: 21,
-                quietHoursEnd: 7,
-                workoutReminders: true,
-                nutritionReminders: true,
-                weeklyCheckInReminders: true,
-                activityReminders: true,
-                membershipAlerts: true,
-                aiEngagementEnabled: true,
+                clientId: uniqueClientId,
+                googleUid: cleanGoogleUid,
+                dailyStepGoal: 6000,
+                dailySteps: 6000,
+                onboardingCompleted: false,
+                onboardingStep: 0,
+                notificationPref: {
+                  create: {
+                    timezone: 'Asia/Kolkata',
+                    quietHoursStart: 21,
+                    quietHoursEnd: 7,
+                    workoutReminders: true,
+                    nutritionReminders: true,
+                    weeklyCheckInReminders: true,
+                    activityReminders: true,
+                    membershipAlerts: true,
+                    aiEngagementEnabled: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      include: {
-        clientProfile: {
-          include: { notificationPref: true },
-        },
-      },
-    });
+          include: {
+            clientProfile: {
+              include: { notificationPref: true },
+            },
+          },
+        });
+        break;
+      } catch (createErr: any) {
+        if (createErr?.code === 'P2002' && (createErr?.meta?.target?.includes('clientId') || String(createErr?.message).includes('clientId'))) {
+          continue;
+        }
+        throw createErr;
+      }
+    }
+
+    if (!newUser) {
+      throw new Error('Failed to generate a unique Client ID after multiple attempts');
+    }
 
     const clientProfile = newUser.clientProfile!;
     const token = jwt.sign(
@@ -587,7 +678,7 @@ router.post('/google', async (req: Request, res: Response) => {
  *   If false -> assessment needs to be completed/resumed.
  *   If true -> opens Client Dashboard.
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
   const { clientId, email, username, clientIdOrEmail, password } = req.body;
 
   const rawIdentifier = (clientId || clientIdOrEmail || username || email || '').trim();
@@ -650,7 +741,8 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!dbUser) {
-      sendError(res, 'INVALID_CREDENTIALS', `Account not found for "${rawIdentifier}"`, HttpStatus.UNAUTHORIZED, undefined, undefined, {
+      // Anti-enumeration: use same message as wrong-password to not reveal account existence
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid Client ID or password. Please check your credentials and try again.', HttpStatus.UNAUTHORIZED, undefined, undefined, {
         activity: 'Client Login Authentication',
         resourceId: rawIdentifier,
         resourceType: 'ClientAccount',
@@ -672,7 +764,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const isPasswordValid = await bcrypt.compare(password, dbUser.passwordHash);
     if (!isPasswordValid) {
-      sendError(res, 'INVALID_CREDENTIALS', 'Invalid password for account', HttpStatus.UNAUTHORIZED, undefined, undefined, {
+      // Anti-enumeration: use same message as account-not-found
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid Client ID or password. Please check your credentials and try again.', HttpStatus.UNAUTHORIZED, undefined, undefined, {
         activity: 'Client Login Authentication',
         resourceId: dbUser.clientProfile?.clientId || dbUser.email,
         resourceType: 'ClientAccount',
@@ -970,22 +1063,26 @@ router.get('/profile', requireAuth, async (req: Request, res: Response) => {
  * POST /api/v1/auth/admin/login
  * Dedicated Administrator Authentication Endpoint.
  */
-router.post('/admin/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+router.post('/admin/login', loginRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
-    sendError(res, 'INVALID_CREDENTIALS', 'Email and password are required', HttpStatus.BAD_REQUEST);
-    return;
+    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+      sendError(res, 'INVALID_CREDENTIALS', 'Email and password are required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const isValid = await adminAuthService.verifyAdminCredentials(email, password);
+    if (!isValid) {
+      sendError(res, 'INVALID_CREDENTIALS', 'Invalid administrator credentials', HttpStatus.UNAUTHORIZED);
+      return;
+    }
+
+    const session = adminAuthService.generateAdminSession();
+    sendSuccess(res, session, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Admin authentication failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-
-  const isValid = await adminAuthService.verifyAdminCredentials(email, password);
-  if (!isValid) {
-    sendError(res, 'INVALID_CREDENTIALS', 'Invalid administrator credentials', HttpStatus.UNAUTHORIZED);
-    return;
-  }
-
-  const session = adminAuthService.generateAdminSession();
-  sendSuccess(res, session, HttpStatus.OK);
 });
 
 /**
@@ -995,14 +1092,17 @@ router.post('/admin/login', async (req: Request, res: Response) => {
  * Enforces strict anti-enumeration: always returns uniform confirmation.
  */
 router.post('/forgot-password', forgotPasswordRateLimiter, async (req: Request, res: Response) => {
-  const { email } = req.body;
-
-  const result = await passwordResetService.requestPasswordReset(email);
-  if (!result.success) {
-    sendError(res, 'SERVICE_UNAVAILABLE', result.message, HttpStatus.SERVICE_UNAVAILABLE);
-    return;
+  try {
+    const { email } = req.body;
+    const result = await passwordResetService.requestPasswordReset(email);
+    if (!result.success) {
+      sendError(res, 'SERVICE_UNAVAILABLE', result.message, HttpStatus.SERVICE_UNAVAILABLE);
+      return;
+    }
+    sendSuccess(res, { message: result.message }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Password reset request failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-  sendSuccess(res, { message: result.message }, HttpStatus.OK);
 });
 
 /**
@@ -1011,24 +1111,28 @@ router.post('/forgot-password', forgotPasswordRateLimiter, async (req: Request, 
  * Used by recovery screens to verify token validity before presenting password inputs.
  */
 router.get('/reset-password/verify', async (req: Request, res: Response) => {
-  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
 
-  if (!token) {
-    sendError(res, 'VALIDATION_ERROR', 'Reset token query parameter is required', HttpStatus.BAD_REQUEST);
-    return;
+    if (!token) {
+      sendError(res, 'VALIDATION_ERROR', 'Reset token query parameter is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const result = await passwordResetService.verifyResetToken(token);
+    if (!result.valid) {
+      sendError(res, result.error || 'INVALID_TOKEN', result.message || 'Invalid or expired reset token', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, {
+      valid: true,
+      email: result.email,
+      role: result.role,
+    }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Token verification failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-
-  const result = await passwordResetService.verifyResetToken(token);
-  if (!result.valid) {
-    sendError(res, result.error || 'INVALID_TOKEN', result.message || 'Invalid or expired reset token', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  sendSuccess(res, {
-    valid: true,
-    email: result.email,
-    role: result.role,
-  }, HttpStatus.OK);
 });
 
 /**
@@ -1037,32 +1141,34 @@ router.get('/reset-password/verify', async (req: Request, res: Response) => {
  * Validates password, saves new bcrypt hash, and consumes token.
  */
 router.post('/reset-password', async (req: Request, res: Response) => {
-  const { token, newPassword, confirmPassword } = req.body;
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
 
-  if (!token || typeof token !== 'string') {
-    sendError(res, 'VALIDATION_ERROR', 'Reset token is required', HttpStatus.BAD_REQUEST);
-    return;
+    if (!token || typeof token !== 'string') {
+      sendError(res, 'VALIDATION_ERROR', 'Reset token is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const result = await passwordResetService.resetPassword(token, newPassword);
+    if (!result.success) {
+      sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, { message: result.message }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Password reset failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-
-  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
-    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  if (confirmPassword && newPassword !== confirmPassword) {
-    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  const result = await passwordResetService.resetPassword(token, newPassword);
-  if (!result.success) {
-    sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  sendSuccess(res, {
-    message: result.message,
-  }, HttpStatus.OK);
 });
 
 /**
@@ -1073,42 +1179,44 @@ router.post('/reset-password', async (req: Request, res: Response) => {
  * Strictly avoids exposing passwords, password hashes, reset tokens, or client PII.
  */
 router.post('/reset-password-with-code', forgotPasswordRateLimiter, async (req: Request, res: Response) => {
-  const { identifier, code, newPassword, confirmPassword } = req.body;
+  try {
+    const { identifier, code, newPassword, confirmPassword } = req.body;
 
-  if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
-    sendError(res, 'VALIDATION_ERROR', 'Athlete email or Client ID is required', HttpStatus.BAD_REQUEST);
-    return;
+    if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+      sendError(res, 'VALIDATION_ERROR', 'Athlete email or Client ID is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      sendError(res, 'VALIDATION_ERROR', '6-digit verification code is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const result = await passwordResetService.resetPasswordWithAdminCode(
+      identifier.trim(),
+      code.trim(),
+      newPassword
+    );
+
+    if (!result.success) {
+      sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, { message: result.message }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Password reset with code failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-
-  if (!code || typeof code !== 'string' || !code.trim()) {
-    sendError(res, 'VALIDATION_ERROR', '6-digit verification code is required', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
-    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  if (confirmPassword && newPassword !== confirmPassword) {
-    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  const result = await passwordResetService.resetPasswordWithAdminCode(
-    identifier.trim(),
-    code.trim(),
-    newPassword
-  );
-
-  if (!result.success) {
-    sendError(res, result.error || 'RESET_FAILED', result.message, HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  sendSuccess(res, {
-    message: result.message,
-  }, HttpStatus.OK);
 });
 
 /**
@@ -1116,13 +1224,17 @@ router.post('/reset-password-with-code', forgotPasswordRateLimiter, async (req: 
  * Returns official gym administrator contact details for zero-cost, email-free recovery.
  */
 router.get('/gym-contact-info', async (_req: Request, res: Response) => {
-  sendSuccess(res, {
-    gymName: 'Alpha X Gym',
-    adminEmail: env.ADMIN_EMAIL,
-    instructions: 'Visit the Alpha X Gym front desk or contact your gym administrator to verify your athlete identity and receive a secure single-use reset code.',
-    verificationMethod: 'In-Person or Direct Administrator Verification',
-    emailConfigured: emailService.isConfigured(),
-  }, HttpStatus.OK);
+  try {
+    sendSuccess(res, {
+      gymName: 'Alpha X Gym',
+      adminEmail: env.ADMIN_EMAIL,
+      instructions: 'Visit the Alpha X Gym front desk or contact your gym administrator to verify your athlete identity and receive a secure single-use reset code.',
+      verificationMethod: 'In-Person or Direct Administrator Verification',
+      emailConfigured: emailService.isConfigured(),
+    }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Failed to retrieve gym contact info', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
+  }
 });
 
 /**
@@ -1130,37 +1242,39 @@ router.get('/gym-contact-info', async (_req: Request, res: Response) => {
  * Authenticated password update (used for user settings and forced password changes).
  */
 router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
-  const { currentPassword, newPassword, confirmPassword } = req.body;
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
-  if (!currentPassword || typeof currentPassword !== 'string') {
-    sendError(res, 'VALIDATION_ERROR', 'Current password is required', HttpStatus.BAD_REQUEST);
-    return;
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      sendError(res, 'VALIDATION_ERROR', 'Current password is required', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    const result = await passwordResetService.changePassword(
+      req.user!.id,
+      currentPassword,
+      newPassword
+    );
+
+    if (!result.success) {
+      sendError(res, result.error || 'CHANGE_PASSWORD_FAILED', result.message, HttpStatus.BAD_REQUEST);
+      return;
+    }
+
+    sendSuccess(res, { message: result.message }, HttpStatus.OK);
+  } catch (err: any) {
+    sendError(res, 'INTERNAL_ERROR', 'Password change failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
-
-  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
-    sendError(res, 'VALIDATION_ERROR', 'New password must be at least 6 characters', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  if (confirmPassword && newPassword !== confirmPassword) {
-    sendError(res, 'VALIDATION_ERROR', 'New password and confirm password do not match', HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  const result = await passwordResetService.changePassword(
-    req.user!.id,
-    currentPassword,
-    newPassword
-  );
-
-  if (!result.success) {
-    sendError(res, result.error || 'CHANGE_PASSWORD_FAILED', result.message, HttpStatus.BAD_REQUEST);
-    return;
-  }
-
-  sendSuccess(res, {
-    message: result.message,
-  }, HttpStatus.OK);
 });
 
 export const authRoutes = router;

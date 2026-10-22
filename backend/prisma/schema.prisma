@@ -412,6 +412,8 @@ model WorkoutAssignment {
   unlockedById  String?
   unlockReason  String?
 
+  workoutRecords WorkoutRecord[]
+
   @@index([sessionId])
   @@index([clientId])
   @@index([scheduledDate])
@@ -442,6 +444,7 @@ model WorkoutRecord {
   sessionId           String?
   session             WorkoutSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   assignmentId        String?
+  assignment          WorkoutAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   sessionTitle        String
   workoutType         String
   startedAt           DateTime
