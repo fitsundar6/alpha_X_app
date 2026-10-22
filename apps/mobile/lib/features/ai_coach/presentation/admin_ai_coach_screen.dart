@@ -7,7 +7,6 @@ import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_reposit
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
-import 'package:alpha_x_gym/features/workout/presentation/admin/admin_create_edit_session_screen.dart';
 import 'package:alpha_x_gym/features/macro_planner/domain/models/assigned_diet_plan.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/widgets/admin_ai_proposal_review_dialog.dart';
 import 'package:alpha_x_gym/features/workout/presentation/admin/admin_proposal_assignment_dialog.dart';
@@ -259,12 +258,12 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
   }
 
   Future<void> _handleApproveProposal(AiProposal proposal) async {
-    if (proposal.type == AiProposalType.workout && widget.workoutRepository != null) {
+    if (proposal.type == AiProposalType.workout) {
       await AdminProposalAssignmentDialog.show(
         context: context,
         proposal: proposal,
         aiCoachRepository: _repo,
-        workoutRepository: widget.workoutRepository!,
+        workoutRepository: widget.workoutRepository ?? WorkoutRepository(),
         onAssigned: () {
           if (mounted) {
             setState(() {
@@ -321,6 +320,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
     }
   }
 
+  // ignore: unused_element
   WorkoutSession _convertProposalToWorkoutSession(AiProposal proposal) {
     final payload = proposal.payload;
     final title = payload['title']?.toString() ?? proposal.title;
@@ -496,44 +496,21 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
   }
 
   Future<void> _handleEditProposal(AiProposal proposal) async {
-    final clientId = proposal.clientId ?? _selectedClientId;
-
     if (proposal.type == AiProposalType.workout) {
-      final isMultiDay = proposal.payload['weeklySchedule'] is List && (proposal.payload['weeklySchedule'] as List).length > 1;
-      if (widget.workoutRepository == null || isMultiDay) {
-        _showEditProposalDialog(proposal);
-        return;
-      }
-
-      final draftSession = _convertProposalToWorkoutSession(proposal);
-
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (ctx) => AdminCreateEditSessionScreen(
-            workoutRepository: widget.workoutRepository!,
-            sessionToEdit: draftSession,
-            clientIdToAssign: clientId,
-            onSaved: () async {
-              await _repo.approveProposal(
-                proposal.id,
-                clientIds: clientId != null ? [clientId] : (proposal.clientId != null ? [proposal.clientId!] : null),
-                proposalData: proposal.toJson(),
-              );
-              if (mounted) {
-                setState(() {
-                  proposal.status = AiProposalStatus.approved;
-                });
-              }
-            },
-          ),
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => WorkoutProposalDetailSheet(
+          proposal: proposal,
+          workoutRepository: widget.workoutRepository ?? WorkoutRepository(),
+          aiCoachRepository: _repo,
+          onProposalUpdated: () {
+            if (mounted) setState(() {});
+          },
         ),
       );
-
-      if (result == true && mounted) {
-        setState(() {
-          proposal.status = AiProposalStatus.approved;
-        });
-      }
+      return;
     } else if (proposal.type == AiProposalType.diet) {
       showModalBottomSheet(
         context: context,

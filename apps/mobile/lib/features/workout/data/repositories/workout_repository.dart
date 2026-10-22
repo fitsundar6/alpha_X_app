@@ -134,6 +134,7 @@ class WorkoutRepository extends ChangeNotifier {
   bool _hasRestoredActiveSession = false;
   DateTime? _activeSessionSavedAt;
   final List<WorkoutSession> _sessions = [];
+  final List<WorkoutSession> _pendingWorkouts = [];
   final List<WorkoutAssignmentData> _assignments = [];
   final List<WorkoutRecord> _workoutHistory = [];
   final List<WorkoutRecord> _pendingSyncRecords = [];
@@ -180,6 +181,7 @@ class WorkoutRepository extends ChangeNotifier {
 
   WorkoutSession get activeSession => _activeSession;
   List<WorkoutSession> get adminSessions => List.unmodifiable(_sessions);
+  List<WorkoutSession> get pendingWorkouts => List.unmodifiable(_pendingWorkouts);
   List<WorkoutRecord> get workoutHistory => List.unmodifiable(_workoutHistory);
   List<Map<String, String>> get clientsList => List.unmodifiable(_clients);
   List<Map<String, String>> get clients => clientsList;
@@ -1594,7 +1596,31 @@ class WorkoutRepository extends ChangeNotifier {
         if (decoded['success'] == true && decoded['data'] != null) {
           final data = decoded['data'];
           final List<dynamic> availableJson = data['available'] as List<dynamic>? ?? [];
-          final Map<String, dynamic>? recJson = data['recommended'] as Map<String, dynamic>?;
+          final Map<String, dynamic>? recJson = (data['todaySession'] ?? data['recommended']) as Map<String, dynamic>?;
+          final List<dynamic> pendingJson = data['pendingWorkouts'] as List<dynamic>? ?? [];
+
+          final List<WorkoutSession> fetchedPending = [];
+          for (final item in pendingJson) {
+            if (item is Map<String, dynamic>) {
+              try {
+                final s = WorkoutSession.fromJson(item).copyWith(isRecommended: false);
+                fetchedPending.add(s);
+              } catch (pe) {
+                debugPrint('[WorkoutRepository] Pending session parse error: $pe');
+              }
+            }
+          }
+          _pendingWorkouts.clear();
+          _pendingWorkouts.addAll(fetchedPending);
+
+          for (final ps in fetchedPending) {
+            final existingIdx = _sessions.indexWhere((s) => s.id == ps.id);
+            if (existingIdx != -1) {
+              _sessions[existingIdx] = ps;
+            } else {
+              _sessions.add(ps);
+            }
+          }
 
           final List<WorkoutSession> fetchedSessions = [];
           for (final item in availableJson) {
@@ -1684,7 +1710,7 @@ class WorkoutRepository extends ChangeNotifier {
     return _assignments.any((a) => a.clientId != null && matchClientIds.contains(a.clientId));
   }
 
-  WorkoutSession? getRecommendedSessionForClient(String clientId) {
+  WorkoutSession? getTodaySessionForClient(String clientId) {
     if (clientId.isEmpty) return null;
 
     final matchClientIds = <String>{
@@ -1694,7 +1720,7 @@ class WorkoutRepository extends ChangeNotifier {
     }.where((id) => id.isNotEmpty).toSet();
 
     // 0. Active session lock: If client currently has an active IN_PROGRESS session that is NOT locked,
-    // preserve and return that exact session! Never switch to another workout mid-session!
+    // preserve and return that exact session!
     if (hasActiveSavedSession &&
         _activeSession.status == 'IN_PROGRESS' &&
         !_activeSession.isLocked &&
@@ -1705,44 +1731,10 @@ class WorkoutRepository extends ChangeNotifier {
     }
 
     final todayIST = IstDateUtils.getTodayISTString();
-    final todayWeekday = IstDateUtils.getTodayISTWeekday();
-
     final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
     if (clientAssignments.isEmpty) return null;
 
-    // 1. Progression check: Check if there is an incomplete scheduled session prior to today in current cycle
-    final priorIncomplete = <WorkoutSession>[];
-    for (final assignment in clientAssignments) {
-      final s = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
-      if (s == null) continue;
-
-      final recurringDays = IstDateUtils.parseWeekdaysFromScheduleString(s.recurringSchedule);
-      int? itemWeekday;
-      if (recurringDays.isNotEmpty) {
-        itemWeekday = recurringDays.first;
-      } else if (assignment.scheduledDate != null) {
-        itemWeekday = IstDateUtils.getWeekdayFromISTDateString(assignment.scheduledDate!);
-      }
-
-      if (itemWeekday != null && itemWeekday < todayWeekday) {
-        final isCompletedInHistory = _workoutHistory.any((r) =>
-          matchClientIds.contains(r.clientId) &&
-          r.sessionId == s.id &&
-          r.isCompleted &&
-          (r.scheduledDate == null || r.scheduledDate == assignment.scheduledDate)
-        );
-        if (!isCompletedInHistory && !assignment.isLocked && assignment.status != 'COMPLETED') {
-          priorIncomplete.add(s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id));
-        }
-      }
-    }
-
-    if (priorIncomplete.isNotEmpty) {
-      // Prior required session remains the eligible workout until completed!
-      return priorIncomplete.first;
-    }
-
-    // 2. All prior days completed: check if there is an active session scheduled for TODAY in IST
+    // Check if there is an active session scheduled for TODAY in IST
     for (final assignment in clientAssignments) {
       final s = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
       if (s == null) continue;
@@ -1758,12 +1750,120 @@ class WorkoutRepository extends ChangeNotifier {
       );
 
       if (isScheduledToday) {
-        return s.copyWith(isRecommended: true, assignedClientId: clientId, assignedWorkoutId: s.id);
+        // Check if session is completed & locked in history for todayIST
+        final todayRecord = _workoutHistory.where((r) {
+          if (!matchClientIds.contains(r.clientId)) return false;
+          if (r.sessionId != s.id) return false;
+          final recordDate = r.scheduledDate ?? IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt);
+          return recordDate == todayIST && r.isCompleted;
+        }).firstOrNull;
+
+        final bool isLockedToday = todayRecord != null && todayRecord.isLocked;
+        final String sessionStatus = isLockedToday
+            ? 'COMPLETED'
+            : (todayRecord != null ? 'IN_PROGRESS' : (assignment.scheduledDate == todayIST ? assignment.status : 'ASSIGNED'));
+
+        return s.copyWith(
+          isRecommended: true,
+          scheduledDate: todayIST,
+          assignmentId: assignment.id,
+          isLocked: isLockedToday,
+          status: sessionStatus,
+          assignedClientId: clientId,
+          assignedWorkoutId: s.id,
+        );
       }
     }
 
-    // 3. REST DAY: No workout scheduled for today in IST (Never fallback to another day's workout!)
+    // REST DAY: No workout scheduled for today in IST
     return null;
+  }
+
+  WorkoutSession? getRecommendedSessionForClient(String clientId) {
+    return getTodaySessionForClient(clientId);
+  }
+
+  List<WorkoutSession> getPendingWorkoutsForClient(String clientId) {
+    if (clientId.isEmpty) return [];
+
+    final matchClientIds = <String>{
+      clientId,
+      AuthService().currentUserId,
+      AuthService().currentClientId,
+    }.where((id) => id.isNotEmpty).toSet();
+
+    if (_pendingWorkouts.isNotEmpty) {
+      return _pendingWorkouts.where((p) =>
+        p.assignedClientId == null ||
+        p.assignedClientId!.isEmpty ||
+        matchClientIds.contains(p.assignedClientId)
+      ).toList();
+    }
+
+    // In-memory / offline calculation
+    final todayIST = IstDateUtils.getTodayISTString();
+    final todayWeekday = IstDateUtils.getTodayISTWeekday();
+
+    final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
+    final List<WorkoutSession> pending = [];
+    final seenKeys = <String>{};
+
+    for (final assignment in clientAssignments) {
+      final s = _sessions.where((sess) => sess.id == assignment.sessionId && sess.isActive).firstOrNull;
+      if (s == null) continue;
+
+      final recurringDays = IstDateUtils.parseWeekdaysFromScheduleString(s.recurringSchedule);
+
+      // Explicit past scheduled date
+      if (assignment.scheduledDate != null && assignment.scheduledDate!.compareTo(todayIST) < 0) {
+        final isCompleted = _workoutHistory.any((r) =>
+          matchClientIds.contains(r.clientId) &&
+          r.sessionId == s.id &&
+          r.isCompleted &&
+          (r.scheduledDate == assignment.scheduledDate || r.assignmentId == assignment.id)
+        );
+        final key = '${s.id}_${assignment.scheduledDate}';
+        if (!isCompleted && !seenKeys.contains(key) && assignment.status != 'COMPLETED') {
+          seenKeys.add(key);
+          pending.add(s.copyWith(
+            scheduledDate: assignment.scheduledDate,
+            assignmentId: assignment.id,
+            status: 'PENDING',
+            isRecommended: false,
+          ));
+        }
+      }
+
+      // Past recurring weekday in current week
+      if (recurringDays.isNotEmpty) {
+        for (final dayNum in recurringDays) {
+          if (dayNum < todayWeekday) {
+            final pastDate = IstDateUtils.getISTDateForWeekday(dayNum);
+            if (pastDate.compareTo(todayIST) < 0) {
+              final isCompleted = _workoutHistory.any((r) =>
+                matchClientIds.contains(r.clientId) &&
+                r.sessionId == s.id &&
+                r.isCompleted &&
+                r.scheduledDate == pastDate
+              );
+              final key = '${s.id}_$pastDate';
+              if (!isCompleted && !seenKeys.contains(key)) {
+                seenKeys.add(key);
+                pending.add(s.copyWith(
+                  scheduledDate: pastDate,
+                  assignmentId: assignment.id,
+                  status: 'PENDING',
+                  isRecommended: false,
+                ));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    pending.sort((a, b) => (a.scheduledDate ?? '').compareTo(b.scheduledDate ?? ''));
+    return pending;
   }
 
   List<WorkoutSession> getAuthorizedSessionsForClient(String clientId) {
@@ -1844,29 +1944,6 @@ class WorkoutRepository extends ChangeNotifier {
     }
 
     return result;
-  }
-
-  WorkoutSession? getTodaySessionForClient(String clientId) {
-    if (clientId.isEmpty) return null;
-
-    // 1. If user already has an active IN_PROGRESS session that is NOT locked, return that active session.
-    // An active session remains locked to its originally started workout and must NEVER be replaced by the current date/next day!
-    if (hasActiveSavedSession &&
-        _activeSession.status == 'IN_PROGRESS' &&
-        !_activeSession.isLocked &&
-        (_activeSession.assignedClientId == clientId || _activeSession.assignedClientId == null || _activeSession.assignedClientId!.isEmpty)) {
-      return _activeSession;
-    }
-
-    final authorized = getAuthorizedSessionsForClient(clientId);
-    if (authorized.isEmpty) return null;
-
-    // 2. Recommended session for this client
-    final rec = authorized.where((s) => s.isRecommended).firstOrNull;
-    if (rec != null) return rec;
-
-    // 3. First authorized session assigned to this client
-    return authorized.first;
   }
 
   // --- Client Workout Execution ---
@@ -2389,6 +2466,7 @@ class WorkoutRepository extends ChangeNotifier {
       exercises: List.from(_activeSession.exercises),
       exerciseSwaps: List.from(_currentSessionSwaps),
       planVersion: _activeSession.planVersion,
+      assignmentId: _activeSession.assignmentId,
       scheduledDate: todayIST,
       isLocked: true,
       lockedAt: now,
@@ -2398,6 +2476,7 @@ class WorkoutRepository extends ChangeNotifier {
     _hasRestoredActiveSession = false;
     _activeSessionSavedAt = null;
     discardActiveSession(userId: currentUserId);
+    _pendingWorkouts.removeWhere((p) => p.id == _activeSession.id && (p.scheduledDate == todayIST || p.scheduledDate == _activeSession.scheduledDate));
     _workoutHistory.insert(0, record);
     _saveToLocalStorage();
     notifyListeners();
@@ -3405,6 +3484,7 @@ class WorkoutRepository extends ChangeNotifier {
   Map<String, dynamic> _formatBackendRecordPayload(WorkoutRecord record) {
     return {
       'sessionId': record.sessionId,
+      'assignmentId': record.assignmentId,
       'sessionTitle': record.sessionTitle.isNotEmpty ? record.sessionTitle : 'Workout Session',
       'workoutType': _normalizeWorkoutType(record.workoutType),
       'scheduledDate': record.scheduledDate ?? IstDateUtils.toISTDateString(record.completedAt ?? record.startedAt),

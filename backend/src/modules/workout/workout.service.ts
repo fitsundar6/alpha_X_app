@@ -9,6 +9,7 @@ import {
 import { prisma } from '../../config/prisma';
 import { maskEmail, maskPhone } from '../../utils/pii_mask';
 import { aiNotificationEngine } from '../notifications/ai_notifications.service';
+import { getISTDateForWeekday, getTodayISTWeekday, getWeekdayFromDayName } from '../../utils/istDate';
 
 export class WorkoutService {
   // --- Admin Session Operations ---
@@ -254,7 +255,9 @@ export class WorkoutService {
 
   async getClientSessionById(sessionId: string, clientId: string): Promise<StoredWorkoutSession | null> {
     const authData = await workoutRepository.getClientAuthorizedSessions(clientId);
-    const session = authData.available.find((s) => s.id === sessionId);
+    const session = authData.available.find((s) => s.id === sessionId)
+                 || authData.pendingWorkouts?.find((s) => s.id === sessionId)
+                 || (authData.todaySession?.id === sessionId ? authData.todaySession : null);
     return session ?? null;
   }
 
@@ -344,13 +347,18 @@ export class WorkoutService {
   async assignWorkoutSplit(splitId: string, params: { clientIds?: string[]; isRecommended?: boolean }, adminId: string): Promise<boolean> {
     const split = await workoutRepository.getClientWorkoutSplit(params.clientIds?.[0] || '');
     if (!split) return false;
+    const todayWeekday = getTodayISTWeekday();
     for (const d of split.days) {
-      if (d.sessionId) {
+      if (d.sessionId && !d.isRestDay) {
+        const weekdayNum = d.dayIndex || (d.dayOfWeek ? getWeekdayFromDayName(d.dayOfWeek) : 1);
+        const scheduledDate = getISTDateForWeekday(weekdayNum);
+        const isToday = weekdayNum === todayWeekday;
         await this.assignSession({
           sessionId: d.sessionId,
           assignmentType: 'SELECTED',
           clientIds: params.clientIds,
-          isRecommended: params.isRecommended,
+          isRecommended: isToday,
+          scheduledDate,
           assignedById: adminId,
         });
       }

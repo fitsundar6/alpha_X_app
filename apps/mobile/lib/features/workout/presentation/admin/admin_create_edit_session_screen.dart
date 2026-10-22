@@ -14,6 +14,7 @@ class AdminCreateEditSessionScreen extends StatefulWidget {
   final bool? startInSplitMode;
   final String? clientIdToAssign;
   final VoidCallback? onSaved;
+  final void Function(WorkoutSession)? onSessionSaved;
 
   const AdminCreateEditSessionScreen({
     super.key,
@@ -25,6 +26,7 @@ class AdminCreateEditSessionScreen extends StatefulWidget {
     this.startInSplitMode,
     this.clientIdToAssign,
     this.onSaved,
+    this.onSessionSaved,
   });
 
   @override
@@ -404,10 +406,14 @@ class _AdminCreateEditSessionScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.calendar_month, color: AppColors.primaryRed, size: 18),
                   const SizedBox(width: 8),
@@ -423,6 +429,7 @@ class _AdminCreateEditSessionScreenState
                 ],
               ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     _isSplitMode ? '7-Day Split' : 'Single Workout',
@@ -564,6 +571,7 @@ class _AdminCreateEditSessionScreenState
       if (newIndex > oldIndex) newIndex -= 1;
       final item = _exercises.removeAt(oldIndex);
       _exercises.insert(newIndex, item);
+      _dayExercises[_selectedSplitDay] = List.from(_exercises);
     });
   }
 
@@ -572,14 +580,32 @@ class _AdminCreateEditSessionScreenState
     setState(() {
       final item = _exercises.removeAt(oldIndex);
       _exercises.insert(newIndex, item);
+      _dayExercises[_selectedSplitDay] = List.from(_exercises);
     });
   }
 
   void _replaceExerciseWithLibrary(int index) async {
     if (index < 0 || index >= _exercises.length) return;
-    final picked = await ExercisePickerDialog.show(context);
+    final existing = _exercises[index];
+    final picked = await ExercisePickerDialog.show(
+      context,
+      initialCategory: existing.category,
+      excludedExerciseId: existing.exerciseId,
+    );
     if (picked != null) {
-      final existing = _exercises[index];
+      if (picked.id == existing.exerciseId ||
+          picked.displayName.toLowerCase().trim() ==
+              existing.exerciseName.toLowerCase().trim()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Selected exercise is identical to current exercise. Please choose a different exercise to replace.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
       final replaced = existing.copyWith(
         exerciseId: picked.id,
         exerciseName: picked.displayName,
@@ -593,6 +619,7 @@ class _AdminCreateEditSessionScreenState
       );
       setState(() {
         _exercises[index] = replaced;
+        _dayExercises[_selectedSplitDay] = List.from(_exercises);
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -946,6 +973,7 @@ class _AdminCreateEditSessionScreenState
         );
       }
 
+      widget.onSessionSaved?.call(session);
       widget.onSaved?.call();
 
       if (!mounted) return;
@@ -1175,11 +1203,15 @@ class _AdminCreateEditSessionScreenState
             const SizedBox(height: 24),
 
             // 3. Exercises in Session (Reorderable List & Picker)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 _sectionHeader('3. EXERCISES IN SESSION (${_exercises.length})'),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     ElevatedButton.icon(
                       onPressed: _pickExerciseFromDatabase,
@@ -1210,11 +1242,40 @@ class _AdminCreateEditSessionScreenState
             ReorderableListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
               itemCount: _exercises.length,
               onReorder: _onReorderExercises,
+              proxyDecorator:
+                  (Widget child, int index, Animation<double> animation) {
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (BuildContext context, Widget? child) {
+                    final animValue =
+                        Curves.easeInOut.transform(animation.value);
+                    final elevation = 4.0 + (animValue * 6.0);
+                    return Material(
+                      elevation: elevation,
+                      color: Colors.transparent,
+                      shadowColor: AppColors.primaryRed.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: AppColors.primaryRed, width: 2),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: child,
+                );
+              },
               itemBuilder: (ctx, index) {
                 final ex = _exercises[index];
-                return _buildExerciseListItem(ex, index, key: ValueKey(ex.id));
+                return _buildExerciseListItem(ex, index,
+                    key: ValueKey('sess_ex_${ex.id}_$index'));
               },
             ),
 
@@ -1504,8 +1565,21 @@ class _AdminCreateEditSessionScreenState
         leading: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.drag_indicator, color: AppColors.textTertiary, size: 20),
-            const SizedBox(width: 8),
+            ReorderableDragStartListener(
+              index: index,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.only(right: 8.0, top: 4.0, bottom: 4.0),
+                  child: const Icon(
+                    Icons.drag_indicator,
+                    color: AppColors.textTertiary,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
             if (ex.isSuperset) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),

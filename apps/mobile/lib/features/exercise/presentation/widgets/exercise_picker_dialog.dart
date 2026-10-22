@@ -306,38 +306,42 @@ class _ExercisePickerDialogState extends State<ExercisePickerDialog> {
                     itemBuilder: (ctx, index) {
                       final ex = exercises[index];
                       return Container(
+                        key: ValueKey('ex_item_${ex.id}'),
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceCard,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppColors.border),
                         ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 4,
-                          ),
-                          title: Text(
-                            ex.displayName,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 4,
                             ),
-                          ),
-                          subtitle: Text(
-                            '${ex.equipment} • ${ex.category} • ${ex.primaryMusclesDisplay}',
-                            style: const TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 11,
+                            title: Text(
+                              ex.displayName,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
+                            subtitle: Text(
+                              '${ex.equipment} • ${ex.category} • ${ex.primaryMusclesDisplay}',
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.add_circle_outline,
+                              color: AppColors.primaryRed,
+                              size: 22,
+                            ),
+                            onTap: () => widget.onSelect(ex),
                           ),
-                          trailing: const Icon(
-                            Icons.add_circle_outline,
-                            color: AppColors.primaryRed,
-                            size: 22,
-                          ),
-                          onTap: () => widget.onSelect(ex),
                         ),
                       );
                     },

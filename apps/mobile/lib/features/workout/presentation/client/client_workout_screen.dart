@@ -88,24 +88,13 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     final clientId = AuthService().currentUserId;
     final hasActive = widget.workoutRepository.hasActiveSavedSession;
     final activeSession = widget.workoutRepository.activeSession;
-    final recommended = widget.workoutRepository.getRecommendedSessionForClient(clientId);
-    final available = widget.workoutRepository.getAuthorizedSessionsForClient(clientId);
+    final todaySession = widget.workoutRepository.getTodaySessionForClient(clientId)
+                      ?? widget.workoutRepository.getRecommendedSessionForClient(clientId);
+    final pendingWorkouts = widget.workoutRepository.getPendingWorkoutsForClient(clientId);
     final hasAssignedWorkouts = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
 
-    final filteredSessions = _selectedCategory == 'All'
-        ? available
-        : available.where((s) {
-            final cat = _selectedCategory.toLowerCase();
-            return s.workoutType.toLowerCase().contains(cat) ||
-                s.targetMuscleGroup.toLowerCase().contains(cat) ||
-                s.title.toLowerCase().contains(cat);
-          }).toList();
-
-    // Avoid displaying a duplicate card for the same workout that is already featured as Recommended Hero
-    final nonHeroSessions = filteredSessions.where((s) => s.id != recommended?.id).toList();
-
-    final isRestDay = hasAssignedWorkouts && recommended == null && available.isEmpty && !hasActive;
-    final hasAnyWorkouts = available.isNotEmpty || recommended != null || hasActive;
+    final isRestDay = todaySession == null && !hasActive && (hasAssignedWorkouts || pendingWorkouts.isNotEmpty);
+    final hasNoWorkoutsAtAll = todaySession == null && pendingWorkouts.isEmpty && !hasActive && !hasAssignedWorkouts;
 
     final content = RefreshIndicator(
       color: isDark ? AppColors.primary : AppColors.lightPrimary,
@@ -122,86 +111,33 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             _buildActiveResumeBanner(activeSession, colors, isDark),
           ],
 
-          if (isRestDay) ...[
+          // Section 1: Today's Workout OR Rest Day OR Empty State
+          if (todaySession != null) ...[
+            _sectionTitle("⭐ TODAY'S WORKOUT", colors),
+            const SizedBox(height: 10),
+            _buildRecommendedCard(todaySession, colors, isDark),
+            const SizedBox(height: 24),
+          ] else if (isRestDay) ...[
             // REST DAY STATE (Client has an assigned split, but today is a designated recovery day!)
             _buildRestDayState(colors, isDark),
-          ] else if (!hasAnyWorkouts) ...[
+            const SizedBox(height: 24),
+          ] else if (hasNoWorkoutsAtAll) ...[
             // ZERO WORKOUTS ASSIGNED STATE (Never fallback to default/generic!)
             _buildNoWorkoutAssignedState(colors, isDark),
-          ] else ...[
-            // Section 1: Recommended Session Hero Card
-            if (recommended != null) ...[
-              _sectionTitle('⭐ RECOMMENDED FOR YOU', colors),
-              const SizedBox(height: 10),
-              _buildRecommendedCard(recommended, colors, isDark),
-              const SizedBox(height: 24),
-            ],
+            const SizedBox(height: 24),
+          ],
 
-            // Section 2: Horizontal Filter Chips
-            if (nonHeroSessions.isNotEmpty) ...[
-              _sectionTitle('PRESCRIBED PROGRAMS', colors),
-              const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _categories.map((cat) {
-                    final isSelected = _selectedCategory == cat;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: AlphaXPressable(
-                        onTap: () {
-                          AlphaXHaptics.selection();
-                          setState(() => _selectedCategory = cat);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? (isDark ? AppColors.primary : AppColors.lightPrimary)
-                                : colors.surfaceCard,
-                            borderRadius: BorderRadius.circular(999), // Pill
-                            border: Border.all(
-                              color: isSelected
-                                  ? (isDark ? AppColors.primary : AppColors.lightPrimary)
-                                  : colors.border,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: (isDark ? AppColors.primary : AppColors.lightPrimary).withOpacity(0.3),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            cat,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isSelected
-                                  ? AppColors.onPrimary // Dark text on lime
-                                  : colors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Prescribed workouts tailored to your training phase. Only active authorized sessions are displayed.',
-                style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
-              ),
-              const SizedBox(height: 14),
-
-              ...nonHeroSessions.map((session) => _buildWorkoutCard(session, colors, isDark)),
-            ],
+          // Section 2: Dedicated Pending Workouts Section
+          if (pendingWorkouts.isNotEmpty) ...[
+            _sectionTitle('⏳ PENDING WORKOUTS (${pendingWorkouts.length})', colors),
+            const SizedBox(height: 8),
+            Text(
+              'Scheduled workouts not yet completed. Complete them separately without affecting today\'s scheduled workout.',
+              style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            ...pendingWorkouts.map((session) => _buildPendingWorkoutCard(session, colors, isDark)),
+            const SizedBox(height: 24),
           ],
         ],
       ),
@@ -962,6 +898,153 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPendingWorkoutCard(WorkoutSession session, ClientThemeColors colors, bool isDark) {
+    final totalSets = session.exercises.fold(0, (acc, ex) => acc + ex.sets.length);
+    const pendingOrange = Color(0xFFF59E0B);
+    final dateDisplay = session.scheduledDate != null
+        ? 'Scheduled: ${session.scheduledDate}'
+        : 'Missed Workout';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: pendingOrange.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: pendingOrange.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: pendingOrange.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: pendingOrange.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.schedule_rounded, size: 12, color: pendingOrange),
+                      const SizedBox(width: 5),
+                      Text(
+                        'PENDING',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                          color: pendingOrange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    dateDisplay,
+                    style: GoogleFonts.poppins(
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Text(
+                    session.difficulty.toUpperCase(),
+                    style: GoogleFonts.poppins(
+                      color: pendingOrange,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              session.title,
+              style: GoogleFonts.poppins(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              session.targetMuscleGroup.toUpperCase(),
+              style: GoogleFonts.poppins(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _metaChip(Icons.fitness_center_rounded, '${session.exercises.length} Exercises', colors),
+                _metaChip(Icons.repeat_rounded, '$totalSets Sets', colors),
+                _metaChip(Icons.timer_outlined, '~${session.estimatedDurationMinutes} min', colors),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: pendingOrange,
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: const StadiumBorder(),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 20),
+                label: Text(
+                  'START PENDING WORKOUT',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 0.8,
+                    color: Colors.black,
+                  ),
+                ),
+                onPressed: () {
+                  AlphaXHaptics.tap();
+                  _openSessionOverview(session);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
 import 'package:alpha_x_gym/features/macro_planner/data/repositories/macro_repository.dart';
 import 'package:alpha_x_gym/features/dashboard/admin_main_dashboard_screen.dart';
+import 'package:alpha_x_gym/features/workout/presentation/admin/admin_workout_proposals_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -345,12 +346,27 @@ void main() {
       await tester.tap(editButton);
       await tester.pumpAndSettle();
 
-      // Bottom sheet opened
-      expect(find.text('EDIT PROPOSAL: WORKOUT'), findsOneWidget);
-      expect(find.text('Save Modifications'), findsOneWidget);
+      // Dedicated workout proposal editor opened
+      expect(find.byType(WorkoutProposalDetailSheet), findsOneWidget);
+      expect(find.text('REVIEW & EDIT PROPOSAL'), findsOneWidget);
+
+      // Edit plan title inside the sheet to mark sheet dirty
+      final sheetTitleField = find.descendant(
+        of: find.byType(WorkoutProposalDetailSheet),
+        matching: find.byType(TextField),
+      ).first;
+      await tester.enterText(sheetTitleField, 'Modified Workout Plan');
+      await tester.pumpAndSettle();
+
+      // SAVE EDITS button appears when dirty
+      expect(find.text('SAVE EDITS'), findsOneWidget);
 
       // Tap Save
-      await tester.tap(find.text('Save Modifications'));
+      await tester.tap(find.text('SAVE EDITS'));
+      await tester.pumpAndSettle();
+
+      // Close the editor sheet
+      await tester.tap(find.byIcon(Icons.close));
       await tester.pumpAndSettle();
 
       // Proposal status changes to EDITED BY ADMIN

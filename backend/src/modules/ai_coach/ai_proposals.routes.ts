@@ -131,7 +131,7 @@ router.post('/:id/reject', requireAuth, requireAdmin, async (req: Request, res: 
     return;
   }
 
-  if (proposal.status !== 'PENDING') {
+  if (proposal.status !== 'PENDING' && proposal.status !== 'EDITED') {
     sendError(res, 'INVALID_STATUS', `Proposal is already ${proposal.status}`, HttpStatus.CONFLICT);
     return;
   }

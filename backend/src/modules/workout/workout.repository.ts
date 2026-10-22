@@ -5,6 +5,7 @@ import {
   isSessionScheduledForDate,
   getTodayISTWeekday,
   getISTDateForWeekday,
+  getOffsetISTDateString,
   getWeekdayFromDayName,
   parseWeekdaysFromScheduleString,
   getWeekdayFromISTDateString,
@@ -1351,8 +1352,11 @@ export class WorkoutRepository {
 
   // --- Client Operations (Strictly Scoped by Date & Auth) ---
   async getClientAuthorizedSessions(clientId: string, simulatedDateOrDay?: string): Promise<{
-    recommended: (StoredWorkoutSession & { isRecommended: boolean }) | null;
-    available: (StoredWorkoutSession & { isRecommended: boolean })[];
+    todaySession: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+    recommended: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+    pendingWorkouts: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[];
+    available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null })[];
+    isRestDay: boolean;
   }> {
     const resolvedUserId = await this.resolveUserId(clientId);
     const todayIST = simulatedDateOrDay && simulatedDateOrDay.includes('-')
@@ -1409,103 +1413,172 @@ export class WorkoutRepository {
       ].filter((a) => a.session && a.session.isActive);
 
       if (combinedAssignments.length > 0) {
-        const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string })[] = [];
+        // Query completed workout records for client
+        const completedRecords = await prisma.workoutRecord.findMany({
+          where: {
+            clientId: resolvedUserId,
+            isCompleted: true,
+          },
+          select: {
+            id: true,
+            sessionId: true,
+            assignmentId: true,
+            scheduledDate: true,
+            completedAt: true,
+            isLocked: true,
+          },
+          orderBy: { completedAt: 'desc' },
+        });
+
+        const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+          ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
+          : getWeekdayFromISTDateString(todayIST);
+
+        const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string })[] = [];
+        const todayCandidates: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[] = [];
+        const pendingMap = new Map<string, StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string }>();
 
         for (const a of combinedAssignments) {
           const candidateIds = this.resolveSessionCandidateIds(a.sessionId);
+          const recurringDays = parseWeekdaysFromScheduleString(a.session.recurringSchedule);
 
-          // Check if this workout session has been completed & locked
-          const lockedRecord = await prisma.workoutRecord.findFirst({
-            where: {
-              clientId: resolvedUserId,
-              sessionId: { in: candidateIds },
-              isCompleted: true,
-            },
-            orderBy: { completedAt: 'desc' },
-          });
+          // Check if session is scheduled for TODAY in IST
+          const isScheduledToday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+            ? (a.session.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase())
+            : isSessionScheduledForDate(a.session, a, todayIST);
 
-          const isLockedForToday = lockedRecord?.isLocked ?? (a.isLocked && !a.unlockedAt);
-          const statusForToday = lockedRecord
-            ? (lockedRecord.isCompleted ? 'COMPLETED' : 'IN_PROGRESS')
-            : (a.status || 'ASSIGNED');
+          const isCompletedToday = completedRecords.some((r) =>
+            (r.assignmentId && r.assignmentId === a.id && r.scheduledDate === todayIST) ||
+            (candidateIds.includes(r.sessionId || '') && r.scheduledDate === todayIST)
+          );
 
-          available.push({
-            ...mapPrismaSessionToStored(a.session),
-            scheduledDate: a.scheduledDate || todayIST,
-            assignmentId: a.id,
-            isLocked: isLockedForToday,
-            status: statusForToday,
-            lockedAt: lockedRecord?.lockedAt ? lockedRecord.lockedAt.toISOString() : null,
-            isRecommended: a.isRecommended,
-          });
-        }
+          const isLockedForToday = isCompletedToday || (a.isLocked && !a.unlockedAt && a.scheduledDate === todayIST);
+          const statusForToday = isCompletedToday ? 'COMPLETED' : (a.scheduledDate === todayIST ? (a.status || 'ASSIGNED') : 'ASSIGNED');
 
-        // Determine recommended session for today:
-        // Scheduling rules (Section 4 & 5):
-        // 1. Identify all scheduled days for this client in the current cycle / week.
-        // 2. Progression check: If any prior scheduled workout day in the current cycle is incomplete,
-        //    that prior incomplete workout remains the required/eligible session!
-        //    Subsequent days remain locked with status 'PREVIOUS_SESSION_REQUIRED'.
-        // 3. If all prior scheduled workouts are completed (or none exist):
-        //    - If today has a scheduled session:
-        //        - If completed & locked: recItem = today's session (isLocked = true, status = 'COMPLETED')
-        //        - If not completed: recItem = today's session (isLocked = false, isRecommended = true)
-        //    - If today has NO scheduled session (Rest Day):
-        //        - recItem = null! (Do NOT pick available[0]!)
-        const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
-          ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
-          : getTodayISTWeekday();
+          const mappedSession = mapPrismaSessionToStored(a.session);
 
-        const getScheduledWeekday = (item: typeof available[0]) => {
-          const matchingAssignment = combinedAssignments.find((a) => a.session.id === item.id);
-          if (!matchingAssignment) return null;
-          const recurringDays = parseWeekdaysFromScheduleString(matchingAssignment.session.recurringSchedule);
-          if (recurringDays.length > 0) return recurringDays[0];
-          if (matchingAssignment.scheduledDate) return getWeekdayFromISTDateString(matchingAssignment.scheduledDate);
-          return null;
-        };
-
-        const priorScheduledItems = available
-          .map((item) => ({ item, weekday: getScheduledWeekday(item) }))
-          .filter((x): x is { item: typeof available[0]; weekday: number } => x.weekday !== null && x.weekday < todayWeekday)
-          .sort((a, b) => a.weekday - b.weekday);
-
-        const priorIncomplete = priorScheduledItems.find((x) => !x.item.isLocked && x.item.status !== 'COMPLETED');
-
-        let recItem: (typeof available)[0] | undefined;
-
-        const todayItems = available.filter((item) => {
-          const matchingAssignment = combinedAssignments.find((a) => a.session.id === item.id);
-          if (!matchingAssignment) return false;
-          if (simulatedDateOrDay && !simulatedDateOrDay.includes('-')) {
-            return (matchingAssignment.session.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase());
+          if (isScheduledToday) {
+            todayCandidates.push({
+              ...mappedSession,
+              scheduledDate: todayIST,
+              assignmentId: a.id,
+              isLocked: isLockedForToday,
+              status: statusForToday,
+              isRecommended: a.isRecommended || true,
+            });
           }
-          return isSessionScheduledForDate(matchingAssignment.session, matchingAssignment, todayIST);
-        });
 
-        if (todayItems.length === 0) {
-          // REST DAY: No workout scheduled for today. Do not display another day's workout.
-          recItem = undefined;
-        } else if (priorIncomplete) {
-          // A prior required workout is incomplete! That prior session remains the required/eligible session.
-          recItem = priorIncomplete.item;
+          // Check for missed / incomplete occurrences (Pending Workouts)
+          // 1. Direct assignment with explicit scheduledDate prior to todayIST
+          if (a.scheduledDate && a.scheduledDate < todayIST) {
+            const isCompletedInPast = completedRecords.some((r) =>
+              (r.assignmentId && r.assignmentId === a.id) ||
+              (candidateIds.includes(r.sessionId || '') && r.scheduledDate === a.scheduledDate)
+            ) || (a.status === 'COMPLETED' && a.isLocked);
 
-          // Lock any subsequent sessions to prevent premature unlocking
-          for (const s of available) {
-            const w = getScheduledWeekday(s);
-            if (w !== null && w > priorIncomplete.weekday && !s.isLocked && s.status !== 'COMPLETED') {
-              s.isLocked = true;
-              s.status = 'PREVIOUS_SESSION_REQUIRED';
+            if (!isCompletedInPast) {
+              const key = `${a.session.id}_${a.scheduledDate}`;
+              if (!pendingMap.has(key)) {
+                pendingMap.set(key, {
+                  ...mappedSession,
+                  scheduledDate: a.scheduledDate,
+                  assignmentId: a.id,
+                  isLocked: false,
+                  status: 'PENDING',
+                  isRecommended: false,
+                });
+              }
             }
           }
-        } else {
-          // All prior workouts completed (or Day 1): recommend today's scheduled workout
-          recItem = todayItems.find((s) => s.isRecommended) || todayItems[0];
+
+          // 2. Recurring schedule days prior to today in current week
+          if (recurringDays.length > 0) {
+            for (const dayNum of recurringDays) {
+              if (dayNum < todayWeekday) {
+                const pastDate = getISTDateForWeekday(dayNum);
+                if (pastDate < todayIST) {
+                  const isCompletedInPast = completedRecords.some((r) =>
+                    candidateIds.includes(r.sessionId || '') && r.scheduledDate === pastDate
+                  );
+                  if (!isCompletedInPast) {
+                    const key = `${a.session.id}_${pastDate}`;
+                    if (!pendingMap.has(key)) {
+                      pendingMap.set(key, {
+                        ...mappedSession,
+                        scheduledDate: pastDate,
+                        assignmentId: a.id,
+                        isLocked: false,
+                        status: 'PENDING',
+                        isRecommended: false,
+                      });
+                    }
+                  }
+                }
+              }
+
+              // Also check previous weeks if assignment was active
+              const effectiveStartDate = a.scheduledDate || toISTDateString(a.session.startDate) || toISTDateString(a.assignedAt);
+              for (let w = 1; w <= 4; w++) {
+                const pastWeekDate = getOffsetISTDateString(-w * 7 + (dayNum - todayWeekday));
+                if (effectiveStartDate && pastWeekDate >= effectiveStartDate && pastWeekDate < todayIST) {
+                  const isCompletedInPast = completedRecords.some((r) =>
+                    candidateIds.includes(r.sessionId || '') && r.scheduledDate === pastWeekDate
+                  );
+                  const key = `${a.session.id}_${pastWeekDate}`;
+                  if (!isCompletedInPast && !pendingMap.has(key)) {
+                    pendingMap.set(key, {
+                      ...mappedSession,
+                      scheduledDate: pastWeekDate,
+                      assignmentId: a.id,
+                      isLocked: false,
+                      status: 'PENDING',
+                      isRecommended: false,
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          // Available list rules:
+          // A session is in available if:
+          // 1. It is scheduled for today (completed or not)
+          // 2. It is an active split session that was NOT completed on a past day
+          const wasCompletedInPast = Boolean(a.scheduledDate && a.scheduledDate < todayIST && (
+            completedRecords.some((r) =>
+              (r.assignmentId && r.assignmentId === a.id) ||
+              (candidateIds.includes(r.sessionId || '') && r.scheduledDate === a.scheduledDate)
+            ) || (a.status === 'COMPLETED' && a.isLocked)
+          ));
+
+          // If session was completed yesterday/past and is not scheduled for today, cleanly exclude from available
+          if (wasCompletedInPast && !isScheduledToday) {
+            continue;
+          }
+
+          available.push({
+            ...mappedSession,
+            scheduledDate: isScheduledToday ? todayIST : (a.scheduledDate || todayIST),
+            assignmentId: a.id,
+            isLocked: isScheduledToday ? isLockedForToday : false,
+            status: isScheduledToday ? statusForToday : (a.status || 'ASSIGNED'),
+            isRecommended: isScheduledToday && (a.isRecommended || false),
+          });
         }
 
+        let todaySession: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string }) | null = null;
+        if (todayCandidates.length > 0) {
+          todaySession = todayCandidates.find((s) => s.isRecommended) || todayCandidates[0];
+        }
+
+        const pendingWorkouts = Array.from(pendingMap.values()).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
         return this.applyActiveSetOverlays({
-          recommended: recItem ? { ...recItem, isRecommended: true } : null,
+          todaySession: todaySession ? { ...todaySession, isRecommended: true } : null,
+          recommended: todaySession ? { ...todaySession, isRecommended: true } : null,
+          pendingWorkouts,
           available,
+          isRestDay: todaySession === null,
         }, resolvedUserId);
       }
     } catch (e: any) {
@@ -1532,89 +1605,159 @@ export class WorkoutRepository {
     ];
 
     if (combinedMemAssignments.length > 0) {
-      const authorizedSessionIds = new Set(combinedMemAssignments.map((a) => a.sessionId));
-      const authorizedSessions = activeSessions
-        .filter((s) => authorizedSessionIds.has(s.id))
-        .map((s) => {
-          const assign = combinedMemAssignments.find((a) => a.sessionId === s.id);
-          const candidateIds = this.resolveSessionCandidateIds(s.id);
-          const memLockedRecord = Array.from(this.records.values()).find(
-            (r) => candidateIds.includes(r.sessionId || '') &&
-                   (r.clientId === resolvedUserId || r.clientId === clientId) &&
-                   r.isCompleted &&
-                   r.isLocked
-          );
+      const memCompletedRecords = Array.from(this.records.values()).filter(
+        (r) => (r.clientId === resolvedUserId || r.clientId === clientId) && r.isCompleted
+      );
 
-          const isLockedForToday = memLockedRecord?.isLocked ?? (assign?.isLocked && !assign?.unlockedAt);
-          const statusForToday = memLockedRecord ? 'COMPLETED' : (assign?.status || 'ASSIGNED');
+      const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+        ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
+        : getWeekdayFromISTDateString(todayIST);
 
-          return {
+      const available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string })[] = [];
+      const todayCandidates: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[] = [];
+      const pendingMap = new Map<string, StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string }>();
+
+      for (const assign of combinedMemAssignments) {
+        const s = activeSessions.find((sess) => sess.id === assign.sessionId);
+        if (!s) continue;
+        const candidateIds = this.resolveSessionCandidateIds(s.id);
+        const recurringDays = parseWeekdaysFromScheduleString(s.recurringSchedule);
+
+        const isScheduledToday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
+          ? (s.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase())
+          : isSessionScheduledForDate(s, assign, todayIST);
+
+        const isCompletedToday = memCompletedRecords.some((r) =>
+          (r.assignmentId && r.assignmentId === assign.id && r.scheduledDate === todayIST) ||
+          (candidateIds.includes(r.sessionId || '') && r.scheduledDate === todayIST)
+        );
+
+        const isLockedForToday = isCompletedToday || (assign.isLocked && !assign.unlockedAt && assign.scheduledDate === todayIST);
+        const statusForToday = isCompletedToday ? 'COMPLETED' : (assign.scheduledDate === todayIST ? (assign.status || 'ASSIGNED') : 'ASSIGNED');
+
+        if (isScheduledToday) {
+          todayCandidates.push({
             ...s,
-            scheduledDate: assign?.scheduledDate || todayIST,
-            assignmentId: assign?.id,
-            isLocked: isLockedForToday ?? false,
+            scheduledDate: todayIST,
+            assignmentId: assign.id,
+            isLocked: isLockedForToday,
             status: statusForToday,
-            isRecommended: assign?.isRecommended ?? false,
-          };
-        });
-
-      if (authorizedSessions.length > 0) {
-        const todayWeekday = simulatedDateOrDay && !simulatedDateOrDay.includes('-')
-          ? parseWeekdaysFromScheduleString(simulatedDateOrDay)[0] ?? getTodayISTWeekday()
-          : getTodayISTWeekday();
-        const getMemScheduledWeekday = (item: typeof authorizedSessions[0]) => {
-          const assign = combinedMemAssignments.find((a) => a.sessionId === item.id);
-          if (!assign) return null;
-          const recurringDays = parseWeekdaysFromScheduleString(item.recurringSchedule);
-          if (recurringDays.length > 0) return recurringDays[0];
-          if (assign.scheduledDate) return getWeekdayFromISTDateString(assign.scheduledDate);
-          return null;
-        };
-
-        const priorMemScheduled = authorizedSessions
-          .map((item) => ({ item, weekday: getMemScheduledWeekday(item) }))
-          .filter((x): x is { item: typeof authorizedSessions[0]; weekday: number } => x.weekday !== null && x.weekday < todayWeekday)
-          .sort((a, b) => a.weekday - b.weekday);
-
-        const priorMemIncomplete = priorMemScheduled.find((x) => !x.item.isLocked && x.item.status !== 'COMPLETED');
-
-        let recItem: (typeof authorizedSessions)[0] | undefined;
-
-        const todayMemItems = authorizedSessions.filter((item) => {
-          const assign = combinedMemAssignments.find((a) => a.sessionId === item.id);
-          if (!assign) return false;
-          if (simulatedDateOrDay && !simulatedDateOrDay.includes('-')) {
-            return (item.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase());
-          }
-          return isSessionScheduledForDate(item, assign, todayIST);
-        });
-
-        if (todayMemItems.length === 0) {
-          // REST DAY: No workout scheduled for today. Do not display another day's workout.
-          recItem = undefined;
-        } else if (priorMemIncomplete) {
-          recItem = priorMemIncomplete.item;
-          for (const s of authorizedSessions) {
-            const w = getMemScheduledWeekday(s);
-            if (w !== null && w > priorMemIncomplete.weekday && !s.isLocked && s.status !== 'COMPLETED') {
-              s.isLocked = true;
-              s.status = 'PREVIOUS_SESSION_REQUIRED';
-            }
-          }
-        } else {
-          recItem = todayMemItems.find((s) => s.isRecommended) || todayMemItems[0];
+            isRecommended: assign.isRecommended || true,
+          });
         }
 
-        return this.applyActiveSetOverlays({
-          recommended: recItem ? { ...recItem, isRecommended: true } : null,
-          available: authorizedSessions,
-        }, resolvedUserId);
+        // Pending checks
+        if (assign.scheduledDate && assign.scheduledDate < todayIST) {
+          const isCompletedInPast = memCompletedRecords.some((r) =>
+            (r.assignmentId && r.assignmentId === assign.id) ||
+            (candidateIds.includes(r.sessionId || '') && r.scheduledDate === assign.scheduledDate)
+          ) || (assign.status === 'COMPLETED' && assign.isLocked);
+
+          if (!isCompletedInPast) {
+            const key = `${s.id}_${assign.scheduledDate}`;
+            if (!pendingMap.has(key)) {
+              pendingMap.set(key, {
+                ...s,
+                scheduledDate: assign.scheduledDate,
+                assignmentId: assign.id,
+                isLocked: false,
+                status: 'PENDING',
+                isRecommended: false,
+              });
+            }
+          }
+        }
+
+        if (recurringDays.length > 0) {
+          for (const dayNum of recurringDays) {
+            if (dayNum < todayWeekday) {
+              const pastDate = getISTDateForWeekday(dayNum);
+              if (pastDate < todayIST) {
+                const isCompletedInPast = memCompletedRecords.some((r) =>
+                  candidateIds.includes(r.sessionId || '') && r.scheduledDate === pastDate
+                );
+                if (!isCompletedInPast) {
+                  const key = `${s.id}_${pastDate}`;
+                  if (!pendingMap.has(key)) {
+                    pendingMap.set(key, {
+                      ...s,
+                      scheduledDate: pastDate,
+                      assignmentId: assign.id,
+                      isLocked: false,
+                      status: 'PENDING',
+                      isRecommended: false,
+                    });
+                  }
+                }
+              }
+            }
+
+            const effectiveStartDate = assign.scheduledDate || toISTDateString(s.startDate) || toISTDateString(assign.assignedAt);
+            for (let w = 1; w <= 4; w++) {
+              const pastWeekDate = getOffsetISTDateString(-w * 7 + (dayNum - todayWeekday));
+              if (effectiveStartDate && pastWeekDate >= effectiveStartDate && pastWeekDate < todayIST) {
+                const isCompletedInPast = memCompletedRecords.some((r) =>
+                  candidateIds.includes(r.sessionId || '') && r.scheduledDate === pastWeekDate
+                );
+                const key = `${s.id}_${pastWeekDate}`;
+                if (!isCompletedInPast && !pendingMap.has(key)) {
+                  pendingMap.set(key, {
+                    ...s,
+                    scheduledDate: pastWeekDate,
+                    assignmentId: assign.id,
+                    isLocked: false,
+                    status: 'PENDING',
+                    isRecommended: false,
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        const wasCompletedInPast = Boolean(assign.scheduledDate && assign.scheduledDate < todayIST && (
+          memCompletedRecords.some((r) =>
+            (r.assignmentId && r.assignmentId === assign.id) ||
+            (candidateIds.includes(r.sessionId || '') && r.scheduledDate === assign.scheduledDate)
+          ) || (assign.status === 'COMPLETED' && assign.isLocked)
+        ));
+
+        if (wasCompletedInPast && !isScheduledToday) {
+          continue;
+        }
+
+        available.push({
+          ...s,
+          scheduledDate: isScheduledToday ? todayIST : (assign.scheduledDate || todayIST),
+          assignmentId: assign.id,
+          isLocked: isScheduledToday ? isLockedForToday : false,
+          status: isScheduledToday ? statusForToday : (assign.status || 'ASSIGNED'),
+          isRecommended: isScheduledToday && (assign.isRecommended || false),
+        });
       }
+
+      let todaySession: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string }) | null = null;
+      if (todayCandidates.length > 0) {
+        todaySession = todayCandidates.find((s) => s.isRecommended) || todayCandidates[0];
+      }
+
+      const pendingWorkouts = Array.from(pendingMap.values()).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+
+      return this.applyActiveSetOverlays({
+        todaySession: todaySession ? { ...todaySession, isRecommended: true } : null,
+        recommended: todaySession ? { ...todaySession, isRecommended: true } : null,
+        pendingWorkouts,
+        available,
+        isRestDay: todaySession === null,
+      }, resolvedUserId);
     }
 
     return {
+      todaySession: null,
       recommended: null,
+      pendingWorkouts: [],
       available: [],
+      isRestDay: true,
     };
   }
 
@@ -1764,7 +1907,12 @@ export class WorkoutRepository {
 
       if (data.sessionId && (data.isCompleted ?? true)) {
         for (const assign of this.assignments.values()) {
-          if ((assign.clientId === resolvedUserId || assign.clientId === clientId) && candidateIds.includes(assign.sessionId)) {
+          const matchesClient = (assign.clientId === resolvedUserId || assign.clientId === clientId);
+          const matchesSession = candidateIds.includes(assign.sessionId);
+          const matchesOccurrence = data.assignmentId
+            ? assign.id === data.assignmentId
+            : (assign.scheduledDate === scheduledDate || !assign.scheduledDate);
+          if (matchesClient && matchesSession && matchesOccurrence) {
             assign.status = 'COMPLETED';
             assign.completedAt = now;
             assign.isLocked = true;
@@ -1845,18 +1993,33 @@ export class WorkoutRepository {
           } catch (_) {}
 
           try {
-            await prisma.workoutAssignment.updateMany({
-              where: {
-                clientId: resolvedUserId,
-                sessionId: { in: candidateIds },
-              },
-              data: {
-                status: 'COMPLETED',
-                completedAt: new Date(),
-                isLocked: true,
-                lockedAt: new Date(),
-              },
-            });
+            if (data.assignmentId) {
+              await prisma.workoutAssignment.updateMany({
+                where: {
+                  id: data.assignmentId,
+                },
+                data: {
+                  status: 'COMPLETED',
+                  completedAt: new Date(),
+                  isLocked: true,
+                  lockedAt: new Date(),
+                },
+              });
+            } else {
+              await prisma.workoutAssignment.updateMany({
+                where: {
+                  clientId: resolvedUserId,
+                  sessionId: { in: candidateIds },
+                  scheduledDate,
+                },
+                data: {
+                  status: 'COMPLETED',
+                  completedAt: new Date(),
+                  isLocked: true,
+                  lockedAt: new Date(),
+                },
+              });
+            }
           } catch (_) {}
 
           // Clear in-memory active set records
@@ -2820,24 +2983,73 @@ export class WorkoutRepository {
   }
 
   private async applyActiveSetOverlays<T extends StoredWorkoutSession>(
-    result: { recommended: (T & { isRecommended: boolean }) | null; available: T[] },
+    result: {
+      todaySession?: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+      recommended: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+      pendingWorkouts?: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[];
+      available: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null })[];
+      isRestDay?: boolean;
+    },
     clientId: string
-  ): Promise<{ recommended: (T & { isRecommended: boolean }) | null; available: T[] }> {
-    const overlaidAvailable: T[] = [];
+  ): Promise<{
+    todaySession: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+    recommended: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
+    pendingWorkouts: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[];
+    available: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null })[];
+    isRestDay: boolean;
+  }> {
+    const overlaidAvailable: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string })[] = [];
     for (const s of result.available) {
       const withOverrides = await this.applyClientOverridesToSession(s, clientId);
       const overlaid = await this.overlayActiveSetsOnSession(withOverrides, clientId);
-      overlaidAvailable.push({ ...withOverrides, ...overlaid } as T);
+      overlaidAvailable.push({
+        ...withOverrides,
+        ...overlaid,
+        isRecommended: s.isRecommended,
+        isLocked: s.isLocked,
+        assignmentId: s.assignmentId,
+        scheduledDate: s.scheduledDate,
+        status: s.status,
+      } as (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string }));
     }
-    let overlaidRec: (T & { isRecommended: boolean }) | null = null;
+    let overlaidRec: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string }) | null = null;
     if (result.recommended) {
       const withOverrides = await this.applyClientOverridesToSession(result.recommended, clientId);
       const baseRec = await this.overlayActiveSetsOnSession(withOverrides, clientId);
-      overlaidRec = { ...withOverrides, ...baseRec, isRecommended: result.recommended.isRecommended } as (T & { isRecommended: boolean });
+      overlaidRec = {
+        ...withOverrides,
+        ...baseRec,
+        isRecommended: result.recommended.isRecommended,
+        isLocked: result.recommended.isLocked,
+        assignmentId: result.recommended.assignmentId,
+        scheduledDate: result.recommended.scheduledDate,
+        status: result.recommended.status,
+      } as (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string });
     }
+
+    const overlaidPending: (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[] = [];
+    if (result.pendingWorkouts) {
+      for (const p of result.pendingWorkouts) {
+        const withOverrides = await this.applyClientOverridesToSession(p, clientId);
+        const overlaid = await this.overlayActiveSetsOnSession(withOverrides, clientId);
+        overlaidPending.push({
+          ...withOverrides,
+          ...overlaid,
+          scheduledDate: p.scheduledDate,
+          assignmentId: p.assignmentId,
+          isRecommended: p.isRecommended,
+          isLocked: p.isLocked,
+          status: p.status,
+        } as (T & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string }));
+      }
+    }
+
     return {
+      todaySession: overlaidRec,
       recommended: overlaidRec,
+      pendingWorkouts: overlaidPending,
       available: overlaidAvailable,
+      isRestDay: overlaidRec === null,
     };
   }
 
@@ -3137,7 +3349,7 @@ export class WorkoutRepository {
                   sessionId: session.id,
                   clientId: rCid,
                   assignedById: authorId,
-                  isRecommended: isToday || dayIndex === 1,
+                  isRecommended: isToday,
                   active: true,
                   scheduledDate,
                   status: 'ASSIGNED',
@@ -3151,7 +3363,7 @@ export class WorkoutRepository {
             sessionId: session.id,
             clientId: rCid,
             assignedById: authorId,
-            isRecommended: isToday || dayIndex === 1,
+            isRecommended: isToday,
             active: true,
             scheduledDate,
             status: 'ASSIGNED',
