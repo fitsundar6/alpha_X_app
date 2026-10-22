@@ -367,43 +367,43 @@ if (!isTestRun && !isVercel && isDirectRun) {
     if (env.ONESIGNAL_APP_ID && env.ONESIGNAL_REST_API_KEY) {
       // 1. 7:30 AM — Morning Readiness Check-in
       cron.schedule('30 7 * * *', () => {
-        console.log('[CRON] 7:30 AM — Starting AI Morning Readiness Check-in sweep...');
+        console.log('[CRON] 7:30 AM IST — Starting AI Morning Readiness Check-in sweep...');
         aiNotificationEngine.runMorningCheckInSweep().catch((err) =>
           console.error('[CRON] Morning check-in sweep error:', err?.message)
         );
-      });
+      }, { timezone: 'Asia/Kolkata' });
 
       // 2. 10:30 AM — Missed Workout Auto-Regulation Sweep
       cron.schedule('30 10 * * *', () => {
-        console.log('[CRON] 10:30 AM — Starting AI Missed Workout Auto-Regulation sweep...');
+        console.log('[CRON] 10:30 AM IST — Starting AI Missed Workout Auto-Regulation sweep...');
         aiNotificationEngine.runMissedWorkoutSweep().catch((err) =>
           console.error('[CRON] Missed workout sweep error:', err?.message)
         );
-      });
+      }, { timezone: 'Asia/Kolkata' });
 
       // 3. 8:30 PM — Evening Accountability & Recovery Sleep Sweep
       cron.schedule('30 20 * * *', () => {
-        console.log('[CRON] 8:30 PM — Starting AI Evening Accountability sweep...');
+        console.log('[CRON] 8:30 PM IST — Starting AI Evening Accountability sweep...');
         aiNotificationEngine.runEveningCheckInSweep().catch((err) =>
           console.error('[CRON] Evening check-in sweep error:', err?.message)
         );
-      });
+      }, { timezone: 'Asia/Kolkata' });
 
       // 4. 9:00 AM — Daily Client Automation & Membership Expiry Sweep (Payment Reminders, Expiry Alerts)
       cron.schedule('0 9 * * *', () => {
-        console.log('[CRON] 9:00 AM — Starting Daily Client Automation & Membership Expiry sweep...');
+        console.log('[CRON] 9:00 AM IST — Starting Daily Client Automation & Membership Expiry sweep...');
         automationService.runDailyAutomationCycle().catch((err) =>
           console.error('[CRON] Daily automation cycle error:', err?.message)
         );
-      });
+      }, { timezone: 'Asia/Kolkata' });
 
       // 5. 8:00 PM Sunday — "Spotify-Wrapped for Lifting" Alpha Telemetry Report
       cron.schedule('0 20 * * 0', () => {
-        console.log('[CRON] Sunday 8:00 PM — Starting Sunday Alpha Telemetry sweep...');
+        console.log('[CRON] Sunday 8:00 PM IST — Starting Sunday Alpha Telemetry sweep...');
         telemetryService.dispatchSundayTelemetrySweep().catch((err) =>
           console.error('[CRON] Sunday Telemetry sweep error:', err?.message)
         );
-      });
+      }, { timezone: 'Asia/Kolkata' });
 
       console.log('🔔 Proactive AI Coach & Sunday Telemetry: Autonomous Push Crons active (7:30 AM, 9:00 AM, 10:30 AM, 8:30 PM, Sun 8:00 PM)');
     } else {

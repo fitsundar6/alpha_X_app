@@ -39,6 +39,8 @@ import 'features/workout_summary/screens/workout_summary_demo_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Load persisted custom server URL before any service initialization
+  await ApiConfig.initialize();
   await AuthService().initialize();
   await ClientThemeService().initialize();
 
