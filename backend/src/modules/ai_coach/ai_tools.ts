@@ -1188,6 +1188,8 @@ export class AiTools {
           for (let i = 0; i < dayExercises.length; i++) {
             const ex = dayExercises[i];
             const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
+            const setType = (ex.setType && typeof ex.setType === 'string') ? ex.setType : (ex.isDropSet ? 'DROP_SET' : 'WORKING');
+            const supersetTag = ex.supersetTag || null;
             const sessionExercise = await prisma.workoutSessionExercise.create({
               data: {
                 sessionId: session.id,
@@ -1195,6 +1197,8 @@ export class AiTools {
                 exerciseName,
                 category: ex.category || workoutType || 'Strength',
                 orderIndex: i,
+                supersetTag,
+                setType,
                 numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
                 targetReps: String(ex.targetReps || ex.reps || '8-12'),
                 targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
@@ -1212,12 +1216,13 @@ export class AiTools {
                 data: {
                   sessionExerciseId: sessionExercise.id,
                   setNumber: s,
-                  setType: 'WORKING',
+                  setType,
                   targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
                   targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
                   targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
                   targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
                   targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+                  tempo: ex.tempo || '3-1-1-0',
                 },
               });
             }
@@ -1230,7 +1235,7 @@ export class AiTools {
                 sessionId: session.id,
                 clientId: targetUserId,
                 assignedById: adminId,
-                isRecommended: isToday || dayIdx === 0,
+                isRecommended: isToday,
                 active: true,
                 scheduledDate: dayScheduledDate,
                 status: 'ASSIGNED',
@@ -1274,6 +1279,8 @@ export class AiTools {
         for (let i = 0; i < exercisesList.length; i++) {
           const ex = exercisesList[i];
           const exerciseName = ex.exerciseName || ex.name || 'Custom Exercise';
+          const setType = (ex.setType && typeof ex.setType === 'string') ? ex.setType : (ex.isDropSet ? 'DROP_SET' : 'WORKING');
+          const supersetTag = ex.supersetTag || null;
           const sessionExercise = await prisma.workoutSessionExercise.create({
             data: {
               sessionId: session.id,
@@ -1281,6 +1288,8 @@ export class AiTools {
               exerciseName,
               category: ex.category || 'Strength',
               orderIndex: i,
+              supersetTag,
+              setType,
               numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
               targetReps: String(ex.targetReps || ex.reps || '8-12'),
               targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
@@ -1298,12 +1307,13 @@ export class AiTools {
               data: {
                 sessionExerciseId: sessionExercise.id,
                 setNumber: s,
-                setType: 'WORKING',
+                setType,
                 targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
                 targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
                 targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
                 targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
                 targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
+                tempo: ex.tempo || '3-1-1-0',
               },
             });
           }
@@ -1470,11 +1480,13 @@ export class AiTools {
     }
 
     const newTitle = editedPayload?.title || editedPayload?.planTitle || proposal.title;
+    const newSummary = editedPayload?.summary || editedPayload?.description || proposal.summary;
 
     const updated = await prisma.aIProposal.update({
       where: { id: proposalId },
       data: {
         title: newTitle,
+        summary: newSummary,
         status: 'EDITED',
         finalDataJson: JSON.stringify(editedPayload),
       },

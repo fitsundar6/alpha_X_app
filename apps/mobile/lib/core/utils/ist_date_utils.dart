@@ -110,6 +110,24 @@ class IstDateUtils {
     return getWeekdayFromISTDateString(getTodayISTString());
   }
 
+  /// Returns the `yyyy-MM-dd` date in the current IST week for a given weekday (1 = Monday ... 7 = Sunday)
+  static String getISTDateForWeekday(int targetWeekday) {
+    final todayStr = getTodayISTString();
+    final todayWeekday = getWeekdayFromISTDateString(todayStr);
+    final diff = targetWeekday - todayWeekday;
+    final parts = todayStr.split('-');
+    if (parts.length != 3) return todayStr;
+    final year = int.tryParse(parts[0]) ?? 2026;
+    final month = int.tryParse(parts[1]) ?? 1;
+    final day = int.tryParse(parts[2]) ?? 1;
+    final baseDate = DateTime.utc(year, month, day);
+    final targetDate = baseDate.add(Duration(days: diff));
+    final y = targetDate.year.toString().padLeft(4, '0');
+    final m = targetDate.month.toString().padLeft(2, '0');
+    final d = targetDate.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
   /// Parses days of week from schedule strings like "Monday", "Monday, Thursday", "Mon, Wed, Fri", etc.
   /// Returns sorted unique list of ISO weekday numbers (1 = Mon ... 7 = Sun).
   static List<int> parseWeekdaysFromScheduleString(String? scheduleStr) {

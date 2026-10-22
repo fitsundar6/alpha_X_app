@@ -1065,16 +1065,15 @@ Color getSplitBadgeColor(String cat) {
   return AppColors.primaryRed;
 }
 
-typedef WorkoutProposalDetailSheet = _ProposalDetailSheet;
-
 /// Bottom Sheet for In-depth Proposal Inspection and Inline Editing.
-class _ProposalDetailSheet extends StatefulWidget {
+class WorkoutProposalDetailSheet extends StatefulWidget {
   final AiProposal proposal;
   final WorkoutRepository workoutRepository;
   final AiCoachRepository aiCoachRepository;
   final VoidCallback onProposalUpdated;
 
-  const _ProposalDetailSheet({
+  const WorkoutProposalDetailSheet({
+    super.key,
     required this.proposal,
     required this.workoutRepository,
     required this.aiCoachRepository,
@@ -1082,10 +1081,12 @@ class _ProposalDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<_ProposalDetailSheet> createState() => _ProposalDetailSheetState();
+  State<WorkoutProposalDetailSheet> createState() => WorkoutProposalDetailSheetState();
 }
 
-class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
+typedef _ProposalDetailSheet = WorkoutProposalDetailSheet;
+
+class WorkoutProposalDetailSheetState extends State<WorkoutProposalDetailSheet> {
   late TextEditingController _titleController;
   late TextEditingController _summaryController;
   late TextEditingController _targetMuscleController;
@@ -1216,26 +1217,70 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
 
   void _replaceExercise(int exIdx) async {
     if (exIdx < 0 || exIdx >= _editableExercises.length) return;
-    final picked = await ExercisePickerDialog.show(context);
+    final oldEx = _editableExercises[exIdx];
+    final currentExId = oldEx['exerciseId']?.toString() ?? oldEx['id']?.toString();
+    final currentName = (oldEx['exerciseName'] ?? oldEx['name'])?.toString() ?? '';
+
+    final picked = await ExercisePickerDialog.show(
+      context,
+      initialCategory: oldEx['category']?.toString(),
+      excludedExerciseId: currentExId,
+    );
     if (picked != null) {
+      if (picked.id == currentExId ||
+          picked.displayName.toLowerCase().trim() == currentName.toLowerCase().trim()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Selected exercise is identical to current exercise. Please choose a different exercise to replace.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
       setState(() {
-        final oldEx = _editableExercises[exIdx];
         _editableExercises[exIdx] = {
           ...oldEx,
           'exerciseId': picked.id,
+          'id': picked.id,
           'exerciseName': picked.displayName,
+          'name': picked.displayName,
           'category': picked.category,
+          'primaryMuscles': picked.primaryMusclesDisplay,
+          'secondaryMuscles': picked.secondaryMusclesDisplay,
           'notes': (oldEx['notes'] != null && oldEx['notes'].toString().isNotEmpty)
               ? oldEx['notes']
+              : picked.defaultTrainerNote,
+          'adminInstruction': (oldEx['adminInstruction'] != null &&
+                  oldEx['adminInstruction'].toString().isNotEmpty)
+              ? oldEx['adminInstruction']
               : picked.defaultTrainerNote,
         };
         _isDirty = true;
       });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Replaced with "${picked.displayName}"'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
     }
   }
 
+  void _onReorderExercise(int oldIdx, int newIdx) {
+    if (newIdx > oldIdx) newIdx -= 1;
+    if (newIdx < 0 || newIdx >= _editableExercises.length || oldIdx < 0 || oldIdx >= _editableExercises.length) return;
+    setState(() {
+      final item = _editableExercises.removeAt(oldIdx);
+      _editableExercises.insert(newIdx, item);
+      _isDirty = true;
+    });
+  }
+
   void _moveExercise(int oldIdx, int newIdx) {
-    if (newIdx < 0 || newIdx >= _editableExercises.length) return;
+    if (newIdx < 0 || newIdx >= _editableExercises.length || oldIdx < 0 || oldIdx >= _editableExercises.length) return;
     setState(() {
       final item = _editableExercises.removeAt(oldIdx);
       _editableExercises.insert(newIdx, item);
@@ -1258,7 +1303,9 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
         final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
         dayExList.add({
           'exerciseId': picked.id,
+          'id': picked.id,
           'exerciseName': picked.displayName,
+          'name': picked.displayName,
           'sets': 3,
           'targetReps': '8-12',
           'targetWeight': 20.0,
@@ -1267,6 +1314,8 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
           'targetRpe': 8.0,
           'tempo': '3-1-1-0',
           'category': picked.category,
+          'primaryMuscles': picked.primaryMusclesDisplay,
+          'secondaryMuscles': picked.secondaryMusclesDisplay,
           'notes': picked.defaultTrainerNote,
         });
         _isDirty = true;
@@ -1278,34 +1327,104 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
     final day = _editableDays[dayIdx];
     final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
     if (exIdx < 0 || exIdx >= dayExList.length) return;
+    final oldEx = dayExList[exIdx];
+    final currentExId = oldEx['exerciseId']?.toString() ?? oldEx['id']?.toString();
+    final currentName = (oldEx['exerciseName'] ?? oldEx['name'])?.toString() ?? '';
 
-    final picked = await ExercisePickerDialog.show(context);
+    final picked = await ExercisePickerDialog.show(
+      context,
+      initialCategory: oldEx['category']?.toString(),
+      excludedExerciseId: currentExId,
+    );
     if (picked != null) {
+      if (picked.id == currentExId ||
+          picked.displayName.toLowerCase().trim() == currentName.toLowerCase().trim()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Selected exercise is identical to current exercise. Please choose a different exercise to replace.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
       setState(() {
-        final oldEx = dayExList[exIdx];
         dayExList[exIdx] = {
           ...oldEx,
           'exerciseId': picked.id,
+          'id': picked.id,
           'exerciseName': picked.displayName,
+          'name': picked.displayName,
           'category': picked.category,
+          'primaryMuscles': picked.primaryMusclesDisplay,
+          'secondaryMuscles': picked.secondaryMusclesDisplay,
           'notes': (oldEx['notes'] != null && oldEx['notes'].toString().isNotEmpty)
               ? oldEx['notes']
+              : picked.defaultTrainerNote,
+          'adminInstruction': (oldEx['adminInstruction'] != null &&
+                  oldEx['adminInstruction'].toString().isNotEmpty)
+              ? oldEx['adminInstruction']
               : picked.defaultTrainerNote,
         };
         _isDirty = true;
       });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Replaced with "${picked.displayName}"'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
     }
   }
 
-  void _moveExerciseInDay(int dayIdx, int oldIdx, int newIdx) {
+  void _onReorderExerciseInDay(int dayIdx, int oldIdx, int newIdx) {
+    if (newIdx > oldIdx) newIdx -= 1;
     final day = _editableDays[dayIdx];
     final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
-    if (newIdx < 0 || newIdx >= dayExList.length) return;
+    if (newIdx < 0 || newIdx >= dayExList.length || oldIdx < 0 || oldIdx >= dayExList.length) return;
     setState(() {
       final item = dayExList.removeAt(oldIdx);
       dayExList.insert(newIdx, item);
       _isDirty = true;
     });
+  }
+
+  void _moveExerciseInDay(int dayIdx, int oldIdx, int newIdx) {
+    final day = _editableDays[dayIdx];
+    final dayExList = (day['exercises'] as List<Map<String, dynamic>>);
+    if (newIdx < 0 || newIdx >= dayExList.length || oldIdx < 0 || oldIdx >= dayExList.length) return;
+    setState(() {
+      final item = dayExList.removeAt(oldIdx);
+      dayExList.insert(newIdx, item);
+      _isDirty = true;
+    });
+  }
+
+  Widget _reorderProxyDecorator(Widget child, int index, Animation<double> animation) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (BuildContext context, Widget? child) {
+        final animValue = Curves.easeInOut.transform(animation.value);
+        final elevation = 4.0 + (animValue * 6.0);
+        return Material(
+          elevation: elevation,
+          color: Colors.transparent,
+          shadowColor: AppColors.primaryRed.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primaryRed, width: 2),
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
   }
 
   void _removeExerciseFromDay(int dayIdx, int exIdx) {
@@ -1387,6 +1506,40 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
           sessionToEdit: draftSession,
           clientIdToAssign: widget.proposal.clientId,
           startInSplitMode: false,
+          onSessionSaved: (savedSession) {
+            setState(() {
+              final day = _editableDays[dayIdx];
+              day['sessionTitle'] = savedSession.title;
+              day['title'] = savedSession.title;
+              day['targetMuscleGroup'] = savedSession.targetMuscleGroup;
+              day['estimatedDurationMinutes'] = savedSession.estimatedDurationMinutes;
+              day['exercises'] = savedSession.exercises.asMap().entries.map((entry) {
+                final e = entry.value;
+                final firstSet = e.sets.isNotEmpty ? e.sets.first : null;
+                return {
+                  'exerciseId': e.exerciseId,
+                  'id': e.exerciseId,
+                  'exerciseName': e.exerciseName,
+                  'name': e.exerciseName,
+                  'category': e.category,
+                  'primaryMuscles': e.primaryMusclesDisplay,
+                  'secondaryMuscles': e.secondaryMusclesDisplay,
+                  'sets': e.sets.length,
+                  'targetReps': firstSet != null ? '${firstSet.targetRepsMin}-${firstSet.targetRepsMax}' : '8-12',
+                  'targetWeight': firstSet?.targetWeight ?? 20.0,
+                  'weight': firstSet?.targetWeight ?? 20.0,
+                  'restSeconds': e.restSeconds,
+                  'targetRir': firstSet?.targetRir ?? 2,
+                  'targetRpe': firstSet?.targetRpe ?? 8.0,
+                  'tempo': e.tempo,
+                  'notes': e.trainerNote,
+                  'supersetTag': e.supersetTag,
+                };
+              }).toList();
+              _isDirty = true;
+            });
+            _saveModifications();
+          },
           onSaved: () {},
         ),
       ),
@@ -1584,11 +1737,13 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                     children: [
                       const Icon(Icons.fitness_center, size: 18, color: AppColors.primaryRed),
                       const SizedBox(width: 8),
-                      Text(
-                        'PRESCRIBED EXERCISES (${_editableExercises.length})',
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                      Expanded(
+                        child: Text(
+                          'PRESCRIBED EXERCISES (${_editableExercises.length})',
+                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Spacer(),
                       TextButton.icon(
                         style: TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
                         icon: const Icon(Icons.add, size: 16),
@@ -1600,11 +1755,34 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                   const SizedBox(height: 8),
 
                   // Exercises List
-                  ..._editableExercises.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final ex = entry.value;
-                    return _buildExerciseEditCard(idx, ex);
-                  }),
+                  if (_editableExercises.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Text(
+                          'No exercises prescribed. Tap + Add Exercise to build.',
+                          style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  else
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: _editableExercises.length,
+                      onReorder: _onReorderExercise,
+                      proxyDecorator: _reorderProxyDecorator,
+                      itemBuilder: (ctx, idx) {
+                        final ex = _editableExercises[idx];
+                        final stableId = ex['id'] ?? ex['exerciseId'] ?? 'prop_ex_$idx';
+                        return _buildExerciseEditCard(
+                          idx,
+                          ex,
+                          key: ValueKey('prop_single_ex_${stableId}_$idx'),
+                        );
+                      },
+                    ),
                 ],
               ],
             ),
@@ -1642,9 +1820,15 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                     ),
                     icon: const Icon(Icons.check_circle_outline, size: 18),
                     label: const Text('ASSIGN WORKOUT', style: TextStyle(fontWeight: FontWeight.w900)),
-                    onPressed: () {
+                    onPressed: () async {
+                      if (_isDirty) {
+                        await _saveModifications();
+                      }
+                      if (!mounted) return;
+                      // ignore: use_build_context_synchronously
                       Navigator.of(context).pop();
                       AdminProposalAssignmentDialog.show(
+                        // ignore: use_build_context_synchronously
                         context: context,
                         proposal: widget.proposal,
                         aiCoachRepository: widget.aiCoachRepository,
@@ -1696,16 +1880,51 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: splitColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: splitColor),
-                      ),
-                      child: Text(
-                        dayName.toString(),
-                        style: TextStyle(color: splitColor, fontSize: 11, fontWeight: FontWeight.w900),
+                    PopupMenuButton<String>(
+                      tooltip: 'Change workout day',
+                      initialValue: dayName.toString(),
+                      onSelected: (val) {
+                        setState(() {
+                          day['day'] = val;
+                          day['dayName'] = val;
+                          day['weekday'] = val;
+                          _isDirty = true;
+                        });
+                      },
+                      itemBuilder: (ctx) => [
+                        'Monday',
+                        'Tuesday',
+                        'Wednesday',
+                        'Thursday',
+                        'Friday',
+                        'Saturday',
+                        'Sunday',
+                        'Day 1',
+                        'Day 2',
+                        'Day 3',
+                        'Day 4',
+                        'Day 5',
+                        'Day 6',
+                        'Day 7',
+                      ].map((d) => PopupMenuItem(value: d, child: Text(d))).toList(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: splitColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: splitColor),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              dayName.toString(),
+                              style: TextStyle(color: splitColor, fontSize: 11, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.arrow_drop_down, size: 12, color: splitColor),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1853,21 +2072,49 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
           // Day Exercises
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            child: Column(
-              children: exercises.asMap().entries.map((exEntry) {
-                final exIdx = exEntry.key;
-                final ex = exEntry.value;
-                return _buildExerciseEditCardForDay(dayIdx, exIdx, ex, exercises.length);
-              }).toList(),
-            ),
+            child: exercises.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    child: Center(
+                      child: Text(
+                        'No exercises prescribed for this session. Tap + Add Exercise.',
+                        style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                      ),
+                    ),
+                  )
+                : ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: exercises.length,
+                    onReorder: (oldIdx, newIdx) =>
+                        _onReorderExerciseInDay(dayIdx, oldIdx, newIdx),
+                    proxyDecorator: _reorderProxyDecorator,
+                    itemBuilder: (ctx, exIdx) {
+                      final ex = exercises[exIdx];
+                      final stableId =
+                          ex['id'] ?? ex['exerciseId'] ?? 'day_${dayIdx}_$exIdx';
+                      return _buildExerciseEditCardForDay(
+                        dayIdx,
+                        exIdx,
+                        ex,
+                        exercises.length,
+                        key: ValueKey('day_${dayIdx}_ex_${stableId}_$exIdx'),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildExerciseEditCardForDay(int dayIdx, int exIdx, Map<String, dynamic> ex, int totalCount) {
+  Widget _buildExerciseEditCardForDay(
+      int dayIdx, int exIdx, Map<String, dynamic> ex, int totalCount,
+      {Key? key}) {
+    final stableId = ex['id'] ?? ex['exerciseId'] ?? 'day_${dayIdx}_$exIdx';
     return Container(
+      key: key ?? ValueKey('day_${dayIdx}_ex_${stableId}_$exIdx'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1880,12 +2127,35 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
         children: [
           Row(
             children: [
-              Text('${exIdx + 1}.', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+              ReorderableDragStartListener(
+                index: exIdx,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: const Icon(
+                      Icons.drag_indicator,
+                      color: AppColors.textTertiary,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+              Text('${exIdx + 1}.',
+                  style: const TextStyle(
+                      color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
               Expanded(
                 child: TextFormField(
-                  initialValue: ex['exerciseName']?.toString() ?? ex['name']?.toString() ?? '',
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  key: ValueKey(
+                      'input_day_name_${dayIdx}_${exIdx}_${ex['exerciseId'] ?? ex['id']}'),
+                  initialValue: ex['exerciseName']?.toString() ??
+                      ex['name']?.toString() ??
+                      '',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
                   decoration: const InputDecoration(
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 2),
@@ -1895,28 +2165,36 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                   ),
                   onChanged: (val) {
                     ex['exerciseName'] = val;
+                    ex['name'] = val;
                     setState(() => _isDirty = true);
                   },
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.arrow_upward, size: 16, color: AppColors.textSecondary),
+                icon: const Icon(Icons.arrow_upward,
+                    size: 16, color: AppColors.textSecondary),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Move Up',
-                onPressed: exIdx > 0 ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx - 1) : null,
+                onPressed: exIdx > 0
+                    ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx - 1)
+                    : null,
               ),
               const SizedBox(width: 6),
               IconButton(
-                icon: const Icon(Icons.arrow_downward, size: 16, color: AppColors.textSecondary),
+                icon: const Icon(Icons.arrow_downward,
+                    size: 16, color: AppColors.textSecondary),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Move Down',
-                onPressed: exIdx < totalCount - 1 ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx + 1) : null,
+                onPressed: exIdx < totalCount - 1
+                    ? () => _moveExerciseInDay(dayIdx, exIdx, exIdx + 1)
+                    : null,
               ),
               const SizedBox(width: 6),
               IconButton(
-                icon: const Icon(Icons.swap_horiz, size: 18, color: AppColors.primaryRed),
+                icon: const Icon(Icons.swap_horiz,
+                    size: 18, color: AppColors.primaryRed),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Replace Exercise from Library',
@@ -1924,7 +2202,8 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               ),
               const SizedBox(width: 6),
               IconButton(
-                icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.error),
+                icon: const Icon(Icons.delete_outline,
+                    size: 16, color: AppColors.error),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Remove Exercise',
@@ -1980,13 +2259,66 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
               }),
             ],
           ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              FilterChip(
+                label: Text(
+                  (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? '🔥 DROP SET' : 'WORKING SET',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? Colors.amberAccent : Colors.white70,
+                  ),
+                ),
+                selected: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET'),
+                selectedColor: Colors.amber.withOpacity(0.25),
+                backgroundColor: AppColors.surface,
+                side: BorderSide(
+                  color: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? Colors.amberAccent : AppColors.border,
+                ),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                onSelected: (selected) {
+                  setState(() {
+                    ex['isDropSet'] = selected;
+                    ex['setType'] = selected ? 'DROP_SET' : 'WORKING';
+                    _isDirty = true;
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: ex['notes']?.toString() ?? ex['adminInstruction']?.toString() ?? '',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                    hintText: 'Trainer coaching note / instruction...',
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                  ),
+                  onChanged: (val) {
+                    ex['notes'] = val;
+                    ex['adminInstruction'] = val;
+                    setState(() => _isDirty = true);
+                  },
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildExerciseEditCard(int index, Map<String, dynamic> ex) {
+  Widget _buildExerciseEditCard(int index, Map<String, dynamic> ex, {Key? key}) {
+    final stableId = ex['id'] ?? ex['exerciseId'] ?? 'prop_ex_$index';
     return Container(
+      key: key ?? ValueKey('prop_single_ex_${stableId}_$index'),
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1999,10 +2331,25 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
         children: [
           Row(
             children: [
+              ReorderableDragStartListener(
+                index: index,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: const Icon(
+                      Icons.drag_indicator,
+                      color: AppColors.textTertiary,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
               Text('${index + 1}.', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
               Expanded(
                 child: TextFormField(
+                  key: ValueKey('input_single_name_${index}_${ex['exerciseId'] ?? ex['id']}'),
                   initialValue: ex['exerciseName']?.toString() ?? ex['name']?.toString() ?? '',
                   style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                   decoration: const InputDecoration(
@@ -2014,6 +2361,7 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                   ),
                   onChanged: (val) {
                     ex['exerciseName'] = val;
+                    ex['name'] = val;
                     setState(() => _isDirty = true);
                   },
                 ),
@@ -2097,6 +2445,57 @@ class _ProposalDetailSheetState extends State<_ProposalDetailSheet> {
                 ex['supersetTag'] = v.trim().isEmpty ? null : v.trim().toUpperCase();
                 setState(() => _isDirty = true);
               }),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              FilterChip(
+                label: Text(
+                  (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? '🔥 DROP SET' : 'WORKING SET',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? Colors.amberAccent : Colors.white70,
+                  ),
+                ),
+                selected: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET'),
+                selectedColor: Colors.amber.withOpacity(0.25),
+                backgroundColor: AppColors.surface,
+                side: BorderSide(
+                  color: (ex['isDropSet'] == true || ex['setType'] == 'DROP_SET') ? Colors.amberAccent : AppColors.border,
+                ),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                onSelected: (selected) {
+                  setState(() {
+                    ex['isDropSet'] = selected;
+                    ex['setType'] = selected ? 'DROP_SET' : 'WORKING';
+                    _isDirty = true;
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  initialValue: ex['notes']?.toString() ?? ex['adminInstruction']?.toString() ?? '',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+                    hintText: 'Trainer coaching note / instruction...',
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                  ),
+                  onChanged: (val) {
+                    ex['notes'] = val;
+                    ex['adminInstruction'] = val;
+                    setState(() => _isDirty = true);
+                  },
+                ),
+              ),
             ],
           ),
         ],
