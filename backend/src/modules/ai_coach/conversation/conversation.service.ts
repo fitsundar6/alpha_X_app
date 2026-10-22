@@ -52,6 +52,55 @@ export class ConversationService {
   }
 
   /**
+   * Resolves a conversation for the authenticated Admin with asynchronous database hydration.
+   * Ensures conversation context persists seamlessly across ephemeral Vercel serverless container recycles.
+   */
+  public async resolveConversationAsync(
+    adminId: string,
+    conversationId?: string
+  ): Promise<{ conversation: Conversation; isNew: boolean }> {
+    const memory = this.store.resolveForAdmin(adminId, conversationId);
+    if (!memory.isNew || !conversationId) {
+      return memory;
+    }
+
+    try {
+      if ((prisma as any).aIConversation?.findUnique) {
+        const cleanId = conversationId.trim();
+        const dbConv = await (prisma as any).aIConversation.findUnique({
+          where: { id: cleanId },
+          include: {
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              take: 50,
+            },
+          },
+        });
+
+        if (dbConv && dbConv.adminId === adminId) {
+          const restored: Conversation = {
+            id: dbConv.id,
+            adminId: dbConv.adminId,
+            createdAt: dbConv.createdAt.toISOString(),
+            updatedAt: dbConv.updatedAt.toISOString(),
+            messages: (dbConv.messages || []).map((m: any) => ({
+              id: m.id,
+              role: m.sender === 'ADMIN' ? 'user' : 'assistant',
+              content: m.content,
+              timestamp: m.createdAt.toISOString(),
+              metadata: m.metadataJson ? JSON.parse(m.metadataJson) : undefined,
+            })),
+          };
+          this.store.save(restored);
+          return { conversation: restored, isNew: false };
+        }
+      }
+    } catch (_) {}
+
+    return memory;
+  }
+
+  /**
    * Extracts bounded multi-turn conversation history for LLM context injection.
    *
    * SECURITY ENFORCEMENT:

@@ -45,8 +45,8 @@ router.post('/chat', async (req: Request, res: Response) => {
   const adminId = adminUser.id || defaultAdminId;
   const requestId = `req_ai_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-  // 2. Resolve or initialize isolated conversation for the authenticated Admin
-  const { conversation } = conversationService.resolveConversation(adminId, conversationId);
+  // 2. Resolve or initialize isolated conversation for the authenticated Admin (with DB hydration)
+  const { conversation } = await conversationService.resolveConversationAsync(adminId, conversationId);
 
   console.log(`[DEBUG CHAT] Incoming user message: "${cleanMessage}", conversationId: "${conversation.id}", selectedClientId: "${selectedClientId || 'none'}"`);
 
@@ -307,7 +307,7 @@ router.post('/clear-client', async (req: Request, res: Response) => {
   const adminUser = (req as any).user || {};
   const adminId = adminUser.id || defaultAdminId;
 
-  const { conversation } = conversationService.resolveConversation(adminId, conversationId);
+  const { conversation } = await conversationService.resolveConversationAsync(adminId, conversationId);
   clientContextService.clearClient(conversation);
 
   sendSuccess(res, {
@@ -331,7 +331,7 @@ router.post('/select-client', async (req: Request, res: Response) => {
   const adminUser = (req as any).user || {};
   const adminId = adminUser.id || defaultAdminId;
 
-  const { conversation } = conversationService.resolveConversation(adminId, conversationId);
+  const { conversation } = await conversationService.resolveConversationAsync(adminId, conversationId);
   const resolveResult = await clientContextService.resolveAndSetClient(conversation, clientId.trim());
 
   if (resolveResult.status === 'AMBIGUOUS') {
