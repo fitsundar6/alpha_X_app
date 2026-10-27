@@ -73,3 +73,16 @@ Thumbs.db
 *.iml
 *.ipr
 *.iws
+
+# AI Agent & Local Development Tooling (Local-only GSD harness)
+.agent/
+.agents/
+.gemini/
+.gsd/
+/adapters/
+/scripts/
+/GSD-STYLE.md
+/PROJECT_RULES.md
+/VERSION
+/model_capabilities.yaml
+/apps/mobile/devtools_options.yaml
