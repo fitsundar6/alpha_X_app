@@ -326,7 +326,6 @@ void main() {
       const clientId = 'client_athlete_release_test';
       const clientName = 'Arjun Verma';
       const adminId = 'admin_coach_vikram';
-      const reason = 'Client accidentally hit complete after warm-up set. Session reopened.';
 
       // Monday 10:00 AM IST
       IstDateUtils.setDateProviderForTesting(() => DateTime.utc(2026, 10, 26, 4, 30, 0));
