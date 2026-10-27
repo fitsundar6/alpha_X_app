@@ -575,15 +575,6 @@ class _AdminCreateEditSessionScreenState
     });
   }
 
-  void _moveExercise(int oldIndex, int newIndex) {
-    if (newIndex < 0 || newIndex >= _exercises.length) return;
-    setState(() {
-      final item = _exercises.removeAt(oldIndex);
-      _exercises.insert(newIndex, item);
-      _dayExercises[_selectedSplitDay] = List.from(_exercises);
-    });
-  }
-
   void _replaceExerciseWithLibrary(int index) async {
     if (index < 0 || index >= _exercises.length) return;
     final existing = _exercises[index];

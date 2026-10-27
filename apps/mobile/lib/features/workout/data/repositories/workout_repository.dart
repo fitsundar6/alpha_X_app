@@ -2666,8 +2666,8 @@ class WorkoutRepository extends ChangeNotifier {
         'recordId': recordId,
         'reason': reason,
         'adminId': adminId,
-        if (effectiveClientId != null) 'clientId': effectiveClientId,
-        if (effectiveSessionId != null) 'sessionId': effectiveSessionId,
+        'clientId': ?effectiveClientId,
+        'sessionId': ?effectiveSessionId,
       });
 
       final response = await _httpClient.post(

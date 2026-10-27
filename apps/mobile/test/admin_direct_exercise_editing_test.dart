@@ -88,7 +88,6 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      WorkoutSession? updatedSessionResult;
       final initialSession = WorkoutSession(
         id: 'sess_direct_02',
         title: 'Pull Day Strength',
