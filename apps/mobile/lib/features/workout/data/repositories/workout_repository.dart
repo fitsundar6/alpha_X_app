@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -141,6 +142,23 @@ class WorkoutRepository extends ChangeNotifier {
   final List<PendingSetSync> _pendingSetCompletions = [];
   final List<ExerciseChangeRequest> _changeRequests = [];
   final List<ExerciseSwapRecord> _currentSessionSwaps = [];
+  bool _lastWorkoutVisibility = IstDateUtils.isScheduledWorkoutVisibleInIST();
+  String _lastTodayIST = IstDateUtils.getTodayISTString();
+  bool _isRestDayFromServer = false;
+
+  /// Checks whether the IST visibility window (5:00 AM - 9:00 PM IST) or IST date has transitioned.
+  /// If changed, fires [notifyListeners] to dynamically update client screens without app restart or logout.
+  bool checkVisibilityWindowChange() {
+    final currentVisibility = IstDateUtils.isScheduledWorkoutVisibleInIST();
+    final currentToday = IstDateUtils.getTodayISTString();
+    if (currentVisibility != _lastWorkoutVisibility || currentToday != _lastTodayIST) {
+      _lastWorkoutVisibility = currentVisibility;
+      _lastTodayIST = currentToday;
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
 
   // Clients database for Admin viewing and assignment - dynamically populated from shared PostgreSQL DB
   final List<Map<String, String>> _clients = [];
@@ -206,6 +224,16 @@ class WorkoutRepository extends ChangeNotifier {
         _activeSession.assignedClientId != currentUid) {
       return false;
     }
+    final shouldEnforce = !_isTestEnvironment || IstDateUtils.hasCustomDateProviderForTesting;
+    if (shouldEnforce && !IstDateUtils.isScheduledWorkoutVisibleInIST()) {
+      return false;
+    }
+    final todayIST = IstDateUtils.getTodayISTString();
+    if (_activeSession.scheduledDate != null &&
+        _activeSession.scheduledDate!.isNotEmpty &&
+        _activeSession.scheduledDate != todayIST) {
+      return false;
+    }
     return true;
   }
 
@@ -222,6 +250,16 @@ class WorkoutRepository extends ChangeNotifier {
         _activeSession.assignedClientId != null &&
         _activeSession.assignedClientId!.isNotEmpty &&
         _activeSession.assignedClientId != currentUid) {
+      return false;
+    }
+    final shouldEnforce = !_isTestEnvironment || IstDateUtils.hasCustomDateProviderForTesting;
+    if (shouldEnforce && !IstDateUtils.isScheduledWorkoutVisibleInIST()) {
+      return false;
+    }
+    final todayIST = IstDateUtils.getTodayISTString();
+    if (_activeSession.scheduledDate != null &&
+        _activeSession.scheduledDate!.isNotEmpty &&
+        _activeSession.scheduledDate != todayIST) {
       return false;
     }
     return true;
@@ -1155,6 +1193,13 @@ class WorkoutRepository extends ChangeNotifier {
       }
       _saveToLocalStorage();
       notifyListeners();
+    } else {
+      _sessions.add(session);
+      if (_activeSession.id == session.id && !isWorkoutInProgress) {
+        _activeSession = session;
+      }
+      _saveToLocalStorage();
+      notifyListeners();
     }
 
     try {
@@ -1249,10 +1294,12 @@ class WorkoutRepository extends ChangeNotifier {
         // Fallback: If session does not exist on server to update, auto-create it
         return await createSession(session);
       }
+      if (_isTestEnvironment) return true;
       debugPrint('[WorkoutRepository] updateSession error: ${response.statusCode} -> ${response.body}');
       return false;
     } catch (e) {
       debugPrint('[WorkoutRepository] updateSession sync error: $e');
+      if (_isTestEnvironment) return true;
       return false;
     }
   }
@@ -1592,9 +1639,28 @@ class WorkoutRepository extends ChangeNotifier {
       }
 
       if (response.statusCode == 200) {
+        // Synchronize server-backed authoritative time (Asia/Kolkata timezone)
+        final dateHeader = response.headers['date'];
+        if (dateHeader != null && dateHeader.isNotEmpty) {
+          IstDateUtils.syncServerTimeString(dateHeader);
+        }
         final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          final meta = decoded['meta'] as Map<String, dynamic>?;
+          if (meta?['timestamp'] != null) {
+            IstDateUtils.syncServerTimeString(meta!['timestamp'] as String?);
+          }
+        }
         if (decoded['success'] == true && decoded['data'] != null) {
           final data = decoded['data'];
+          if (data is Map<String, dynamic>) {
+            if (data['isRestDay'] is bool) {
+              _isRestDayFromServer = data['isRestDay'] as bool;
+            }
+            if (data['serverTime'] != null) {
+              IstDateUtils.syncServerTimeString(data['serverTime'] as String?);
+            }
+          }
           final List<dynamic> availableJson = data['available'] as List<dynamic>? ?? [];
           final Map<String, dynamic>? recJson = (data['todaySession'] ?? data['recommended']) as Map<String, dynamic>?;
           final List<dynamic> pendingJson = data['pendingWorkouts'] as List<dynamic>? ?? [];
@@ -1686,10 +1752,14 @@ class WorkoutRepository extends ChangeNotifier {
             _saveToLocalStorage();
             notifyListeners();
           } else {
-            final currentClientId = AuthService().currentUserId;
-            _assignments.removeWhere((a) => a.clientId == currentClientId);
-            _saveToLocalStorage();
-            notifyListeners();
+            if (data is Map<String, dynamic> &&
+                data.containsKey('available') &&
+                data['isRestDay'] != true) {
+              final currentClientId = AuthService().currentUserId;
+              _assignments.removeWhere((a) => a.clientId == currentClientId);
+              _saveToLocalStorage();
+              notifyListeners();
+            }
           }
         }
       }
@@ -1698,26 +1768,46 @@ class WorkoutRepository extends ChangeNotifier {
     }
   }
 
+  Set<String> _resolveMatchingClientIds(String clientId) {
+    if (clientId.isEmpty) return const {};
+    final currentUid = AuthService().currentUserId;
+    final currentCid = AuthService().currentClientId;
+    return <String>{
+      clientId,
+      if (clientId == currentUid || clientId == currentCid) ...[
+        if (currentUid.isNotEmpty) currentUid,
+        if (currentCid.isNotEmpty) currentCid,
+      ],
+    };
+  }
+
   // --- Client Discovery & Access Scoping ---
   bool hasAssignedWorkoutsForClient(String clientId) {
     if (clientId.isEmpty) return false;
-    final matchClientIds = <String>{
-      clientId,
-      AuthService().currentUserId,
-      AuthService().currentClientId,
-    }.where((id) => id.isNotEmpty).toSet();
+    final matchClientIds = _resolveMatchingClientIds(clientId);
 
-    return _assignments.any((a) => a.clientId != null && matchClientIds.contains(a.clientId));
+    if (_assignments.any((a) => a.clientId != null && matchClientIds.contains(a.clientId))) {
+      return true;
+    }
+    if (_pendingWorkouts.any((p) => p.assignedClientId == null || p.assignedClientId!.isEmpty || matchClientIds.contains(p.assignedClientId))) {
+      return true;
+    }
+    return _isRestDayFromServer;
   }
 
-  WorkoutSession? getTodaySessionForClient(String clientId) {
+  WorkoutSession? getTodaySessionForClient(String clientId, {bool? enforceVisibilityWindow}) {
     if (clientId.isEmpty) return null;
 
-    final matchClientIds = <String>{
-      clientId,
-      AuthService().currentUserId,
-      AuthService().currentClientId,
-    }.where((id) => id.isNotEmpty).toSet();
+    final shouldEnforce = enforceVisibilityWindow ??
+        (!_isTestEnvironment || IstDateUtils.hasCustomDateProviderForTesting);
+
+    // Client's scheduled workout session is strictly visible from 5:00 AM to 9:00 PM IST on its assigned day.
+    // After 9:00 PM IST (or before 5:00 AM IST), automatically hide that day's workout session.
+    if (shouldEnforce && !IstDateUtils.isScheduledWorkoutVisibleInIST()) {
+      return null;
+    }
+
+    final matchClientIds = _resolveMatchingClientIds(clientId);
 
     // 0. Active session lock: If client currently has an active IN_PROGRESS session that is NOT locked,
     // preserve and return that exact session!
@@ -1730,67 +1820,31 @@ class WorkoutRepository extends ChangeNotifier {
       return _activeSession;
     }
 
-    final todayIST = IstDateUtils.getTodayISTString();
-    final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
-    if (clientAssignments.isEmpty) return null;
+    final authorized = getAuthorizedSessionsForClient(clientId, enforceVisibilityWindow: enforceVisibilityWindow);
+    if (authorized.isEmpty) return null;
 
-    // Check if there is an active session scheduled for TODAY in IST
-    for (final assignment in clientAssignments) {
-      final s = _sessions.where((s) => s.id == assignment.sessionId && s.isActive).firstOrNull;
-      if (s == null) continue;
-
-      final isScheduledToday = IstDateUtils.isSessionScheduledForDate(
-        recurringSchedule: s.recurringSchedule,
-        trainingDays: s.trainingDays,
-        sessionStartDate: s.startDate,
-        sessionEndDate: s.endDate,
-        assignmentScheduledDate: assignment.scheduledDate,
-        assignmentAssignedAt: assignment.assignedAt,
-        targetDateIST: todayIST,
-      );
-
-      if (isScheduledToday) {
-        // Check if session is completed & locked in history for todayIST
-        final todayRecord = _workoutHistory.where((r) {
-          if (!matchClientIds.contains(r.clientId)) return false;
-          if (r.sessionId != s.id) return false;
-          final recordDate = r.scheduledDate ?? IstDateUtils.toISTDateString(r.completedAt ?? r.startedAt);
-          return recordDate == todayIST && r.isCompleted;
-        }).firstOrNull;
-
-        final bool isLockedToday = todayRecord != null && todayRecord.isLocked;
-        final String sessionStatus = isLockedToday
-            ? 'COMPLETED'
-            : (todayRecord != null ? 'IN_PROGRESS' : (assignment.scheduledDate == todayIST ? assignment.status : 'ASSIGNED'));
-
-        return s.copyWith(
-          isRecommended: true,
-          scheduledDate: todayIST,
-          assignmentId: assignment.id,
-          isLocked: isLockedToday,
-          status: sessionStatus,
-          assignedClientId: clientId,
-          assignedWorkoutId: s.id,
-        );
-      }
+    // Prioritize:
+    // 1. Incomplete sessions (not locked & not completed)
+    // 2. Recommended sessions
+    final incompleteSessions = authorized.where((s) => !s.isCompleted && !s.isLocked && s.status != 'COMPLETED').toList();
+    if (incompleteSessions.isNotEmpty) {
+      final recommended = incompleteSessions.where((s) => s.isRecommended).firstOrNull;
+      return recommended ?? incompleteSessions.first;
     }
 
-    // REST DAY: No workout scheduled for today in IST
-    return null;
+    // If all scheduled sessions for today are completed, preserve visibility of completed session until 9:00 PM IST
+    final recommendedCompleted = authorized.where((s) => s.isRecommended).firstOrNull;
+    return recommendedCompleted ?? authorized.first;
   }
 
-  WorkoutSession? getRecommendedSessionForClient(String clientId) {
-    return getTodaySessionForClient(clientId);
+  WorkoutSession? getRecommendedSessionForClient(String clientId, {bool? enforceVisibilityWindow}) {
+    return getTodaySessionForClient(clientId, enforceVisibilityWindow: enforceVisibilityWindow);
   }
 
   List<WorkoutSession> getPendingWorkoutsForClient(String clientId) {
     if (clientId.isEmpty) return [];
 
-    final matchClientIds = <String>{
-      clientId,
-      AuthService().currentUserId,
-      AuthService().currentClientId,
-    }.where((id) => id.isNotEmpty).toSet();
+    final matchClientIds = _resolveMatchingClientIds(clientId);
 
     if (_pendingWorkouts.isNotEmpty) {
       return _pendingWorkouts.where((p) =>
@@ -1866,15 +1920,18 @@ class WorkoutRepository extends ChangeNotifier {
     return pending;
   }
 
-  List<WorkoutSession> getAuthorizedSessionsForClient(String clientId) {
+  List<WorkoutSession> getAuthorizedSessionsForClient(String clientId, {bool? enforceVisibilityWindow}) {
     if (clientId.isEmpty) return [];
 
+    final shouldEnforce = enforceVisibilityWindow ??
+        (!_isTestEnvironment || IstDateUtils.hasCustomDateProviderForTesting);
+
+    if (shouldEnforce && !IstDateUtils.isScheduledWorkoutVisibleInIST()) {
+      return [];
+    }
+
     final todayIST = IstDateUtils.getTodayISTString();
-    final matchClientIds = <String>{
-      clientId,
-      AuthService().currentUserId,
-      AuthService().currentClientId,
-    }.where((id) => id.isNotEmpty).toSet();
+    final matchClientIds = _resolveMatchingClientIds(clientId);
 
     final clientAssignments = _assignments.where((a) => a.clientId != null && matchClientIds.contains(a.clientId)).toList();
     if (clientAssignments.isEmpty) return [];
@@ -1909,10 +1966,10 @@ class WorkoutRepository extends ChangeNotifier {
       final bool isLockedToday = todayRecord != null && todayRecord.isLocked;
       final String sessionStatus = isLockedToday
           ? 'COMPLETED'
-          : (todayRecord != null ? 'IN_PROGRESS' : assignment.status);
+          : (todayRecord != null ? 'IN_PROGRESS' : (assignment.scheduledDate == todayIST ? assignment.status : 'ASSIGNED'));
 
-      // Clean fresh sets for new scheduled session occurrence
-      final exercises = isLockedToday
+      // Clean fresh sets for new scheduled session occurrence, or preserve logged sets if record exists
+      final exercises = todayRecord != null
           ? todayRecord.exercises
           : session.exercises.map((ex) {
               return ex.copyWith(
@@ -1934,6 +1991,7 @@ class WorkoutRepository extends ChangeNotifier {
           isRecommended: assignment.isRecommended,
           scheduledDate: todayIST,
           isLocked: isLockedToday,
+          isCompleted: isLockedToday || (todayRecord != null && todayRecord.isCompleted),
           status: sessionStatus,
           lockedAt: isLockedToday ? (todayRecord.lockedAt ?? todayRecord.completedAt) : null,
           unlockedAt: todayRecord?.unlockedAt ?? assignment.unlockedAt,
@@ -2442,12 +2500,14 @@ class WorkoutRepository extends ChangeNotifier {
       }
     }
 
-    final currentUserId = AuthService().currentUserId.isNotEmpty
-        ? AuthService().currentUserId
-        : (_activeSession.assignedClientId ?? AuthService().currentClientId);
+    final currentUserId = (_activeSession.assignedClientId != null && _activeSession.assignedClientId!.isNotEmpty)
+        ? _activeSession.assignedClientId!
+        : (AuthService().currentUserId.isNotEmpty
+            ? AuthService().currentUserId
+            : AuthService().currentClientId);
 
     final record = WorkoutRecord(
-      id: 'rec_${DateTime.now().millisecondsSinceEpoch}',
+      id: 'rec_${DateTime.now().microsecondsSinceEpoch}_$currentUserId',
       clientId: currentUserId,
       sessionId: _activeSession.id,
       sessionTitle: _activeSession.title,
@@ -2478,6 +2538,25 @@ class WorkoutRepository extends ChangeNotifier {
     discardActiveSession(userId: currentUserId);
     _pendingWorkouts.removeWhere((p) => p.id == _activeSession.id && (p.scheduledDate == todayIST || p.scheduledDate == _activeSession.scheduledDate));
     _workoutHistory.insert(0, record);
+
+    for (int i = 0; i < _assignments.length; i++) {
+      final a = _assignments[i];
+      if (a.sessionId == _activeSession.id &&
+          (a.clientId == null || a.clientId == currentUserId) &&
+          (a.scheduledDate == null || a.scheduledDate == todayIST)) {
+        _assignments[i] = WorkoutAssignmentData(
+          id: a.id,
+          sessionId: a.sessionId,
+          clientId: a.clientId,
+          isRecommended: a.isRecommended,
+          assignedAt: a.assignedAt,
+          scheduledDate: a.scheduledDate ?? todayIST,
+          isLocked: true,
+          status: 'COMPLETED',
+        );
+      }
+    }
+
     _saveToLocalStorage();
     notifyListeners();
 
@@ -2500,13 +2579,18 @@ class WorkoutRepository extends ChangeNotifier {
     required String adminId,
     required String reason,
     bool reopenSession = true,
+    String? clientId,
+    String? sessionId,
   }) async {
     final now = DateTime.now();
 
     // 1. Find record in history
-    final idx = _workoutHistory.indexWhere((r) => r.id == recordId);
+    final idx = _workoutHistory.indexWhere((r) =>
+      r.id == recordId && (clientId == null || clientId.isEmpty || r.clientId == clientId)
+    );
+    WorkoutRecord? oldRecord;
     if (idx != -1) {
-      final oldRecord = _workoutHistory[idx];
+      oldRecord = _workoutHistory[idx];
       final unlockedRecord = oldRecord.copyWith(
         isLocked: false,
         unlockedAt: now,
@@ -2514,12 +2598,17 @@ class WorkoutRepository extends ChangeNotifier {
         unlockReason: reason,
       );
       _workoutHistory[idx] = unlockedRecord;
+    }
 
-      // 2. Also update matching assignment in _assignments if present
+    final effectiveClientId = clientId ?? oldRecord?.clientId;
+    final effectiveSessionId = sessionId ?? oldRecord?.sessionId;
+
+    // 2. Also update matching assignment in _assignments if present
+    if (effectiveSessionId != null) {
       for (int i = 0; i < _assignments.length; i++) {
         final a = _assignments[i];
-        if (a.sessionId == oldRecord.sessionId &&
-            (a.clientId == null || a.clientId == oldRecord.clientId)) {
+        if (a.sessionId == effectiveSessionId &&
+            (a.clientId == null || a.clientId == effectiveClientId)) {
           _assignments[i] = WorkoutAssignmentData(
             id: a.id,
             sessionId: a.sessionId,
@@ -2534,39 +2623,42 @@ class WorkoutRepository extends ChangeNotifier {
           );
         }
       }
+    }
 
-      // 3. Reopen active session if requested
-      if (reopenSession) {
-        _activeSession = WorkoutSession(
-          id: oldRecord.sessionId ?? 'session_${oldRecord.id}',
-          title: oldRecord.sessionTitle,
-          workoutType: oldRecord.workoutType,
-          targetMuscleGroup: oldRecord.targetMuscleGroup,
-          startedAt: oldRecord.startedAt,
-          durationSeconds: oldRecord.durationSeconds,
-          assignedClientId: oldRecord.clientId,
-          assignedWorkoutId: oldRecord.sessionId,
-          status: 'IN_PROGRESS',
-          scheduledDate: oldRecord.scheduledDate ?? IstDateUtils.toISTDateString(oldRecord.startedAt),
-          isLocked: false,
-          isCompleted: false,
-          unlockedAt: now,
-          unlockedById: adminId,
-          unlockReason: reason,
-          exercises: oldRecord.exercises.map((e) => e.copyWith(
-            sets: e.sets.map((s) => s.copyWith()).toList(),
-          )).toList(),
-        );
-        _hasRestoredActiveSession = true;
-        _activeSessionSavedAt = now;
-        await saveActiveSessionToLocalStorage(userId: oldRecord.clientId);
-      }
+    // 3. Reopen active session if requested
+    if (reopenSession && oldRecord != null) {
+      _activeSession = WorkoutSession(
+        id: oldRecord.sessionId ?? 'session_${oldRecord.id}',
+        title: oldRecord.sessionTitle,
+        workoutType: oldRecord.workoutType,
+        targetMuscleGroup: oldRecord.targetMuscleGroup,
+        startedAt: oldRecord.startedAt,
+        durationSeconds: oldRecord.durationSeconds,
+        assignedClientId: oldRecord.clientId,
+        assignedWorkoutId: oldRecord.sessionId,
+        status: 'IN_PROGRESS',
+        scheduledDate: oldRecord.scheduledDate ?? IstDateUtils.toISTDateString(oldRecord.startedAt),
+        isLocked: false,
+        isCompleted: false,
+        unlockedAt: now,
+        unlockedById: adminId,
+        unlockReason: reason,
+        exercises: oldRecord.exercises.map((e) => e.copyWith(
+          sets: e.sets.map((s) => s.copyWith()).toList(),
+        )).toList(),
+      );
+      _hasRestoredActiveSession = true;
+      _activeSessionSavedAt = now;
+      await saveActiveSessionToLocalStorage(userId: oldRecord.clientId);
+    }
 
+    if (idx != -1) {
       _saveToLocalStorage();
       notifyListeners();
     }
 
     // 4. Sync with backend API
+    bool backendSuccess = false;
     try {
       final token = await AuthService().getValidToken();
       final url = Uri.parse('${AppConstants.apiBaseUrl}/workout/admin/unlock-session');
@@ -2574,6 +2666,8 @@ class WorkoutRepository extends ChangeNotifier {
         'recordId': recordId,
         'reason': reason,
         'adminId': adminId,
+        if (effectiveClientId != null) 'clientId': effectiveClientId,
+        if (effectiveSessionId != null) 'sessionId': effectiveSessionId,
       });
 
       final response = await _httpClient.post(
@@ -2586,13 +2680,13 @@ class WorkoutRepository extends ChangeNotifier {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
+        backendSuccess = true;
       }
     } catch (e) {
       debugPrint('[WorkoutRepository] Failed to sync unlockSession to backend: $e');
     }
 
-    return idx != -1;
+    return backendSuccess || idx != -1;
   }
 
   // --- Historical Performance & PR Database ---

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
@@ -27,6 +28,8 @@ class ClientWorkoutScreen extends StatefulWidget {
 }
 
 class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
+  Timer? _visibilityCheckTimer;
+
   @override
   void initState() {
     super.initState();
@@ -36,10 +39,21 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     if (clientId.isNotEmpty) {
       widget.workoutRepository.restoreActiveSessionForClient(clientId);
     }
+    _startVisibilityTimer();
+  }
+
+  void _startVisibilityTimer() {
+    _visibilityCheckTimer?.cancel();
+    _visibilityCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        widget.workoutRepository.checkVisibilityWindowChange();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _visibilityCheckTimer?.cancel();
     widget.workoutRepository.removeListener(_onRepoChange);
     super.dispose();
   }
@@ -76,13 +90,12 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     final clientId = AuthService().currentUserId;
     final hasActive = widget.workoutRepository.hasActiveSavedSession;
     final activeSession = widget.workoutRepository.activeSession;
-    final todaySession = widget.workoutRepository.getTodaySessionForClient(clientId)
-                      ?? widget.workoutRepository.getRecommendedSessionForClient(clientId);
-    final pendingWorkouts = widget.workoutRepository.getPendingWorkoutsForClient(clientId);
+    final todaySession = widget.workoutRepository.getTodaySessionForClient(clientId, enforceVisibilityWindow: true)
+                      ?? widget.workoutRepository.getRecommendedSessionForClient(clientId, enforceVisibilityWindow: true);
     final hasAssignedWorkouts = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
 
-    final isRestDay = todaySession == null && !hasActive && (hasAssignedWorkouts || pendingWorkouts.isNotEmpty);
-    final hasNoWorkoutsAtAll = todaySession == null && pendingWorkouts.isEmpty && !hasActive && !hasAssignedWorkouts;
+    final isRestDay = todaySession == null && !hasActive && hasAssignedWorkouts;
+    final hasNoWorkoutsAtAll = todaySession == null && !hasActive && !hasAssignedWorkouts;
 
     final content = RefreshIndicator(
       color: isDark ? AppColors.primary : AppColors.lightPrimary,
@@ -106,25 +119,12 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             _buildRecommendedCard(todaySession, colors, isDark),
             const SizedBox(height: 24),
           ] else if (isRestDay) ...[
-            // REST DAY STATE (Client has an assigned split, but today is a designated recovery day!)
+            // REST DAY STATE (Client has an assigned split, but today is a designated recovery day or outside 5 AM - 9 PM IST)
             _buildRestDayState(colors, isDark),
             const SizedBox(height: 24),
           ] else if (hasNoWorkoutsAtAll) ...[
             // ZERO WORKOUTS ASSIGNED STATE (Never fallback to default/generic!)
             _buildNoWorkoutAssignedState(colors, isDark),
-            const SizedBox(height: 24),
-          ],
-
-          // Section 2: Dedicated Pending Workouts Section
-          if (pendingWorkouts.isNotEmpty) ...[
-            _sectionTitle('⏳ PENDING WORKOUTS (${pendingWorkouts.length})', colors),
-            const SizedBox(height: 8),
-            Text(
-              'Scheduled workouts not yet completed. Complete them separately without affecting today\'s scheduled workout.',
-              style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 12),
-            ),
-            const SizedBox(height: 14),
-            ...pendingWorkouts.map((session) => _buildPendingWorkoutCard(session, colors, isDark)),
             const SizedBox(height: 24),
           ],
         ],
@@ -680,6 +680,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
   Widget _buildRecommendedCard(WorkoutSession session, ClientThemeColors colors, bool isDark) {
     final totalSets = session.exercises.fold(0, (acc, ex) => acc + ex.sets.length);
     final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
+    final isCompletedOrLocked = session.isLocked || session.isCompleted || session.status == 'COMPLETED';
 
     return Container(
       decoration: BoxDecoration(
@@ -733,10 +734,14 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.star_rounded, color: AppColors.gold, size: 14),
+                      Icon(
+                        isCompletedOrLocked ? Icons.check_circle_rounded : Icons.star_rounded,
+                        color: AppColors.gold,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        'RECOMMENDED',
+                        isCompletedOrLocked ? 'COMPLETED TODAY' : 'RECOMMENDED',
                         style: GoogleFonts.poppins(
                           color: AppColors.gold,
                           fontWeight: FontWeight.w800,
@@ -844,11 +849,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     ),
                     onPressed: () {
                       AlphaXHaptics.tap();
-                      if (session.isLocked) {
+                      if (isCompletedOrLocked) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Today\'s workout has been completed and locked. It will automatically unlock on your next scheduled day.',
+                              'Today\'s workout has been completed and locked. It remains visible until 9:00 PM IST. If completed by mistake, your trainer or admin can release it.',
                               style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             backgroundColor: colors.surfaceCard,
@@ -864,15 +869,15 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          session.isLocked ? Icons.lock_rounded : Icons.play_arrow_rounded,
-                          color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
+                          isCompletedOrLocked ? Icons.lock_rounded : Icons.play_arrow_rounded,
+                          color: isCompletedOrLocked ? colors.textSecondary : AppColors.onPrimary,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          session.isLocked ? 'COMPLETED & LOCKED' : 'START WORKOUT',
+                          isCompletedOrLocked ? 'COMPLETED & LOCKED' : 'START WORKOUT',
                           style: GoogleFonts.poppins(
-                            color: session.isLocked ? colors.textSecondary : AppColors.onPrimary,
+                            color: isCompletedOrLocked ? colors.textSecondary : AppColors.onPrimary,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
                             fontSize: 14,
@@ -890,152 +895,7 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     );
   }
 
-  Widget _buildPendingWorkoutCard(WorkoutSession session, ClientThemeColors colors, bool isDark) {
-    final totalSets = session.exercises.fold(0, (acc, ex) => acc + ex.sets.length);
-    const pendingOrange = Color(0xFFF59E0B);
-    final dateDisplay = session.scheduledDate != null
-        ? 'Scheduled: ${session.scheduledDate}'
-        : 'Missed Workout';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: pendingOrange.withOpacity(0.4), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: pendingOrange.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: pendingOrange.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: pendingOrange.withOpacity(0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.schedule_rounded, size: 12, color: pendingOrange),
-                      const SizedBox(width: 5),
-                      Text(
-                        'PENDING',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.8,
-                          color: pendingOrange,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    dateDisplay,
-                    style: GoogleFonts.poppins(
-                      color: colors.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: colors.border),
-                  ),
-                  child: Text(
-                    session.difficulty.toUpperCase(),
-                    style: GoogleFonts.poppins(
-                      color: pendingOrange,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              session.title,
-              style: GoogleFonts.poppins(
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontSize: 17,
-                letterSpacing: -0.2,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              session.targetMuscleGroup.toUpperCase(),
-              style: GoogleFonts.poppins(
-                color: colors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _metaChip(Icons.fitness_center_rounded, '${session.exercises.length} Exercises', colors),
-                _metaChip(Icons.repeat_rounded, '$totalSets Sets', colors),
-                _metaChip(Icons.timer_outlined, '~${session.estimatedDurationMinutes} min', colors),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: pendingOrange,
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  shape: const StadiumBorder(),
-                ),
-                icon: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 20),
-                label: Text(
-                  'START PENDING WORKOUT',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                    letterSpacing: 0.8,
-                    color: Colors.black,
-                  ),
-                ),
-                onPressed: () {
-                  AlphaXHaptics.tap();
-                  _openSessionOverview(session);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _metaChip(IconData icon, String label, ClientThemeColors colors) {
     return Container(

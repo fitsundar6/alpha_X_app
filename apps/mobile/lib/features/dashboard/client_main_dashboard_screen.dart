@@ -680,6 +680,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   Widget _buildBeginnerWorkoutCard(ClientThemeColors colors, WorkoutSession? recommended) {
     final hasActive = widget.workoutRepository.hasActiveSavedSession;
     final active = widget.workoutRepository.activeSession;
+    final clientId = AuthService().currentUserId;
 
     final String sessionTitle;
     final String sessionSubtitle;
@@ -699,19 +700,32 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       buttonLabel = 'RESUME WORKOUT';
       buttonIcon = Icons.play_arrow_rounded;
     } else if (recommended != null) {
+      final isLocked = recommended.isLocked || recommended.isCompleted || recommended.status == 'COMPLETED';
       sessionTitle = recommended.title;
-      sessionSubtitle = '${recommended.estimatedDurationMinutes} min • ${recommended.exercises.length} exercises • ${recommended.targetMuscleGroup}';
-      statusLabel = "TODAY'S TARGET";
-      statusColor = colors.primaryRed;
-      buttonLabel = 'START WORKOUT';
-      buttonIcon = Icons.play_arrow_rounded;
+      sessionSubtitle = isLocked
+          ? 'Completed today • Visible until 9:00 PM IST'
+          : '${recommended.estimatedDurationMinutes} min • ${recommended.exercises.length} exercises • ${recommended.targetMuscleGroup}';
+      statusLabel = isLocked ? 'COMPLETED' : "TODAY'S TARGET";
+      statusColor = isLocked ? colors.textSecondary : colors.primaryRed;
+      buttonLabel = isLocked ? 'COMPLETED & LOCKED' : 'START WORKOUT';
+      buttonIcon = isLocked ? Icons.lock_rounded : Icons.play_arrow_rounded;
     } else {
-      sessionTitle = 'No workout assigned';
-      sessionSubtitle = "Your trainer hasn't assigned a workout yet.";
-      statusLabel = 'NO ASSIGNMENT';
-      statusColor = colors.textSecondary;
-      buttonLabel = 'CONTACT YOUR TRAINER';
-      buttonIcon = Icons.chat_bubble_outline_rounded;
+      final hasAssigned = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
+      if (hasAssigned) {
+        sessionTitle = 'Rest & Recovery Day';
+        sessionSubtitle = 'No active workout right now. Workouts are available from 5:00 AM to 9:00 PM IST.';
+        statusLabel = 'REST DAY';
+        statusColor = colors.textSecondary;
+        buttonLabel = 'VIEW WORKOUT HISTORY';
+        buttonIcon = Icons.history_rounded;
+      } else {
+        sessionTitle = 'No workout assigned';
+        sessionSubtitle = "Your trainer hasn't assigned a workout yet.";
+        statusLabel = 'NO ASSIGNMENT';
+        statusColor = colors.textSecondary;
+        buttonLabel = 'CONTACT YOUR TRAINER';
+        buttonIcon = Icons.chat_bubble_outline_rounded;
+      }
     }
 
     return Container(
@@ -842,6 +856,18 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     ),
                   );
                 } else if (recommended != null) {
+                  final isLocked = recommended.isLocked || recommended.isCompleted || recommended.status == 'COMPLETED';
+                  if (isLocked) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text("Today's workout has been completed and locked. It remains visible until 9:00 PM IST. If completed by mistake, your trainer or admin can release it."),
+                        backgroundColor: colors.surfaceCard,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    );
+                    return;
+                  }
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (ctx) => ClientSessionOverviewScreen(
@@ -851,12 +877,21 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                     ),
                   );
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Your trainer hasn't assigned a workout yet. Please reach out to your coach."),
-                      backgroundColor: AppColors.surfaceElevated,
-                    ),
-                  );
+                  final hasAssigned = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
+                  if (hasAssigned) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ClientWorkoutHistoryScreen(workoutRepository: widget.workoutRepository),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Your trainer hasn't assigned a workout yet. Please reach out to your coach."),
+                        backgroundColor: AppColors.surfaceElevated,
+                      ),
+                    );
+                  }
                 }
               },
             ),
@@ -1320,8 +1355,8 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
   // --- TAB 0: 🏠 HOME DASHBOARD COMMAND CENTER ---
   Widget _buildClientHomeScreen() {
     final clientId = AuthService().currentUserId;
-    final recommended = widget.workoutRepository.getTodaySessionForClient(clientId) ??
-        widget.workoutRepository.getRecommendedSessionForClient(clientId);
+    final recommended = widget.workoutRepository.getTodaySessionForClient(clientId, enforceVisibilityWindow: true) ??
+        widget.workoutRepository.getRecommendedSessionForClient(clientId, enforceVisibilityWindow: true);
     final history = widget.workoutRepository.clientHistory;
     final userFullName = AuthService().currentUserName;
     final firstName = userFullName.isNotEmpty ? userFullName.split(' ').first : 'Athlete';

@@ -9,6 +9,7 @@ import {
   getWeekdayFromDayName,
   parseWeekdaysFromScheduleString,
   getWeekdayFromISTDateString,
+  isScheduledWorkoutVisibleInIST,
 } from '../../utils/istDate';
 
 export interface StoredWorkoutSplitDay {
@@ -82,6 +83,7 @@ export interface StoredWorkoutSession {
   updatedAt: string;
   scheduledDate?: string | null;
   isLocked?: boolean;
+  isCompleted?: boolean;
   lockedAt?: string | null;
   status?: string;
   assignmentId?: string | null;
@@ -1351,12 +1353,14 @@ export class WorkoutRepository {
   }
 
   // --- Client Operations (Strictly Scoped by Date & Auth) ---
-  async getClientAuthorizedSessions(clientId: string, simulatedDateOrDay?: string): Promise<{
+  async getClientAuthorizedSessions(clientId: string, simulatedDateOrDay?: string, enforceVisibilityWindow: boolean = true): Promise<{
     todaySession: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
     recommended: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null }) | null;
     pendingWorkouts: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate: string })[];
     available: (StoredWorkoutSession & { isRecommended: boolean; isLocked?: boolean; assignmentId?: string; scheduledDate?: string | null })[];
     isRestDay: boolean;
+    serverTime?: string;
+    timezone?: string;
   }> {
     const resolvedUserId = await this.resolveUserId(clientId);
     const todayIST = simulatedDateOrDay && simulatedDateOrDay.includes('-')
@@ -1447,24 +1451,31 @@ export class WorkoutRepository {
             ? (a.session.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase())
             : isSessionScheduledForDate(a.session, a, todayIST);
 
-          const isCompletedToday = completedRecords.some((r) =>
-            (r.assignmentId && r.assignmentId === a.id && r.scheduledDate === todayIST) ||
-            (candidateIds.includes(r.sessionId || '') && r.scheduledDate === todayIST)
-          );
+          const isCompletedToday = completedRecords.some((r) => {
+            const recordDate = r.scheduledDate || toISTDateString(r.completedAt);
+            return ((r.assignmentId && r.assignmentId === a.id && recordDate === todayIST) ||
+            (candidateIds.includes(r.sessionId || '') && recordDate === todayIST)) &&
+            r.isLocked !== false;
+          });
 
           const isLockedForToday = isCompletedToday || (a.isLocked && !a.unlockedAt && a.scheduledDate === todayIST);
           const statusForToday = isCompletedToday ? 'COMPLETED' : (a.scheduledDate === todayIST ? (a.status || 'ASSIGNED') : 'ASSIGNED');
 
           const mappedSession = mapPrismaSessionToStored(a.session);
 
-          if (isScheduledToday) {
+          const isVisibleInWindow = (!enforceVisibilityWindow || (simulatedDateOrDay && !simulatedDateOrDay.includes('-')))
+            ? true
+            : isScheduledWorkoutVisibleInIST();
+
+          if (isScheduledToday && isVisibleInWindow) {
             todayCandidates.push({
               ...mappedSession,
               scheduledDate: todayIST,
               assignmentId: a.id,
               isLocked: isLockedForToday,
+              isCompleted: isLockedForToday || statusForToday === 'COMPLETED',
               status: statusForToday,
-              isRecommended: a.isRecommended || true,
+              isRecommended: a.isRecommended ?? true,
             });
           }
 
@@ -1542,7 +1553,7 @@ export class WorkoutRepository {
 
           // Available list rules:
           // A session is in available if:
-          // 1. It is scheduled for today (completed or not)
+          // 1. It is scheduled for today (completed or not) and currently visible in the 5:00 AM - 9:00 PM IST window
           // 2. It is an active split session that was NOT completed on a past day
           const wasCompletedInPast = Boolean(a.scheduledDate && a.scheduledDate < todayIST && (
             completedRecords.some((r) =>
@@ -1553,6 +1564,11 @@ export class WorkoutRepository {
 
           // If session was completed yesterday/past and is not scheduled for today, cleanly exclude from available
           if (wasCompletedInPast && !isScheduledToday) {
+            continue;
+          }
+
+          // If today's scheduled session is outside the 5:00 AM - 9:00 PM IST window, hide from client available
+          if (isScheduledToday && !isVisibleInWindow) {
             continue;
           }
 
@@ -1573,13 +1589,19 @@ export class WorkoutRepository {
 
         const pendingWorkouts = Array.from(pendingMap.values()).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
 
-        return this.applyActiveSetOverlays({
+        const overlaid = await this.applyActiveSetOverlays({
           todaySession: todaySession ? { ...todaySession, isRecommended: true } : null,
           recommended: todaySession ? { ...todaySession, isRecommended: true } : null,
           pendingWorkouts,
           available,
           isRestDay: todaySession === null,
         }, resolvedUserId);
+
+        return {
+          ...overlaid,
+          serverTime: new Date().toISOString(),
+          timezone: 'Asia/Kolkata',
+        };
       }
     } catch (e: any) {
       console.warn('[WorkoutRepository] Failed to query client sessions from DB, falling back to cache:', e?.message);
@@ -1627,22 +1649,29 @@ export class WorkoutRepository {
           ? (s.recurringSchedule || '').toLowerCase().includes(simulatedDateOrDay.toLowerCase())
           : isSessionScheduledForDate(s, assign, todayIST);
 
-        const isCompletedToday = memCompletedRecords.some((r) =>
-          (r.assignmentId && r.assignmentId === assign.id && r.scheduledDate === todayIST) ||
-          (candidateIds.includes(r.sessionId || '') && r.scheduledDate === todayIST)
-        );
+        const isCompletedToday = memCompletedRecords.some((r) => {
+          const recordDate = r.scheduledDate || toISTDateString(r.completedAt);
+          return ((r.assignmentId && r.assignmentId === assign.id && recordDate === todayIST) ||
+          (candidateIds.includes(r.sessionId || '') && recordDate === todayIST)) &&
+          r.isLocked !== false;
+        });
 
         const isLockedForToday = isCompletedToday || (assign.isLocked && !assign.unlockedAt && assign.scheduledDate === todayIST);
         const statusForToday = isCompletedToday ? 'COMPLETED' : (assign.scheduledDate === todayIST ? (assign.status || 'ASSIGNED') : 'ASSIGNED');
 
-        if (isScheduledToday) {
+        const isVisibleInWindow = (!enforceVisibilityWindow || (simulatedDateOrDay && !simulatedDateOrDay.includes('-')))
+          ? true
+          : isScheduledWorkoutVisibleInIST();
+
+        if (isScheduledToday && isVisibleInWindow) {
           todayCandidates.push({
             ...s,
             scheduledDate: todayIST,
             assignmentId: assign.id,
             isLocked: isLockedForToday,
+            isCompleted: isLockedForToday || statusForToday === 'COMPLETED',
             status: statusForToday,
-            isRecommended: assign.isRecommended || true,
+            isRecommended: assign.isRecommended ?? true,
           });
         }
 
@@ -1726,6 +1755,10 @@ export class WorkoutRepository {
           continue;
         }
 
+        if (isScheduledToday && !isVisibleInWindow) {
+          continue;
+        }
+
         available.push({
           ...s,
           scheduledDate: isScheduledToday ? todayIST : (assign.scheduledDate || todayIST),
@@ -1743,13 +1776,19 @@ export class WorkoutRepository {
 
       const pendingWorkouts = Array.from(pendingMap.values()).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
 
-      return this.applyActiveSetOverlays({
+      const overlaid = await this.applyActiveSetOverlays({
         todaySession: todaySession ? { ...todaySession, isRecommended: true } : null,
         recommended: todaySession ? { ...todaySession, isRecommended: true } : null,
         pendingWorkouts,
         available,
         isRestDay: todaySession === null,
       }, resolvedUserId);
+
+      return {
+        ...overlaid,
+        serverTime: new Date().toISOString(),
+        timezone: 'Asia/Kolkata',
+      };
     }
 
     return {
@@ -2419,31 +2458,51 @@ export class WorkoutRepository {
     const resolvedClientId = await this.resolveUserId(params.clientId);
     const now = new Date();
     const nowIso = now.toISOString();
-    const candidateIds = params.sessionId ? this.resolveSessionCandidateIds(params.sessionId) : [];
 
-    // 1. Update DB assignments
+    let targetRecord: any = null;
+    if (params.recordId) {
+      if (this.records.has(params.recordId)) {
+        targetRecord = this.records.get(params.recordId);
+      }
+      try {
+        if (!targetRecord) {
+          targetRecord = await prisma.workoutRecord.findUnique({
+            where: { id: params.recordId },
+          });
+        }
+      } catch (_) {}
+    }
+
+    const effectiveSessionId = params.sessionId || targetRecord?.sessionId || null;
+    const effectiveAssignmentId = params.assignmentId || targetRecord?.assignmentId || null;
+    const effectiveScheduledDate = params.scheduledDate || targetRecord?.scheduledDate || null;
+    const candidateIds = effectiveSessionId ? this.resolveSessionCandidateIds(effectiveSessionId) : [];
+
+    // 1. Update DB assignments (strictly scoped to targeted session or assignment)
     try {
-      const assignmentWhere: any = {
-        clientId: resolvedClientId,
-      };
-      if (params.assignmentId) {
-        assignmentWhere.id = params.assignmentId;
-      } else if (candidateIds.length > 0) {
-        assignmentWhere.sessionId = { in: candidateIds };
+      if (effectiveAssignmentId || candidateIds.length > 0) {
+        const assignmentWhere: any = {
+          clientId: resolvedClientId,
+        };
+        if (effectiveAssignmentId) {
+          assignmentWhere.id = effectiveAssignmentId;
+        } else if (candidateIds.length > 0) {
+          assignmentWhere.sessionId = { in: candidateIds };
+        }
+
+        await prisma.workoutAssignment.updateMany({
+          where: assignmentWhere,
+          data: {
+            isLocked: false,
+            status: 'IN_PROGRESS',
+            unlockedAt: now,
+            unlockedById: resolvedAdminId,
+            unlockReason: params.reason,
+          },
+        });
       }
 
-      await prisma.workoutAssignment.updateMany({
-        where: assignmentWhere,
-        data: {
-          isLocked: false,
-          status: 'IN_PROGRESS',
-          unlockedAt: now,
-          unlockedById: resolvedAdminId,
-          unlockReason: params.reason,
-        },
-      });
-
-      // 2. Update DB workout records
+      // 2. Update DB workout records (strictly scoped to targeted record or session)
       if (params.recordId) {
         await prisma.workoutRecord.update({
           where: { id: params.recordId },
@@ -2454,41 +2513,41 @@ export class WorkoutRepository {
             unlockReason: params.reason,
           },
         });
+      } else if (candidateIds.length > 0) {
+        const recordWhere: any = {
+          clientId: resolvedClientId,
+          sessionId: { in: candidateIds },
+        };
+        if (effectiveScheduledDate) {
+          recordWhere.scheduledDate = effectiveScheduledDate;
+        }
+        await prisma.workoutRecord.updateMany({
+          where: recordWhere,
+          data: {
+            isLocked: false,
+            unlockedAt: now,
+            unlockedById: resolvedAdminId,
+            unlockReason: params.reason,
+          },
+        });
       }
-
-      const recordWhere: any = {
-        clientId: resolvedClientId,
-      };
-      if (candidateIds.length > 0) {
-        recordWhere.sessionId = { in: candidateIds };
-      }
-      if (params.scheduledDate) {
-        recordWhere.scheduledDate = params.scheduledDate;
-      }
-      await prisma.workoutRecord.updateMany({
-        where: recordWhere,
-        data: {
-          isLocked: false,
-          unlockedAt: now,
-          unlockedById: resolvedAdminId,
-          unlockReason: params.reason,
-        },
-      });
     } catch (err: any) {
       console.warn('[WorkoutRepository] DB notice during unlockSession:', err?.message);
     }
 
-    // 3. Update in-memory assignments and records
-    for (const a of this.assignments.values()) {
-      if (
-        (a.clientId === resolvedClientId || a.clientId === params.clientId) &&
-        (params.assignmentId ? a.id === params.assignmentId : (params.sessionId ? candidateIds.includes(a.sessionId) : true))
-      ) {
-        a.isLocked = false;
-        a.status = 'IN_PROGRESS';
-        a.unlockedAt = nowIso;
-        a.unlockedById = resolvedAdminId;
-        a.unlockReason = params.reason;
+    // 3. Update in-memory assignments and records (strictly scoped)
+    if (effectiveAssignmentId || candidateIds.length > 0) {
+      for (const a of this.assignments.values()) {
+        if (
+          (a.clientId === resolvedClientId || a.clientId === params.clientId) &&
+          (effectiveAssignmentId ? a.id === effectiveAssignmentId : candidateIds.includes(a.sessionId))
+        ) {
+          a.isLocked = false;
+          a.status = 'IN_PROGRESS';
+          a.unlockedAt = nowIso;
+          a.unlockedById = resolvedAdminId;
+          a.unlockReason = params.reason;
+        }
       }
     }
 
@@ -2498,17 +2557,18 @@ export class WorkoutRepository {
       r.unlockedAt = nowIso;
       r.unlockedById = resolvedAdminId;
       r.unlockReason = params.reason;
-    }
-
-    for (const r of this.records.values()) {
-      if (
-        (r.clientId === resolvedClientId || r.clientId === params.clientId) &&
-        (params.sessionId ? candidateIds.includes(r.sessionId || '') : true)
-      ) {
-        r.isLocked = false;
-        r.unlockedAt = nowIso;
-        r.unlockedById = resolvedAdminId;
-        r.unlockReason = params.reason;
+    } else if (candidateIds.length > 0) {
+      for (const r of this.records.values()) {
+        if (
+          (r.clientId === resolvedClientId || r.clientId === params.clientId) &&
+          candidateIds.includes(r.sessionId || '') &&
+          (!effectiveScheduledDate || r.scheduledDate === effectiveScheduledDate)
+        ) {
+          r.isLocked = false;
+          r.unlockedAt = nowIso;
+          r.unlockedById = resolvedAdminId;
+          r.unlockReason = params.reason;
+        }
       }
     }
 

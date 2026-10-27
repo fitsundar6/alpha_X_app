@@ -206,6 +206,12 @@ void main() {
       expect(oct19Chest.isLocked, false);
       expect(oct19Chest.status, 'ASSIGNED');
 
+      final oct19Today = repo.getTodaySessionForClient('AXG-0002');
+      expect(oct19Today, isNotNull);
+      expect(oct19Today!.id, mondayChestSession.id);
+      expect(oct19Today.isLocked, false);
+      expect(oct19Today.status, 'ASSIGNED');
+
       // Verify all sets are FRESH and clean
       for (final ex in oct19Chest.exercises) {
         for (final s in ex.sets) {
@@ -282,6 +288,12 @@ void main() {
       expect(wed21Sessions.first.id, wednesdayBackSession.id);
       expect(wed21Sessions.first.isLocked, false);
       expect(wed21Sessions.first.status, 'ASSIGNED');
+
+      final wed21Today = repo.getTodaySessionForClient('AXG-0002');
+      expect(wed21Today, isNotNull);
+      expect(wed21Today!.id, wednesdayBackSession.id);
+      expect(wed21Today.isLocked, false);
+      expect(wed21Today.status, 'ASSIGNED');
     });
 
     test('5. Missed workout day does not silently complete', () async {

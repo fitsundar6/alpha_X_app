@@ -151,6 +151,7 @@ class AppAutoRefreshService with WidgetsBindingObserver {
         }
 
         if (_workoutRepository != null) {
+          _workoutRepository!.checkVisibilityWindowChange();
           futures.add(_workoutRepository!.fetchClientWorkouts(forceRefresh: true));
         }
 
