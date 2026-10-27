@@ -221,7 +221,7 @@ void main() {
       expect(todayAfter.isLocked, isFalse);
     });
 
-    testWidgets('4. ClientWorkoutScreen displays Today\'s Workout and Pending Workouts section', (tester) async {
+    testWidgets('4. ClientWorkoutScreen displays Today\'s Workout and does NOT display previous days\' pending workouts', (tester) async {
       // Tuesday Oct 13, 2026
       IstDateUtils.setDateProviderForTesting(() => DateTime.utc(2026, 10, 13, 4, 30));
 
@@ -257,11 +257,15 @@ void main() {
       expect(find.text("⭐ TODAY'S WORKOUT"), findsOneWidget);
       expect(find.text('Pull A — Back & Biceps'), findsOneWidget);
 
-      // Check Pending Workouts section is rendered
-      expect(find.textContaining('PENDING WORKOUTS'), findsOneWidget);
-      expect(find.text('Push A — Chest & Triceps'), findsOneWidget);
-      expect(find.text('Scheduled: 2026-10-12'), findsOneWidget);
-      expect(find.text('START PENDING WORKOUT'), findsOneWidget);
+      // Check previous days' pending workouts are NOT shown in the client workout session screen
+      expect(find.textContaining('PENDING WORKOUTS'), findsNothing);
+      expect(find.text('Push A — Chest & Triceps'), findsNothing);
+      expect(find.text('START PENDING WORKOUT'), findsNothing);
+
+      // Verify pending workouts are preserved safely in repository/backend
+      final pendingInRepo = testRepo.getPendingWorkoutsForClient('client_test_aravind');
+      expect(pendingInRepo.isNotEmpty, isTrue);
+      expect(pendingInRepo.first.id, equals(pushSession.id));
     });
 
     testWidgets('5. ClientWorkoutScreen displays Rest Day card when today has no workout scheduled', (tester) async {

@@ -727,11 +727,17 @@ class _AdminCreateEditSessionScreenState
       exerciseName: '${original.exerciseName} (Copy)',
       sets: original.sets.map((s) => s.copyWith(isCompleted: false)).toList(),
     );
-    setState(() => _exercises.insert(index + 1, copy));
+    setState(() {
+      _exercises.insert(index + 1, copy);
+      _dayExercises[_selectedSplitDay] = List.from(_exercises);
+    });
   }
 
   void _deleteExercise(int index) {
-    setState(() => _exercises.removeAt(index));
+    setState(() {
+      _exercises.removeAt(index);
+      _dayExercises[_selectedSplitDay] = List.from(_exercises);
+    });
   }
 
   void _addSectionDialog() {
@@ -1275,7 +1281,7 @@ class _AdminCreateEditSessionScreenState
               itemBuilder: (ctx, index) {
                 final ex = _exercises[index];
                 return _buildExerciseListItem(ex, index,
-                    key: ValueKey('sess_ex_${ex.id}_$index'));
+                    key: ValueKey('sess_ex_${ex.id}'));
               },
             ),
 
@@ -1546,142 +1552,519 @@ class _AdminCreateEditSessionScreenState
     int index, {
     required Key key,
   }) {
-    final firstSet = ex.sets.firstOrNull;
-    return Container(
+    return _InlineExerciseCard(
       key: key,
+      exercise: ex,
+      index: index,
+      sections: _sections,
+      onChanged: (updated) {
+        _exercises[index] = updated;
+        _dayExercises[_selectedSplitDay] = List.from(_exercises);
+      },
+      onDelete: () => _deleteExercise(index),
+      onDuplicate: () => _duplicateExercise(index),
+      onReplace: () => _replaceExerciseWithLibrary(index),
+    );
+  }
+}
+
+/// Direct Inline Exercise Card Editor
+///
+/// Simplifies the Admin Workout Session screen so all exercise editing (Sets,
+/// Reps, Rest Time, Weight, Tempo, Superset Tag, Notes) can be done directly
+/// without opening a separate Edit screen or dialog.
+class _InlineExerciseCard extends StatefulWidget {
+  final WorkoutExercise exercise;
+  final int index;
+  final List<WorkoutSection> sections;
+  final ValueChanged<WorkoutExercise> onChanged;
+  final VoidCallback onDelete;
+  final VoidCallback onDuplicate;
+  final VoidCallback onReplace;
+
+  const _InlineExerciseCard({
+    required Key key,
+    required this.exercise,
+    required this.index,
+    required this.sections,
+    required this.onChanged,
+    required this.onDelete,
+    required this.onDuplicate,
+    required this.onReplace,
+  }) : super(key: key);
+
+  @override
+  State<_InlineExerciseCard> createState() => _InlineExerciseCardState();
+}
+
+class _InlineExerciseCardState extends State<_InlineExerciseCard> {
+  late TextEditingController _setsController;
+  late TextEditingController _repsController;
+  late TextEditingController _restController;
+  late TextEditingController _weightController;
+  late TextEditingController _tempoController;
+  late TextEditingController _tagController;
+  late TextEditingController _noteController;
+
+  bool _isExpanded = false;
+  late AdvancedTrainingMethod _selectedMethod;
+  late WorkoutSectionType _selectedSectionType;
+
+  @override
+  void initState() {
+    super.initState();
+    final ex = widget.exercise;
+    final firstSet = ex.sets.firstOrNull;
+
+    _setsController = TextEditingController(text: ex.sets.length.toString());
+    _repsController = TextEditingController(text: firstSet?.targetRepsDisplay ?? '8-12');
+    _restController = TextEditingController(text: ex.restSeconds.toString());
+    _weightController = TextEditingController(
+      text: firstSet?.targetWeight != null && firstSet!.targetWeight > 0
+          ? '${firstSet.targetWeight}'
+          : '',
+    );
+    _tempoController = TextEditingController(text: ex.tempo);
+    _tagController = TextEditingController(text: ex.supersetTag ?? '');
+    _noteController = TextEditingController(text: ex.trainerNote);
+
+    _selectedMethod = ex.trainingMethod;
+    _selectedSectionType = ex.sectionType;
+  }
+
+  @override
+  void didUpdateWidget(_InlineExerciseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.exercise.id != widget.exercise.id ||
+        oldWidget.exercise.exerciseName != widget.exercise.exerciseName) {
+      _syncFromExercise(widget.exercise);
+    }
+  }
+
+  void _syncFromExercise(WorkoutExercise ex) {
+    final firstSet = ex.sets.firstOrNull;
+    _setsController.text = ex.sets.length.toString();
+    _repsController.text = firstSet?.targetRepsDisplay ?? '8-12';
+    _restController.text = ex.restSeconds.toString();
+    _weightController.text = firstSet?.targetWeight != null && firstSet!.targetWeight > 0
+        ? '${firstSet.targetWeight}'
+        : '';
+    _tempoController.text = ex.tempo;
+    _tagController.text = ex.supersetTag ?? '';
+    _noteController.text = ex.trainerNote;
+    _selectedMethod = ex.trainingMethod;
+    _selectedSectionType = ex.sectionType;
+  }
+
+  @override
+  void dispose() {
+    _setsController.dispose();
+    _repsController.dispose();
+    _restController.dispose();
+    _weightController.dispose();
+    _tempoController.dispose();
+    _tagController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _syncExercise() {
+    final setsCount = int.tryParse(_setsController.text.trim()) ?? (widget.exercise.sets.isNotEmpty ? widget.exercise.sets.length : 3);
+    final count = setsCount <= 0 ? 1 : setsCount;
+
+    final repsText = _repsController.text.trim();
+    int minReps = 8;
+    int maxReps = 12;
+    if (repsText.contains('–') || repsText.contains('-')) {
+      final parts = repsText.split(RegExp(r'[–\-]'));
+      minReps = int.tryParse(parts[0].trim()) ?? 8;
+      maxReps = int.tryParse(parts[1].trim()) ?? minReps;
+    } else if (repsText.isNotEmpty) {
+      minReps = int.tryParse(repsText) ?? 8;
+      maxReps = minReps;
+    }
+
+    final rest = int.tryParse(_restController.text.trim()) ?? widget.exercise.restSeconds;
+    final weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
+    final tempoText = _tempoController.text.trim().isNotEmpty ? _tempoController.text.trim() : '3-1-1-0';
+    final tagText = _tagController.text.trim();
+    final noteText = _noteController.text.trim();
+
+    final currentSets = widget.exercise.sets;
+    final updatedSets = <ExerciseSet>[];
+    for (int i = 0; i < count; i++) {
+      if (i < currentSets.length) {
+        final existing = currentSets[i];
+        updatedSets.add(existing.copyWith(
+          targetWeight: weight,
+          targetRepsMin: minReps,
+          targetRepsMax: maxReps,
+          tempo: tempoText,
+        ));
+      } else {
+        updatedSets.add(ExerciseSet(
+          id: 'set_${DateTime.now().millisecondsSinceEpoch}_${i + 1}',
+          setNumber: i + 1,
+          setType: currentSets.isNotEmpty ? currentSets.first.setType : SetType.working,
+          targetWeight: weight,
+          targetRepsMin: minReps,
+          targetRepsMax: maxReps,
+          targetRpe: 8.0,
+          targetRir: 2,
+          tempo: tempoText,
+        ));
+      }
+    }
+
+    final updated = widget.exercise.copyWith(
+      restSeconds: rest,
+      tempo: tempoText,
+      trainerNote: noteText,
+      supersetTag: tagText.isEmpty ? null : tagText.toUpperCase(),
+      trainingMethod: _selectedMethod,
+      sectionType: _selectedSectionType,
+      sets: updatedSets,
+    );
+
+    widget.onChanged(updated);
+  }
+
+  InputDecoration _compactInputDecoration(String label, {String? suffix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 10, color: AppColors.textTertiary, height: 0.8),
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      suffixText: suffix,
+      suffixStyle: const TextStyle(fontSize: 9, color: AppColors.textTertiary),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      isDense: true,
+      filled: true,
+      fillColor: AppColors.surfaceElevated,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.primaryRed),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: ex.isSuperset
+          color: widget.exercise.isSuperset
               ? AppColors.primaryRed.withOpacity(0.5)
               : AppColors.border,
-          width: ex.isSuperset ? 1.5 : 1.0,
+          width: widget.exercise.isSuperset ? 1.5 : 1.0,
         ),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: Row(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ReorderableDragStartListener(
-              index: index,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.only(right: 8.0, top: 4.0, bottom: 4.0),
-                  child: const Icon(
-                    Icons.drag_indicator,
-                    color: AppColors.textTertiary,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-            if (ex.isSuperset) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  ex.supersetTag ?? 'SS',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ] else ...[
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
+            // Compact Primary Row
+            Row(
+              children: [
+                // Left: Drag Handle
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: const Padding(
+                      padding: EdgeInsets.only(right: 6.0),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        color: AppColors.textTertiary,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ],
-        ),
-        title: Text(
-          ex.exerciseName,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text(
-              '${ex.trainingMethod.displayName} • ${ex.sets.length} sets × ${firstSet?.targetRepsDisplay ?? "8-12"} reps @ ${firstSet?.targetWeight != null ? "${firstSet!.targetWeight} kg" : "BW"} | Rest: ${ex.restSeconds}s | Tempo: ${ex.tempo}',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-            ),
-            if (ex.trainerNote.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                'Note: ${ex.trainerNote}',
-                style: const TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
+                // Left: Index / Superset Badge
+                if (widget.exercise.isSuperset) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      widget.exercise.supersetTag ?? 'SS',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ] else ...[
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${widget.index + 1}',
+                        style: const TextStyle(
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                // Left: Exercise Name
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.exercise.exerciseName,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (widget.exercise.category.isNotEmpty) ...[
+                        Text(
+                          widget.exercise.category,
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 8),
+                // Right: Editable Sets Field
+                SizedBox(
+                  width: 44,
+                  child: TextFormField(
+                    controller: _setsController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: _compactInputDecoration('Sets'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Right: Editable Reps Field
+                SizedBox(
+                  width: 58,
+                  child: TextFormField(
+                    controller: _repsController,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: _compactInputDecoration('Reps'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Right: Editable Rest Time Field
+                SizedBox(
+                  width: 50,
+                  child: TextFormField(
+                    controller: _restController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                    decoration: _compactInputDecoration('Rest', suffix: 's'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Right-side action: Delete button
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                  tooltip: 'Delete Exercise',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  onPressed: widget.onDelete,
+                ),
+              ],
+            ),
+            // Preserved Secondary Options & Extended Settings
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                // Target Weight
+                SizedBox(
+                  width: 64,
+                  child: TextFormField(
+                    controller: _weightController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                    decoration: _compactInputDecoration('Wt (kg)'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Tempo
+                SizedBox(
+                  width: 68,
+                  child: TextFormField(
+                    controller: _tempoController,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                    decoration: _compactInputDecoration('Tempo'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Superset Tag
+                SizedBox(
+                  width: 48,
+                  child: TextFormField(
+                    controller: _tagController,
+                    keyboardType: TextInputType.text,
+                    textAlign: TextAlign.center,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                    decoration: _compactInputDecoration('Tag'),
+                    onChanged: (_) => _syncExercise(),
+                  ),
+                ),
+                const Spacer(),
+                // Preserved Action: Replace with Library Exercise
+                IconButton(
+                  icon: const Icon(Icons.swap_horiz, size: 18, color: AppColors.primaryRed),
+                  tooltip: 'Replace with Library Exercise',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: widget.onReplace,
+                ),
+                // Preserved Action: Duplicate Exercise
+                IconButton(
+                  icon: const Icon(Icons.copy_outlined, size: 16, color: AppColors.textSecondary),
+                  tooltip: 'Duplicate Exercise',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: widget.onDuplicate,
+                ),
+                // Expand/collapse note & method
+                IconButton(
+                  icon: Icon(
+                    _isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                    color: AppColors.textTertiary,
+                  ),
+                  tooltip: _isExpanded ? 'Less Settings' : 'More Settings',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () => setState(() => _isExpanded = !_isExpanded),
+                ),
+              ],
+            ),
+            if (_isExpanded) ...[
+              const SizedBox(height: 8),
+              // Trainer note
+              TextFormField(
+                controller: _noteController,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                decoration: InputDecoration(
+                  labelText: 'Trainer Note / Instructions',
+                  labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  hintText: 'e.g. Pause at bottom, control eccentric',
+                  hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                  filled: true,
+                  fillColor: AppColors.surfaceElevated,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.primaryRed)),
+                ),
+                onChanged: (_) => _syncExercise(),
+              ),
+              const SizedBox(height: 8),
+              // Training Method & Section Dropdowns
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<AdvancedTrainingMethod>(
+                      value: _selectedMethod,
+                      dropdownColor: AppColors.surfaceElevated,
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                      decoration: InputDecoration(
+                        labelText: 'Method',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        isDense: true,
+                        filled: true,
+                        fillColor: AppColors.surfaceElevated,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+                      ),
+                      items: AdvancedTrainingMethod.values.map((m) {
+                        return DropdownMenuItem(value: m, child: Text(m.displayName, style: const TextStyle(fontSize: 11)));
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedMethod = val);
+                          _syncExercise();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<WorkoutSectionType>(
+                      value: _selectedSectionType,
+                      dropdownColor: AppColors.surfaceElevated,
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+                      decoration: InputDecoration(
+                        labelText: 'Section',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        isDense: true,
+                        filled: true,
+                        fillColor: AppColors.surfaceElevated,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+                      ),
+                      items: WorkoutSectionType.values.map((s) {
+                        return DropdownMenuItem(value: s, child: Text(s.displayName, style: const TextStyle(fontSize: 11)));
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedSectionType = val);
+                          _syncExercise();
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_upward, size: 18, color: AppColors.textSecondary),
-              tooltip: 'Move Up',
-              onPressed: index > 0 ? () => _moveExercise(index, index - 1) : null,
-            ),
-            IconButton(
-              icon: const Icon(Icons.arrow_downward, size: 18, color: AppColors.textSecondary),
-              tooltip: 'Move Down',
-              onPressed: index < _exercises.length - 1 ? () => _moveExercise(index, index + 1) : null,
-            ),
-            IconButton(
-              icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.primaryRed),
-              tooltip: 'Replace with Library Exercise',
-              onPressed: () => _replaceExerciseWithLibrary(index),
-            ),
-            IconButton(
-              icon: const Icon(Icons.copy_outlined, size: 18, color: AppColors.textSecondary),
-              tooltip: 'Duplicate Exercise',
-              onPressed: () => _duplicateExercise(index),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
-              tooltip: 'Edit Exercise Details',
-              onPressed: () => _openExerciseDialog(existingExercise: ex, index: index),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-              tooltip: 'Delete Exercise',
-              onPressed: () => _deleteExercise(index),
-            ),
           ],
         ),
       ),

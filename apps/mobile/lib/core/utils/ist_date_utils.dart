@@ -5,6 +5,8 @@ class IstDateUtils {
   static const int istOffsetMs = (5 * 60 + 30) * 60 * 1000;
 
   static DateTime Function()? _dateProviderForTesting;
+  static Duration _serverTimeOffset = Duration.zero;
+  static bool _hasSyncedServerTime = false;
 
   /// Configure a controlled date provider for automated tests.
   /// Pass null to restore real system time.
@@ -17,14 +19,49 @@ class IstDateUtils {
     _dateProviderForTesting = null;
   }
 
-  static DateTime _getNow() {
-    return _dateProviderForTesting != null ? _dateProviderForTesting!() : DateTime.now();
+  /// Whether a custom date provider is currently configured for testing
+  static bool get hasCustomDateProviderForTesting => _dateProviderForTesting != null;
+
+  /// Synchronize authoritative server time
+  static void syncServerTime(DateTime serverTime) {
+    final localNow = DateTime.now();
+    _serverTimeOffset = serverTime.toUtc().difference(localNow.toUtc());
+    _hasSyncedServerTime = true;
   }
 
-  /// Returns current DateTime in Indian Standard Time (IST)
-  static DateTime nowInIST() {
-    final now = _getNow();
-    final utc = now.toUtc();
+  /// Synchronize authoritative server time from ISO-8601 string or HTTP Date header
+  static void syncServerTimeString(String? timestampStr) {
+    if (timestampStr == null || timestampStr.isEmpty) return;
+    try {
+      final parsed = DateTime.tryParse(timestampStr);
+      if (parsed != null) {
+        syncServerTime(parsed);
+      }
+    } catch (_) {}
+  }
+
+  /// Whether server time has been synchronized
+  static bool get hasSyncedServerTime => _hasSyncedServerTime;
+
+  /// Current difference between server UTC time and local device UTC time
+  static Duration get serverTimeOffset => _serverTimeOffset;
+
+  /// Reset server time offset (for testing or reset)
+  static void resetServerTime() {
+    _serverTimeOffset = Duration.zero;
+    _hasSyncedServerTime = false;
+  }
+
+  static DateTime _getNow() {
+    if (_dateProviderForTesting != null) {
+      return _dateProviderForTesting!();
+    }
+    return DateTime.now().add(_serverTimeOffset);
+  }
+
+  /// Converts any [DateTime] to Indian Standard Time (IST, UTC+05:30)
+  static DateTime toISTDateTime(DateTime input) {
+    final utc = input.toUtc();
     final istUtc = utc.add(istOffset);
     return DateTime(
       istUtc.year,
@@ -35,6 +72,25 @@ class IstDateUtils {
       istUtc.second,
       istUtc.millisecond,
     );
+  }
+
+  /// Determines whether a scheduled workout session is currently visible to the client.
+  /// Visible strictly from 5:00 AM to 9:00 PM IST on its assigned day.
+  /// Opening boundary: 05:00:00 IST (5:00 AM IST) - visible. Before 5:00 AM is hidden.
+  /// Closing boundary: 21:00:00 IST (9:00 PM IST) - visible up to 9:00 PM.
+  /// After 9:00 PM (e.g. 21:00:01+), automatically hidden from client app.
+  static bool isScheduledWorkoutVisibleInIST([DateTime? dateTime]) {
+    final ist = dateTime != null ? toISTDateTime(dateTime) : nowInIST();
+    final totalMs = (ist.hour * 3600 + ist.minute * 60 + ist.second) * 1000 + ist.millisecond;
+    const openingMs = 5 * 3600 * 1000;  // 05:00:00.000 IST (5:00:00 AM)
+    const closingMs = 21 * 3600 * 1000; // 21:00:00.000 IST (9:00:00 PM)
+    return totalMs >= openingMs && totalMs <= closingMs;
+  }
+
+  /// Returns current DateTime in Indian Standard Time (IST)
+  static DateTime nowInIST() {
+    final now = _getNow();
+    return toISTDateTime(now);
   }
 
   /// Returns today's date formatted as `yyyy-MM-dd` in IST

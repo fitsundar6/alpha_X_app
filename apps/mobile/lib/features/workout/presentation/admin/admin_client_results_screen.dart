@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 
@@ -593,9 +594,11 @@ class _AdminClientResultsScreenState extends State<AdminClientResultsScreen> {
                 try {
                   await widget.workoutRepository.unlockSession(
                     recordId: record.id,
-                    adminId: 'admin_1',
+                    adminId: AuthService().currentUserId.isNotEmpty ? AuthService().currentUserId : 'admin_1',
                     reason: reason,
                     reopenSession: reopenSession,
+                    clientId: widget.client['id'],
+                    sessionId: record.sessionId,
                   );
                   if (mounted) {
                     setState(() {});

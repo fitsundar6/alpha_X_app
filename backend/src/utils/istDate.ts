@@ -16,6 +16,31 @@ export function setDateProviderForTesting(provider: (() => Date) | null): void {
 }
 
 /**
+ * Checks whether current or specified time falls within the client workout visibility window:
+ * 5:00 AM to 9:00 PM IST (Asia/Kolkata).
+ * Opening boundary: 05:00:00 IST (5:00 AM IST) - visible. Before 5:00 AM is hidden.
+ * Closing boundary: 21:00:00 IST (9:00 PM IST) - visible up to 9:00 PM.
+ * After 9:00 PM (e.g. 21:00:01+), automatically hidden from client app.
+ */
+export function isScheduledWorkoutVisibleInIST(d?: Date | string | null): boolean {
+  let now: Date;
+  if (d) {
+    now = typeof d === 'string' ? new Date(d) : d;
+  } else {
+    now = _dateProvider ? _dateProvider() : new Date();
+  }
+  const istTime = new Date(now.getTime() + IST_OFFSET_MS);
+  const hour = istTime.getUTCHours();
+  const minute = istTime.getUTCMinutes();
+  const second = istTime.getUTCSeconds();
+  const ms = istTime.getUTCMilliseconds();
+  const totalMs = (hour * 3600 + minute * 60 + second) * 1000 + ms;
+  const openingMs = 5 * 3600 * 1000;  // 05:00:00.000 (5:00:00 AM IST)
+  const closingMs = 21 * 3600 * 1000; // 21:00:00.000 (9:00:00 PM IST)
+  return totalMs >= openingMs && totalMs <= closingMs;
+}
+
+/**
  * Returns current Date adjusted to Indian Standard Time (IST, UTC+05:30)
  */
 export function getCurrentISTDate(): Date {

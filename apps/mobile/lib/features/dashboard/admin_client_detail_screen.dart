@@ -1750,36 +1750,75 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: colors.surfaceCard,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.border),
       ),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        iconColor: colors.primary,
-        collapsedIconColor: colors.textSecondary,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(4),
+      child: Material(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          iconColor: colors.primary,
+          collapsedIconColor: colors.textSecondary,
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  record.workoutType.toUpperCase(),
+                  style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800),
+                ),
               ),
-              child: Text(
-                record.workoutType.toUpperCase(),
-                style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  record.sessionTitle,
+                  style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                record.sessionTitle,
-                style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
-              ),
-            ),
-          ],
-        ),
+              if (record.isLocked) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.gold, width: 0.8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_rounded, size: 10, color: AppColors.gold),
+                      SizedBox(width: 3),
+                      Text('LOCKED', style: TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                ),
+              ] else if (record.unlockedAt != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.green, width: 0.8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_open_rounded, size: 10, color: Colors.green),
+                      SizedBox(width: 3),
+                      Text('UNLOCKED', style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4.0),
           child: Row(
@@ -1802,6 +1841,75 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(color: AppColors.border),
+                if (record.isLocked) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_rounded, color: AppColors.gold, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Session Locked & Completed',
+                                style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 13),
+                              ),
+                              Text(
+                                'Client cannot access or modify this workout.',
+                                style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          key: const Key('admin_release_unlock_button'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gold,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.lock_open_rounded, size: 14),
+                          label: const Text('Release / Unlock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                          onPressed: () => _showUnlockSessionDialog(record, colors),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (record.unlockedAt != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_open_rounded, color: Colors.green, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Session Released & Unlocked. Reason: "${record.unlockReason ?? 'Admin approval'}"',
+                            style: GoogleFonts.poppins(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (record.notes != null && record.notes!.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
@@ -1945,6 +2053,184 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+  Future<void> _showUnlockSessionDialog(WorkoutRecord record, ClientThemeColors colors) async {
+    if (!AuthService().isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unauthorized: Only administrators can unlock workout sessions.'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+      return;
+    }
+
+    final reasonController = TextEditingController(
+      text: 'Accidental completion by client - released for workout access',
+    );
+    bool reopenSession = true;
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (sbCtx, setDialogState) => AlertDialog(
+          backgroundColor: colors.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: colors.border),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.lock_open_rounded, color: AppColors.gold, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Release & Unlock Session',
+                  style: GoogleFonts.poppins(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Release and unlock "${record.sessionTitle}" for $_clientName?',
+                style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.gold.withOpacity(0.3)),
+                ),
+                child: Text(
+                  'Audit Notice: All releases are recorded with your Admin ID, reason, and timestamp.',
+                  style: GoogleFonts.poppins(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'REASON FOR RELEASE / UNLOCK *',
+                style: GoogleFonts.poppins(color: colors.textTertiary, fontSize: 10, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Accidental completion by client',
+                  hintStyle: TextStyle(color: colors.textDisabled, fontSize: 12),
+                  filled: true,
+                  fillColor: colors.surfaceElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colors.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.gold)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Checkbox(
+                    value: reopenSession,
+                    activeColor: AppColors.gold,
+                    checkColor: Colors.black,
+                    onChanged: (val) => setDialogState(() => reopenSession = val ?? true),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Reopen as active workout for client',
+                      style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text('Cancel', style: TextStyle(color: colors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a reason for unlocking the session.'),
+                      backgroundColor: AppColors.primaryRed,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogCtx);
+                try {
+                  final adminId = AuthService().currentUserId.isNotEmpty
+                      ? AuthService().currentUserId
+                      : 'admin_1';
+                  final success = await widget.workoutRepository.unlockSession(
+                    recordId: record.id,
+                    adminId: adminId,
+                    reason: reason,
+                    reopenSession: reopenSession,
+                    clientId: _clientId,
+                    sessionId: record.sessionId,
+                  );
+                  if (success) {
+                    await _loadWorkoutHistory();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Session "${record.sessionTitle}" released and unlocked for $_clientName.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to release session: Record not found.'),
+                          backgroundColor: AppColors.primaryRed,
+                        ),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to release session: $e'),
+                        backgroundColor: AppColors.primaryRed,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Confirm Release', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
       ),
     );
   }
