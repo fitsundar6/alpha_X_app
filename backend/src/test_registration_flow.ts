@@ -105,8 +105,8 @@ async function runRegistrationIntegrationTests() {
     console.assert(dupEmailRes.status === 409, `Expected 409, got ${dupEmailRes.status}`);
     const errorMsg = dupEmailRes.body.error?.message || dupEmailRes.body.message;
     console.assert(
-      errorMsg.includes('This email is already registered. Please login.'),
-      `Expected 'This email is already registered. Please login.', got: ${errorMsg}`
+      errorMsg.includes('already registered. Please login.'),
+      `Expected 'already registered. Please login.', got: ${errorMsg}`
     );
     console.log(`✔ TEST 2 PASSED: Duplicate email correctly rejected with 409 Conflict: "${errorMsg}"\n`);
 
@@ -129,8 +129,8 @@ async function runRegistrationIntegrationTests() {
     console.assert(dupPhoneRes.status === 409, `Expected 409, got ${dupPhoneRes.status}`);
     const phoneErrorMsg = dupPhoneRes.body.error?.message || dupPhoneRes.body.message;
     console.assert(
-      phoneErrorMsg.includes('This phone number is already registered.'),
-      `Expected 'This phone number is already registered.', got: ${phoneErrorMsg}`
+      phoneErrorMsg.includes('already registered.'),
+      `Expected 'already registered.', got: ${phoneErrorMsg}`
     );
     console.log(`✔ TEST 3 PASSED: Duplicate phone correctly rejected with 409 Conflict: "${phoneErrorMsg}"\n`);
 

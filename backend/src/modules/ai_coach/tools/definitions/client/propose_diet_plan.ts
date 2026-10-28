@@ -636,6 +636,14 @@ export const proposeDietPlanTool: ToolDefinition<ProposeDietPlanInput> = {
 
       // Harmonize meal totals with daily calorie target by proportionally scaling food portions
       const sumMealCalories = normalizedMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
+      if (sumMealCalories > 0 && Math.abs(sumMealCalories - dailyCalories) > Math.max(dailyCalories * 0.20, 250)) {
+        return {
+          success: false,
+          source: 'ALPHA_X_DATABASE',
+          error: 'VALIDATION_ERROR',
+          message: `Total meal calories (${sumMealCalories} kcal) deviate significantly from the daily target (${dailyCalories} kcal). Please provide meals that align with the daily calorie target.`,
+        };
+      }
       if (sumMealCalories > 0 && Math.abs(sumMealCalories - dailyCalories) > 10) {
         const scale = dailyCalories / sumMealCalories;
         normalizedMeals = normalizedMeals.map((meal) => {

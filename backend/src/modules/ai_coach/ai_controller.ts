@@ -275,9 +275,10 @@ export class AiController {
 
     let proposedPayload: any;
     let planTitle = `${ctx.user.name} — ${splitResult.titleSuffix}`;
+    const strengthHistory = await workoutIntentService.fetchClientStrengthHistory(ctx.profile.id);
 
     if (splitResult.isMultiDayTemplate) {
-      const daysCount = splitResult.suggestedDaysPerWeek || 4;
+      const daysCount = ctx.profile.trainingDaysPerWeek || splitResult.suggestedDaysPerWeek || 4;
       const dayPlans = workoutIntentService.generateScheduleForSplit(splitResult.split, {
         daysPerWeek: daysCount,
         primaryGoal: goal,
@@ -315,25 +316,46 @@ export class AiController {
           }
         );
 
-        const mappedExercises = dayExercises.map((e, eIdx) => ({
-          exerciseId: e.id,
-          exerciseName: e.name,
-          name: e.name,
-          category: e.category,
-          bodyPart: e.bodyPart,
-          orderIndex: eIdx,
-          sets: level === 'Advanced' ? 4 : 3,
-          reps: level === 'Advanced' ? '6-8' : '8-10',
-          weight: level === 'Advanced' ? 80.0 : 50.0,
-          targetReps: level === 'Advanced' ? '6-8' : '8-10',
-          targetWeight: level === 'Advanced' ? 80.0 : 50.0,
-          restSeconds: 90,
-          targetRir: 2,
-          targetRpe: 8.0,
-          tempo: '3-1-1-0',
-          notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
-          day: d.dayName,
-        }));
+        const mappedExercises = dayExercises.map((e, eIdx) => {
+          const params = workoutIntentService.calculatePersonalizedExerciseParameters(
+            e,
+            {
+              fitnessLevel: level,
+              primaryGoal: goal,
+              gender: ctx.profile.gender,
+              weightKg: ctx.profile.weightKg,
+              trainingExperience: ctx.profile.trainingExperience,
+            },
+            {
+              orderIndex: eIdx,
+              totalExercises: dayExercises.length,
+              sessionWorkoutType: d.workoutType,
+              strengthHistory,
+            }
+          );
+
+          return {
+            exerciseId: e.id,
+            exerciseName: e.name,
+            name: e.name,
+            category: e.category,
+            bodyPart: e.bodyPart,
+            orderIndex: eIdx,
+            sets: params.sets,
+            numberOfSets: params.sets,
+            reps: params.reps,
+            targetReps: params.reps,
+            weight: params.weight,
+            targetWeight: params.targetWeight,
+            restSeconds: params.restSeconds,
+            targetRir: params.targetRir,
+            targetRpe: params.targetRpe,
+            tempo: params.tempo,
+            notes: params.notes,
+            adminInstruction: params.notes,
+            day: d.dayName,
+          };
+        });
 
         allExercises.push(...mappedExercises);
 
@@ -356,7 +378,7 @@ export class AiController {
         difficulty: level,
         estimatedDurationMinutes: weeklySchedule[0]?.estimatedDurationMinutes || 50,
         description: `${daysCount}-day ${splitResult.displayName} program designed for ${ctx.user.name}. Goal: ${goal}. Level: ${level}.`,
-        exercises: allExercises,
+        exercises: weeklySchedule[0]?.exercises || allExercises.slice(0, 4),
         weeklySchedule,
       };
     } else {
@@ -379,6 +401,47 @@ export class AiController {
         ? 'Chest Hypertrophy'
         : (goal.includes('Strength') ? 'Strength' : 'Hypertrophy');
 
+      const mappedSingleExercises = selectedExercises.map((e, idx) => {
+        const params = workoutIntentService.calculatePersonalizedExerciseParameters(
+          e,
+          {
+            fitnessLevel: level,
+            primaryGoal: goal,
+            gender: ctx.profile.gender,
+            weightKg: ctx.profile.weightKg,
+            trainingExperience: ctx.profile.trainingExperience,
+          },
+          {
+            orderIndex: idx,
+            totalExercises: selectedExercises.length,
+            sessionWorkoutType: workoutType,
+            strengthHistory,
+          }
+        );
+
+        return {
+          exerciseId: e.id,
+          exerciseName: e.name,
+          name: e.name,
+          category: e.category,
+          bodyPart: e.bodyPart,
+          orderIndex: idx,
+          sets: params.sets,
+          numberOfSets: params.sets,
+          reps: params.reps,
+          targetReps: params.reps,
+          weight: params.weight,
+          targetWeight: params.targetWeight,
+          restSeconds: params.restSeconds,
+          targetRir: params.targetRir,
+          targetRpe: params.targetRpe,
+          tempo: params.tempo,
+          notes: params.notes,
+          adminInstruction: params.notes,
+          day: 'Day 1',
+        };
+      });
+
       proposedPayload = {
         title: planTitle,
         workoutType,
@@ -386,23 +449,7 @@ export class AiController {
         difficulty: level,
         estimatedDurationMinutes: 50,
         description: `Targeted ${splitResult.split} session designed for ${ctx.user.name}. Target: ${splitResult.targetMuscleGroup}. Goal: ${goal}. Level: ${level}. Considers recorded recovery and injury constraints.`,
-        exercises: selectedExercises.map((e, idx) => ({
-          exerciseId: e.id,
-          exerciseName: e.name,
-          name: e.name,
-          category: e.category,
-          bodyPart: e.bodyPart,
-          orderIndex: idx,
-          sets: 3,
-          targetReps: level === 'Advanced' ? '6-8' : '8-10',
-          reps: level === 'Advanced' ? '6-8' : '8-10',
-          targetWeight: level === 'Advanced' ? 80.0 : 50.0,
-          restSeconds: 90,
-          targetRir: 2,
-          targetRpe: 8.0,
-          tempo: '3-1-1-0',
-          notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
-        })),
+        exercises: mappedSingleExercises,
         weeklySchedule: [
           {
             day: 'Day 1',
@@ -410,23 +457,30 @@ export class AiController {
             workoutType,
             targetMuscleGroup: splitResult.targetMuscleGroup,
             estimatedDurationMinutes: 50,
-            exercises: selectedExercises.map((e) => ({
-              name: e.name,
-              exerciseId: e.id,
-              category: e.category,
-              bodyPart: e.bodyPart,
-              sets: 3,
-              reps: level === 'Advanced' ? '6-8' : '8-10',
-              weight: level === 'Advanced' ? 80.0 : 50.0,
-              restSeconds: 90,
-              notes: `Focus on controlled eccentric phase (3s). Maintain neutral spine.`,
-            })),
+            exercises: mappedSingleExercises,
           },
         ],
       };
     }
 
     const reason = `Formulated from Alpha X Exercise Library for ${splitResult.displayName} based on ${ctx.user.name}'s goal (${goal}), ${level} tier, and verified injury records (${injury}).`;
+
+    // Validate proposed plan against split rules, client injury restrictions, and catalog constraints
+    const validation = await workoutIntentService.validateProposalForSplit(
+      splitResult,
+      proposedPayload.exercises,
+      proposedPayload.weeklySchedule,
+      {
+        clientProfileId: ctx.profile.id,
+        injuryAreas: ctx.profile.injuryAreas || [],
+        fitnessLevel: level,
+        primaryGoal: goal,
+      }
+    );
+
+    if (!validation.isValid) {
+      console.warn(`[AI Controller] Workout validation warning: ${validation.error}`);
+    }
 
     const proposal = await aiTools.createProposal({
       conversationId,
@@ -435,7 +489,7 @@ export class AiController {
       clientName: ctx.user.name,
       proposalType: 'WORKOUT',
       title: proposedPayload.title,
-      summary: `4-exercise ${proposedPayload.workoutType} protocol (${proposedPayload.estimatedDurationMinutes} min)`,
+      summary: `${proposedPayload.weeklySchedule?.length || 1}-day ${proposedPayload.workoutType} protocol (${proposedPayload.estimatedDurationMinutes} min)`,
       reason,
       proposedDataJson: JSON.stringify(proposedPayload),
     });

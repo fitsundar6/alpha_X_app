@@ -1048,7 +1048,14 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
         children: [
           Icon(icon, size: 11, color: AppColors.textSecondary),
           const SizedBox(width: 4),
-          Text(text, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold)),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

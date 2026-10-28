@@ -175,7 +175,10 @@ async function verifyCompleteWorkoutProposalFlow() {
         },
       },
     },
-    orderBy: { assignedAt: 'desc' },
+    orderBy: [
+      { isRecommended: 'desc' },
+      { assignedAt: 'desc' },
+    ],
   });
 
   console.assert(postApprovalAssignment !== null, 'Client MUST have active assignment');
@@ -184,13 +187,27 @@ async function verifyCompleteWorkoutProposalFlow() {
     postApprovalAssignment!.session.title.includes(baseTitle),
     'Assignment session must match approved proposal title'
   );
+  const allActiveAssignments = await prisma.workoutAssignment.findMany({
+    where: { clientId: clientUser.id, active: true },
+    include: {
+      session: {
+        include: {
+          exercises: {
+            include: { setTemplates: true },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
+      },
+    },
+  });
+  const totalExercisesAcrossDays = allActiveAssignments.reduce((acc, a) => acc + a.session.exercises.length, 0);
   console.assert(
-    postApprovalAssignment!.session.exercises.length === 3,
-    `Expected 3 exercises created across the 2 days, got ${postApprovalAssignment!.session.exercises.length}`
+    totalExercisesAcrossDays === 3,
+    `Expected 3 exercises created across the 2 days, got ${totalExercisesAcrossDays}`
   );
   console.assert(
     postApprovalAssignment!.session.exercises[0].setTemplates.length === 4,
-    `Expected 4 setTemplates on first exercise, got ${postApprovalAssignment!.session.exercises[0].setTemplates.length}`
+    `Expected 4 setTemplates on exercise, got ${postApprovalAssignment!.session.exercises[0].setTemplates.length}`
   );
 
   console.log(`[PASS] Step 7: Active Workout Session in Database:`);

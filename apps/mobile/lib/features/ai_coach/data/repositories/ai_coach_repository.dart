@@ -809,11 +809,22 @@ class AiCoachRepository extends ChangeNotifier {
     try {
       debugPrint('[AI COACH REPO] Backend offline or error — calling Gemini directly');
 
-      // Candidate models with active quotas and tool/text capability
+      if (_geminiApiKey.trim().isEmpty) {
+        debugPrint('[AI COACH REPO] Direct Gemini fallback unavailable: GEMINI_API_KEY is not configured.');
+        return AiChatMessage(
+          id: UniqueKey().toString(),
+          sender: 'AI',
+          content: '⚠️ The Alpha X Backend server is currently offline (cannot reach ' + AppConstants.apiBaseUrl + '), and no Gemini API key was provided to Flutter.\n\nTo resolve this:\n1. Start the backend: cd backend && npm run dev\n2. Or run Flutter with: flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY',
+          isError: true,
+          intent: 'BACKEND_OFFLINE',
+        );
+      }
+
+      // Candidate models with active quotas and verified availability
       final modelCandidates = [
-        'gemini-3.5-flash',
-        'gemini-flash-latest',
         'gemini-flash-lite-latest',
+        'gemini-flash-latest',
+        'gemini-3.5-flash',
         'gemini-3.8-flash',
         'gemini-3.6-flash',
         'gemini-3.5-flash-lite',

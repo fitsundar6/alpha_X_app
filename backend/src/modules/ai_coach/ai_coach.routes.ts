@@ -206,30 +206,12 @@ router.post('/chat', async (req: Request, res: Response) => {
       return;
     } catch (err: any) {
       const errMsg = err.message || String(err);
-      const isAuthError = errMsg.includes('401') || errMsg.includes('authentication') || errMsg.includes('API key');
-      console.error(`[GEMINI SERVICE NOTICE] [${requestId}]:`, errMsg);
-
-      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503 ERROR) "${errMsg}"`);
-      sendError(
-        res,
-        isAuthError ? 'AI_AUTHENTICATION_ERROR' : 'AI_SERVICE_UNAVAILABLE',
-        errMsg || 'AI service is temporarily unavailable.',
-        HttpStatus.SERVICE_UNAVAILABLE,
-        undefined,
-        err,
-        {
-          activity: 'AI Coach Natural Language Query',
-          explanation: isAuthError
-            ? 'Google Gemini API rejected authentication credentials. Verify GEMINI_API_KEY in server environment.'
-            : 'External AI reasoning model execution encountered an error.',
-          receivedPayload: { message: cleanMessage, conversationId: conversation.id },
-        }
-      );
-      return;
+      console.warn(`[GEMINI SERVICE NOTICE] [${requestId}]: External Gemini unavailable (${errMsg}). Falling back to local database AI engine.`);
+      // Allow execution to fall through to step 10 below
     }
   }
 
-  // 10. If Gemini API Key is missing, attempt database-backed response via AiController
+  // 10. Attempt database-backed response via AiController
   try {
     const fallbackResult = await aiController.handleAdminMessage({
       adminId,
@@ -265,18 +247,20 @@ router.post('/chat', async (req: Request, res: Response) => {
       verifiedClient: conversation.verifiedClient || null,
     }, HttpStatus.OK, `AI Coach answered via Alpha X Analytics Engine (Prompt: "${cleanMessage}")`);
     return;
-  } catch (_) {
-    console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] (HTTP 503) "GEMINI_API_KEY is not configured on the server."`);
+  } catch (fallbackErr: any) {
+    const errText = fallbackErr?.message || String(fallbackErr);
+    console.error(`[AI CONTROLLER ERROR] [${requestId}]:`, errText);
     sendError(
       res,
-      'AI_CONFIGURATION_REQUIRED',
-      'AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.',
+      'AI_SERVICE_UNAVAILABLE',
+      'AI service is temporarily unavailable.',
       HttpStatus.SERVICE_UNAVAILABLE,
       undefined,
-      undefined,
+      fallbackErr,
       {
         activity: 'AI Coach Natural Language Query',
-        explanation: 'GEMINI_API_KEY environment variable is not configured on the server.',
+        explanation: 'External model and local database AI engine both encountered an error.',
+        receivedPayload: { message: cleanMessage, conversationId: conversation.id },
       }
     );
   }
@@ -771,6 +755,7 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
     const focusMuscles = Array.isArray(workoutConfig?.focusMuscles) ? workoutConfig.focusMuscles : [];
     const weakPoints = Array.isArray(workoutConfig?.weakPoints) ? workoutConfig.weakPoints : [];
     const injuryExclusions = Array.isArray(workoutConfig?.injuryExclusions) ? workoutConfig.injuryExclusions : (clientProfile?.injuryAreas || []);
+    const strengthHistory = await workoutIntentService.fetchClientStrengthHistory(profileId);
 
     // Generate schedule days according to split configuration template
     const dayPlans = splitTemplate.generateSchedule({
@@ -859,27 +844,46 @@ export const handleGenerateProposal = async (req: Request, res: Response): Promi
         targetMuscles: d.primaryBodyParts || [d.targetMuscleGroup],
         estimatedDurationMinutes: d.estimatedDurationMinutes || sessionDuration,
         recommendedExercisesCount: dayExercises.length,
-        exercises: dayExercises.map((e, eIdx) => ({
-          exerciseId: e.id,
-          name: e.name,
-          exerciseName: e.name,
-          category: e.category,
-          bodyPart: e.bodyPart,
-          orderIndex: eIdx,
-          sets: experience.toLowerCase() === 'advanced' ? 4 : 3,
-          numberOfSets: experience.toLowerCase() === 'advanced' ? 4 : 3,
-          reps: experience.toLowerCase() === 'advanced' ? '6-8' : (primaryGoal.toLowerCase().includes('strength') ? '5-6' : '8-10'),
-          targetReps: experience.toLowerCase() === 'advanced' ? '6-8' : (primaryGoal.toLowerCase().includes('strength') ? '5-6' : '8-10'),
-          restSeconds: primaryGoal.toLowerCase().includes('strength') ? 120 : 90,
-          weight: experience.toLowerCase() === 'advanced' ? 75.0 : 50.0,
-          targetWeight: experience.toLowerCase() === 'advanced' ? 75.0 : 50.0,
-          targetRir: 2,
-          targetRpe: 8.0,
-          tempo: '3-1-1-0',
-          notes: 'Tempo 3-1-1-0. Prioritize strict range of motion and form.',
-          adminInstruction: 'Tempo 3-1-1-0. Prioritize strict range of motion and form.',
-          day: d.dayName,
-        })),
+        exercises: dayExercises.map((e, eIdx) => {
+          const params = workoutIntentService.calculatePersonalizedExerciseParameters(
+            e,
+            {
+              fitnessLevel: experience,
+              primaryGoal,
+              gender: clientProfile?.gender,
+              weightKg: clientProfile?.weightKg,
+              trainingExperience: clientProfile?.trainingExperience,
+            },
+            {
+              orderIndex: eIdx,
+              totalExercises: dayExercises.length,
+              sessionWorkoutType: d.workoutType,
+              strengthHistory,
+            }
+          );
+
+          return {
+            exerciseId: e.id,
+            name: e.name,
+            exerciseName: e.name,
+            category: e.category,
+            bodyPart: e.bodyPart,
+            orderIndex: eIdx,
+            sets: params.sets,
+            numberOfSets: params.sets,
+            reps: params.reps,
+            targetReps: params.reps,
+            restSeconds: params.restSeconds,
+            weight: params.weight,
+            targetWeight: params.targetWeight,
+            targetRir: params.targetRir,
+            targetRpe: params.targetRpe,
+            tempo: params.tempo,
+            notes: params.notes,
+            adminInstruction: params.notes,
+            day: d.dayName,
+          };
+        }),
       });
     }
 
