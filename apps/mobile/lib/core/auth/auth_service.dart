@@ -92,11 +92,19 @@ class AuthService extends ChangeNotifier {
   String? get approvedAt => _approvedAt;
   String? get suspendedAt => _suspendedAt;
   String get currentToken {
-    if (_token.isNotEmpty) return _token;
-    if (_role == UserRole.admin && _isAuthenticated) return 'local_admin_session_token';
+    final isProd = (kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app')) &&
+        (!_isTestEnvironment || _customHttpClient != null);
+    if (_token.isNotEmpty) {
+      if (_token == 'local_admin_session_token' && isProd) {
+        return '';
+      }
+      return _token;
+    }
+    if (_role == UserRole.admin && _isAuthenticated && !isProd) {
+      return 'local_admin_session_token';
+    }
     if (_isTestEnvironment) return 'alpha_x_mock_token_for_client';
     if (!_isAuthenticated) return '';
-    // Never return a mock client token in production — empty string forces re-authentication
     return '';
   }
   String get rawToken => _token;
@@ -284,7 +292,10 @@ class AuthService extends ChangeNotifier {
             _userPhone = null;
             _photoUrl = null;
             _isAuthenticated = true;
-            _token = effectiveToken.isNotEmpty ? effectiveToken : 'local_admin_session_token';
+            final isProd = kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app');
+            _token = effectiveToken.isNotEmpty && effectiveToken != 'local_admin_session_token'
+                ? effectiveToken
+                : (isProd ? '' : 'local_admin_session_token');
             unawaited(refreshAdminToken());
           } else {
             await logout();
@@ -424,7 +435,8 @@ class AuthService extends ChangeNotifier {
       };
 
       // 1. Secure token & session persistence using Flutter Secure Storage (Android KeyStore / iOS Keychain)
-      if (_token.isNotEmpty) {
+      final isProd = kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app');
+      if (_token.isNotEmpty && (!isProd || _token != 'local_admin_session_token')) {
         await SecureTokenStorage.writeAuthToken(_token);
       }
       await SecureTokenStorage.writeSessionData(session);
@@ -1124,30 +1136,43 @@ class AuthService extends ChangeNotifier {
     _userEmail = cleanEmail;
     _userPhone = null;
     _photoUrl = null;
-    _isAuthenticated = true;
-    _token = 'local_admin_session_token';
+    final isProd = (kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app')) &&
+        (!_isTestEnvironment || _customHttpClient != null);
+    _token = isProd ? '' : 'local_admin_session_token';
 
     // Authoritative Backend JWT Token Acquisition
     try {
-      final res = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': cleanEmail,
-          'password': configured,
-        }),
-      ).timeout(const Duration(seconds: 8));
+      final client = _customHttpClient;
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+      final headers = {'Content-Type': 'application/json'};
+      final reqBody = jsonEncode({
+        'email': cleanEmail,
+        'password': configured,
+      });
+
+      final res = client != null
+          ? await client.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8))
+          : await http.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        if (decoded['data'] != null && decoded['data']['token'] != null) {
-          _token = decoded['data']['token'];
+        final candidateToken = (decoded is Map ? (decoded['data']?['token'] ?? decoded['token']) : null)?.toString();
+        if (candidateToken != null && candidateToken.trim().isNotEmpty) {
+          _token = candidateToken.trim();
         }
       }
     } catch (e) {
       debugPrint('[AUTH] Admin backend sync note: $e');
     }
 
+    if (isProd && _token.isEmpty) {
+      _isAuthenticated = false;
+      await _saveActiveSession();
+      notifyListeners();
+      return;
+    }
+
+    _isAuthenticated = true;
     await _saveActiveSession();
     notifyListeners();
   }
@@ -1158,6 +1183,7 @@ class AuthService extends ChangeNotifier {
     String userId = 'admin_alex_stone',
     String userName = 'Alpha X Administrator',
     String password = '',
+    String? token,
   }) async {
     _role = UserRole.admin;
     _userId = userId;
@@ -1166,28 +1192,49 @@ class AuthService extends ChangeNotifier {
     _userEmail = email.trim().toLowerCase();
     _userPhone = null;
     _photoUrl = null;
-    _isAuthenticated = true;
-    _token = 'local_admin_session_token';
 
-    // Authoritative Backend JWT Token Acquisition
-    try {
-      final res = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+    final hasProvidedToken = token != null && token.trim().isNotEmpty;
+    if (hasProvidedToken) {
+      _token = token.trim();
+      _isAuthenticated = true;
+    } else {
+      final isProd = (kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app')) &&
+          (!_isTestEnvironment || _customHttpClient != null);
+      _token = isProd ? '' : 'local_admin_session_token';
+
+      // Authoritative Backend JWT Token Acquisition (only when token was not already provided)
+      try {
+        final client = _customHttpClient;
+        final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+        final headers = {'Content-Type': 'application/json'};
+        final reqBody = jsonEncode({
           'email': _userEmail,
           'password': password.isNotEmpty ? password : AdminConfig.adminPassword,
-        }),
-      ).timeout(const Duration(seconds: 8));
+        });
 
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        if (decoded['data'] != null && decoded['data']['token'] != null) {
-          _token = decoded['data']['token'];
+        final res = client != null
+            ? await client.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8))
+            : await http.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          final decoded = jsonDecode(res.body);
+          final candidateToken = (decoded is Map ? (decoded['data']?['token'] ?? decoded['token']) : null)?.toString();
+          if (candidateToken != null && candidateToken.trim().isNotEmpty) {
+            _token = candidateToken.trim();
+          }
         }
+      } catch (e) {
+        debugPrint('[AUTH] Admin backend sync note: $e');
       }
-    } catch (e) {
-      debugPrint('[AUTH] Admin backend sync note: $e');
+
+      if (isProd && _token.isEmpty) {
+        _isAuthenticated = false;
+        await _saveActiveSession();
+        notifyListeners();
+        return;
+      }
+
+      _isAuthenticated = true;
     }
 
     await _saveActiveSession();
