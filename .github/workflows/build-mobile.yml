@@ -1,0 +1,253 @@
+name: Build Alpha X Gym Mobile (Android & iOS)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/build-mobile.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: 🤖 Build Android Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter (Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter Installation
+        run: flutter --version
+
+      - name: Install Android Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Configure Keystore Signing (if secret configured)
+        working-directory: apps/mobile/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > app/keystore.jks
+            if keytool -list -keystore app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+              echo "✅ Production keystore verified with keytool."
+              cat > key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=app/keystore.jks
+          EOF
+            else
+              echo "⚠️ Keystore credentials in secrets failed verification; falling back to debug signing."
+              rm -f app/keystore.jks
+            fi
+          else
+            echo "ℹ️ Keystore secrets not configured; build.gradle.kts will use debug signing fallback for sideloading."
+          fi
+
+      - name: Build Android Release APK
+        working-directory: apps/mobile
+        env:
+          GRADLE_OPTS: "-Xmx2560m -XX:MaxMetaspaceSize=512m"
+        run: |
+          flutter build apk --release
+
+      - name: Verify APK Output
+        run: |
+          APK_PATH="apps/mobile/build/app/outputs/flutter-apk/app-release.apk"
+          if [ -f "$APK_PATH" ]; then
+            FILE_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH")
+            echo "✅ Release APK generated successfully: $APK_PATH ($FILE_SIZE bytes)"
+          else
+            echo "::error::Release APK not found at $APK_PATH"
+            exit 1
+          fi
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-x-gym-android-apk
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  build-ios:
+    name: 🍎 Build iOS Release Application
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter (Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter & Xcode Versions
+        run: |
+          flutter --version
+          xcodebuild -version
+
+      - name: Install iOS Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Patch camera_avfoundation for Xcode 16 Compatibility
+        run: |
+          for f in $(find ~/.pub-cache -name "DefaultCamera.swift" 2>/dev/null); do
+            echo "Applying Xcode 16 notification fix to $f..."
+            sed -i '' 's/AVCaptureSession\.wasInterruptedNotification/NSNotification.Name("AVCaptureSessionWasInterruptedNotification")/g' "$f"
+            sed -i '' 's/AVCaptureSession\.runtimeErrorNotification/NSNotification.Name("AVCaptureSessionRuntimeErrorNotification")/g' "$f"
+          done
+
+      - name: Prepare iOS Output Directory
+        run: mkdir -p apps/mobile/build/ios/outputs
+
+      - name: Check Apple Code Signing Secrets
+        id: check_signing
+        env:
+          CERT_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          PROV_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$CERT_BASE64" ] && [ -n "$PROV_BASE64" ]; then
+            echo "has_signing=true" >> $GITHUB_OUTPUT
+            echo "✅ Apple signing secrets detected."
+          else
+            echo "has_signing=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Apple signing secrets not configured. Building unsigned iOS package."
+          fi
+
+      - name: Install Apple Certificate and Provisioning Profile
+        if: steps.check_signing.outputs.has_signing == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD || 'temporary_keychain_pass' }}
+        run: |
+          # 1. Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # 2. Import certificate to keychain
+          CERT_PATH=$RUNNER_TEMP/build_cert.p12
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > $CERT_PATH
+          security import $CERT_PATH -k $KEYCHAIN_PATH -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # 3. Apply keychain to search list
+          security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | tr -d '"')
+
+          # 4. Install provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          PROFILE_PATH=~/Library/MobileDevice/Provisioning\ Profiles/build_profile.mobileprovision
+          echo "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode > $PROFILE_PATH
+          echo "✅ Apple certificate and provisioning profile installed successfully."
+
+      - name: Build Signed iOS App (IPA)
+        if: steps.check_signing.outputs.has_signing == 'true'
+        working-directory: apps/mobile
+        run: |
+          flutter build ipa --release
+          find build/ios/ipa -name "*.ipa" -exec cp {} build/ios/outputs/AlphaXGym-Signed.ipa \;
+          echo "✅ Signed IPA generated successfully."
+
+      - name: Build Unsigned iOS App (--no-codesign)
+        if: steps.check_signing.outputs.has_signing != 'true'
+        working-directory: apps/mobile
+        run: |
+          flutter build ios --release --no-codesign
+          
+          # Package the Runner.app bundle into a zip archive
+          cd build/ios/iphoneos
+          zip -r -q ../outputs/AlphaXGym-Unsigned-Runner.app.zip Runner.app
+          cd ../../..
+
+          # Create explicit installation warning file (do not falsely label as installable IPA)
+          cat > build/ios/outputs/README_INSTALLATION.txt <<'EOF'
+          ================================================================================
+          ALPHA X GYM - iOS BUILD NOTICE (UNSIGNED)
+          ================================================================================
+          This iOS build was created WITHOUT Apple Developer code signing (--no-codesign)
+          because Apple signing secrets were not configured in this repository.
+
+          ⚠️ IMPORTANT:
+          Because Apple iOS strictly requires cryptographic code signing with a valid
+          provisioning profile, this build CANNOT be installed directly on an iPhone
+          via AirDrop, Safari, or standard installation.
+
+          HOW TO INSTALL ON YOUR IPHONE:
+          1. Configure Repository Secrets for automatic signing:
+             - BUILD_CERTIFICATE_BASE64 (Base64-encoded .p12 distribution certificate)
+             - P12_PASSWORD (Password for the .p12 certificate)
+             - BUILD_PROVISION_PROFILE_BASE64 (Base64-encoded .mobileprovision profile)
+             - KEYCHAIN_PASSWORD (Random temporary password for runner keychain)
+          2. Sideloading (Alternative):
+             - You can resign and sideload AlphaXGym-Unsigned-Runner.app.zip using AltStore,
+               Sideloadly, or Xcode using your personal Apple ID.
+          ================================================================================
+          EOF
+
+          echo "::warning::iOS build is UNSIGNED. It cannot be installed directly on an iPhone without signing credentials."
+
+      - name: Report Build Summary to GitHub Actions
+        run: |
+          echo "### 🍎 iOS Build Output Summary" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_signing.outputs.has_signing }}" = "true" ]; then
+            echo "✅ **Status:** Signed IPA successfully built with repository Apple credentials." >> $GITHUB_STEP_SUMMARY
+            echo "* Artifact contains installable `AlphaXGym-Signed.ipa`." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Status:** **Unsigned Build** (`--no-codesign`)" >> $GITHUB_STEP_SUMMARY
+            echo "* **Direct iPhone installation:** ❌ Not possible without resigning." >> $GITHUB_STEP_SUMMARY
+            echo "* **Artifact contains:** `AlphaXGym-Unsigned-Runner.app.zip` and `README_INSTALLATION.txt`." >> $GITHUB_STEP_SUMMARY
+            echo "* **To enable signed IPAs:** Add `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, and `BUILD_PROVISION_PROFILE_BASE64` to repository secrets." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Clean up Keychain and Signing Secrets
+        if: always() && steps.check_signing.outputs.has_signing == 'true'
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain $KEYCHAIN_PATH 2>/dev/null || true
+          fi
+          rm -f $RUNNER_TEMP/build_cert.p12
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/build_profile.mobileprovision
+
+      - name: Upload iOS Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-x-gym-ios-build
+          path: apps/mobile/build/ios/outputs/
+          if-no-files-found: error
+          retention-days: 14
