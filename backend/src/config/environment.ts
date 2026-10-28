@@ -22,6 +22,7 @@ const envSchema = z.object({
   EXERCISE_DB_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_API_KEY_BACKUP: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-flash-lite-latest'),
   ONESIGNAL_APP_ID: z.string().optional(),
   ONESIGNAL_REST_API_KEY: z.string().optional(),
   PYTHON_AI_URL: z.string().default('http://127.0.0.1:8000/api/v1/ai'),

@@ -617,7 +617,7 @@ export class GeminiReliabilityManager {
     const startTime = Date.now();
     try {
       const { client, source } = this.getClient();
-      const testModel = 'gemini-flash-lite-latest';
+      const testModel = (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim();
 
       await Promise.race([
         client.models.generateContent({
@@ -665,7 +665,7 @@ export class GeminiReliabilityManager {
         isBackupActive: this.activeKeySource === 'BACKUP',
         circuitTripped: this.isCircuitTripped(),
         cooldownRemainingSeconds: this.getCircuitCooldownRemainingSeconds(),
-        model: 'gemini-flash-lite-latest',
+        model: (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim(),
         latencyMs,
         lastChecked: new Date().toISOString(),
         message: classified.sanitizedMessage.substring(0, 150),

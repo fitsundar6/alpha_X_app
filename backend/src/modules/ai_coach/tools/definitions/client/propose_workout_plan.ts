@@ -285,6 +285,22 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
 
     const { profileId, clientId, name } = resolved.client;
 
+    const clientProfile = await prisma.clientProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        fitnessLevel: true,
+        primaryGoal: true,
+        hasCurrentInjury: true,
+        injuryAreas: true,
+        injuryDescription: true,
+        trainingExperience: true,
+        trainingDaysPerWeek: true,
+        weightKg: true,
+        gender: true,
+      },
+    });
+
     // 3. Detect split and perform workout quality & muscle group validation
     const splitDetectorInput = `${args.planTitle} ${args.weeklySchedule[0]?.targetMuscleGroup || ''} ${args.weeklySchedule[0]?.sessionTitle || ''} ${args.summary || ''} ${args.reason || ''}`;
     const splitResult = workoutIntentService.detectSplit(splitDetectorInput);
@@ -311,7 +327,7 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
         numberOfSets: Number(ex.sets) || 3,
         targetReps: String(ex.reps || '8-10'),
         reps: String(ex.reps || '8-10'),
-        targetWeight: ex.weight !== undefined ? Number(ex.weight) : (ex.targetWeight !== undefined ? Number(ex.targetWeight) : null),
+        targetWeight: ex.weight !== undefined ? (ex.weight === null ? null : Number(ex.weight)) : (ex.targetWeight !== undefined ? (ex.targetWeight === null ? null : Number(ex.targetWeight)) : null),
         restSeconds: Number(ex.restSeconds) || 90,
         targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : 2,
         targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : 8.0,
@@ -321,7 +337,17 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
       }))
     );
 
-    const validation = await workoutIntentService.validateProposalForSplit(splitResult, rawExercises, args.weeklySchedule);
+    const validation = await workoutIntentService.validateProposalForSplit(
+      splitResult,
+      rawExercises,
+      args.weeklySchedule,
+      {
+        clientProfileId: profileId,
+        injuryAreas: clientProfile?.injuryAreas || [],
+        fitnessLevel: clientProfile?.fitnessLevel || clientProfile?.trainingExperience || undefined,
+        primaryGoal: clientProfile?.primaryGoal || undefined,
+      }
+    );
     if (!validation.isValid) {
       return {
         success: false,
@@ -332,6 +358,7 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
     }
 
     const validatedExercises = validation.validatedExercises;
+    const clientStrengthHistory = await workoutIntentService.fetchClientStrengthHistory(profileId);
 
     // Update weekly schedule exercises with validated items while preserving day structure
     let validatedIdx = 0;
@@ -364,11 +391,34 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
         recommendedExercisesCount: (day.exercises || []).length,
         exercises: (day.exercises || []).map((ex: any, exIdx: number) => {
           const v = validatedExercises[validatedIdx++];
+          const exName = v ? v.name : (ex.name || ex.exerciseName);
+          let resolvedWeight: number | null = (ex.weight !== undefined && ex.weight !== null)
+            ? Number(ex.weight)
+            : ((ex.targetWeight !== undefined && ex.targetWeight !== null) ? Number(ex.targetWeight) : ((v as any)?.weight !== undefined ? (v as any).weight : null));
+
+          let historyNote = '';
+          if (resolvedWeight === null && clientStrengthHistory.size > 0 && exName) {
+            const exNameLower = exName.toLowerCase().trim();
+            const hist = clientStrengthHistory.get(exNameLower);
+            if (hist && hist.weightKg > 0) {
+              const isStrength = /strength|power/i.test(args.planTitle || '') || /strength/i.test(clientProfile?.primaryGoal || '');
+              const isFatLoss = /fat|loss|endurance/i.test(args.planTitle || '') || /fat/i.test(clientProfile?.primaryGoal || '');
+              const mult = isStrength ? 1.0 : (isFatLoss ? 0.75 : 0.90);
+              resolvedWeight = Math.max(2.5, Math.round((hist.weightKg * mult) / 2.5) * 2.5);
+              historyNote = `Target load calibrated from athlete's recorded strength history (${hist.weightKg} kg baseline).`;
+            }
+          }
+
+          const existingNotes = ex.notes || ex.adminInstruction || (v ? v.notes : null);
+          const finalNotes = historyNote
+            ? (existingNotes ? `${existingNotes} ${historyNote}` : historyNote)
+            : existingNotes;
+
           return {
             ...ex,
             exerciseId: v ? v.exerciseId : ex.exerciseId,
-            name: v ? v.name : ex.name,
-            exerciseName: v ? v.name : (ex.exerciseName || ex.name),
+            name: exName,
+            exerciseName: exName,
             category: v ? v.category : (ex.category || day.workoutType || 'Strength'),
             bodyPart: v ? v.bodyPart : ex.bodyPart,
             orderIndex: ex.orderIndex !== undefined ? ex.orderIndex : exIdx,
@@ -376,14 +426,14 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
             numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
             reps: String(ex.reps || ex.targetReps || '8-10'),
             targetReps: String(ex.targetReps || ex.reps || '8-10'),
-            weight: ex.weight !== undefined ? Number(ex.weight) : (ex.targetWeight !== undefined ? Number(ex.targetWeight) : null),
-            targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+            weight: resolvedWeight,
+            targetWeight: resolvedWeight,
             restSeconds: Number(ex.restSeconds || ex.rest) || 90,
             targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
             targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
             tempo: ex.tempo || '3-1-1-0',
-            notes: ex.notes || ex.adminInstruction || null,
-            adminInstruction: ex.adminInstruction || ex.notes || null,
+            notes: finalNotes,
+            adminInstruction: finalNotes,
             day: dayName,
           };
         }),
@@ -422,13 +472,12 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
         }
       }
 
-      // Prevent duplicate proposals caused by retries or repeated tool calls for the SAME plan
+      // Prevent duplicate proposals caused by retries or repeated tool calls for the same client in this conversation
       const existing = await prisma.aIProposal.findFirst({
         where: {
           clientProfileId: profileId,
           proposalType: 'WORKOUT',
           status: 'PENDING',
-          title: args.planTitle,
           ...(validConversationId ? { conversationId: validConversationId } : {}),
         },
         orderBy: { createdAt: 'desc' },
@@ -443,6 +492,8 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
             summary: args.summary,
             reason: args.reason,
             proposedDataJson: JSON.stringify(proposedPayload),
+            finalDataJson: null,
+            status: 'PENDING',
             updatedAt: new Date(),
           },
           select: { id: true, title: true, status: true, createdAt: true },

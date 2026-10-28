@@ -15,6 +15,7 @@ import {
   ToolExecutionContext,
 } from './tools';
 import { prisma } from '../../config/prisma';
+import { env } from '../../config/environment';
 
 export interface GeminiChatOptions {
   message: string;
@@ -55,12 +56,19 @@ export class GeminiService {
   }
   // Primary: gemini-3.5-flash (fast GA workhorse, active free quota, supports tool calling)
   // Fallbacks: gemini-flash-lite-latest, gemini-flash-latest, gemini-3.8-flash
-  private static readonly DEFAULT_MODEL = 'gemini-3.5-flash';
-  private static readonly FALLBACK_MODELS = [
-    'gemini-flash-lite-latest',
-    'gemini-flash-latest',
-    'gemini-3.8-flash',
-  ];
+  public static get DEFAULT_MODEL(): string {
+    return (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim();
+  }
+  public static get FALLBACK_MODELS(): string[] {
+    const primary = GeminiService.DEFAULT_MODEL;
+    const candidates = [
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+    ];
+    return candidates.filter((m) => m !== primary);
+  }
   private static readonly MAX_RETRIES = 3;
   private static readonly DEFAULT_TIMEOUT_MS = 45000;
 

@@ -36,8 +36,7 @@ export const searchExerciseLibraryTool: ToolDefinition<SearchExerciseLibraryInpu
     properties: {
       split: {
         type: 'string',
-        description: 'Target workout split: "CHEST", "PULL", "LEG", "PUSH", or "FULL_BODY"',
-        enum: ['CHEST', 'PULL', 'LEG', 'PUSH', 'FULL_BODY', 'GENERAL'],
+        description: 'Target workout split or category, e.g. "UPPER_LOWER", "PUSH_PULL_LEGS", "BRO_SPLIT", "FULL_BODY", "PUSH", "PULL", "LEG", "CHEST", or "GENERAL"',
       },
       bodyPart: {
         type: 'string',

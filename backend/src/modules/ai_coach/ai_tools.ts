@@ -1151,6 +1151,10 @@ export class AiTools {
 
         const baseTitle = payload.title || payload.planTitle || proposal.title || 'Weekly Split Protocol';
         const todayWeekday = getTodayISTWeekday();
+        const anyDayIsToday = payload.weeklySchedule.some((d: any, idx: number) => {
+          const rawName = d.dayOfWeek || d.day || d.dayName || d.weekday || '';
+          return getWeekdayFromDayName(rawName, idx + 1) === todayWeekday;
+        });
 
         // Create a distinct WorkoutSession for EACH day of the weekly split
         for (let dayIdx = 0; dayIdx < payload.weeklySchedule.length; dayIdx++) {
@@ -1158,7 +1162,9 @@ export class AiTools {
           const rawDayName = day.dayOfWeek || day.day || day.dayName || day.weekday || '';
           const weekdayNum = getWeekdayFromDayName(rawDayName, dayIdx + 1);
           const canonicalWeekday = getWeekdayName(weekdayNum);
-          const sessionTitle = day.sessionTitle || day.title || `${baseTitle} — ${canonicalWeekday}`;
+          const sessionTitle = day.sessionTitle?.includes(baseTitle)
+            ? day.sessionTitle
+            : (day.sessionTitle ? `${baseTitle} — ${day.sessionTitle}` : `${baseTitle} — ${canonicalWeekday}`);
           const targetMuscleGroup = day.targetMuscleGroup || day.focus || 'Full Body';
           const workoutType = day.workoutType || payload.workoutType || 'Hypertrophy';
           const estimatedDurationMinutes = Number(day.estimatedDurationMinutes) || Number(payload.estimatedDurationMinutes) || 50;
@@ -1167,6 +1173,7 @@ export class AiTools {
           // Compute scheduled date for this weekday in IST
           const dayScheduledDate = getISTDateForWeekday(weekdayNum);
           const isToday = weekdayNum === todayWeekday;
+          const isRecommended = isToday || (!anyDayIsToday && dayIdx === 0);
 
           // Create the dedicated WorkoutSession for this day
           const session = await prisma.workoutSession.create({
@@ -1201,7 +1208,7 @@ export class AiTools {
                 setType,
                 numberOfSets: Number(ex.sets || ex.numberOfSets) || 3,
                 targetReps: String(ex.targetReps || ex.reps || '8-12'),
-                targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+                targetWeight: (ex.targetWeight !== undefined && ex.targetWeight !== null) ? Number(ex.targetWeight) : ((ex.weight !== undefined && ex.weight !== null) ? Number(ex.weight) : null),
                 restSeconds: Number(ex.restSeconds || ex.rest) || 90,
                 targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
                 targetRpe: ex.targetRpe !== undefined ? Number(ex.targetRpe) : (ex.rpe !== undefined ? Number(ex.rpe) : 8.0),
@@ -1217,7 +1224,7 @@ export class AiTools {
                   sessionExerciseId: sessionExercise.id,
                   setNumber: s,
                   setType,
-                  targetWeight: ex.targetWeight !== undefined ? Number(ex.targetWeight) : (ex.weight !== undefined ? Number(ex.weight) : null),
+                  targetWeight: (ex.targetWeight !== undefined && ex.targetWeight !== null) ? Number(ex.targetWeight) : ((ex.weight !== undefined && ex.weight !== null) ? Number(ex.weight) : null),
                   targetRepsMin: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[0]) || 8) : (Number(ex.targetReps || ex.reps) || 8),
                   targetRepsMax: typeof ex.targetReps === 'string' && ex.targetReps.includes('-') ? (parseInt(ex.targetReps.split('-')[1]) || 12) : (Number(ex.targetReps || ex.reps) || 12),
                   targetRir: ex.targetRir !== undefined ? Number(ex.targetRir) : (ex.rir !== undefined ? Number(ex.rir) : 2),
@@ -1230,17 +1237,26 @@ export class AiTools {
 
           // Assign this session to all target clients
           for (const targetUserId of targetUserIds) {
-            await prisma.workoutAssignment.create({
+            const assignment = await prisma.workoutAssignment.create({
               data: {
                 sessionId: session.id,
                 clientId: targetUserId,
                 assignedById: adminId,
-                isRecommended: isToday,
+                isRecommended,
                 active: true,
                 scheduledDate: dayScheduledDate,
                 status: 'ASSIGNED',
               },
             });
+
+            if (isRecommended) {
+              aiNotificationEngine.notifyWorkoutAssignment({
+                assignmentId: assignment.id,
+                clientId: targetUserId,
+                sessionTitle,
+                scheduledDate: dayScheduledDate,
+              }).catch((e) => console.warn('[AI_TOOLS] Failed to send workout assignment notification:', e?.message));
+            }
           }
         }
       } else {
@@ -1325,7 +1341,7 @@ export class AiTools {
             data: { active: false },
           });
 
-          await prisma.workoutAssignment.create({
+          const assignment = await prisma.workoutAssignment.create({
             data: {
               sessionId: session.id,
               clientId: targetUserId,
@@ -1336,6 +1352,13 @@ export class AiTools {
               status: 'ASSIGNED',
             },
           });
+
+          aiNotificationEngine.notifyWorkoutAssignment({
+            assignmentId: assignment.id,
+            clientId: targetUserId,
+            sessionTitle: session.title,
+            scheduledDate,
+          }).catch((e) => console.warn('[AI_TOOLS] Failed to send workout assignment notification:', e?.message));
         }
       }
     } else if (proposal.proposalType === 'PROGRESSION') {

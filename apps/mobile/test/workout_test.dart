@@ -3,6 +3,7 @@ import 'package:alpha_x_gym/features/workout/data/repositories/workout_repositor
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Workout Execution Engine Tests', () {
     late WorkoutRepository repository;
 

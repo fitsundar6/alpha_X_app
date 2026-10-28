@@ -103,6 +103,28 @@ export interface ValidatedExerciseItem {
   day?: string;
 }
 
+export interface PersonalizedExerciseParameters {
+  sets: number;
+  numberOfSets: number;
+  reps: string;
+  targetReps: string;
+  weight: number | null;
+  targetWeight: number | null;
+  restSeconds: number;
+  targetRir: number;
+  targetRpe: number;
+  tempo: string;
+  notes: string;
+  adminInstruction: string;
+}
+
+export interface SplitValidationOptions {
+  clientProfileId?: string;
+  injuryAreas?: string[];
+  fitnessLevel?: string;
+  primaryGoal?: string;
+}
+
 const DEFAULT_WEEKDAY_PATTERNS: Record<number, string[]> = {
   2: ['Monday', 'Thursday'],
   3: ['Monday', 'Wednesday', 'Friday'],
@@ -2160,15 +2182,324 @@ export class WorkoutIntentService {
   }
 
   /**
+   * Fetches the client's verified strength history across exercises from completed workout records.
+   * Returns a map of normalized exercise names to their highest recorded working weight (in kg) and reps.
+   */
+  public async fetchClientStrengthHistory(
+    userIdOrProfileId: string
+  ): Promise<Map<string, { weightKg: number; reps: number; date: Date }>> {
+    const history = new Map<string, { weightKg: number; reps: number; date: Date }>();
+    if (!userIdOrProfileId || typeof userIdOrProfileId !== 'string') return history;
+
+    try {
+      const records = await prisma.workoutRecord.findMany({
+        where: {
+          OR: [
+            { clientId: userIdOrProfileId },
+            { client: { clientProfile: { id: userIdOrProfileId } } },
+            { client: { clientProfile: { clientId: userIdOrProfileId } } },
+          ],
+          isCompleted: true,
+        },
+        include: {
+          exerciseRecords: {
+            where: { isSkipped: false },
+            include: {
+              setRecords: {
+                where: { isCompleted: true, actualWeight: { gt: 0 } },
+                orderBy: { actualWeight: 'desc' },
+              },
+            },
+          },
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 50,
+      });
+
+      for (const rec of records) {
+        for (const exRec of rec.exerciseRecords) {
+          const exName = (exRec.exerciseName || '').toLowerCase().trim();
+          if (!exName) continue;
+
+          for (const set of exRec.setRecords) {
+            const wgt = Number(set.actualWeight) || 0;
+            const reps = Number(set.actualReps) || 0;
+            if (wgt > 0) {
+              const existing = history.get(exName);
+              if (!existing || wgt > existing.weightKg) {
+                history.set(exName, { weightKg: wgt, reps, date: rec.startedAt });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[WorkoutIntentService] Error fetching client strength history:`, err);
+    }
+
+    return history;
+  }
+
+  /**
+   * Calculates personalized workout exercise parameters (sets, reps, realistic load, rest, RIR, RPE, tempo, cues)
+   * tailored to the client's goal, fitness level, experience, gender, and exercise biomechanics/equipment.
+   */
+  public calculatePersonalizedExerciseParameters(
+    exercise: {
+      name: string;
+      bodyPart?: string;
+      category?: string;
+      equipment?: string;
+      isCompound?: boolean;
+      isIsolation?: boolean;
+    },
+    clientProfile?: {
+      fitnessLevel?: string | null;
+      primaryGoal?: string | null;
+      secondaryGoal?: string | null;
+      trainingExperience?: string | null;
+      weightKg?: number | null;
+      gender?: string | null;
+      strengthHistory?: Map<string, any> | Record<string, any> | null;
+    },
+    context?: {
+      orderIndex?: number;
+      totalExercises?: number;
+      sessionWorkoutType?: string;
+      strengthHistory?: Map<string, any> | Record<string, any> | null;
+    }
+  ): PersonalizedExerciseParameters {
+    const rawLevel = (clientProfile?.fitnessLevel || clientProfile?.trainingExperience || 'Intermediate').toLowerCase();
+    const isBeginner = rawLevel.includes('begin') || rawLevel.includes('new') || rawLevel.includes('less than') || rawLevel.includes('return');
+    const isAdvanced = rawLevel.includes('advanc') || rawLevel.includes('elite') || rawLevel.includes('5+');
+
+    const rawGoal = (clientProfile?.primaryGoal || clientProfile?.secondaryGoal || context?.sessionWorkoutType || 'Hypertrophy').toLowerCase();
+    const isStrength = rawGoal.includes('strength') || rawGoal.includes('power') || rawGoal.includes('sbd');
+    const isFatLoss = rawGoal.includes('fat') || rawGoal.includes('loss') || rawGoal.includes('lean') || rawGoal.includes('endurance') || rawGoal.includes('condition');
+
+    const nameLower = (exercise.name || '').toLowerCase();
+    const equipLower = (exercise.equipment || '').toLowerCase();
+
+    const isBodyweight =
+      equipLower.includes('bodyweight') ||
+      nameLower.includes('pull-up') ||
+      nameLower.includes('push-up') ||
+      nameLower.includes('chin-up') ||
+      nameLower.includes('dip') ||
+      nameLower.includes('plank') ||
+      nameLower.includes('crunch') ||
+      nameLower.includes('hanging leg') ||
+      nameLower.includes('hanging knee') ||
+      nameLower.includes('inverted row');
+
+    const isDumbbell = equipLower.includes('dumbbell') || nameLower.includes('dumbbell') || nameLower.includes('db ');
+    const isBarbell = equipLower.includes('barbell') || nameLower.includes('barbell') || nameLower.includes('bb ');
+    const isCable = equipLower.includes('cable') || nameLower.includes('cable');
+    const isMachine = equipLower.includes('machine') || equipLower.includes('smith') || nameLower.includes('machine') || nameLower.includes('leg press') || nameLower.includes('hack squat');
+
+    const isCompound = exercise.isCompound ?? (isBarbell || isMachine || nameLower.includes('squat') || nameLower.includes('press') || nameLower.includes('deadlift') || nameLower.includes('row') || nameLower.includes('lunge'));
+    const isIsolation = exercise.isIsolation ?? (!isCompound || nameLower.includes('curl') || nameLower.includes('lateral raise') || nameLower.includes('extension') || nameLower.includes('fly'));
+    const isHeavyCompound = isCompound && (nameLower.includes('squat') || nameLower.includes('deadlift') || nameLower.includes('bench press') || nameLower.includes('overhead press') || nameLower.includes('leg press'));
+    const isArmOrShoulderIsolation = isIsolation && (nameLower.includes('lateral raise') || nameLower.includes('curl') || nameLower.includes('rear delt') || nameLower.includes('kickback') || nameLower.includes('fly') || nameLower.includes('raise'));
+
+    // 1. Sets calculation
+    let sets: number;
+    if (isBeginner) {
+      sets = isCompound ? 3 : 2;
+    } else if (isAdvanced) {
+      sets = isHeavyCompound ? 4 : 3;
+    } else {
+      sets = 3;
+    }
+
+    // 2. Reps calculation
+    let reps: string;
+    if (isStrength) {
+      if (isHeavyCompound) {
+        reps = isBeginner ? '5-6' : (isAdvanced ? '3-5' : '4-6');
+      } else if (isCompound) {
+        reps = isBeginner ? '6-8' : '5-6';
+      } else {
+        reps = '8-10';
+      }
+    } else if (isFatLoss) {
+      if (isCompound) {
+        reps = '10-12';
+      } else {
+        reps = '12-15';
+      }
+    } else {
+      // Hypertrophy
+      if (isHeavyCompound) {
+        reps = isAdvanced ? '6-8' : '8-10';
+      } else if (isCompound) {
+        reps = '8-10';
+      } else {
+        reps = '10-12';
+      }
+    }
+
+    // 3. Rest Seconds calculation
+    let restSeconds: number;
+    if (isStrength) {
+      restSeconds = isHeavyCompound ? 180 : (isCompound ? 120 : 90);
+    } else if (isFatLoss) {
+      restSeconds = isCompound ? 60 : 45;
+    } else {
+      restSeconds = isHeavyCompound ? 120 : (isCompound ? 90 : 60);
+    }
+
+    // 4. Target Weight calculation (evidence-informed & clinical safety standards)
+    // Requirement 4: Verify client-specific strength history is used when available.
+    // Do not use gender alone to determine working weights.
+    // If reliable load data is unavailable, return an unspecified load rather than inventing a precise kilogram value.
+    let targetWeight: number | null = null;
+    let loadNote = '';
+
+    if (isBodyweight) {
+      targetWeight = null;
+    } else {
+      // Look up client strength history if available
+      const strengthHistorySource = context?.strengthHistory || (clientProfile as any)?.strengthHistory;
+      let matchedHistoryWeight: number | null = null;
+
+      if (strengthHistorySource) {
+        const getFromSource = (key: string): number | null => {
+          if (strengthHistorySource instanceof Map) {
+            const v = strengthHistorySource.get(key);
+            if (v !== undefined && v !== null) {
+              return typeof v === 'number' ? v : (v.weightKg ?? null);
+            }
+          } else if (typeof strengthHistorySource === 'object') {
+            const v = (strengthHistorySource as Record<string, any>)[key];
+            if (v !== undefined && v !== null) {
+              return typeof v === 'number' ? v : (v.weightKg ?? null);
+            }
+          }
+          return null;
+        };
+
+        // 1. Exact match
+        matchedHistoryWeight = getFromSource(nameLower);
+
+        // 2. Normalized match (without symbols)
+        if (matchedHistoryWeight === null) {
+          const cleanName = nameLower.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+          matchedHistoryWeight = getFromSource(cleanName);
+        }
+
+        // 3. Substring / Token matching
+        if (matchedHistoryWeight === null) {
+          const keys = strengthHistorySource instanceof Map
+            ? Array.from(strengthHistorySource.keys())
+            : Object.keys(strengthHistorySource);
+          for (const k of keys) {
+            const kLower = k.toLowerCase().trim();
+            if (kLower && (nameLower.includes(kLower) || kLower.includes(nameLower))) {
+              matchedHistoryWeight = getFromSource(k);
+              if (matchedHistoryWeight !== null) break;
+            }
+          }
+        }
+      }
+
+      if (matchedHistoryWeight !== null && matchedHistoryWeight > 0) {
+        // Calibrate working weight from client's verified strength history
+        let multiplier = 0.90; // Default hypertrophy working load (~90% of past best)
+        if (isStrength) {
+          multiplier = isBeginner ? 0.95 : 1.0; // 95-100% of previous working weight
+        } else if (isFatLoss) {
+          multiplier = 0.75; // 75% for higher rep conditioning endurance sets
+        }
+
+        const calculated = Math.round((matchedHistoryWeight * multiplier) / 2.5) * 2.5;
+        targetWeight = Math.max(2.5, calculated);
+        loadNote = `Target load calibrated from athlete's recorded strength history (${matchedHistoryWeight} kg baseline).`;
+      } else {
+        // Reliable load data is unavailable: return unspecified load (null) rather than inventing an arbitrary kilogram value based on gender alone!
+        targetWeight = null;
+        loadNote = `Load unspecified — establish working weight in session 1 with progressive warm-up to target RIR ${isBeginner ? 3 : 2}.`;
+      }
+    }
+
+    // 5. Target RIR & RPE
+    let targetRir: number;
+    let targetRpe: number;
+    if (isBeginner) {
+      targetRir = 3;
+      targetRpe = 7.0;
+    } else if (isAdvanced) {
+      targetRir = isHeavyCompound ? 2 : 1;
+      targetRpe = isHeavyCompound ? 8.5 : 9.0;
+    } else {
+      targetRir = 2;
+      targetRpe = 8.0;
+    }
+
+    // 6. Tempo
+    let tempo = '3-1-1-0';
+    if (isStrength) {
+      tempo = '2-0-1-0';
+    } else if (isFatLoss) {
+      tempo = '2-0-1-0';
+    } else {
+      tempo = isHeavyCompound ? '3-1-1-0' : '2-0-1-0';
+    }
+
+    // 7. Coaching Cues
+    let notes = 'Prioritize strict technique and full range of motion over load. Maintain consistent tempo.';
+    if (nameLower.includes('bench') || nameLower.includes('chest press') || nameLower.includes('push-up')) {
+      notes = 'Retract and depress scapulae. Maintain 5-point contact with bench and drive through feet. 3-second controlled descent.';
+    } else if (nameLower.includes('squat') || nameLower.includes('leg press')) {
+      notes = 'Brace abdominal wall 360°. Push floor away and keep knees tracking over 2nd toe. Hit parallel depth with upright torso.';
+    } else if (nameLower.includes('deadlift') || nameLower.includes('hinge') || nameLower.includes('rdl')) {
+      notes = 'Engage lats to pack upper back. Push floor away through midfoot without hyperextending at lockout.';
+    } else if (nameLower.includes('row') || nameLower.includes('pulldown') || nameLower.includes('pull-up') || nameLower.includes('chin-up')) {
+      notes = 'Initiate with scapular retraction before bending elbows. Squeeze lats at contraction, avoid trunk swinging.';
+    } else if (nameLower.includes('overhead press') || nameLower.includes('shoulder press')) {
+      notes = 'Keep glutes and core squeezed to protect lumbar spine. Press in straight vertical path over midfoot.';
+    } else if (nameLower.includes('lateral raise')) {
+      notes = 'Lead with elbows with a slight forward torso angle. Pause at parallel, do not use momentum.';
+    } else if (nameLower.includes('curl') || nameLower.includes('extension') || nameLower.includes('kickback')) {
+      notes = 'Keep elbows pinned to sides. Full elbow extension on descent and peak squeeze at top.';
+    } else if (isBodyweight) {
+      notes = 'Maintain constant core tension and steady breathing cadence. Avoid swinging or dropping into lumbar extension.';
+    }
+
+    if (loadNote) {
+      notes = `${notes} ${loadNote}`;
+    }
+
+    return {
+      sets,
+      numberOfSets: sets,
+      reps,
+      targetReps: reps,
+      weight: targetWeight,
+      targetWeight,
+      restSeconds,
+      targetRir,
+      targetRpe,
+      tempo,
+      notes,
+      adminInstruction: notes,
+    };
+  }
+
+  /**
    * Validates a workout proposal against the requested split and schedule, checking:
    * - Muscle group alignment (per-day check for multi-day schedules)
    * - Real exercise database IDs and links
+   * - In-session duplicate exercise elimination
+   * - Client injury and limitation contraindication avoidance
    * - Volume distribution, sets, reps, and exercise variety
+   * - Non-empty training days in weekly schedule
    */
   public async validateProposalForSplit(
     splitResult: SplitDetectionResult,
     exercises: Array<any>,
-    weeklySchedule?: Array<any>
+    weeklySchedule?: Array<any>,
+    options?: SplitValidationOptions
   ): Promise<{ isValid: boolean; error?: string; validatedExercises: ValidatedExerciseItem[] }> {
     if (!Array.isArray(exercises) || exercises.length === 0) {
       return { isValid: false, error: 'Workout proposal must contain at least one exercise.', validatedExercises: [] };
@@ -2223,7 +2554,7 @@ export class WorkoutIntentService {
         sets: Math.max(1, Math.min(6, Number(rawEx.sets || rawEx.numberOfSets) || 3)),
         reps: String(rawEx.reps || rawEx.targetReps || '8-10'),
         restSeconds: Math.max(30, Math.min(180, Number(rawEx.restSeconds) || 90)),
-        targetWeight: rawEx.targetWeight !== undefined ? Number(rawEx.targetWeight) : (rawEx.weight !== undefined ? Number(rawEx.weight) : null),
+        targetWeight: rawEx.targetWeight !== undefined ? (rawEx.targetWeight === null ? null : Number(rawEx.targetWeight)) : (rawEx.weight !== undefined ? (rawEx.weight === null ? null : Number(rawEx.weight)) : null),
         targetRir: Number(rawEx.targetRir) || 2,
         targetRpe: Number(rawEx.targetRpe) || 8.0,
         notes: rawEx.notes || undefined,
@@ -2231,9 +2562,57 @@ export class WorkoutIntentService {
       });
     }
 
-    // Multi-day split validation:
+    // 1. Injury Contraindication Check
+    const activeInjuries = options?.injuryAreas || [];
+    if (activeInjuries.length > 0) {
+      for (const v of validated) {
+        const conflict = this.checkInjuryConflict(v.name, v.bodyPart, activeInjuries);
+        if (conflict.hasConflict) {
+          return {
+            isValid: false,
+            error: conflict.reason,
+            validatedExercises: validated,
+          };
+        }
+      }
+    }
+
+    // 2. In-Session Duplicate Exercise Check
+    if (isMultiDay && weeklySchedule && weeklySchedule.length > 0) {
+      for (const day of weeklySchedule) {
+        const dayExercises = Array.isArray(day.exercises) ? day.exercises : [];
+        const seenNames = new Set<string>();
+        for (const ex of dayExercises) {
+          const exName = (ex.name || ex.exerciseName || '').trim().toLowerCase();
+          if (!exName) continue;
+          if (seenNames.has(exName)) {
+            return {
+              isValid: false,
+              error: `Session "${day.sessionTitle || day.day}" contains duplicate exercise "${ex.name || ex.exerciseName}". Each exercise within a session must be unique.`,
+              validatedExercises: validated,
+            };
+          }
+          seenNames.add(exName);
+        }
+      }
+    } else {
+      const seenSingle = new Set<string>();
+      for (const ex of validated) {
+        const exName = ex.name.trim().toLowerCase();
+        if (seenSingle.has(exName)) {
+          return {
+            isValid: false,
+            error: `Workout proposal contains duplicate exercise "${ex.name}". Each exercise within a session must be unique.`,
+            validatedExercises: validated,
+          };
+        }
+        seenSingle.add(exName);
+      }
+    }
+
+    // 3. Multi-day split validation:
     if (isMultiDay || splitResult.isMultiDayTemplate) {
-      // 1. Flattening check: single-day output with excessive exercises for multi-day split
+      // Flattening check: single-day output with excessive exercises for multi-day split
       if ((!weeklySchedule || weeklySchedule.length <= 1) && validated.length >= 10 && splitResult.isMultiDayTemplate) {
         return {
           isValid: false,
@@ -2243,7 +2622,17 @@ export class WorkoutIntentService {
       }
 
       if (weeklySchedule && weeklySchedule.length > 1) {
-        // 2. Duplicate day check (check if all non-empty days have identical exercise lists)
+        // Empty days check
+        const emptyDays = weeklySchedule.filter((d: any) => !Array.isArray(d.exercises) || d.exercises.length === 0);
+        if (emptyDays.length > 0) {
+          return {
+            isValid: false,
+            error: `Workout proposal has empty training days without exercises: ${emptyDays.map((d: any) => d.sessionTitle || d.day).join(', ')}. All training days must include scheduled exercises.`,
+            validatedExercises: validated,
+          };
+        }
+
+        // Duplicate day check (check if all non-empty days have identical exercise lists)
         const daysWithExercises = weeklySchedule.filter((d: any) => Array.isArray(d.exercises) && d.exercises.length > 0);
         if (daysWithExercises.length > 1) {
           const firstDayKeys = daysWithExercises[0].exercises.map((e: any) => (e.name || e.exerciseName || '').toLowerCase().trim()).sort().join('|');
@@ -2260,7 +2649,7 @@ export class WorkoutIntentService {
           }
         }
 
-        // 3. Day-by-Day Muscle Group & Exercise Count Validation
+        // Day-by-Day Muscle Group & Exercise Count Validation
         for (const day of weeklySchedule) {
           const dayTitle = (day.sessionTitle || day.title || day.day || '').toLowerCase();
           const dayCat = (day.splitCategory || day.category || '').toLowerCase();
@@ -2337,6 +2726,57 @@ export class WorkoutIntentService {
     }
 
     return { isValid: true, validatedExercises: validated };
+  }
+
+  /**
+   * Helper to evaluate whether an exercise conflicts with documented client injury areas.
+   */
+  public checkInjuryConflict(exName: string, bodyPart: string, injuryAreas: string[]): { hasConflict: boolean; reason?: string } {
+    const lowerName = (exName || '').toLowerCase();
+    for (const inj of injuryAreas) {
+      const lowerInj = (inj || '').toLowerCase().trim();
+      if (!lowerInj) continue;
+      if (lowerInj.includes('shoulder') || lowerInj.includes('rotator cuff')) {
+        if (
+          lowerName.includes('overhead press') ||
+          lowerName.includes('military press') ||
+          lowerName.includes('behind the neck') ||
+          lowerName.includes('upright row') ||
+          lowerName.includes('arnold press')
+        ) {
+          return { hasConflict: true, reason: `Exercise "${exName}" conflicts with client's recorded shoulder injury/limitation.` };
+        }
+      }
+      if (lowerInj.includes('knee')) {
+        if (
+          lowerName.includes('deep squat') ||
+          lowerName.includes('jump squat') ||
+          lowerName.includes('sissy squat') ||
+          lowerName.includes('pistol squat') ||
+          lowerName.includes('box jump')
+        ) {
+          return { hasConflict: true, reason: `Exercise "${exName}" conflicts with client's recorded knee injury/limitation.` };
+        }
+      }
+      if (lowerInj.includes('lower back') || lowerInj.includes('lumbar') || lowerInj.includes('spine')) {
+        if (
+          lowerName.includes('conventional deadlift') ||
+          lowerName.includes('good morning') ||
+          lowerName.includes('stiff leg deadlift')
+        ) {
+          return { hasConflict: true, reason: `Exercise "${exName}" conflicts with client's recorded lower back injury/limitation.` };
+        }
+      }
+      if (lowerInj.includes('wrist')) {
+        if (
+          (lowerName.includes('barbell curl') && !lowerName.includes('ez')) ||
+          lowerName.includes('clean and press')
+        ) {
+          return { hasConflict: true, reason: `Exercise "${exName}" conflicts with client's recorded wrist injury/limitation.` };
+        }
+      }
+    }
+    return { hasConflict: false };
   }
 }
 
