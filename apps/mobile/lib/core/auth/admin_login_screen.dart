@@ -100,10 +100,37 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
         debugPrint(
           '[AUTH DEBUG] AdminPortal backend authentication successful',
         );
+        Map<String, dynamic>? decoded;
+        try {
+          final parsed = jsonDecode(res.body);
+          if (parsed is Map<String, dynamic>) {
+            decoded = parsed;
+          }
+        } catch (_) {}
+
+        final token = (decoded?['data'] is Map ? decoded!['data']['token'] : decoded?['token'])?.toString().trim();
+        if (token == null || token.isEmpty) {
+          debugPrint('[AUTH ERROR] Admin login response contained no valid JWT token');
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Authentication error: Server response did not contain a valid session token.';
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+
+        final userData = decoded?['data'] is Map ? decoded!['data']['user'] as Map? : null;
+        final userId = userData?['id']?.toString() ?? 'admin_alex_stone';
+        final userName = userData?['name']?.toString() ?? 'Alpha X Administrator';
+
         final auth = AuthService();
         await auth.setAdminSession(
           email: enteredEmail,
+          userId: userId,
+          userName: userName,
           password: enteredPassword,
+          token: token,
         );
 
         if (mounted) {

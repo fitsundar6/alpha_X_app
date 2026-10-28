@@ -1,5 +1,6 @@
+import 'dart:async' show TimeoutException;
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, SocketException;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -23,7 +24,11 @@ class AiCoachRepository extends ChangeNotifier {
   static const String _geminiApiKey =
       String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
-  AiCoachRepository({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
+  final bool _hasCustomHttpClient;
+
+  AiCoachRepository({http.Client? httpClient})
+      : _httpClient = httpClient ?? http.Client(),
+        _hasCustomHttpClient = httpClient != null;
 
   bool get _isTestEnvironment {
     if (kIsWeb) return false;
@@ -53,21 +58,21 @@ class AiCoachRepository extends ChangeNotifier {
     String? customStartDate,
     String? customEndDate,
   }) async {
-    if (_isTestEnvironment) {
+    if (_isTestEnvironment && !_hasCustomHttpClient) {
       return _buildLocalFallbackResponse(message, selectedClientId);
     }
 
-    try {
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/chat');
-      final payload = <String, dynamic>{'message': message};
-      if (conversationId != null) payload['conversationId'] = conversationId;
-      if (selectedClientId != null && selectedClientId.isNotEmpty && selectedClientId != 'ALL') {
-        payload['selectedClientId'] = selectedClientId;
-      }
-      if (dateRangePreset != null) payload['dateRangePreset'] = dateRangePreset;
-      if (customStartDate != null) payload['customStartDate'] = customStartDate;
-      if (customEndDate != null) payload['customEndDate'] = customEndDate;
+    final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/chat');
+    final payload = <String, dynamic>{'message': message};
+    if (conversationId != null) payload['conversationId'] = conversationId;
+    if (selectedClientId != null && selectedClientId.isNotEmpty && selectedClientId != 'ALL') {
+      payload['selectedClientId'] = selectedClientId;
+    }
+    if (dateRangePreset != null) payload['dateRangePreset'] = dateRangePreset;
+    if (customStartDate != null) payload['customStartDate'] = customStartDate;
+    if (customEndDate != null) payload['customEndDate'] = customEndDate;
 
+    try {
       var resp = await _httpClient.post(
         url,
         headers: _buildHeaders(),
@@ -75,18 +80,31 @@ class AiCoachRepository extends ChangeNotifier {
       ).timeout(const Duration(seconds: 45)); // Gemini 2.5-flash + tool calls can take 20-40s
 
       // Automatic 401 recovery: JWT access token expired — refresh and retry
-      if (resp.statusCode == 401 && !_isTestEnvironment && AuthService().isAdmin) {
-        debugPrint('[AI COACH REPO] Session token expired. Re-authenticating...');
-        final freshToken = await AuthService().refreshAdminToken();
-        if (freshToken != null && freshToken.isNotEmpty) {
-          resp = await _httpClient.post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $freshToken',
-            },
-            body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 45));
+      if (resp.statusCode == 401) {
+        if (!_isTestEnvironment && AuthService().isAdmin) {
+          debugPrint('[AI COACH REPO] Session token expired. Re-authenticating...');
+          final freshToken = await AuthService().refreshAdminToken();
+          if (freshToken != null && freshToken.isNotEmpty) {
+            resp = await _httpClient.post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $freshToken',
+              },
+              body: jsonEncode(payload),
+            ).timeout(const Duration(seconds: 45));
+          }
+        }
+
+        // If still 401 after refresh attempt (or if not admin), return AUTH_REQUIRED
+        if (resp.statusCode == 401) {
+          return AiChatMessage(
+            id: UniqueKey().toString(),
+            sender: 'AI',
+            content: '⚠️ Your administrator session has expired or is unauthorized. Please re-authenticate to continue using AI Coach.',
+            isError: true,
+            intent: 'AUTH_REQUIRED',
+          );
         }
       }
 
@@ -114,45 +132,72 @@ class AiCoachRepository extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // If the primary server returned an error (e.g. 503 from remote Vercel) and wasn't LAN IP,
-      // attempt to connect to LAN IP or local dev server before going offline
-      final urlStr = url.toString();
-      final lanChatUrl = Uri.parse('${ApiConfig.physicalLanUrl}/admin/ai-coach/chat');
-      if (!urlStr.contains(ApiConfig.defaultHostIp) && !urlStr.contains('localhost')) {
-        try {
-          debugPrint('[AI COACH REPO] Remote backend status ${resp.statusCode}, trying LAN server: $lanChatUrl');
-          final lanResp = await _httpClient.post(
-            lanChatUrl,
-            headers: _buildHeaders(),
-            body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 4));
-          if (lanResp.statusCode == 200) {
-            final decoded = jsonDecode(lanResp.body);
-            if (decoded['success'] == true && decoded['data'] != null) {
-              debugPrint('[AI COACH REPO] LAN backend responded successfully with database tools!');
-              return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
-            }
-          }
-        } catch (lanErr) {
-          debugPrint('[AI COACH REPO] LAN server attempt failed: $lanErr');
-        }
+      // Handle HTTP 403 Forbidden
+      if (resp.statusCode == 403) {
+        return AiChatMessage(
+          id: UniqueKey().toString(),
+          sender: 'AI',
+          content: '⚠️ Access denied: Administrator privileges are required to access Master AI Coach.',
+          isError: true,
+          intent: 'ACCESS_DENIED',
+        );
       }
 
-      // For any backend AI service error, fall back transparently to direct Gemini
-      debugPrint('[AI COACH REPO] Backend status ${resp.statusCode} — failing over to direct Gemini');
-      return await _callGeminiDirectly(message, selectedClientId);
+      // Handle HTTP 404 Not Found separately
+      if (resp.statusCode == 404) {
+        return AiChatMessage(
+          id: UniqueKey().toString(),
+          sender: 'AI',
+          content: '⚠️ AI Coach endpoint was not found on the server (404 Not Found at ${url.path}). Please verify server configuration.',
+          isError: true,
+          intent: 'NOT_FOUND',
+        );
+      }
+
+      // Handle HTTP 500, 502, 503, 504 Service Unavailable / Degradation
+      if (resp.statusCode == 500 || resp.statusCode == 502 || resp.statusCode == 503 || resp.statusCode == 504) {
+        String? serverMessage;
+        try {
+          final decoded = jsonDecode(resp.body);
+          serverMessage = (decoded['error']?['message'] ?? decoded['message'])?.toString();
+        } catch (_) {}
+
+        final contentMsg = (serverMessage != null && serverMessage.trim().isNotEmpty)
+            ? '⚠️ AI Coach service error (${resp.statusCode}): $serverMessage'
+            : '⚠️ AI Coach service is temporarily degraded on the server (${resp.statusCode}). Please try again shortly.';
+
+        return AiChatMessage(
+          id: UniqueKey().toString(),
+          sender: 'AI',
+          content: contentMsg,
+          isError: true,
+          intent: 'SERVICE_UNAVAILABLE',
+        );
+      }
+
+      // Any other unexpected HTTP status
+      String? fallbackMsg;
+      try {
+        final decoded = jsonDecode(resp.body);
+        fallbackMsg = (decoded['error']?['message'] ?? decoded['message'])?.toString();
+      } catch (_) {}
+
+      return AiChatMessage(
+        id: UniqueKey().toString(),
+        sender: 'AI',
+        content: fallbackMsg != null && fallbackMsg.trim().isNotEmpty
+            ? '⚠️ Server returned error (${resp.statusCode}): $fallbackMsg'
+            : '⚠️ Server returned unexpected status code (${resp.statusCode}).',
+        isError: true,
+        intent: 'HTTP_ERROR_${resp.statusCode}',
+      );
     } catch (e) {
-      debugPrint('[AI COACH REPO] Network or backend error: $e — trying LAN backend then direct Gemini');
+      debugPrint('[AI COACH REPO] Network exception: $e');
 
       // If primary failed due to network, try LAN host if primary wasn't already LAN
       final primaryUrlStr = AppConstants.apiBaseUrl;
       if (!primaryUrlStr.contains(ApiConfig.defaultHostIp) && !primaryUrlStr.contains('localhost')) {
         try {
-          final payload = <String, dynamic>{'message': message};
-          if (conversationId != null) payload['conversationId'] = conversationId;
-          if (selectedClientId != null && selectedClientId.isNotEmpty && selectedClientId != 'ALL') {
-            payload['selectedClientId'] = selectedClientId;
-          }
           final lanChatUrl = Uri.parse('${ApiConfig.physicalLanUrl}/admin/ai-coach/chat');
           final lanResp = await _httpClient.post(
             lanChatUrl,
@@ -169,7 +214,33 @@ class AiCoachRepository extends ChangeNotifier {
         } catch (_) {}
       }
 
-      return await _callGeminiDirectly(message, selectedClientId);
+      // If client has an explicit direct Gemini API key configured, attempt direct fallback
+      if (_geminiApiKey.trim().isNotEmpty) {
+        return await _callGeminiDirectly(message, selectedClientId);
+      }
+
+      final host = url.host.isNotEmpty ? url.host : 'server';
+      final port = url.hasPort ? ':${url.port}' : '';
+      final destination = '$host$port';
+
+      String errorDetail;
+      if (e is TimeoutException) {
+        errorDetail = 'Connection timed out while contacting server at $destination.';
+      } else if (e is SocketException) {
+        errorDetail = 'Network connection failed (cannot reach $destination). Please verify the server is running and reachable.';
+      } else if (e is http.ClientException) {
+        errorDetail = 'HTTP client error communicating with $destination: ${e.message}';
+      } else {
+        errorDetail = 'Unable to connect to Alpha X server at $destination: $e';
+      }
+
+      return AiChatMessage(
+        id: UniqueKey().toString(),
+        sender: 'AI',
+        content: '⚠️ $errorDetail\n\nPlease check your internet connection or verify the server address in Server Settings.',
+        isError: true,
+        intent: 'CONNECTION_ERROR',
+      );
     }
   }
 
@@ -811,12 +882,13 @@ class AiCoachRepository extends ChangeNotifier {
 
       if (_geminiApiKey.trim().isEmpty) {
         debugPrint('[AI COACH REPO] Direct Gemini fallback unavailable: GEMINI_API_KEY is not configured.');
+        final host = Uri.tryParse(AppConstants.apiBaseUrl)?.host ?? 'server';
         return AiChatMessage(
           id: UniqueKey().toString(),
           sender: 'AI',
-          content: '⚠️ The Alpha X Backend server is currently offline (cannot reach ${AppConstants.apiBaseUrl}), and no Gemini API key was provided to Flutter.\n\nTo resolve this:\n1. Start the backend: cd backend && npm run dev\n2. Or run Flutter with: flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY',
+          content: '⚠️ Unable to connect to Alpha X server ($host). Please verify your network connection or Server Settings.',
           isError: true,
-          intent: 'BACKEND_OFFLINE',
+          intent: 'CONNECTION_ERROR',
         );
       }
 
