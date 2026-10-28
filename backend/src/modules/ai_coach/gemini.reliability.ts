@@ -298,6 +298,18 @@ export class GeminiReliabilityManager {
   private lastHealthCheckTimestamp: number = 0;
   private readonly HEALTH_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
 
+  // Concurrency & safe recovery tracking
+  private activeProbePromise: Promise<GeminiHealthStatus> | null = null;
+  private lastFailureTimestamp: number = 0;
+  private probeExecutor: ((client: GoogleGenAI, model: string) => Promise<any>) | null = null;
+
+  /**
+   * Inject a custom probe executor for automated testing (avoids live network calls).
+   */
+  public setProbeExecutor(executor: ((client: GoogleGenAI, model: string) => Promise<any>) | null): void {
+    this.probeExecutor = executor;
+  }
+
   /**
    * Safe in-memory credential resolution with zero per-request disk reads.
    * Works seamlessly on Vercel serverless environments and local development.
@@ -441,12 +453,30 @@ export class GeminiReliabilityManager {
   }
 
   /**
+   * Retrieves an isolated client specifically for health probing.
+   * Unlike getClient(), this permits testing candidate credentials even when prior
+   * failure flags are set, without exposing normal user traffic.
+   */
+  public getProbeClient(): { client: GoogleGenAI; source: 'PRIMARY' | 'BACKUP' } {
+    const { primaryKey, backupKey } = this.getResolvedCredentials();
+
+    if (primaryKey) {
+      return { client: new GoogleGenAI({ apiKey: primaryKey }), source: 'PRIMARY' };
+    }
+    if (backupKey) {
+      return { client: new GoogleGenAI({ apiKey: backupKey }), source: 'BACKUP' };
+    }
+    throw new Error('AI service is temporarily unavailable: GEMINI_API_KEY is not configured on the server.');
+  }
+
+  /**
    * Handles failure on a specific key source and evaluates failover or circuit trip.
    */
   public handleFailure(classified: ClassifiedGeminiError, sourceUsed: 'PRIMARY' | 'BACKUP'): {
     canFailover: boolean;
     circuitTripped: boolean;
   } {
+    this.lastFailureTimestamp = Date.now();
     const { primaryKey, backupKey } = this.getResolvedCredentials();
     const hasDistinctBackup = Boolean(backupKey && backupKey !== primaryKey);
 
@@ -490,6 +520,7 @@ export class GeminiReliabilityManager {
    */
   public tripCircuitBreaker(reason: string): void {
     this.circuitTrippedUntil = Date.now() + this.CIRCUIT_COOLDOWN_MS;
+    this.lastFailureTimestamp = Date.now();
     console.error(`[ALPHA X GEMINI AUTH DIAGNOSTIC 🚨] Authentication circuit breaker tripped for 10m: ${reason}`);
 
     // Asynchronously notify admin without holding up request
@@ -510,6 +541,8 @@ export class GeminiReliabilityManager {
     this.activeKeySource = 'PRIMARY';
     this.lastHealthCheck = null;
     this.lastHealthCheckTimestamp = 0;
+    this.activeProbePromise = null;
+    this.lastFailureTimestamp = 0;
   }
 
   /**
@@ -564,10 +597,28 @@ export class GeminiReliabilityManager {
   /**
    * Lightweight health check probe.
    * Uses a 10-minute cache TTL so ordinary user requests never incur extra API latency or cost.
+   * Safe recovery:
+   * 1. Returns cached status if fresh (< 10m TTL) and healthy.
+   * 2. If circuit is currently cooling down and forceRefresh is false, returns cached AUTH_FAILED status.
+   * 3. When cooldown has expired OR forceRefresh is true:
+   *    - Deduplicates concurrent calls via a shared activeProbePromise (prevents probe storms).
+   *    - Executes a controlled probe ping via getProbeClient().
+   *    - Normal user traffic continues to be protected by authentication safeguards until probe confirms HTTP 200.
+   *    - On probe SUCCESS: Resets failure flags, closes circuit breaker, marks status HEALTHY.
+   *    - On probe AUTH FAILURE: Re-arms circuit breaker for 10m cooldown, keeps failure flags active.
    */
   public async checkHealth(forceRefresh: boolean = false): Promise<GeminiHealthStatus> {
     const now = Date.now();
-    if (!forceRefresh && this.lastHealthCheck && now - this.lastHealthCheckTimestamp < this.HEALTH_CACHE_TTL_MS) {
+    const isCooldownActive = this.getCircuitCooldownRemainingSeconds() > 0;
+
+    // 1. Cache hit: Return cached status if within TTL, provided cooldown hasn't expired.
+    // If cooldown has expired, we must perform a controlled probe rather than serving stale AUTH_FAILED.
+    if (
+      !forceRefresh &&
+      this.lastHealthCheck &&
+      now - this.lastHealthCheckTimestamp < this.HEALTH_CACHE_TTL_MS &&
+      (this.lastHealthCheck.healthy || isCooldownActive)
+    ) {
       return {
         ...this.lastHealthCheck,
         cooldownRemainingSeconds: this.getCircuitCooldownRemainingSeconds(),
@@ -577,6 +628,7 @@ export class GeminiReliabilityManager {
     const { primaryKey, backupKey } = this.getResolvedCredentials();
     const hasBackupKey = Boolean(backupKey);
 
+    // 2. Unconfigured check
     if (!primaryKey && !backupKey) {
       const unconfigured: GeminiHealthStatus = {
         healthy: false,
@@ -595,7 +647,8 @@ export class GeminiReliabilityManager {
       return unconfigured;
     }
 
-    if (this.isCircuitTripped()) {
+    // 3. Fast-return while cooling down unless forced refresh was requested
+    if (!forceRefresh && isCooldownActive) {
       const circuitStatus: GeminiHealthStatus = {
         healthy: false,
         status: 'AUTH_FAILED',
@@ -613,13 +666,41 @@ export class GeminiReliabilityManager {
       return circuitStatus;
     }
 
-    // Perform minimal, lightweight ping (1-token output) with 5s timeout
-    const startTime = Date.now();
-    try {
-      const { client, source } = this.getClient();
-      const testModel = (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim();
+    // 4. In-flight probe deduplication: If a probe is already running, reuse the same promise
+    if (this.activeProbePromise) {
+      return await this.activeProbePromise;
+    }
 
-      await Promise.race([
+    // 5. Execute controlled probe with singleton deduplication
+    const probePromise = this.performControlledProbe(hasBackupKey);
+    this.activeProbePromise = probePromise;
+
+    try {
+      return await probePromise;
+    } finally {
+      if (this.activeProbePromise === probePromise) {
+        this.activeProbePromise = null;
+      }
+    }
+  }
+
+  /**
+   * Internal controlled health probe execution.
+   */
+  private async performControlledProbe(hasBackupKey: boolean): Promise<GeminiHealthStatus> {
+    const probeStartTime = Date.now();
+    const testModel = (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim();
+    const { primaryKey, backupKey } = this.getResolvedCredentials();
+
+    const candidateSource: 'PRIMARY' | 'BACKUP' = primaryKey ? 'PRIMARY' : 'BACKUP';
+    const candidateKey = primaryKey || backupKey || '';
+
+    const executePing = async (key: string, source: 'PRIMARY' | 'BACKUP') => {
+      const client = new GoogleGenAI({ apiKey: key });
+      if (this.probeExecutor) {
+        return await this.probeExecutor(client, testModel);
+      }
+      return await Promise.race([
         client.models.generateContent({
           model: testModel,
           contents: 'ping',
@@ -627,16 +708,35 @@ export class GeminiReliabilityManager {
             maxOutputTokens: 1,
           },
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Health probe timed out after 5000ms')), 5000)),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Health probe timed out after 5000ms')), 5000)
+        ),
       ]);
+    };
 
-      const latencyMs = Date.now() - startTime;
+    try {
+      await executePing(candidateKey, candidateSource);
+      const latencyMs = Date.now() - probeStartTime;
+
+      // Probe confirmed successful! Safely clear circuit breaker and failure flags if no newer failure occurred
+      if (this.lastFailureTimestamp <= probeStartTime) {
+        if (candidateSource === 'PRIMARY') {
+          this.primaryAuthFailed = false;
+          this.primaryQuotaFailed = false;
+        } else {
+          this.backupAuthFailed = false;
+          this.backupQuotaFailed = false;
+        }
+        this.circuitTrippedUntil = null;
+        this.activeKeySource = candidateSource;
+      }
+
       const healthyStatus: GeminiHealthStatus = {
         healthy: true,
         status: 'HEALTHY',
-        activeKeySource: source,
+        activeKeySource: candidateSource,
         hasBackupKey,
-        isBackupActive: source === 'BACKUP',
+        isBackupActive: candidateSource === 'BACKUP',
         circuitTripped: false,
         cooldownRemainingSeconds: 0,
         model: testModel,
@@ -646,16 +746,58 @@ export class GeminiReliabilityManager {
       };
 
       this.lastHealthCheck = healthyStatus;
-      this.lastHealthCheckTimestamp = now;
+      this.lastHealthCheckTimestamp = Date.now();
       return healthyStatus;
-    } catch (err: any) {
-      const latencyMs = Date.now() - startTime;
-      const classified = classifyGeminiError(err);
+    } catch (firstErr: any) {
+      const classifiedFirst = classifyGeminiError(firstErr);
 
+      // If primary failed auth/quota and distinct backup key exists, attempt backup probe
+      if (candidateSource === 'PRIMARY' && hasBackupKey && backupKey) {
+        try {
+          console.warn('[GEMINI RELIABILITY] Probe failed on primary; attempting backup key probe...');
+          await executePing(backupKey, 'BACKUP');
+          const latencyMs = Date.now() - probeStartTime;
+
+          if (this.lastFailureTimestamp <= probeStartTime) {
+            this.primaryAuthFailed = true;
+            this.backupAuthFailed = false;
+            this.circuitTrippedUntil = null;
+            this.activeKeySource = 'BACKUP';
+          }
+
+          const backupHealthyStatus: GeminiHealthStatus = {
+            healthy: true,
+            status: 'HEALTHY',
+            activeKeySource: 'BACKUP',
+            hasBackupKey: true,
+            isBackupActive: true,
+            circuitTripped: false,
+            cooldownRemainingSeconds: 0,
+            model: testModel,
+            latencyMs,
+            lastChecked: new Date().toISOString(),
+            message: `Gemini API operational on backup key (${latencyMs}ms).`,
+          };
+
+          this.lastHealthCheck = backupHealthyStatus;
+          this.lastHealthCheckTimestamp = Date.now();
+          return backupHealthyStatus;
+        } catch (backupErr: any) {
+          this.backupAuthFailed = true;
+        }
+      }
+
+      const latencyMs = Date.now() - probeStartTime;
       let statusCategory: GeminiHealthStatus['status'] = 'UNAVAILABLE';
-      if (classified.isAuth) statusCategory = 'AUTH_FAILED';
-      else if (classified.isQuota) statusCategory = 'QUOTA_EXHAUSTED';
-      else if (classified.isRateLimit) statusCategory = 'RATE_LIMITED';
+      if (classifiedFirst.isAuth) {
+        statusCategory = 'AUTH_FAILED';
+        this.primaryAuthFailed = true;
+        this.tripCircuitBreaker(`Health probe authentication failed: ${classifiedFirst.sanitizedMessage}`);
+      } else if (classifiedFirst.isQuota) {
+        statusCategory = 'QUOTA_EXHAUSTED';
+      } else if (classifiedFirst.isRateLimit) {
+        statusCategory = 'RATE_LIMITED';
+      }
 
       const unhealthyStatus: GeminiHealthStatus = {
         healthy: false,
@@ -665,14 +807,14 @@ export class GeminiReliabilityManager {
         isBackupActive: this.activeKeySource === 'BACKUP',
         circuitTripped: this.isCircuitTripped(),
         cooldownRemainingSeconds: this.getCircuitCooldownRemainingSeconds(),
-        model: (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim(),
+        model: testModel,
         latencyMs,
         lastChecked: new Date().toISOString(),
-        message: classified.sanitizedMessage.substring(0, 150),
+        message: classifiedFirst.sanitizedMessage.substring(0, 150),
       };
 
       this.lastHealthCheck = unhealthyStatus;
-      this.lastHealthCheckTimestamp = now;
+      this.lastHealthCheckTimestamp = Date.now();
       return unhealthyStatus;
     }
   }

@@ -321,11 +321,100 @@ async function runTests() {
     // Test with configured key in circuit-tripped state
     process.env.GEMINI_API_KEY = sampleApiKey;
     testManager.tripCircuitBreaker('Testing health check with tripped circuit');
+    // Mock probe failure on invalid key
+    testManager.setProbeExecutor(async () => {
+      throw { status: 401, message: 'API key not valid. Please pass a valid API key.' };
+    });
     const trippedHealth = await testManager.checkHealth(true);
     assert(trippedHealth.healthy === false, 'Health check reports unhealthy when circuit is tripped');
     assert(trippedHealth.circuitTripped === true, 'circuitTripped flag is true');
     assert(trippedHealth.status === 'AUTH_FAILED', 'Status is AUTH_FAILED');
     assert(!JSON.stringify(trippedHealth).includes(sampleApiKey), 'API key value is NOT present in health payload');
+
+    // --------------------------------------------------------------------------
+    // TEST 7: Controlled Recovery & Concurrency Verification (Phase 2 Fixes)
+    // --------------------------------------------------------------------------
+    console.log('\n--- TEST 7: Controlled Recovery & Concurrency Verification ---');
+
+    // 7a: Expired cooldown followed by successful probe and recovery
+    testManager.resetState();
+    process.env.GEMINI_API_KEY = sampleApiKey;
+    delete process.env.GEMINI_API_KEY_BACKUP;
+
+    // Simulate prior auth failure
+    (testManager as any).primaryAuthFailed = true;
+    (testManager as any).circuitTrippedUntil = Date.now() - 1000; // Cooldown expired 1s ago
+
+    assert(testManager.isCircuitTripped() === false, '7a: Circuit breaker cooldown has expired');
+    assert((testManager as any).primaryAuthFailed === true, '7a: Authentication failure flag remains active before probe');
+
+    // Attempting normal AI request before probe confirms success must remain blocked
+    let normalRequestBlocked = false;
+    try {
+      testManager.getClient();
+    } catch (err: any) {
+      if (err instanceof GeminiAuthCircuitError) normalRequestBlocked = true;
+    }
+    assert(normalRequestBlocked === true, '7a: Normal AI requests stay blocked before controlled probe confirms recovery');
+
+    // Now execute controlled probe with mock returning success
+    testManager.setProbeExecutor(async () => ({ text: 'pong' }));
+    const recoveredHealth = await testManager.checkHealth();
+    assert(recoveredHealth.healthy === true, '7a: Health check reports healthy after successful probe');
+    assert(recoveredHealth.status === 'HEALTHY', '7a: Status transitioned to HEALTHY');
+    assert((testManager as any).primaryAuthFailed === false, '7a: primaryAuthFailed cleared upon confirmed probe success');
+    assert(testManager.getClient().source === 'PRIMARY', '7a: Normal AI requests unlocked and can access primary client');
+
+    // 7b: Failed authentication probe retaining lockout and re-arming cooldown
+    testManager.resetState();
+    (testManager as any).primaryAuthFailed = true;
+    (testManager as any).circuitTrippedUntil = Date.now() - 1000; // Cooldown expired
+
+    testManager.setProbeExecutor(async () => {
+      throw { status: 401, message: 'API key not valid' };
+    });
+    const failedProbeHealth = await testManager.checkHealth();
+    assert(failedProbeHealth.healthy === false, '7b: Health check reports unhealthy after failed probe');
+    assert(failedProbeHealth.status === 'AUTH_FAILED', '7b: Status remains AUTH_FAILED');
+    assert(testManager.isCircuitTripped() === true, '7b: Circuit breaker re-armed with fresh cooldown');
+    assert(testManager.getCircuitCooldownRemainingSeconds() > 0, '7b: Fresh 10m cooldown active');
+    assert((testManager as any).primaryAuthFailed === true, '7b: primaryAuthFailed remains true');
+
+    // 7c: Forced health refresh recovering after a successful probe
+    testManager.resetState();
+    testManager.tripCircuitBreaker('Active lockout before admin fix');
+    assert(testManager.isCircuitTripped() === true, '7c: Circuit is actively tripped');
+    assert(testManager.getCircuitCooldownRemainingSeconds() > 0, '7c: Cooldown has not expired');
+
+    // Admin updates key and triggers forceRefresh: true with working key
+    testManager.setProbeExecutor(async () => ({ text: 'pong' }));
+    const forceRefreshHealth = await testManager.checkHealth(true);
+    assert(forceRefreshHealth.healthy === true, '7c: forceRefresh probe succeeds on working key');
+    assert(forceRefreshHealth.status === 'HEALTHY', '7c: State transitioned to HEALTHY');
+    assert(testManager.isCircuitTripped() === false, '7c: Circuit breaker is closed');
+    assert((testManager as any).primaryAuthFailed === false, '7c: Failure flags cleared');
+
+    // 7d: Concurrent health checks sharing exactly one probe (Deduplication)
+    testManager.resetState();
+    let probeExecCount = 0;
+    testManager.setProbeExecutor(async () => {
+      probeExecCount++;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return { text: 'pong' };
+    });
+
+    // Launch 5 concurrent forced refresh checks
+    const concurrentResults = await Promise.all([
+      testManager.checkHealth(true),
+      testManager.checkHealth(true),
+      testManager.checkHealth(true),
+      testManager.checkHealth(true),
+      testManager.checkHealth(true),
+    ]);
+
+    assert(concurrentResults.length === 5, '7d: All 5 concurrent health checks resolved');
+    assert(concurrentResults.every((r) => r.healthy === true), '7d: All concurrent callers received HEALTHY status');
+    assert(probeExecCount === 1, '7d: Exactly ONE network probe was executed (concurrent probe storm prevented)');
 
     console.log('\n================================================================');
     console.log(`🎉 TEST SUMMARY: ${passedCount} PASSED, ${failedCount} FAILED`);
