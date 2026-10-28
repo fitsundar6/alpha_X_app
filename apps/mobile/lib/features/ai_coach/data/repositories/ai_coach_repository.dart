@@ -814,7 +814,7 @@ class AiCoachRepository extends ChangeNotifier {
         return AiChatMessage(
           id: UniqueKey().toString(),
           sender: 'AI',
-          content: '⚠️ The Alpha X Backend server is currently offline (cannot reach ' + AppConstants.apiBaseUrl + '), and no Gemini API key was provided to Flutter.\n\nTo resolve this:\n1. Start the backend: cd backend && npm run dev\n2. Or run Flutter with: flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY',
+          content: '⚠️ The Alpha X Backend server is currently offline (cannot reach ${AppConstants.apiBaseUrl}), and no Gemini API key was provided to Flutter.\n\nTo resolve this:\n1. Start the backend: cd backend && npm run dev\n2. Or run Flutter with: flutter run --dart-define=GEMINI_API_KEY=YOUR_KEY',
           isError: true,
           intent: 'BACKEND_OFFLINE',
         );
