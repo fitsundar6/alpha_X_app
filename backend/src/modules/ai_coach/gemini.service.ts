@@ -12,6 +12,7 @@ import {
   toolRegistry,
   toolExecutor,
   toolConfig,
+  PROPOSAL_TOOL_NAMES,
   ToolExecutionContext,
 } from './tools';
 import { prisma } from '../../config/prisma';
@@ -382,11 +383,23 @@ export class GeminiService {
       // The SDK emits that warning from its .text getter, not from .functionCalls,
       // but using our own part-level inspection keeps the code consistent and safe.
       const maxCalls = toolConfig.maxToolCallsPerRequest;
+      const hardMaxCalls = maxCalls + 2; // Absolute safety ceiling to strictly prevent infinite looping
 
-      while (hasFunctionCallParts(currentResponse) && toolCallsExecuted < maxCalls && context) {
+      while (hasFunctionCallParts(currentResponse) && context && toolCallsExecuted < hardMaxCalls) {
+        // Once a proposal has been successfully executed, exit the tool loop immediately
+        if (executedProposal) {
+          break;
+        }
         // Extract raw function-call parts so we never touch the SDK's .text getter
         const rawParts: any[] = currentResponse?.candidates?.[0]?.content?.parts ?? [];
         const fcParts = rawParts.filter((p: any) => p && 'functionCall' in p && p.functionCall);
+
+        // If we have hit the call cap AND none of the pending function calls are
+        // proposal tools (which must always be allowed to complete), exit the loop.
+        const pendingProposalCalls = fcParts.filter((p: any) => PROPOSAL_TOOL_NAMES.has(p.functionCall?.name));
+        if (toolCallsExecuted >= maxCalls && pendingProposalCalls.length === 0) {
+          break;
+        }
 
         // Push the full model turn (preserving thought_signature if present)
         if (currentResponse?.candidates?.[0]?.content) {
@@ -406,13 +419,22 @@ export class GeminiService {
           const call = part.functionCall as { name: string; args: any };
 
           if (toolCallsExecuted >= maxCalls) {
-            functionResponseParts.push({
-              functionResponse: {
-                name: call.name,
-                response: { output: { notice: 'Maximum tool call depth reached.' } },
-              },
-            });
-            continue;
+            // Proposal tools MUST NOT be blocked by the soft cap — they are the
+            // terminal step in the entire tool chain.  If Gemini has decided to
+            // invoke propose_workout_plan or propose_diet_plan, blocking it here
+            // causes a text-only fallback with zero database persistence.
+            // Non-proposal tools are still capped normally.
+            if (!PROPOSAL_TOOL_NAMES.has(call.name)) {
+              functionResponseParts.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { output: { notice: 'Maximum tool call depth reached.' } },
+                },
+              });
+              continue;
+            }
+            // Proposal tool — fall through to execute despite the soft cap.
+            console.log(`[DEBUG GEMINI] Proposal tool '${call.name}' bypassing soft cap (${toolCallsExecuted}/${maxCalls}).`);
           }
 
           toolCallsExecuted++;

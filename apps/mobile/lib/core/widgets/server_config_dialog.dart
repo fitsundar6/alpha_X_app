@@ -109,6 +109,19 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
   Future<void> _saveAndApply() async {
     final cleanUrl = _urlController.text.trim();
     final normalized = cleanUrl.isNotEmpty ? ApiConfig.normalizeUrl(cleanUrl) : '';
+    if (normalized.isNotEmpty && ApiConfig.isInvalidLoopback(normalized)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '⚠️ localhost cannot be reached from mobile or release builds. Use Production Cloud or PC LAN IP.',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppColors.primaryRed,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
     await AuthService().updateServerUrl(normalized);
     if (mounted) {
       Navigator.of(context).pop();

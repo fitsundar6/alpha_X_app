@@ -7,8 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 1. Android physical phone (via Windows PC LAN IPv4)
 /// 2. iPhone physical device (via Windows PC LAN IPv4 with iOS ATS compliance)
 /// 3. Android emulator (10.0.2.2)
-/// 4. Local Windows development & Flutter Web (localhost:5000)
-/// 5. Production live server (https://api.alphaxgym.com/api/v1)
+/// 4. Local Windows development & Flutter Web (localhost:5000 when ENV=local)
+/// 5. Production live server (https://alpha-x-app.vercel.app/api/v1)
 ///
 /// Features dynamic URL normalization, compile-time dart-define flags,
 /// and runtime user-override persistence in SharedPreferences.
@@ -50,6 +50,73 @@ class ApiConfig {
   /// In-memory cache of user-configured runtime server URL
   static String? customServerUrl;
 
+  // --- Test & Environment Overrides ---
+  @visibleForTesting
+  static TargetPlatform? platformOverride;
+
+  @visibleForTesting
+  static bool? isReleaseModeOverride;
+
+  @visibleForTesting
+  static bool? isWebOverride;
+
+  @visibleForTesting
+  static String? envTargetOverride;
+
+  /// Effective target platform taking test overrides into account
+  static TargetPlatform get effectivePlatform => platformOverride ?? defaultTargetPlatform;
+
+  /// Effective release mode flag taking test overrides into account
+  static bool get effectiveIsReleaseMode => isReleaseModeOverride ?? kReleaseMode;
+
+  /// Effective web platform flag taking test overrides into account
+  static bool get effectiveIsWeb => isWebOverride ?? kIsWeb;
+
+  /// Effective environment target string taking test overrides into account
+  static String get effectiveEnvTarget => envTargetOverride ?? _envTarget;
+
+  /// Resets test-only overrides back to standard runtime values
+  @visibleForTesting
+  static void resetTestOverrides() {
+    platformOverride = null;
+    isReleaseModeOverride = null;
+    isWebOverride = null;
+    envTargetOverride = null;
+  }
+
+  /// Determines whether a given URL points to an unusable or obsolete loopback address.
+  ///
+  /// Criteria:
+  /// 1. Mobile devices (Android/iOS physical devices and emulators) can never reach a host machine
+  ///    via `localhost` or `127.0.0.1` because the phone's loopback points to itself.
+  /// 2. Production/release builds (`kReleaseMode == true`) must never connect to loopback addresses.
+  /// 3. On Web and Desktop, if no explicit local development flag (`ENV=local|dev|localhost`) is set,
+  ///    an obsolete `localhost:5000` override is pruned to prevent breaking production cloud connectivity.
+  /// 4. Valid custom LAN URLs (e.g. `http://192.168.x.x:5000`) and custom remote URLs (`https://...`)
+  ///    are NEVER considered loopback and are strictly preserved.
+  static bool isInvalidLoopback(String url) {
+    final lower = url.toLowerCase();
+    final isLoopback = lower.contains('localhost') || lower.contains('127.0.0.1');
+    if (!isLoopback) return false;
+
+    // Mobile platforms cannot use loopback to reach PC host
+    final isMobile = !effectiveIsWeb &&
+        (effectivePlatform == TargetPlatform.android || effectivePlatform == TargetPlatform.iOS);
+    if (isMobile) return true;
+
+    // Release builds must never use localhost on any platform
+    if (effectiveIsReleaseMode) return true;
+
+    // On Web / Desktop without explicit local dev environment flag, prune stale localhost:5000
+    final env = effectiveEnvTarget.trim().toLowerCase();
+    final isExplicitLocalDev = env == 'local' || env == 'localhost' || env == 'dev';
+    if (!isExplicitLocalDev && (lower.contains('localhost:5000') || lower.contains('127.0.0.1:5000'))) {
+      return true;
+    }
+
+    return false;
+  }
+
   /// Load persisted server URL from SharedPreferences at startup
   static Future<void> initialize() async {
     try {
@@ -57,18 +124,11 @@ class ApiConfig {
       final saved = prefs.getString(storageKey) ?? prefs.getString('custom_api_url');
       if (saved != null && saved.trim().isNotEmpty) {
         final normalized = normalizeUrl(saved.trim());
-        // Prune only unusable loopback addresses on mobile release mode;
-        // never prune valid user-configured physical LAN (192.168.x.x) overrides.
-        final isLoopbackOnly = normalized.contains('127.0.0.1') ||
-            (normalized.contains('localhost') &&
-                defaultTargetPlatform != TargetPlatform.windows &&
-                defaultTargetPlatform != TargetPlatform.linux &&
-                defaultTargetPlatform != TargetPlatform.macOS &&
-                !kIsWeb);
-        if (isLoopbackOnly && kReleaseMode) {
-          debugPrint('[API CONFIG] Pruning unusable loopback server URL in release: $normalized -> using production $productionUrl');
+        if (isInvalidLoopback(normalized)) {
+          debugPrint('[API CONFIG] Pruning obsolete/unusable loopback server URL: $normalized -> resetting to production $productionUrl');
           customServerUrl = null;
           await prefs.remove(storageKey);
+          await prefs.remove('custom_api_url');
         } else {
           customServerUrl = normalized;
         }
@@ -144,12 +204,16 @@ class ApiConfig {
   /// 3. Compile-time `--dart-define=SERVER_IP=...` or `--dart-define=LAN_IP=...`
   /// 4. Compile-time `--dart-define=ENV=production` -> [productionUrl]
   /// 5. Compile-time `--dart-define=ENV=emulator` -> [emulatorUrl]
-  /// 6. Desktop (Windows, macOS, Linux) or Web development -> [localhostUrl]
-  /// 7. Mobile platforms (iOS and Android) -> [productionUrl] (HTTPS production cloud backend)
+  /// 6. Compile-time `--dart-define=ENV=local` / `dev` / `localhost` -> [localhostUrl]
+  /// 7. Compile-time `--dart-define=ENV=lan` / `physical` -> [physicalLanUrl]
+  /// 8. Default for ALL platforms (Mobile, Web, Desktop) -> [productionUrl] (HTTPS production cloud backend)
   static String get baseUrl {
-    // 1. Runtime override
+    // 1. Runtime override (if not an unusable loopback)
     if (customServerUrl != null && customServerUrl!.trim().isNotEmpty) {
-      return normalizeUrl(customServerUrl!);
+      final normalized = normalizeUrl(customServerUrl!);
+      if (!isInvalidLoopback(normalized)) {
+        return normalized;
+      }
     }
 
     // 2. Explicit compile-time API URL
@@ -164,7 +228,7 @@ class ApiConfig {
     }
 
     // 4. Environment flags
-    final env = _envTarget.trim().toLowerCase();
+    final env = effectiveEnvTarget.trim().toLowerCase();
     if (env == 'prod' || env == 'production') {
       return productionUrl;
     }
@@ -178,17 +242,7 @@ class ApiConfig {
       return physicalLanUrl;
     }
 
-    // 5. Desktop (Windows, macOS, Linux) or Web development -> localhostUrl
-    if (kDebugMode || !kReleaseMode) {
-      if (kIsWeb ||
-          defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux) {
-        return localhostUrl;
-      }
-    }
-
-    // 6. Unified Production Target for release builds
+    // 5. Default across all platforms (Android, iOS, Web, Desktop) is the verified HTTPS production cloud backend
     return productionUrl;
   }
 }

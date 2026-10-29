@@ -14,8 +14,36 @@ export interface ToolSystemConfig {
   allowWriteTools: boolean;
 }
 
+/**
+ * Proposal tool names that must NEVER be blocked by the tool-call cap.
+ * A workout or diet proposal is the end-product of the entire tool-call chain;
+ * if the cap prevents it from executing, Gemini falls back to a text-only
+ * description and no database record is ever created.
+ *
+ * These tools are still subject to permission validation and secure execution —
+ * they are simply exempt from the soft per-request call count limit so that the
+ * structured proposal workflow always completes when Gemini decides to invoke it.
+ */
+export const PROPOSAL_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'propose_workout_plan',
+  'propose_diet_plan',
+]);
+
 export const DEFAULT_TOOL_CONFIG: ToolSystemConfig = {
-  maxToolCallsPerRequest: 3,
+  /**
+   * Raised from 3 → 8.
+   *
+   * Root-cause fix for "workout proposals not created" bug:
+   * The Gemini model's typical chain for a workout plan is:
+   *   1. get_client_profile
+   *   2. search_exercise_library  (may be called 2–4 times for different splits/days)
+   *   3. propose_workout_plan     ← was blocked when cap was 3
+   *
+   * A cap of 8 supports a 6-day PPL split (up to 6 search_exercise_library calls)
+   * plus one get_client_profile and one propose_workout_plan without hitting the limit.
+   * PROPOSAL_TOOL_NAMES also bypass the soft cap as a safety net (see gemini.service.ts).
+   */
+  maxToolCallsPerRequest: 8,
   toolTimeoutMs: 20000,
   maxResultCharacters: 16000,
   allowWriteTools: false, // Phase 5: WRITE tools strictly disabled at code level

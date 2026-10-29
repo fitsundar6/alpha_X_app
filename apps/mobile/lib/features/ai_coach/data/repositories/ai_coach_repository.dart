@@ -284,7 +284,7 @@ class AiCoachRepository extends ChangeNotifier {
       return AiChatMessage(
         id: UniqueKey().toString(),
         sender: 'AI',
-        content: '⚠️ $errorDetail\n\nPlease check your internet connection or verify the server address in Server Settings.',
+        content: '⚠️ $errorDetail\n\n[Diagnostic: Target = $destination | Error Category = CONNECTION_ERROR]\nPlease check your internet connection or verify the server address in Server Settings.',
         isError: true,
         intent: 'CONNECTION_ERROR',
       );
@@ -297,7 +297,11 @@ class AiCoachRepository extends ChangeNotifier {
     _cachedConversations.remove(key);
     _activeConversationIds.remove(key);
 
-    if (_isTestEnvironment) {
+    // In the test environment without a custom HTTP client, use a deterministic
+    // local fallback so widget tests do not depend on a live server.
+    // When a custom httpClient is injected (e.g. MockClient), always use the
+    // real network path so integration tests can verify the full request chain.
+    if (_isTestEnvironment && !_hasCustomHttpClient) {
       return 'conv_test_${DateTime.now().millisecondsSinceEpoch}';
     }
 
@@ -824,7 +828,11 @@ class AiCoachRepository extends ChangeNotifier {
   }) async {
     final effectiveName = clientName ?? clientIdentifier;
 
-    if (_isTestEnvironment) {
+    // In the test environment without a custom HTTP client, use a deterministic
+    // local fallback so widget tests do not depend on a live server.
+    // When a custom httpClient is injected (e.g. MockClient), always use the
+    // real network path so integration tests can verify the full request chain.
+    if (_isTestEnvironment && !_hasCustomHttpClient) {
       final fallback = _buildClientFallbackProposal(
         clientIdentifier: clientIdentifier,
         effectiveName: effectiveName,
