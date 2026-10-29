@@ -49,22 +49,56 @@ export interface GeminiChatResult {
   proposal?: any;
 }
 
+/**
+ * Safely extracts concatenated text from a raw Gemini SDK response WITHOUT
+ * triggering the SDK's internal ".text" getter warning:
+ *   "there are non-text parts functionCall in the response,
+ *    returning concatenation of all text parts..."
+ *
+ * The SDK emits this warning whenever response.text is accessed and the
+ * candidate contains function-call parts alongside text parts.  By reading
+ * candidates[0].content.parts directly we avoid the getter entirely.
+ */
+function extractResponseText(response: any): string {
+  if (!response?.candidates?.[0]?.content?.parts) {
+    return '';
+  }
+  let text = '';
+  for (const part of response.candidates[0].content.parts) {
+    // Skip thought / reasoning parts emitted by flash-thinking models
+    if (typeof part.thought === 'boolean' && part.thought) continue;
+    if (typeof part.text === 'string') {
+      text += part.text;
+    }
+  }
+  return text;
+}
+
+/**
+ * Checks whether a raw Gemini SDK response still carries pending function
+ * calls — without touching response.text (which triggers the SDK warning).
+ */
+function hasFunctionCallParts(response: any): boolean {
+  const parts: any[] = response?.candidates?.[0]?.content?.parts ?? [];
+  return parts.some((p: any) => p && typeof p === 'object' && 'functionCall' in p && p.functionCall);
+}
+
 export class GeminiService {
   public static readonly PROMPT_VERSION = ALPHA_X_AI_PROMPT_VERSION;
   public get promptVersion(): string {
     return GeminiService.PROMPT_VERSION;
   }
   // Primary: gemini-3.5-flash (fast GA workhorse, active free quota, supports tool calling)
-  // Fallbacks: gemini-flash-lite-latest, gemini-flash-latest, gemini-3.8-flash
+  // Fallbacks: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.8-flash
   public static get DEFAULT_MODEL(): string {
-    return (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-flash-lite-latest').trim();
+    return (env.GEMINI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash').trim();
   }
   public static get FALLBACK_MODELS(): string[] {
     const primary = GeminiService.DEFAULT_MODEL;
     const candidates = [
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest',
       'gemini-3.5-flash',
+      'gemini-flash-latest',
+      'gemini-flash-lite-latest',
       'gemini-3.8-flash',
     ];
     return candidates.filter((m) => m !== primary);
@@ -340,29 +374,37 @@ export class GeminiService {
         toolsConfig
       );
 
-      // Handle function calls loop if model requested any tool
+      // ── Tool-call execution loop ──────────────────────────────────────────────
+      // Use hasFunctionCallParts() instead of currentResponse?.functionCalls
+      // to avoid triggering the SDK ".text" getter warning:
+      //   "there are non-text parts functionCall in the response, returning
+      //    concatenation of all text parts."
+      // The SDK emits that warning from its .text getter, not from .functionCalls,
+      // but using our own part-level inspection keeps the code consistent and safe.
       const maxCalls = toolConfig.maxToolCallsPerRequest;
-      while (
-        currentResponse?.functionCalls &&
-        currentResponse.functionCalls.length > 0 &&
-        toolCallsExecuted < maxCalls &&
-        context
-      ) {
-        // Carry the full model turn including thought_signature from candidates[0].content
+
+      while (hasFunctionCallParts(currentResponse) && toolCallsExecuted < maxCalls && context) {
+        // Extract raw function-call parts so we never touch the SDK's .text getter
+        const rawParts: any[] = currentResponse?.candidates?.[0]?.content?.parts ?? [];
+        const fcParts = rawParts.filter((p: any) => p && 'functionCall' in p && p.functionCall);
+
+        // Push the full model turn (preserving thought_signature if present)
         if (currentResponse?.candidates?.[0]?.content) {
           contentsPayload.push(currentResponse.candidates[0].content);
         } else {
           contentsPayload.push({
             role: 'model',
-            parts: currentResponse.functionCalls.map((fc: any) => ({
-              functionCall: { name: fc.name, args: fc.args || {} },
+            parts: fcParts.map((p: any) => ({
+              functionCall: { name: p.functionCall.name, args: p.functionCall.args || {} },
             })),
           });
         }
 
         const functionResponseParts: any[] = [];
 
-        for (const call of currentResponse.functionCalls) {
+        for (const part of fcParts) {
+          const call = part.functionCall as { name: string; args: any };
+
           if (toolCallsExecuted >= maxCalls) {
             functionResponseParts.push({
               functionResponse: {
@@ -379,18 +421,30 @@ export class GeminiService {
 
           // Execute tool securely through ToolExecutor
           const toolResult = await toolExecutor.executeTool(call.name, call.args, context);
-          console.log(`[DEBUG GEMINI] Tool result for ${call.name}: success=${toolResult.success}, hasData=${toolResult.data !== undefined}`);
+          console.log(
+            `[DEBUG GEMINI] Tool result for ${call.name}: ` +
+            `executorSuccess=${toolResult.success}, toolSuccess=${toolResult.data?.success}, ` +
+            `hasProposal=${!!toolResult.data?.proposal}, hasProposalId=${!!toolResult.data?.proposalId}`
+          );
 
           if (call.name === 'propose_workout_plan' || call.name === 'propose_diet_plan') {
+            // Success path: executor succeeded AND tool itself succeeded
             if (toolResult.success && toolResult.data?.success !== false) {
               if (toolResult.data?.proposal) {
                 executedProposal = toolResult.data.proposal;
+                console.log(`[DEBUG GEMINI] Captured proposal from tool result: id=${executedProposal.id}, type=${executedProposal.type}`);
               } else if (toolResult.data?.proposalId) {
+                // Fetch full proposal from DB when tool only returned the ID
                 try {
                   const propDb = await prisma.aIProposal.findUnique({ where: { id: toolResult.data.proposalId } });
                   if (propDb) {
                     let proposedData: any = {};
-                    try { proposedData = JSON.parse(propDb.finalDataJson || propDb.proposedDataJson); } catch {}
+                    const rawPayload = propDb.finalDataJson || propDb.proposedDataJson;
+                    if (typeof rawPayload === 'object' && rawPayload !== null) {
+                      proposedData = rawPayload;
+                    } else if (typeof rawPayload === 'string') {
+                      try { proposedData = JSON.parse(rawPayload); } catch {}
+                    }
                     executedProposal = {
                       id: propDb.id,
                       clientId: propDb.clientId || propDb.clientProfileId,
@@ -401,12 +455,18 @@ export class GeminiService {
                       reason: propDb.reason,
                       status: propDb.status,
                       payload: proposedData,
+                      proposedData,
                     };
+                    console.log(`[DEBUG GEMINI] Fetched proposal from DB: id=${executedProposal.id}`);
                   }
-                } catch (_) {}
+                } catch (dbFetchErr) {
+                  console.warn(`[DEBUG GEMINI] Could not fetch proposal from DB: ${dbFetchErr}`);
+                }
               }
             } else {
+              // Tool failed (validation, client-not-found, split error, etc.)
               lastProposalError = toolResult.error || toolResult.data?.message || 'Proposal validation or database error';
+              console.warn(`[DEBUG GEMINI] Proposal tool failed: ${lastProposalError}`);
             }
           }
 
@@ -420,14 +480,12 @@ export class GeminiService {
           });
         }
 
-        // Append all tool responses in a single turn
-        contentsPayload.push({
-          role: 'user',
-          parts: functionResponseParts,
-        });
+        // Append all tool responses in a single user turn
+        contentsPayload.push({ role: 'user', parts: functionResponseParts });
 
-        // Call model with tool responses to generate final synthesis
-        const nextToolsConfig = toolCallsExecuted < maxCalls ? toolsConfig : undefined;
+        // After a successful proposal is captured, disable further tool calls so Gemini
+        // summarises rather than looping into another proposal attempt.
+        const nextToolsConfig = (toolCallsExecuted < maxCalls && !executedProposal) ? toolsConfig : undefined;
         currentResponse = await this.callModelWithFallback(
           ai,
           modelName,
@@ -437,54 +495,54 @@ export class GeminiService {
         );
       }
 
-      // If loop exited but model still left pending function calls, close them and synthesize final text
-      if (
-        currentResponse?.functionCalls &&
-        currentResponse.functionCalls.length > 0 &&
-        (!currentResponse.text || currentResponse.text.trim().length === 0)
-      ) {
+      const pendingText = extractResponseText(currentResponse);
+
+      // Cap: if the loop exited due to hitting maxCalls and Gemini still has pending
+      // function-call parts without producing a text reply, force a final text synthesis.
+      if (hasFunctionCallParts(currentResponse) && (!pendingText || pendingText.trim().length === 0)) {
         if (currentResponse?.candidates?.[0]?.content) {
           contentsPayload.push(currentResponse.candidates[0].content);
         }
-        const capResponses = currentResponse.functionCalls.map((fc: any) => ({
-          functionResponse: {
-            name: fc.name,
-            response: { output: { notice: 'Tool call cap reached. Please provide final answer using gathered data.' } },
-          },
-        }));
-        contentsPayload.push({
-          role: 'user',
-          parts: capResponses,
-        });
-        currentResponse = await this.callModelWithFallback(
-          ai,
-          modelName,
-          contentsPayload,
-          systemInstruction,
-          undefined
-        );
-      }
-
-      let finalText = currentResponse?.text || '';
-      if (!finalText && currentResponse?.candidates?.[0]?.content?.parts) {
-        for (const p of currentResponse.candidates[0].content.parts) {
-          if (p.text) finalText += p.text;
+        const capParts: any[] = currentResponse?.candidates?.[0]?.content?.parts ?? [];
+        const capResponses = capParts
+          .filter((p: any) => p && 'functionCall' in p && p.functionCall)
+          .map((p: any) => ({
+            functionResponse: {
+              name: p.functionCall.name,
+              response: { output: { notice: 'Tool call cap reached. Please provide final answer using gathered data.' } },
+            },
+          }));
+        if (capResponses.length > 0) {
+          contentsPayload.push({ role: 'user', parts: capResponses });
+          currentResponse = await this.callModelWithFallback(
+            ai,
+            modelName,
+            contentsPayload,
+            systemInstruction,
+            undefined
+          );
         }
       }
+
+      let finalText = extractResponseText(currentResponse);
 
       if (executedProposal) {
-        if (executedProposal.type === 'WORKOUT' || toolsInvokedNames.includes('propose_workout_plan')) {
-          finalText = `Workout proposal created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Workout Proposals for admin review.`;
-        } else if (executedProposal.type === 'DIET' || toolsInvokedNames.includes('propose_diet_plan')) {
-          const isMacroOnly = executedProposal.payload?.planKind === 'MACRO_ONLY' || executedProposal.payload?.isMacroOnly;
-          const planLabel = isMacroOnly ? 'Macro-only proposal' : 'Diet plan proposal with structured meals';
-          finalText = `${planLabel} created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Admin Review.`;
+        if (!finalText || finalText.trim().length === 0) {
+          if (executedProposal.type === 'WORKOUT' || toolsInvokedNames.includes('propose_workout_plan')) {
+            finalText = `Workout proposal created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Workout Proposals for admin review.`;
+          } else if (executedProposal.type === 'DIET' || toolsInvokedNames.includes('propose_diet_plan')) {
+            const isMacroOnly = executedProposal.payload?.planKind === 'MACRO_ONLY' || executedProposal.payload?.isMacroOnly;
+            const planLabel = isMacroOnly ? 'Macro-only proposal' : 'Diet plan proposal with structured meals';
+            finalText = `${planLabel} created successfully for ${executedProposal.clientName || 'athlete'} (${executedProposal.clientId || 'AXG'}). Staged as PENDING in Admin Review.`;
+          }
         }
       } else {
-        if (toolsInvokedNames.includes('propose_workout_plan')) {
-          finalText = `Failed to create workout proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please verify the client identity and retry.`;
-        } else if (toolsInvokedNames.includes('propose_diet_plan')) {
-          finalText = `Failed to create diet proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please address the missing required details (such as meal items and quantities) and retry.`;
+        if (!finalText || finalText.trim().length === 0) {
+          if (toolsInvokedNames.includes('propose_workout_plan')) {
+            finalText = `Failed to create workout proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please verify the client identity and retry.`;
+          } else if (toolsInvokedNames.includes('propose_diet_plan')) {
+            finalText = `Failed to create diet proposal: ${lastProposalError || 'The plan was not saved to the database.'} Please address the missing required details (such as meal items and quantities) and retry.`;
+          }
         }
       }
 

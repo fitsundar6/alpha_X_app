@@ -266,7 +266,13 @@ Example format:
           },
         });
 
-        const text = response.text || '';
+        // Use candidates[0].content.parts directly to avoid the SDK ".text" getter
+        // warning that fires when non-text (e.g. function-call) parts are present.
+        const parts: any[] = response?.candidates?.[0]?.content?.parts ?? [];
+        const text = parts
+          .filter((p: any) => typeof p.text === 'string')
+          .map((p: any) => p.text)
+          .join('') || '';
         if (text) {
           const jsonArray = JSON.parse(text);
           if (Array.isArray(jsonArray) && jsonArray.length > 0) {

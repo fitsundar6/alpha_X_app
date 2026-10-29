@@ -23,13 +23,22 @@ const router = Router();
 // Returns all proposals, filtered by status if provided
 router.get('/', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;  // PENDING | APPROVED | REJECTED
-  const type = req.query.type as string | undefined;       // WORKOUT | DIET
+  const type = (req.query.type || req.query.proposalType) as string | undefined;       // WORKOUT | DIET
+  const clientId = req.query.clientId as string | undefined;
+
+  const where: any = {};
+  if (status && status.toUpperCase() !== 'ALL') where.status = status.toUpperCase();
+  if (type && type.toUpperCase() !== 'ALL') where.proposalType = type.toUpperCase();
+  if (clientId && clientId.toUpperCase() !== 'ALL') {
+    where.OR = [
+      { clientId: clientId },
+      { clientId: clientId.toUpperCase() },
+      { clientProfileId: clientId },
+    ];
+  }
 
   const proposals = await prisma.aIProposal.findMany({
-    where: {
-      ...(status ? { status: status.toUpperCase() } : {}),
-      ...(type ? { proposalType: type.toUpperCase() } : {}),
-    },
+    where,
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -53,7 +62,12 @@ router.get('/', requireAuth, requireAdmin, async (req: Request, res: Response) =
 
   const parsed = proposals.map((p) => {
     let proposedData: any = {};
-    try { proposedData = JSON.parse(p.finalDataJson || p.proposedDataJson || '{}'); } catch {}
+    const rawPayload = p.finalDataJson || p.proposedDataJson;
+    if (typeof rawPayload === 'object' && rawPayload !== null) {
+      proposedData = rawPayload;
+    } else if (typeof rawPayload === 'string') {
+      try { proposedData = JSON.parse(rawPayload); } catch {}
+    }
     return {
       ...p,
       proposedData,

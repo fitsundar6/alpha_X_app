@@ -1,5 +1,5 @@
 /**
- * Alpha X — Weekly Telemetry Intelligence Engine ("Spotify-Wrapped for Lifting")
+ * Alpha X â€” Weekly Telemetry Intelligence Engine ("Spotify-Wrapped for Lifting")
  *
  * Computes deep, visual weekly lifting telemetry:
  *  - 3D Muscle Group Heatmap (Sets, Volume, Stimulation Status)
@@ -38,8 +38,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${bikes} Harley-Davidson Fat Boys`,
         itemCount: bikes,
-        itemIcon: '🏍️',
-        description: `You moved ${volume.toLocaleString()} kg this week — equivalent to ${bikes} heavy Harley-Davidson cruisers!`,
+        itemIcon: 'ðŸï¸',
+        description: `You moved ${volume.toLocaleString()} kg this week â€” equivalent to ${bikes} heavy Harley-Davidson cruisers!`,
       };
     } else if (volume < 8000) {
       const elephants = Math.max(1, Math.round(volume / 5000));
@@ -47,8 +47,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${elephants} African Elephants`,
         itemCount: elephants,
-        itemIcon: '🐘',
-        description: `You hoisted ${volume.toLocaleString()} kg — equivalent to lifting ${elephants} full-grown African bull elephant${elephants > 1 ? 's' : ''}!`,
+        itemIcon: 'ðŸ˜',
+        description: `You hoisted ${volume.toLocaleString()} kg â€” equivalent to lifting ${elephants} full-grown African bull elephant${elephants > 1 ? 's' : ''}!`,
       };
     } else if (volume < 18000) {
       const cars = Math.max(1, Math.round(volume / 1850));
@@ -56,8 +56,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${cars} Tesla Model 3s`,
         itemCount: cars,
-        itemIcon: '🚗',
-        description: `You moved ${volume.toLocaleString()} kg of iron — equivalent to benching ${cars} Tesla Model 3s!`,
+        itemIcon: 'ðŸš—',
+        description: `You moved ${volume.toLocaleString()} kg of iron â€” equivalent to benching ${cars} Tesla Model 3s!`,
       };
     } else if (volume < 35000) {
       const dinos = Math.max(1, Math.round(volume / 2500));
@@ -65,8 +65,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${dinos} T-Rex Dinosaurs`,
         itemCount: dinos,
-        itemIcon: '🦖',
-        description: `You moved ${volume.toLocaleString()} kg — equivalent to deadlifting ${dinos} Cretaceous T-Rex apex predators!`,
+        itemIcon: 'ðŸ¦–',
+        description: `You moved ${volume.toLocaleString()} kg â€” equivalent to deadlifting ${dinos} Cretaceous T-Rex apex predators!`,
       };
     } else if (volume < 65000) {
       const trucks = Math.max(1, Math.round(volume / 1850));
@@ -74,8 +74,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${trucks} Ford F-150 Trucks`,
         itemCount: trucks,
-        itemIcon: '🛻',
-        description: `You crushed ${volume.toLocaleString()} kg of volume — equivalent to hoisting ${trucks} Ford F-150 SuperDuty trucks!`,
+        itemIcon: 'ðŸ›»',
+        description: `You crushed ${volume.toLocaleString()} kg of volume â€” equivalent to hoisting ${trucks} Ford F-150 SuperDuty trucks!`,
       };
     } else if (volume < 120000) {
       const jets = Math.max(1, Math.round(volume / 41000));
@@ -83,8 +83,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${jets} Boeing 737 Airplane${jets > 1 ? 's' : ''}`,
         itemCount: jets,
-        itemIcon: '✈️',
-        description: `Staggering output! You lifted ${volume.toLocaleString()} kg — equivalent to ${jets} Boeing 737 commercial jetliner${jets > 1 ? 's' : ''}!`,
+        itemIcon: 'âœˆï¸',
+        description: `Staggering output! You lifted ${volume.toLocaleString()} kg â€” equivalent to ${jets} Boeing 737 commercial jetliner${jets > 1 ? 's' : ''}!`,
       };
     } else {
       const boosters = Math.max(1, Math.round(volume / 85000));
@@ -92,8 +92,8 @@ export class TelemetryService {
         tonnageKg: volume,
         equivalentLabel: `${boosters} NASA Rocket Boosters`,
         itemCount: boosters,
-        itemIcon: '🚀',
-        description: `Legendary iron tonnage! You moved ${volume.toLocaleString()} kg — equivalent to ${boosters} Space Shuttle solid rocket booster${boosters > 1 ? 's' : ''}!`,
+        itemIcon: 'ðŸš€',
+        description: `Legendary iron tonnage! You moved ${volume.toLocaleString()} kg â€” equivalent to ${boosters} Space Shuttle solid rocket booster${boosters > 1 ? 's' : ''}!`,
       };
     }
   }
@@ -166,7 +166,8 @@ export class TelemetryService {
           for (const model of models) {
             try {
               const resp = await ai.models.generateContent({ model, contents: prompt });
-              const text = (resp.text || '').trim().replace(/^["']|["']$/g, '');
+              const _tParts = (resp && resp.candidates && resp.candidates[0] && resp.candidates[0].content && resp.candidates[0].content.parts) || [];
+              const text = _tParts.filter(function(p) { return typeof p.text === 'string'; }).map(function(p) { return p.text; }).join('').trim().replace(/^["']|["']$/g, '');
               if (text.length > 20 && text.length <= 320) {
                 return text;
               }
@@ -335,7 +336,7 @@ export class TelemetryService {
     const topMuscle = [...muscleHeatmap].sort((a, b) => b.totalVolumeKg - a.totalVolumeKg)[0];
     const topPrText = prHighlights.length > 0 ? `a new PR on ${prHighlights[0].exerciseName}` : 'consistent progressive overload';
 
-    const fallbackCommentary = `${firstName} moved a monstrous ${Math.round(totalVolumeKg).toLocaleString()} kg across ${completedWorkouts} sessions this week (${physicalComparison.equivalentLabel})! Your ${topMuscle.displayName} volume was top tier with ${topMuscle.totalSets} working sets and ${topPrText}. Continue locking in recovery sleep as we advance next week's split 🏆`;
+    const fallbackCommentary = `${firstName} moved a monstrous ${Math.round(totalVolumeKg).toLocaleString()} kg across ${completedWorkouts} sessions this week (${physicalComparison.equivalentLabel})! Your ${topMuscle.displayName} volume was top tier with ${topMuscle.totalSets} working sets and ${topPrText}. Continue locking in recovery sleep as we advance next week's split ðŸ†`;
 
     const prompt = `You are the Alpha X Gym Head AI Coach writing the Sunday Telemetry Progress Review for gym athlete ${firstName}.
 Week stats:
@@ -351,7 +352,7 @@ Sentence 3: Directive for next week's recovery and progressive overload.
 Rules:
 - High energy, professional sports science tone
 - No hashtags or markdown asterisks
-- End with one trophy/flame emoji (🏆, ⚡, 🔥)
+- End with one trophy/flame emoji (ðŸ†, âš¡, ðŸ”¥)
 Reply with ONLY the text.`;
 
     const aiCoachCommentary = await this.generateAiCommentary(prompt, fallbackCommentary);
@@ -462,7 +463,7 @@ Reply with ONLY the text.`;
    * Generates report for each active client, sends OneSignal push, and writes to Notification Center.
    */
   async dispatchSundayTelemetrySweep(): Promise<{ sent: number; skipped: number }> {
-    console.log('[TELEMETRY] 📊 Starting Sunday Alpha Telemetry Sweep (8:00 PM)...');
+    console.log('[TELEMETRY] ðŸ“Š Starting Sunday Alpha Telemetry Sweep (8:00 PM)...');
 
     const clients = await prisma.user.findMany({
       where: {
@@ -485,7 +486,7 @@ Reply with ONLY the text.`;
           continue;
         }
 
-        const pushTitle = `📊 YOUR ALPHA TELEMETRY IS READY`;
+        const pushTitle = `ðŸ“Š YOUR ALPHA TELEMETRY IS READY`;
         const pushBody = `You moved ${report.totalVolumeKg.toLocaleString()} kg this week (${report.physicalComparison.equivalentLabel} ${report.physicalComparison.itemIcon})! Tap to view your 3D muscle heatmap.`;
 
         await oneSignalService.sendToPlayer(client.oneSignalPlayerId!, {
@@ -522,7 +523,7 @@ Reply with ONLY the text.`;
       }
     }
 
-    console.log(`[TELEMETRY] 📊 Sunday Telemetry sweep complete: ${sent} sent, ${skipped} skipped.`);
+    console.log(`[TELEMETRY] ðŸ“Š Sunday Telemetry sweep complete: ${sent} sent, ${skipped} skipped.`);
     return { sent, skipped };
   }
 }

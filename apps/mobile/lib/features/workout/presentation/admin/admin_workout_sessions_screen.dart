@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
+import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
 import 'admin_create_edit_session_screen.dart';
@@ -11,11 +12,13 @@ import 'package:alpha_x_gym/features/exercise/presentation/admin/admin_exercise_
 
 class AdminWorkoutSessionsScreen extends StatefulWidget {
   final WorkoutRepository workoutRepository;
+  final AiCoachRepository? aiCoachRepository;
   final bool showAppBar;
 
   const AdminWorkoutSessionsScreen({
     super.key,
     required this.workoutRepository,
+    this.aiCoachRepository,
     this.showAppBar = true,
   });
 
@@ -360,6 +363,7 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                       MaterialPageRoute(
                         builder: (ctx) => AdminWorkoutProposalsScreen(
                           workoutRepository: widget.workoutRepository,
+                          aiCoachRepository: widget.aiCoachRepository,
                         ),
                       ),
                     );

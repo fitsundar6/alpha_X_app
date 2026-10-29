@@ -1,10 +1,10 @@
 /**
- * Alpha X AI — Autonomous Proactive Push Notification & Check-in Engine
+ * Alpha X AI â€” Autonomous Proactive Push Notification & Check-in Engine
  *
  * Implements:
  *   1. Morning Readiness Check-in (07:30 AM IST / 02:00 UTC)
  *   2. Event-Driven Post-Workout Celebration (Upon completion, strictly guarded, deduped)
- *   3. Missed Workout Auto-Regulation (10:30 AM IST / 05:00 UTC — verified schedule data, no inferences)
+ *   3. Missed Workout Auto-Regulation (10:30 AM IST / 05:00 UTC â€” verified schedule data, no inferences)
  *   4. Evening Accountability & Nutrition Sweep (08:30 PM IST / 15:00 UTC)
  *   5. Plan Assignment Notifications (Workout & Diet Plan updates, Essential tier)
  *
@@ -111,7 +111,8 @@ export class AiNotificationEngine {
                 model,
                 contents: prompt,
               });
-              const text = (response.text || '').trim().replace(/^["']|["']$/g, '');
+              const _nParts = (response && response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) || [];
+              const text = _nParts.filter(function(p) { return typeof p.text === 'string'; }).map(function(p) { return p.text; }).join('').trim().replace(/^["']|["']$/g, '');
               if (text.length > 0 && text.length <= 180) {
                 return text;
               }
@@ -206,8 +207,8 @@ export class AiNotificationEngine {
         const sessionTitle = todayAssignment?.session?.title || 'Strength & Conditioning';
 
         const fallback = isTrainingDay
-          ? `${sessionTitle} today at ${timePref}. Drink your water and hit at least ${targetProtein}g protein 💧`
-          : `Active recovery day, ${firstName}! Hydrate with ${targetWater}L and aim for ${targetProtein}g protein 🧘`;
+          ? `${sessionTitle} today at ${timePref}. Drink your water and hit at least ${targetProtein}g protein ðŸ’§`
+          : `Active recovery day, ${firstName}! Hydrate with ${targetWater}L and aim for ${targetProtein}g protein ðŸ§˜`;
 
         const prompt = `You are the Alpha X Gym AI Coach sending an energizing morning push notification to gym member ${firstName}.
 Context for today:
@@ -221,7 +222,7 @@ Write ONE short, punchy message (max 110 characters). Rules:
 - Address the client naturally or dive straight into the cue
 - Exact tone target: "Leg Day today at 6 PM. Drink your water and hit at least 150g protein."
 - Do NOT use hashtags, quotes, or markdown asterisks
-- End with one relevant emoji (e.g. 💧, 💪, 🏋️)
+- End with one relevant emoji (e.g. ðŸ’§, ðŸ’ª, ðŸ‹ï¸)
 Reply with ONLY the notification text.`;
 
         const message = await this.callGemini(prompt, fallback);
@@ -230,7 +231,7 @@ Reply with ONLY the notification text.`;
           userId: client.id,
           clientProfileId: profile.id,
           clientId: profile.clientId,
-          title: '⚡ Alpha X Morning Briefing',
+          title: 'âš¡ Alpha X Morning Briefing',
           message,
           type: 'WORKOUT',
           category: 'TRAINING',
@@ -313,8 +314,8 @@ Reply with ONLY the notification text.`;
 
       const hasPR = Boolean(prExerciseName && totalVolumeKg > 0);
       const fallback = hasPR
-        ? `You hit a personal volume record on ${prExerciseName} (${totalVolumeKg.toLocaleString()} kg total). Prioritize recovery sleep tonight 🏆`
-        : `Outstanding session! Crushed ${totalVolumeKg.toLocaleString()} kg volume across ${completedSets} sets. Fuel up with 35g protein within the hour 🔥`;
+        ? `You hit a personal volume record on ${prExerciseName} (${totalVolumeKg.toLocaleString()} kg total). Prioritize recovery sleep tonight ðŸ†`
+        : `Outstanding session! Crushed ${totalVolumeKg.toLocaleString()} kg volume across ${completedSets} sets. Fuel up with 35g protein within the hour ðŸ”¥`;
 
       const prompt = `You are the Alpha X Gym AI Coach sending an immediate post-workout push notification to gym member ${firstName}.
 Workout stats just completed:
@@ -327,7 +328,7 @@ Write ONE short, high-energy notification message (max 115 characters). Rules:
 - Give one immediate actionable recovery instruction (e.g. sleep, post-workout protein)
 - Tone target: "You hit a personal volume record on Deadlifts (4,200 kg total). Prioritize recovery sleep tonight."
 - Do NOT use hashtags, quotes, or markdown asterisks
-- End with one relevant emoji (🏆, 🥩, 🔥)
+- End with one relevant emoji (ðŸ†, ðŸ¥©, ðŸ”¥)
 Reply with ONLY the notification text.`;
 
       const message = await this.callGemini(prompt, fallback);
@@ -338,7 +339,7 @@ Reply with ONLY the notification text.`;
         userId: user.id,
         clientProfileId: user.clientProfile.id,
         clientId: user.clientProfile.clientId,
-        title: hasPR ? '🏆 NEW PR ACHIEVED!' : '🔥 WORKOUT CRUSHED!',
+        title: hasPR ? 'ðŸ† NEW PR ACHIEVED!' : 'ðŸ”¥ WORKOUT CRUSHED!',
         message,
         type: 'WORKOUT',
         category: 'ACHIEVEMENT',
@@ -466,14 +467,14 @@ Reply with ONLY the notification text.`;
         const sessionTitle = scheduledAssignment?.session?.title || 'scheduled session';
         const firstName = client.name.split(' ')[0] || 'Athlete';
 
-        const fallback = `You missed yesterday's scheduled session. Should we swap it to today or make it a rest week? 🏋️`;
+        const fallback = `You missed yesterday's scheduled session. Should we swap it to today or make it a rest week? ðŸ‹ï¸`;
 
         const prompt = `You are the Alpha X Gym AI Coach checking in with ${firstName}, who missed yesterday's scheduled workout ("${sessionTitle}").
 Write ONE short, empathetic, solution-oriented coaching message (max 115 characters). Rules:
 - Zero guilt or judgment, 100% supportive auto-regulation
 - Tone target: "You missed yesterday's scheduled session. Should we swap it to today or make it a rest week?"
 - Do NOT use hashtags, quotes, or markdown asterisks
-- End with one emoji (🏋️, ⚡, 💪)
+- End with one emoji (ðŸ‹ï¸, âš¡, ðŸ’ª)
 Reply with ONLY the notification text.`;
 
         const message = await this.callGemini(prompt, fallback);
@@ -482,7 +483,7 @@ Reply with ONLY the notification text.`;
           userId: client.id,
           clientProfileId: profile.id,
           clientId: profile.clientId,
-          title: 'Alpha X Coach • Training Check-In',
+          title: 'Alpha X Coach â€¢ Training Check-In',
           message,
           type: 'WORKOUT',
           category: 'COACHING',
@@ -590,8 +591,8 @@ Reply with ONLY the notification text.`;
         }
 
         const fallback = proteinGap > 15
-          ? `Hey ${firstName}! You have ${proteinGap}g protein left today. A quick shake or Greek yogurt will lock in your recovery 🥣`
-          : `Great effort today, ${firstName}! Prioritize 8 hours of sleep tonight for maximum muscular recovery 💤`;
+          ? `Hey ${firstName}! You have ${proteinGap}g protein left today. A quick shake or Greek yogurt will lock in your recovery ðŸ¥£`
+          : `Great effort today, ${firstName}! Prioritize 8 hours of sleep tonight for maximum muscular recovery ðŸ’¤`;
 
         const prompt = `You are the Alpha X Gym AI Coach sending an evening check-in push notification to ${firstName}.
 Status:
@@ -600,9 +601,9 @@ Status:
 
 Write ONE short, friendly evening reminder (max 115 characters). Rules:
 - Mention the remaining protein gap if > 15g, or praise today's discipline
-- Tone target: "You have 30g protein left today. A quick casein shake before bed will lock in your gains 🥣"
+- Tone target: "You have 30g protein left today. A quick casein shake before bed will lock in your gains ðŸ¥£"
 - Do NOT use hashtags or markdown asterisks
-- End with one emoji (🥣, 🥩, 💤)
+- End with one emoji (ðŸ¥£, ðŸ¥©, ðŸ’¤)
 Reply with ONLY the notification text.`;
 
         const message = await this.callGemini(prompt, fallback);
@@ -611,7 +612,7 @@ Reply with ONLY the notification text.`;
           userId: client.id,
           clientProfileId: profile.id,
           clientId: profile.clientId,
-          title: '🌙 Alpha X Evening Check-In',
+          title: 'ðŸŒ™ Alpha X Evening Check-In',
           message,
           type: 'NUTRITION',
           category: 'NUTRITION',
@@ -669,13 +670,13 @@ Reply with ONLY the notification text.`;
       }
 
       const dedupKey = `PLAN_ASSIGNED:${params.assignmentId}:${params.scheduledDate || 'today'}`;
-      const message = `Your coach assigned you "${params.sessionTitle}". Open Alpha X to view your program 💪`;
+      const message = `Your coach assigned you "${params.sessionTitle}". Open Alpha X to view your program ðŸ’ª`;
 
       const res = await notificationPolicyService.dispatch({
         userId: user.id,
         clientProfileId: user.clientProfile.id,
         clientId: user.clientProfile.clientId,
-        title: '📋 New Workout Assigned',
+        title: 'ðŸ“‹ New Workout Assigned',
         message,
         type: 'WORKOUT',
         category: 'PLAN_UPDATE',
@@ -713,13 +714,13 @@ Reply with ONLY the notification text.`;
       }
 
       const dedupKey = `DIET_ASSIGNED:${params.dietPlanId}:v${params.version}`;
-      const message = `Your coach updated your nutrition plan to "${params.planName}" (v${params.version}). Check your daily targets in Alpha X 🥗`;
+      const message = `Your coach updated your nutrition plan to "${params.planName}" (v${params.version}). Check your daily targets in Alpha X ðŸ¥—`;
 
       const res = await notificationPolicyService.dispatch({
         userId: profile.user.id,
         clientProfileId: profile.id,
         clientId: profile.clientId,
-        title: '🥗 Nutrition Plan Updated',
+        title: 'ðŸ¥— Nutrition Plan Updated',
         message,
         type: 'NUTRITION',
         category: 'PLAN_UPDATE',

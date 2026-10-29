@@ -472,12 +472,13 @@ export const proposeWorkoutPlanTool: ToolDefinition<ProposeWorkoutPlanInput> = {
         }
       }
 
-      // Prevent duplicate proposals caused by retries or repeated tool calls for the same client in this conversation
+      // Prevent duplicate proposals caused by retries or repeated tool calls for the SAME plan
       const existing = await prisma.aIProposal.findFirst({
         where: {
           clientProfileId: profileId,
           proposalType: 'WORKOUT',
           status: 'PENDING',
+          title: args.planTitle,
           ...(validConversationId ? { conversationId: validConversationId } : {}),
         },
         orderBy: { createdAt: 'desc' },

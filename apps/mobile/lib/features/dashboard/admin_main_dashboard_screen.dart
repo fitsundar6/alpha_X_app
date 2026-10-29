@@ -1744,6 +1744,7 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               children: [
                 AdminWorkoutSessionsScreen(
                   workoutRepository: widget.workoutRepository,
+                  aiCoachRepository: _aiCoachRepo,
                   showAppBar: false,
                 ),
                 AdminWorkoutProposalsScreen(

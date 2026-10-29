@@ -395,29 +395,50 @@ router.get('/summary', async (req: Request, res: Response) => {
 router.get('/proposals', async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
   const clientId = req.query.clientId as string | undefined;
-  const proposalType = req.query.type as string | undefined;
+  const proposalType = (req.query.type || req.query.proposalType) as string | undefined;
 
   const where: any = {};
-  if (status) where.status = status.toUpperCase();
-  if (clientId) where.clientId = clientId.toUpperCase();
-  if (proposalType) where.proposalType = proposalType.toUpperCase();
+  if (status && status.toUpperCase() !== 'ALL') {
+    where.status = status.toUpperCase();
+  }
+  if (clientId && clientId.toUpperCase() !== 'ALL') {
+    where.OR = [
+      { clientId: clientId },
+      { clientId: clientId.toUpperCase() },
+      { clientProfileId: clientId },
+    ];
+  }
+  if (proposalType && proposalType.toUpperCase() !== 'ALL') {
+    where.proposalType = proposalType.toUpperCase();
+  }
 
   try {
     const proposals = await prisma.aIProposal.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 100,
     });
 
     const parsed = proposals.map((p) => {
-      let payload = null;
-      let currentData = null;
-      try {
-        payload = JSON.parse(p.finalDataJson || p.proposedDataJson);
-      } catch (_) {}
-      try {
-        if (p.currentDataJson) currentData = JSON.parse(p.currentDataJson);
-      } catch (_) {}
+      let payload: any = null;
+      let currentData: any = null;
+      const rawPayload = p.finalDataJson || p.proposedDataJson;
+      if (typeof rawPayload === 'object' && rawPayload !== null) {
+        payload = rawPayload;
+      } else if (typeof rawPayload === 'string') {
+        try {
+          payload = JSON.parse(rawPayload);
+        } catch (_) {}
+      }
+
+      const rawCurrent = p.currentDataJson;
+      if (typeof rawCurrent === 'object' && rawCurrent !== null) {
+        currentData = rawCurrent;
+      } else if (typeof rawCurrent === 'string') {
+        try {
+          currentData = JSON.parse(rawCurrent);
+        } catch (_) {}
+      }
 
       return {
         id: p.id,
@@ -432,6 +453,7 @@ router.get('/proposals', async (req: Request, res: Response) => {
         reason: p.reason,
         currentData,
         proposedData: payload,
+        payload: payload,
         approvedById: p.approvedById,
         approvedByName: p.approvedByName,
         approvedAt: p.approvedAt,

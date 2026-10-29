@@ -2622,8 +2622,14 @@ export class WorkoutIntentService {
       }
 
       if (weeklySchedule && weeklySchedule.length > 1) {
-        // Empty days check
-        const emptyDays = weeklySchedule.filter((d: any) => !Array.isArray(d.exercises) || d.exercises.length === 0);
+        // Empty days check (excluding explicit rest / recovery days)
+        const emptyDays = weeklySchedule.filter((d: any) => {
+          const title = (d.sessionTitle || d.title || d.day || '').toLowerCase();
+          const type = (d.workoutType || d.type || '').toLowerCase();
+          const isRestDay = title.includes('rest') || title.includes('recovery') || type.includes('rest') || type.includes('recovery');
+          if (isRestDay) return false;
+          return !Array.isArray(d.exercises) || d.exercises.length === 0;
+        });
         if (emptyDays.length > 0) {
           return {
             isValid: false,
