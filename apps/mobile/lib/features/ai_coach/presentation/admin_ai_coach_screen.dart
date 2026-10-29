@@ -208,6 +208,22 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
         });
         _persistCurrentConversation();
         _scrollToBottom();
+
+        if (aiReply.proposal != null) {
+          _repo.registerProposal(aiReply.proposal!);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎯 ${aiReply.proposal!.title} staged in Proposals.'),
+              backgroundColor: AppColors.surfaceElevated,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'REVIEW',
+                textColor: AppColors.primaryRed,
+                onPressed: () => _showProposalReviewDialog(aiReply.proposal!),
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -506,7 +522,10 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
           workoutRepository: widget.workoutRepository ?? WorkoutRepository(),
           aiCoachRepository: _repo,
           onProposalUpdated: () {
-            if (mounted) setState(() {});
+            if (mounted) {
+              _repo.registerProposal(proposal);
+              setState(() {});
+            }
           },
         ),
       );
@@ -520,7 +539,10 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
           proposal: proposal,
           aiCoachRepository: _repo,
           onProposalUpdated: () {
-            if (mounted) setState(() {});
+            if (mounted) {
+              _repo.registerProposal(proposal);
+              setState(() {});
+            }
           },
         ),
       );
@@ -1184,8 +1206,8 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
     );
   }
 
-  void _openWorkoutProposalsScreen() {
-    Navigator.of(context).push(
+  void _openWorkoutProposalsScreen() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => AdminWorkoutProposalsScreen(
           workoutRepository: widget.workoutRepository,
@@ -1193,6 +1215,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
         ),
       ),
     );
+    if (mounted) setState(() {});
   }
 
   Map<String, String>? get _currentSelectedClient {
@@ -1423,6 +1446,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
       conversationId: _conversationId,
       onProposalCreated: (proposal) {
         if (mounted) {
+          _repo.registerProposal(proposal);
           setState(() {
             _messages.add(
               AiChatMessage(

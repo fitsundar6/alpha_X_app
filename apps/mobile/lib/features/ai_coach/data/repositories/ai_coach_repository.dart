@@ -9,6 +9,10 @@ import 'package:alpha_x_gym/core/constants/app_constants.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
 
+class _ProposalChangeBus extends ChangeNotifier {
+  void emit() => notifyListeners();
+}
+
 class AiCoachRepository extends ChangeNotifier {
   final http.Client _httpClient;
   AiDailySummary? _cachedSummary;
@@ -26,9 +30,26 @@ class AiCoachRepository extends ChangeNotifier {
 
   final bool _hasCustomHttpClient;
 
+  static final _ProposalChangeBus _proposalBus = _ProposalChangeBus();
+
   AiCoachRepository({http.Client? httpClient})
       : _httpClient = httpClient ?? http.Client(),
-        _hasCustomHttpClient = httpClient != null;
+        _hasCustomHttpClient = httpClient != null {
+    _proposalBus.addListener(_onSharedProposalChange);
+  }
+
+  @override
+  void dispose() {
+    _proposalBus.removeListener(_onSharedProposalChange);
+    super.dispose();
+  }
+
+  void _onSharedProposalChange() => notifyListeners();
+
+  void _notifyProposals() => _proposalBus.emit();
+
+  bool _isLocalOnlyProposalId(String proposalId) =>
+      proposalId.startsWith('prop_local_') || proposalId.startsWith('prop_chat_');
 
   bool get _isTestEnvironment {
     if (kIsWeb) return false;
@@ -40,6 +61,24 @@ class AiCoachRepository extends ChangeNotifier {
   }
 
   AiDailySummary? get cachedSummary => _cachedSummary;
+
+  /// Shared in-memory proposal registry for instant UI reflection across screens.
+  static final Map<String, AiProposal> _inMemoryProposals = {};
+
+  /// Exposes unmodifiable view of in-memory staged proposals.
+  List<AiProposal> get inMemoryProposals => List.unmodifiable(_inMemoryProposals.values);
+
+  /// Registers or updates a proposal in local state and notifies all listeners.
+  void registerProposal(AiProposal proposal) {
+    _inMemoryProposals[proposal.id] = proposal;
+    _notifyProposals();
+  }
+
+  /// Clears in-memory proposals (used for testing and teardown).
+  @visibleForTesting
+  static void clearInMemoryProposals() {
+    _inMemoryProposals.clear();
+  }
 
   Map<String, String> _buildHeaders() {
     final token = AuthService().currentToken;
@@ -59,7 +98,11 @@ class AiCoachRepository extends ChangeNotifier {
     String? customEndDate,
   }) async {
     if (_isTestEnvironment && !_hasCustomHttpClient) {
-      return _buildLocalFallbackResponse(message, selectedClientId);
+      final localReply = _buildLocalFallbackResponse(message, selectedClientId);
+      if (localReply.proposal != null) {
+        registerProposal(localReply.proposal!);
+      }
+      return localReply;
     }
 
     final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/chat');
@@ -111,7 +154,11 @@ class AiCoachRepository extends ChangeNotifier {
       if (resp.statusCode == 200) {
         final decoded = jsonDecode(resp.body);
         if (decoded['success'] == true && decoded['data'] != null) {
-          return AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
+          final reply = AiChatMessage.fromResponse(Map<String, dynamic>.from(decoded['data']));
+          if (reply.proposal != null) {
+            registerProposal(reply.proposal!);
+          }
+          return reply;
         }
       }
 
@@ -471,19 +518,20 @@ class AiCoachRepository extends ChangeNotifier {
     return _cachedSummary!;
   }
 
-  /// Fetches pending or reviewed AI proposals.
+  /// Fetches pending or reviewed AI proposals, merging with locally staged proposals.
   Future<List<AiProposal>> getProposals({
     String? status,
     String? clientId,
     String? type,
     String? proposalType,
   }) async {
+    List<AiProposal> serverProposals = [];
     try {
       final queryParams = <String, String>{};
-      if (status != null) queryParams['status'] = status;
-      if (clientId != null) queryParams['clientId'] = clientId;
+      if (status != null && status != 'ALL') queryParams['status'] = status;
+      if (clientId != null && clientId != 'ALL') queryParams['clientId'] = clientId;
       final effectiveType = proposalType ?? type;
-      if (effectiveType != null) queryParams['type'] = effectiveType;
+      if (effectiveType != null && effectiveType != 'ALL') queryParams['type'] = effectiveType;
 
       final uri = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/proposals').replace(queryParameters: queryParams);
       final resp = await _httpClient.get(uri, headers: _buildHeaders()).timeout(const Duration(seconds: 8));
@@ -491,27 +539,58 @@ class AiCoachRepository extends ChangeNotifier {
       if (resp.statusCode == 200) {
         final decoded = jsonDecode(resp.body);
         if (decoded['success'] == true && decoded['data'] is List) {
-          return (decoded['data'] as List)
+          serverProposals = (decoded['data'] as List)
               .map((it) => AiProposal.fromJson(Map<String, dynamic>.from(it)))
               .toList();
         }
-      }
-
-      // Alternative route support: /admin/ai-proposals
-      final altUri = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-proposals').replace(queryParameters: queryParams);
-      final altResp = await _httpClient.get(altUri, headers: _buildHeaders()).timeout(const Duration(seconds: 8));
-      if (altResp.statusCode == 200) {
-        final decoded = jsonDecode(altResp.body);
-        final list = decoded['data']?['proposals'] ?? decoded['data'];
-        if (list is List) {
-          return list.map((it) => AiProposal.fromJson(Map<String, dynamic>.from(it))).toList();
+      } else {
+        // Alternative route support: /admin/ai-proposals
+        final altUri = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-proposals').replace(queryParameters: queryParams);
+        final altResp = await _httpClient.get(altUri, headers: _buildHeaders()).timeout(const Duration(seconds: 8));
+        if (altResp.statusCode == 200) {
+          final decoded = jsonDecode(altResp.body);
+          final list = decoded['data']?['proposals'] ?? decoded['data'];
+          if (list is List) {
+            serverProposals = list.map((it) => AiProposal.fromJson(Map<String, dynamic>.from(it))).toList();
+          }
         }
       }
     } catch (e) {
       debugPrint('[AI COACH REPO] Proposals fetch error: $e');
     }
 
-    return [];
+    // Merge server proposals into _inMemoryProposals
+    for (final p in serverProposals) {
+      final local = _inMemoryProposals[p.id];
+      if (local != null && local.status == AiProposalStatus.edited && p.status == AiProposalStatus.pending) {
+        // preserve local edit state until server acknowledges
+      } else {
+        _inMemoryProposals[p.id] = p;
+      }
+    }
+
+    // Filter combined proposals based on query params
+    var merged = _inMemoryProposals.values.toList();
+    if (status != null && status != 'ALL') {
+      merged = merged.where((p) => p.status.name.toUpperCase() == status.toUpperCase()).toList();
+    }
+    if (clientId != null && clientId != 'ALL') {
+      final qId = clientId.toLowerCase();
+      merged = merged.where((p) => (p.clientId ?? '').toLowerCase() == qId).toList();
+    }
+    final filterType = proposalType ?? type;
+    if (filterType != null && filterType != 'ALL') {
+      final isWorkout = filterType.toUpperCase() == 'WORKOUT';
+      merged = merged.where((p) => isWorkout ? p.type == AiProposalType.workout : p.type == AiProposalType.diet).toList();
+    }
+
+    merged.sort((a, b) {
+      final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+
+    return merged;
   }
 
   /// Admin approves an AI proposal, activating it for the athlete.
@@ -522,8 +601,26 @@ class AiCoachRepository extends ChangeNotifier {
     String? scheduledDate,
     Map<String, dynamic>? proposalData,
   }) async {
-    if (_isTestEnvironment) return true;
-    final isLocalProposal = proposalId.startsWith('prop_local_');
+    final local = _inMemoryProposals[proposalId];
+    final previousStatus = local?.status;
+    final isLocalProposal = _isLocalOnlyProposalId(proposalId);
+
+    void markApproved() {
+      if (local == null) return;
+      local.status = AiProposalStatus.approved;
+      _notifyProposals();
+    }
+
+    void revert() {
+      if (local == null || previousStatus == null) return;
+      local.status = previousStatus;
+      _notifyProposals();
+    }
+
+    if (_isTestEnvironment && !_hasCustomHttpClient) {
+      markApproved();
+      return true;
+    }
 
     try {
       final payload = <String, dynamic>{};
@@ -539,7 +636,10 @@ class AiCoachRepository extends ChangeNotifier {
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 15));
 
-      if (resp.statusCode == 200) return true;
+      if (resp.statusCode == 200) {
+        markApproved();
+        return true;
+      }
 
       // Alternative endpoint support
       final altUrl = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-proposals/$proposalId/approve');
@@ -548,7 +648,10 @@ class AiCoachRepository extends ChangeNotifier {
         headers: _buildHeaders(),
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 15));
-      if (altResp.statusCode == 200) return true;
+      if (altResp.statusCode == 200) {
+        markApproved();
+        return true;
+      }
 
       // Attempt LAN server fallback if primary remote server failed
       final primaryUrlStr = AppConstants.apiBaseUrl;
@@ -560,28 +663,55 @@ class AiCoachRepository extends ChangeNotifier {
             headers: _buildHeaders(),
             body: jsonEncode(payload),
           ).timeout(const Duration(seconds: 4));
-          if (lanResp.statusCode == 200) return true;
+          if (lanResp.statusCode == 200) {
+            markApproved();
+            return true;
+          }
         } catch (_) {}
       }
 
       // Graceful fallback for local preview / mock proposals
       if (isLocalProposal) {
         debugPrint('[AI COACH REPO] Server returned status ${resp.statusCode} for local proposal; approving locally.');
+        markApproved();
         return true;
       }
 
+      revert();
       return false;
     } catch (e) {
       debugPrint('[AI COACH REPO] Approve error: $e');
-      if (isLocalProposal) return true;
+      if (isLocalProposal) {
+        markApproved();
+        return true;
+      }
+      revert();
       return false;
     }
   }
 
   /// Admin rejects an AI proposal.
   Future<bool> rejectProposal(String proposalId, {String? reason}) async {
-    if (_isTestEnvironment) return true;
-    final isLocalProposal = proposalId.startsWith('prop_local_');
+    final local = _inMemoryProposals[proposalId];
+    final previousStatus = local?.status;
+    final isLocalProposal = _isLocalOnlyProposalId(proposalId);
+
+    void markRejected() {
+      if (local == null) return;
+      local.status = AiProposalStatus.rejected;
+      _notifyProposals();
+    }
+
+    void revert() {
+      if (local == null || previousStatus == null) return;
+      local.status = previousStatus;
+      _notifyProposals();
+    }
+
+    if (_isTestEnvironment && !_hasCustomHttpClient) {
+      markRejected();
+      return true;
+    }
 
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/proposals/$proposalId/reject');
@@ -591,7 +721,10 @@ class AiCoachRepository extends ChangeNotifier {
         body: jsonEncode({'reason': reason ?? 'Rejected by Admin'}),
       ).timeout(const Duration(seconds: 15));
 
-      if (resp.statusCode == 200) return true;
+      if (resp.statusCode == 200) {
+        markRejected();
+        return true;
+      }
 
       final altUrl = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-proposals/$proposalId/reject');
       final altResp = await _httpClient.post(
@@ -599,20 +732,59 @@ class AiCoachRepository extends ChangeNotifier {
         headers: _buildHeaders(),
         body: jsonEncode({'reason': reason ?? 'Rejected by Admin'}),
       ).timeout(const Duration(seconds: 15));
-      if (altResp.statusCode == 200) return true;
+      if (altResp.statusCode == 200) {
+        markRejected();
+        return true;
+      }
 
-      if (isLocalProposal) return true;
+      if (isLocalProposal) {
+        markRejected();
+        return true;
+      }
+      revert();
       return false;
     } catch (e) {
       debugPrint('[AI COACH REPO] Reject error: $e');
-      if (isLocalProposal) return true;
+      if (isLocalProposal) {
+        markRejected();
+        return true;
+      }
+      revert();
       return false;
     }
   }
 
   /// Admin modifies an AI proposal prior to approval.
   Future<bool> editProposal(String proposalId, Map<String, dynamic> editedPayload) async {
-    if (_isTestEnvironment) return true;
+    final local = _inMemoryProposals[proposalId];
+    final previousStatus = local?.status;
+    final previousTitle = local?.title;
+    final previousSummary = local?.summary;
+    final previousPayload = local?.payload;
+    final isLocalProposal = _isLocalOnlyProposalId(proposalId);
+
+    void applyLocal() {
+      if (local == null) return;
+      local.status = AiProposalStatus.edited;
+      local.payload = Map<String, dynamic>.from(editedPayload);
+      if (editedPayload['title'] != null) local.title = editedPayload['title'].toString();
+      if (editedPayload['summary'] != null) local.summary = editedPayload['summary'].toString();
+      _notifyProposals();
+    }
+
+    void revertLocal() {
+      if (local == null) return;
+      if (previousStatus != null) local.status = previousStatus;
+      if (previousTitle != null) local.title = previousTitle;
+      if (previousSummary != null) local.summary = previousSummary;
+      if (previousPayload != null) local.payload = previousPayload;
+      _notifyProposals();
+    }
+
+    applyLocal();
+
+    if (_isTestEnvironment && !_hasCustomHttpClient) return true;
+
     try {
       final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/ai-coach/proposals/$proposalId/edit');
       final resp = await _httpClient.post(
@@ -628,10 +800,16 @@ class AiCoachRepository extends ChangeNotifier {
         headers: _buildHeaders(),
         body: jsonEncode({'editedPayload': editedPayload}),
       ).timeout(const Duration(seconds: 8));
-      return altResp.statusCode == 200;
+      if (altResp.statusCode == 200) return true;
+
+      if (isLocalProposal) return true;
+      revertLocal();
+      return false;
     } catch (e) {
       debugPrint('[AI COACH REPO] Edit error: $e');
-      return true;
+      if (isLocalProposal) return true;
+      revertLocal();
+      return false;
     }
   }
 
@@ -647,13 +825,15 @@ class AiCoachRepository extends ChangeNotifier {
     final effectiveName = clientName ?? clientIdentifier;
 
     if (_isTestEnvironment) {
-      return _buildClientFallbackProposal(
+      final fallback = _buildClientFallbackProposal(
         clientIdentifier: clientIdentifier,
         effectiveName: effectiveName,
         planType: planType,
         workoutConfig: workoutConfig,
         dietConfig: dietConfig,
       );
+      registerProposal(fallback);
+      return fallback;
     }
 
     try {
@@ -677,7 +857,9 @@ class AiCoachRepository extends ChangeNotifier {
         if (decoded['success'] == true && decoded['data'] != null) {
           final propData = decoded['data']['proposal'];
           if (propData != null) {
-            return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+            final prop = AiProposal.fromJson(Map<String, dynamic>.from(propData));
+            registerProposal(prop);
+            return prop;
           }
         }
       }
@@ -698,7 +880,9 @@ class AiCoachRepository extends ChangeNotifier {
             if (decoded['success'] == true && decoded['data'] != null) {
               final propData = decoded['data']['proposal'];
               if (propData != null) {
-                return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+                final prop = AiProposal.fromJson(Map<String, dynamic>.from(propData));
+                registerProposal(prop);
+                return prop;
               }
             }
           }
@@ -726,7 +910,9 @@ class AiCoachRepository extends ChangeNotifier {
                 if (decoded['success'] == true && decoded['data'] != null) {
                   final propData = decoded['data']['proposal'];
                   if (propData != null) {
-                    return AiProposal.fromJson(Map<String, dynamic>.from(propData));
+                    final prop = AiProposal.fromJson(Map<String, dynamic>.from(propData));
+                    registerProposal(prop);
+                    return prop;
                   }
                 }
               }
@@ -741,13 +927,15 @@ class AiCoachRepository extends ChangeNotifier {
     // Resilient fallback: If backend returns 404 (e.g. cloud deployment in progress)
     // or is offline, generate the structured proposal on-device so the user flow never breaks.
     debugPrint('[AI COACH REPO] Backend 404/offline for proposals/generate — creating client fallback proposal.');
-    return _buildClientFallbackProposal(
+    final fallback = _buildClientFallbackProposal(
       clientIdentifier: clientIdentifier,
       effectiveName: effectiveName,
       planType: planType,
       workoutConfig: workoutConfig,
       dietConfig: dietConfig,
     );
+    registerProposal(fallback);
+    return fallback;
   }
 
   /// Builds a fully-structured in-memory proposal matching database schema
@@ -973,7 +1161,11 @@ class AiCoachRepository extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AI COACH REPO] Direct Gemini error: $e');
       // If all Gemini remote calls fail, use keyword responses with actionable proposal cards
-      return _buildLocalFallbackResponse(message, selectedClientId);
+      final fallback = _buildLocalFallbackResponse(message, selectedClientId);
+      if (fallback.proposal != null) {
+        registerProposal(fallback.proposal!);
+      }
+      return fallback;
     }
   }
 

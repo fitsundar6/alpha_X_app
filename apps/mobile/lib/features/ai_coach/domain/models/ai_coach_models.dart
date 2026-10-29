@@ -266,6 +266,44 @@ class AiChatMessage {
   bool get isAi => sender == 'AI';
   bool get isAdmin => sender == 'ADMIN';
 
+  AiChatMessage copyWith({
+    String? id,
+    String? sender,
+    String? content,
+    String? intent,
+    DateTime? timestamp,
+    AiDataCompleteness? completeness,
+    AiProposal? proposal,
+    AiReportCard? reportCard,
+    List<String>? suggestedFollowUps,
+    bool? isError,
+    String? conversationId,
+    String? promptVersion,
+    bool? knowledgeRetrievalEnabled,
+    int? retrievedKnowledgeCount,
+    List<String>? retrievedKnowledgeIds,
+    VerifiedClientInfo? verifiedClient,
+  }) {
+    return AiChatMessage(
+      id: id ?? this.id,
+      sender: sender ?? this.sender,
+      content: content ?? this.content,
+      intent: intent ?? this.intent,
+      timestamp: timestamp ?? this.timestamp,
+      completeness: completeness ?? this.completeness,
+      proposal: proposal ?? this.proposal,
+      reportCard: reportCard ?? this.reportCard,
+      suggestedFollowUps: suggestedFollowUps ?? this.suggestedFollowUps,
+      isError: isError ?? this.isError,
+      conversationId: conversationId ?? this.conversationId,
+      promptVersion: promptVersion ?? this.promptVersion,
+      knowledgeRetrievalEnabled: knowledgeRetrievalEnabled ?? this.knowledgeRetrievalEnabled,
+      retrievedKnowledgeCount: retrievedKnowledgeCount ?? this.retrievedKnowledgeCount,
+      retrievedKnowledgeIds: retrievedKnowledgeIds ?? this.retrievedKnowledgeIds,
+      verifiedClient: verifiedClient ?? this.verifiedClient,
+    );
+  }
+
   factory AiChatMessage.fromResponse(Map<String, dynamic> json) {
     AiProposal? proposal;
     if (json['proposal'] != null && json['proposal'] is Map) {

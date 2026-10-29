@@ -48,23 +48,44 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
     super.initState();
     _aiRepo = widget.aiCoachRepository ?? AiCoachRepository();
     _workoutRepo = widget.workoutRepository ?? WorkoutRepository();
+    _aiRepo.addListener(_onRepoChanged);
     if (widget.initialStatusFilter != null) {
       _statusFilter = widget.initialStatusFilter!;
     }
     _loadProposals();
   }
 
+  void _onRepoChanged() {
+    if (mounted) {
+      _loadProposals(silent: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(AdminWorkoutProposalsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.aiCoachRepository != widget.aiCoachRepository) {
+      _aiRepo.removeListener(_onRepoChanged);
+      _aiRepo = widget.aiCoachRepository ?? AiCoachRepository();
+      _aiRepo.addListener(_onRepoChanged);
+    }
+    _loadProposals(silent: true);
+  }
+
   @override
   void dispose() {
+    _aiRepo.removeListener(_onRepoChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadProposals() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _loadProposals({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final all = await _aiRepo.getProposals();
@@ -72,6 +93,7 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
       setState(() {
         _proposals = all;
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -395,18 +417,27 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
                           ],
                         ),
                       )
-                    : _filteredProposals.isEmpty
-                        ? _buildEmptyState()
-                        : RefreshIndicator(
-                            onRefresh: _loadProposals,
-                            color: AppColors.primaryRed,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              itemCount: _filteredProposals.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 12),
-                              itemBuilder: (ctx, idx) => _buildProposalCard(_filteredProposals[idx]),
-                            ),
-                          ),
+                    : RefreshIndicator(
+                        onRefresh: () => _loadProposals(),
+                        color: AppColors.primaryRed,
+                        child: _filteredProposals.isEmpty
+                            ? LayoutBuilder(
+                                builder: (ctx, constraints) => SingleChildScrollView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                                    child: _buildEmptyState(),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                itemCount: _filteredProposals.length,
+                                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                                itemBuilder: (ctx, idx) => _buildProposalCard(_filteredProposals[idx]),
+                              ),
+                      ),
           ),
         ],
       ),
@@ -511,28 +542,40 @@ class _AdminWorkoutProposalsScreenState extends State<AdminWorkoutProposalsScree
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: TextField(
-        controller: _searchController,
-        style: const TextStyle(color: Colors.white, fontSize: 13),
-        onChanged: (val) => setState(() => _searchQuery = val.trim()),
-        decoration: InputDecoration(
-          hintText: 'Search by client name, client ID, or plan title...',
-          hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-          prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close, size: 16, color: Colors.white54),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
-                )
-              : null,
-          filled: true,
-          fillColor: AppColors.surfaceElevated,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              onChanged: (val) => setState(() => _searchQuery = val.trim()),
+              decoration: InputDecoration(
+                hintText: 'Search by client name, client ID, or plan title...',
+                hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 16, color: Colors.white54),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.surfaceElevated,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white70),
+            tooltip: 'Refresh proposals',
+            onPressed: () => _loadProposals(),
+          ),
+        ],
       ),
     );
   }
