@@ -183,18 +183,57 @@ router.post('/chat', async (req: Request, res: Response) => {
         verifiedClient: conversation.verifiedClient || null,
       });
 
-      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] "${geminiResult.replyText.substring(0, 100)}..."`);
+      let finalProposal = geminiResult.proposal || null;
+      let finalReplyText = geminiResult.replyText;
+
+      // 9b. Server-Side Orchestration Fallback for Proposals:
+      // When the admin explicitly asks to create a workout or diet plan for a verified client,
+      // but Gemini returned text only without executing propose_workout_plan or propose_diet_plan,
+      // route the request into the existing structured proposal workflow (aiController).
+      const isWorkoutProposalRequest =
+        /(?:create|prepare|generate|design|build|prescribe|suggest|set up|plan)\b.*?\b(?:workout|routine|split|exercise|plan|session|bicep|tricep|arm day|leg day|push day|pull day)/i.test(cleanMessage) ||
+        /\b(?:workout|routine)\b.*?\b(?:for|to)\b/i.test(cleanMessage) ||
+        /\b(?:create|make|prepare)\b.*?\b(?:bicep|tricep|arm|chest|back|shoulder|leg)\b.*?\b(?:workout|routine|session|day)\b/i.test(cleanMessage);
+
+      const isDietProposalRequest =
+        /(?:diet|nutrition|meal|macro)\s+(?:plan|proposal|targets?)/i.test(cleanMessage) ||
+        /(?:create|prepare|generate|build)\s+.*(?:diet|meal plan|nutrition plan|macro plan)/i.test(cleanMessage);
+
+      if (!finalProposal && conversation.verifiedClient && (isWorkoutProposalRequest || isDietProposalRequest)) {
+        console.log(`[AI COACH ORCHESTRATION] Gemini returned text-only reply for proposal request. Triggering server-side proposal creation for client ${conversation.verifiedClient.clientId}...`);
+        try {
+          const fallbackProposalRes = await aiController.handleAdminMessage({
+            adminId,
+            adminName: adminUser.name || 'Alex Stone',
+            conversationId: conversation.id,
+            message: cleanMessage,
+            selectedClientId: conversation.verifiedClient.clientId,
+          });
+
+          if (fallbackProposalRes.proposal) {
+            finalProposal = fallbackProposalRes.proposal;
+            console.log(`[AI COACH ORCHESTRATION] Successfully generated and persisted proposal id=${finalProposal.id} via server orchestration.`);
+            if (!finalReplyText.toLowerCase().includes('proposal created') && !finalReplyText.toLowerCase().includes('saved as pending') && !finalReplyText.toLowerCase().includes('staged as pending')) {
+              finalReplyText = `${finalReplyText}\n\n✅ **Structured proposal created and saved as PENDING for admin review** (ID: \`${finalProposal.id}\`). You can review, edit, or approve it in the **Proposals** tab.`;
+            }
+          }
+        } catch (orchErr: any) {
+          console.error(`[AI COACH ORCHESTRATION ERROR] Failed to create server-side proposal fallback: ${orchErr.message}`);
+        }
+      }
+
+      console.log(`[DEBUG CHAT] Final response returned to frontend: [ConvID: ${conversation.id}] "${finalReplyText.substring(0, 100)}..."`);
       sendSuccess(res, {
         conversationId: geminiResult.conversationId,
-        response: geminiResult.response,
-        replyText: geminiResult.replyText,
+        response: finalReplyText,
+        replyText: finalReplyText,
         requestId: geminiResult.requestId,
         model: geminiResult.model,
         promptVersion: geminiResult.promptVersion,
-        intent: geminiResult.proposal
-          ? (geminiResult.proposal.type === 'DIET' ? 'DIET_PROPOSAL' : 'WORKOUT_PROPOSAL')
+        intent: finalProposal
+          ? (finalProposal.type === 'DIET' ? 'DIET_PROPOSAL' : 'WORKOUT_PROPOSAL')
           : geminiResult.intent,
-        proposal: geminiResult.proposal || null,
+        proposal: finalProposal,
         suggestedFollowUps: geminiResult.suggestedFollowUps,
         knowledgeRetrievalEnabled: geminiResult.knowledgeRetrievalEnabled,
         retrievedKnowledgeCount: geminiResult.retrievedKnowledgeCount,
