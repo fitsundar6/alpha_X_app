@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/build-mobile.yml'
 
 permissions:
   contents: read
@@ -17,8 +14,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ==========================================
+  # 1. QUALITY ASSURANCE (LINT & TEST GATE)
+  # ==========================================
+  validate:
+    name: 🧪 Quality Gate (Analyze & Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter (Stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+
+      - name: Verify Code Quality (flutter analyze)
+        working-directory: apps/mobile
+        run: flutter analyze --no-pub
+
+      - name: Run Core Regression & Unit Tests
+        working-directory: apps/mobile
+        run: flutter test test/api_config_test.dart test/workout_proposal_generation_regression_test.dart --no-pub --reporter=compact
+
+  # ==========================================
+  # 2. ANDROID RELEASE APK BUILD
+  # ==========================================
   build-android:
     name: 🤖 Build Android Release APK
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -38,8 +75,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Verify Flutter Installation
-        run: flutter --version
+      - name: Install Android NDK (matching build.gradle.kts)
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;28.2.13676358'
 
       - name: Install Android Dependencies
         working-directory: apps/mobile
@@ -75,15 +114,21 @@ jobs:
         working-directory: apps/mobile
         env:
           GRADLE_OPTS: "-Xmx2560m -XX:MaxMetaspaceSize=512m"
-        run: |
-          flutter build apk --release
+        run: flutter build apk --release
 
-      - name: Verify APK Output
+      - name: Verify APK Output & Report Summary
         run: |
           APK_PATH="apps/mobile/build/app/outputs/flutter-apk/app-release.apk"
           if [ -f "$APK_PATH" ]; then
             FILE_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH")
-            echo "✅ Release APK generated successfully: $APK_PATH ($FILE_SIZE bytes)"
+            SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1048576}")
+            echo "✅ Release APK generated successfully: $APK_PATH ($FILE_SIZE bytes / $SIZE_MB MB)"
+            echo "### 🤖 Android Release APK Output Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** ✅ Successfully Built" >> $GITHUB_STEP_SUMMARY
+            echo "- **Artifact File:** \`app-release.apk\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Size:** $SIZE_MB MB ($FILE_SIZE bytes)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Installation:** Ready for direct sideloading on Android physical phones or emulators." >> $GITHUB_STEP_SUMMARY
+            echo "- **Download:** Find \`alpha-x-gym-android-apk\` in the **Artifacts** section at the bottom of this run summary." >> $GITHUB_STEP_SUMMARY
           else
             echo "::error::Release APK not found at $APK_PATH"
             exit 1
@@ -97,8 +142,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # ==========================================
+  # 3. iOS RELEASE BUILD (SIGNED OR UNSIGNED)
+  # ==========================================
   build-ios:
     name: 🍎 Build iOS Release Application
+    needs: validate
     runs-on: macos-14
     timeout-minutes: 60
 
@@ -137,8 +186,9 @@ jobs:
         env:
           CERT_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           PROV_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          P12_PASS: ${{ secrets.P12_PASSWORD }}
         run: |
-          if [ -n "$CERT_BASE64" ] && [ -n "$PROV_BASE64" ]; then
+          if [ -n "$CERT_BASE64" ] && [ -n "$PROV_BASE64" ] && [ -n "$P12_PASS" ]; then
             echo "has_signing=true" >> $GITHUB_OUTPUT
             echo "✅ Apple signing secrets detected."
           else
@@ -189,8 +239,15 @@ jobs:
         run: |
           flutter build ios --release --no-codesign
           
-          # Package the Runner.app bundle into a zip archive
-          cd build/ios/iphoneos
+          # Package standard Payload IPA archive for sideloading tools (AltStore, Sideloadly)
+          mkdir -p build/ios/outputs/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/outputs/Payload/
+          cd build/ios/outputs
+          zip -r -q AlphaXGym-Unsigned.ipa Payload
+          rm -rf Payload
+          
+          # Also package standalone Runner.app.zip
+          cd ../iphoneos
           zip -r -q ../outputs/AlphaXGym-Unsigned-Runner.app.zip Runner.app
           cd ../../..
 
@@ -205,17 +262,19 @@ jobs:
           ⚠️ IMPORTANT:
           Because Apple iOS strictly requires cryptographic code signing with a valid
           provisioning profile, this build CANNOT be installed directly on an iPhone
-          via AirDrop, Safari, or standard installation.
+          via AirDrop, Safari, or standard direct installation.
 
           HOW TO INSTALL ON YOUR IPHONE:
-          1. Configure Repository Secrets for automatic signing:
-             - BUILD_CERTIFICATE_BASE64 (Base64-encoded .p12 distribution certificate)
-             - P12_PASSWORD (Password for the .p12 certificate)
-             - BUILD_PROVISION_PROFILE_BASE64 (Base64-encoded .mobileprovision profile)
-             - KEYCHAIN_PASSWORD (Random temporary password for runner keychain)
-          2. Sideloading (Alternative):
-             - You can resign and sideload AlphaXGym-Unsigned-Runner.app.zip using AltStore,
-               Sideloadly, or Xcode using your personal Apple ID.
+          1. Automatic Signing via GitHub Actions (Recommended):
+             Add the following repository secrets in GitHub (Settings -> Secrets -> Actions):
+             - BUILD_CERTIFICATE_BASE64: Base64-encoded .p12 distribution certificate
+             - P12_PASSWORD: Password for the .p12 certificate
+             - BUILD_PROVISION_PROFILE_BASE64: Base64-encoded .mobileprovision profile
+             - KEYCHAIN_PASSWORD: (Optional) Temporary password for runner keychain
+
+          2. Sideloading (Alternative without paid developer account):
+             - Use AltStore, Sideloadly, or TrollStore with `AlphaXGym-Unsigned.ipa`.
+             - These tools sign the IPA on-the-fly using your free personal Apple ID.
           ================================================================================
           EOF
 
@@ -225,13 +284,17 @@ jobs:
         run: |
           echo "### 🍎 iOS Build Output Summary" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.check_signing.outputs.has_signing }}" = "true" ]; then
-            echo "✅ **Status:** Signed IPA successfully built with repository Apple credentials." >> $GITHUB_STEP_SUMMARY
-            echo "* Artifact contains installable `AlphaXGym-Signed.ipa`." >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** ✅ **Signed IPA** successfully built with Apple credentials." >> $GITHUB_STEP_SUMMARY
+            echo "- **Artifact:** \`AlphaXGym-Signed.ipa\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Direct iPhone installation:** ✅ Installable on registered test devices or via TestFlight/MDM." >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ **Status:** **Unsigned Build** (`--no-codesign`)" >> $GITHUB_STEP_SUMMARY
-            echo "* **Direct iPhone installation:** ❌ Not possible without resigning." >> $GITHUB_STEP_SUMMARY
-            echo "* **Artifact contains:** `AlphaXGym-Unsigned-Runner.app.zip` and `README_INSTALLATION.txt`." >> $GITHUB_STEP_SUMMARY
-            echo "* **To enable signed IPAs:** Add `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, and `BUILD_PROVISION_PROFILE_BASE64` to repository secrets." >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** ⚠️ **Unsigned Build** (\`--no-codesign\`)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Direct iPhone installation:** ❌ Not possible without resigning." >> $GITHUB_STEP_SUMMARY
+            echo "- **Artifact Contents:**" >> $GITHUB_STEP_SUMMARY
+            echo "  - \`AlphaXGym-Unsigned.ipa\` (suitable for resigning via AltStore or Sideloadly)" >> $GITHUB_STEP_SUMMARY
+            echo "  - \`AlphaXGym-Unsigned-Runner.app.zip\` (app bundle for Xcode or simulator)" >> $GITHUB_STEP_SUMMARY
+            echo "  - \`README_INSTALLATION.txt\` (instructions on signing and sideloading)" >> $GITHUB_STEP_SUMMARY
+            echo "- **To enable signed IPAs:** Configure \`BUILD_CERTIFICATE_BASE64\`, \`P12_PASSWORD\`, and \`BUILD_PROVISION_PROFILE_BASE64\` in repository secrets." >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Clean up Keychain and Signing Secrets
