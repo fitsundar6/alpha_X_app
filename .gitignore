@@ -38,6 +38,14 @@ backend/.env.*
 secrets/
 credentials/
 
+# Database Backups, Exports & Dumps (CRITICAL: Never commit database dumps)
+backups/
+backend/backups/
+*.dump
+*.sql
+*.bak
+db_backup_*.json
+
 # Certificates, Keys, Signing & Provisioning Profiles
 *.pem
 *.key
