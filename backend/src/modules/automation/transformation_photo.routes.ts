@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { transformationPhotoController } from './transformation_photo.controller';
+import { requireAuth } from '../../middlewares/auth';
 
 const router = Router();
 
@@ -8,6 +9,6 @@ router.get('/:milestoneId/:angle', (req, res) => transformationPhotoController.s
 router.get('/:id', (req, res) => transformationPhotoController.streamTransformationPhoto(req, res));
 
 // 2. Direct upload route
-router.post('/upload', (req, res) => transformationPhotoController.uploadTransformationPhoto(req, res));
+router.post('/upload', requireAuth, (req, res) => transformationPhotoController.uploadTransformationPhoto(req, res));
 
 export const transformationPhotoRoutes = router;

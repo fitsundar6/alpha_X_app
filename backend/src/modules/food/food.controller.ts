@@ -19,7 +19,10 @@ export class FoodController {
         limit,
       } = req.query;
       const user = (req as any).user || {};
-      const userId = user.clientId || user.id || (req.query.userId as string | undefined);
+      const isAdmin = user.role === 'ADMIN';
+      const userId = isAdmin
+        ? (req.query.userId as string | undefined) || user.clientId || user.id
+        : (user.clientId || user.id);
 
       const result = await foodService.searchFoods({
         query: query as string | undefined,
@@ -108,10 +111,10 @@ export class FoodController {
         return;
       }
 
-      const user = (req as any).user || {};
-      const clientIdHeader = (req.headers['x-client-id'] || req.headers['x-user-id'] || req.body.createdBy) as string | undefined;
-      if (clientIdHeader && !user.clientId) {
-        user.clientId = clientIdHeader;
+      const user = (req as any).user;
+      if (!user || (!user.id && !user.clientId)) {
+        sendError(res, 'UNAUTHORIZED', 'Authentication required to create custom food', HttpStatus.UNAUTHORIZED);
+        return;
       }
 
       const result = await foodService.createCustomFood(
@@ -154,7 +157,11 @@ export class FoodController {
   public async deleteFood(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
     try {
-      const user = (req as any).user || {};
+      const user = (req as any).user;
+      if (!user || (!user.id && !user.clientId)) {
+        sendError(res, 'UNAUTHORIZED', 'Authentication required to delete food', HttpStatus.UNAUTHORIZED);
+        return;
+      }
       const deleted = await foodService.deleteFood(id, user);
 
       if (!deleted) {
@@ -169,11 +176,20 @@ export class FoodController {
 
       sendSuccess(res, { deleted: true, id }, HttpStatus.OK, `Deleted food item "${id}" from database`);
     } catch (err: any) {
-      sendError(res, 'DELETE_FOOD_ERROR', err.message || 'Failed to delete food', HttpStatus.BAD_REQUEST, undefined, err, {
-        activity: 'Delete Food Item',
-        resourceId: id,
-        resourceType: 'FoodItem',
-      });
+      const isAuthError = err.message && err.message.toLowerCase().includes('unauthorized');
+      sendError(
+        res,
+        isAuthError ? 'UNAUTHORIZED' : 'DELETE_FOOD_ERROR',
+        err.message || 'Failed to delete food',
+        isAuthError ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST,
+        undefined,
+        err,
+        {
+          activity: 'Delete Food Item',
+          resourceId: id,
+          resourceType: 'FoodItem',
+        }
+      );
     }
   }
 
@@ -195,8 +211,18 @@ export class FoodController {
         return;
       }
 
-      const user = (req as any).user || {};
-      const userId = user.clientId || user.id || (req.headers['x-client-id'] as string) || req.ip || 'client_athlete';
+      const user = (req as any).user;
+      if (!user || (!user.id && !user.clientId)) {
+        sendError(
+          res,
+          'UNAUTHORIZED',
+          'Authentication required for AI food scanning',
+          HttpStatus.UNAUTHORIZED
+        );
+        return;
+      }
+
+      const userId = user.clientId || user.id;
 
       const scanResult = await foodAiService.analyzeFoodImage(
         rawImage,

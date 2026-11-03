@@ -288,8 +288,14 @@ export class FoodService {
         : calculatedCalories;
 
     const category = input.category?.trim() || 'Custom';
-    const creatorId = user.clientId || user.id || 'anonymous';
+    const creatorId = user.clientId || user.id;
+    if (!creatorId) {
+      throw new Error('Authenticated user ID is required to create custom food');
+    }
     const creatorName = user.name || user.email || creatorId;
+    const isAdmin = user.role === 'ADMIN';
+    const isPublic = isAdmin ? (input.isPublic !== false) : false;
+    const status = isAdmin ? 'APPROVED' : 'PENDING';
 
     // DUPLICATE PREVENTION:
     // Check if an identical food already exists with the same normalized name and serving unit
@@ -361,9 +367,9 @@ export class FoodService {
           isCustom: true,
           createdBy: creatorId,
           createdByName: creatorName,
-          isPublic: input.isPublic !== false, // Default true: global food library
-          isVerified: false,
-          status: 'APPROVED', // Immediately available to all users with admin ability to moderate
+          isPublic,
+          isVerified: isAdmin,
+          status,
         },
       });
 
@@ -420,9 +426,9 @@ export class FoodService {
         isCustom: true,
         createdBy: creatorId,
         createdByName: creatorName,
-        isPublic: true,
-        isVerified: false,
-        status: 'APPROVED',
+        isPublic,
+        isVerified: isAdmin,
+        status,
         createdAt: now,
         updatedAt: now,
       };
@@ -438,26 +444,43 @@ export class FoodService {
     id: string,
     user: { id?: string; clientId?: string; role?: string }
   ): Promise<boolean> {
+    const isAdmin = user.role === 'ADMIN';
     try {
       const existing = await prisma.food.findUnique({ where: { id } });
-      if (!existing) return false;
+      if (existing) {
+        const isOwner =
+          existing.createdBy === user.clientId ||
+          existing.createdBy === user.id;
 
-      const isAdmin = user.role === 'ADMIN';
-      const isOwner =
-        existing.createdBy === user.clientId ||
-        existing.createdBy === user.id;
+        if (!isAdmin && !isOwner) {
+          throw new Error('Unauthorized: You do not have permission to delete this food item');
+        }
 
-      if (!isAdmin && !isOwner) {
-        throw new Error('Unauthorized: You do not have permission to delete this food item');
+        await prisma.food.delete({ where: { id } });
+        this.fallbackMemoryFoods.delete(id);
+        return true;
       }
-
-      await prisma.food.delete({ where: { id } });
-      this.fallbackMemoryFoods.delete(id);
-      return true;
-    } catch (err) {
-      this.fallbackMemoryFoods.delete(id);
-      return true;
+    } catch (err: any) {
+      if (err.message && err.message.includes('Unauthorized')) {
+        throw err;
+      }
+      // Continue to check in-memory catalog
     }
+
+    // Check memory catalog
+    const memItem = this.fallbackMemoryFoods.get(id);
+    if (!memItem) return false;
+
+    const isMemOwner =
+      memItem.createdBy === user.clientId ||
+      memItem.createdBy === user.id;
+
+    if (!isAdmin && !isMemOwner) {
+      throw new Error('Unauthorized: You do not have permission to delete this food item');
+    }
+
+    this.fallbackMemoryFoods.delete(id);
+    return true;
   }
 }
 

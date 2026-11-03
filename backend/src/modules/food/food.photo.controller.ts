@@ -18,48 +18,27 @@ export class FoodPhotoController {
       return (req as any).user;
     }
 
-    // 2. Check Authorization header
+    // 2. Check Authorization header or query token (for direct network image loading in Flutter Image.network)
     let token = '';
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
     } else if (req.query.token && typeof req.query.token === 'string') {
-      // Query token fallback for direct network image loading
       token = req.query.token;
     }
 
     if (!token) return null;
 
-    if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
-      return {
-        id: 'admin_alex_stone',
-        email: env.ADMIN_EMAIL.trim().toLowerCase(),
-        role: UserRole.ADMIN,
-      };
-    }
-
     try {
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
-      } catch (verifyErr: any) {
-        if (verifyErr?.name === 'TokenExpiredError') {
-          const unexpired = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as any;
-          const expTimeMs = (unexpired.exp || 0) * 1000;
-          const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30-day grace period
-          if (Date.now() - expTimeMs < gracePeriodMs) {
-            decoded = unexpired;
-          } else {
-            return null;
-          }
-        } else {
-          return null;
-        }
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+      if (!decoded || (!decoded.id && !decoded.clientId)) {
+        return null;
       }
+
       const normalizedEmail = (decoded.email || '').trim().toLowerCase();
       const isAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
       return {
-        id: decoded.id || decoded.clientId || 'client_user',
+        id: decoded.id || decoded.clientId,
         email: normalizedEmail,
         role: isAdmin ? UserRole.ADMIN : UserRole.CLIENT,
         clientId: decoded.clientId,

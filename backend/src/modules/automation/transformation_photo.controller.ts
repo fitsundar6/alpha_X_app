@@ -39,31 +39,10 @@ export class TransformationPhotoController {
 
     if (!token) return null;
 
-    if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
-      return {
-        id: 'admin_alex_stone',
-        email: env.ADMIN_EMAIL.trim().toLowerCase(),
-        role: UserRole.ADMIN,
-      };
-    }
-
     try {
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
-      } catch (verifyErr: any) {
-        if (verifyErr?.name === 'TokenExpiredError') {
-          const unexpired = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as any;
-          const expTimeMs = (unexpired.exp || 0) * 1000;
-          const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30-day grace period
-          if (Date.now() - expTimeMs < gracePeriodMs) {
-            decoded = unexpired;
-          } else {
-            return null;
-          }
-        } else {
-          return null;
-        }
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
+      if (!decoded || (!decoded.id && !decoded.userId && !decoded.sub)) {
+        return null;
       }
 
       const normalizedEmail = (decoded.email || '').trim().toLowerCase();
