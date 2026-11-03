@@ -1,12 +1,12 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { foodPhotoController } from './food.photo.controller';
 import { requireAuth, requireAdmin } from '../../middlewares/auth';
 
 const router = Router();
 
 // 1. Client Live Camera Food Photo Recording (strictly live capture, no food log injection)
-router.post('/live', requireAuth, (req, res) => foodPhotoController.recordLiveFoodPhoto(req, res));
-router.post('/', requireAuth, (req, res) => foodPhotoController.recordLiveFoodPhoto(req, res));
+router.post('/live', requireAuth, express.json({ limit: '10mb' }), (req, res) => foodPhotoController.recordLiveFoodPhoto(req, res));
+router.post('/', requireAuth, express.json({ limit: '10mb' }), (req, res) => foodPhotoController.recordLiveFoodPhoto(req, res));
 
 // 2. Client Food Photo History
 router.get('/my-photos', requireAuth, (req, res) => foodPhotoController.getClientFoodPhotos(req, res));

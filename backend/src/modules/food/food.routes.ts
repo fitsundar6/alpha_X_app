@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import express, { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/environment';
 import { UserRole } from '../../constants/roles';
@@ -47,7 +47,7 @@ router.get('/', optionalAuth, (req, res) => foodController.searchFoods(req, res)
 router.get('/:id', optionalAuth, (req, res) => foodController.getFoodById(req, res));
 
 // AI Food Camera Scanner endpoint (strictly authenticated; user quota and abuse protection)
-router.post('/ai-scan', requireAuth, (req, res) => foodController.analyzeFoodImage(req, res));
+router.post('/ai-scan', requireAuth, express.json({ limit: '10mb' }), (req, res) => foodController.analyzeFoodImage(req, res));
 
 // Create custom food (requires authenticated user; derived strictly from token)
 router.post('/', requireAuth, (req, res) => foodController.createCustomFood(req, res));

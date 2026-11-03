@@ -17,7 +17,7 @@ export class ActivityService {
       throw new AppError('Authentication required to sync activity', HttpStatus.UNAUTHORIZED);
     }
 
-    const records = await activityRepository.upsertRecords(authenticatedClientId, input.records);
+    const records = await activityRepository.upsertRecords(authenticatedClientId, input.records as any);
     return {
       syncedCount: records.length,
       records,

@@ -78,10 +78,22 @@ app.use(
   })
 );
 
+// Explicitly allowed production web origins
+const allowedOrigins = [
+  'https://alpha-x-app.vercel.app',
+  'https://alphaxgym.com',
+  'https://www.alphaxgym.com',
+];
+
+if (env.CORS_ORIGIN && env.CORS_ORIGIN !== '*') {
+  const extraOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
+  allowedOrigins.push(...extraOrigins);
+}
+
 // CORS configuration (supports native mobile apps, web, and production domains)
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // 1. Mobile native apps (iOS / Android Flutter) do not send Origin header
+    // 1. Mobile native apps (iOS / Android Flutter) and server-to-server requests do not send Origin header
     if (!origin) {
       return callback(null, true);
     }
@@ -89,14 +101,22 @@ const corsOptions: cors.CorsOptions = {
     if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') {
       return callback(null, true);
     }
-    // 3. Whitelist check
-    const allowed = env.CORS_ORIGIN.split(',').map((o) => o.trim());
-    if (allowed.includes('*') || allowed.includes(origin)) {
-      return callback(null, true);
-    }
-    // 4. Vercel deployment preview / prod URLs and custom domain
-    if (origin.endsWith('.vercel.app') || origin.endsWith('.alphaxgym.com')) {
-      return callback(null, true);
+    // 3. Strict whitelist check against verified domains (prevents arbitrary .vercel.app reflection)
+    try {
+      const parsedOrigin = new URL(origin).origin;
+      const isAllowed = allowedOrigins.some((allowed) => {
+        try {
+          return new URL(allowed).origin === parsedOrigin;
+        } catch {
+          return allowed === origin;
+        }
+      });
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+    } catch {
+      // Invalid URL in origin header
     }
     return callback(new Error(`CORS policy: Origin ${origin} not allowed`));
   },
@@ -108,8 +128,6 @@ const corsOptions: cors.CorsOptions = {
     'X-Requested-With',
     'Accept',
     'Origin',
-    'x-client-id',
-    'x-user-id',
   ],
 };
 
@@ -142,9 +160,9 @@ const generalLimiter = rateLimit({
 });
 app.use(generalLimiter);
 
-// Parse JSON and urlencoded request bodies
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Parse JSON and urlencoded request bodies (constrained to 1MB to prevent DoS; photo/scan routes use isolated limits)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Query / Path Normalizer Middleware (Handles accidental /api?v1 typos or missing slashes)
 app.use((req: Request, _res: Response, next) => {
@@ -154,21 +172,11 @@ app.use((req: Request, _res: Response, next) => {
   next();
 });
 
-// Base Health Check Endpoints (Available on /, /api, /health, /api/health, and /api/v1/health)
+// Base Health Check Endpoints (Minimal response: prevents infrastructure and environment disclosure)
 const healthHandler = (_req: Request, res: Response) => {
   sendSuccess(res, {
     status: 'healthy',
-    service: 'Alpha X Gym REST API',
-    uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
-    environment: env.NODE_ENV,
-    host: env.HOST,
-    port: env.PORT,
-    aiCoach: geminiReliability.hasConfiguredKey()
-      ? geminiReliability.isCircuitTripped()
-        ? 'degraded'
-        : 'available'
-      : 'unconfigured',
   });
 };
 
