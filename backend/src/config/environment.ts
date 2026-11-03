@@ -41,6 +41,24 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('Alpha X Gym <noreply@alphaxgym.com>'),
   APP_URL: z.string().default('http://localhost:3000'),
+}).superRefine((data, ctx) => {
+  const isProduction = data.NODE_ENV === 'production' || data.VERCEL_ENV === 'production';
+  if (isProduction) {
+    if (data.QR_SECRET_KEY === 'alpha_x_qr_dynamic_secret_key_rotation') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['QR_SECRET_KEY'],
+        message: 'QR_SECRET_KEY must be explicitly set to a unique strong secret in production; cannot use default value.',
+      });
+    }
+    if (data.CORS_ORIGIN === '*') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CORS_ORIGIN'],
+        message: 'CORS_ORIGIN cannot be wildcard "*" in production when credentials are supported.',
+      });
+    }
+  }
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

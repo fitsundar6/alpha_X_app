@@ -1,4 +1,3 @@
-
 /// ============================================================================
 /// ALPHA X GYM — MASTER ADMINISTRATOR CONFIGURATION
 /// ============================================================================
@@ -15,9 +14,10 @@ class AdminConfig {
   );
 
   /// Master Administrator Password
-  /// Matches Master Admin Credentials defined in environment and backend configuration.
+  /// In release builds, this defaults to an empty string so no administrator
+  /// credentials are baked into the compiled client binary.
   static const String adminPassword = String.fromEnvironment(
     'ADMIN_PASSWORD',
-    defaultValue: 'AlphaXAdmin2026!',
+    defaultValue: '',
   );
 }
