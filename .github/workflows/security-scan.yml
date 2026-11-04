@@ -1,0 +1,52 @@
+
+name: Security Scan & Secret Leak Detection
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    name: 🛡️ Gitleaks Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        # Pin actions/checkout to immutable commit SHA for v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify Prohibited Backup, Dump, SQL & Keystore Patterns
+        shell: bash
+        run: |
+          echo "Checking repository index for prohibited dump, backup, SQL, and keystore files..."
+          BLOCKED_FILES=$(git ls-files | grep -v -E '^backend/prisma/migrations/[^/]+/migration[.]sql$' | grep -i -E '(^|/)db_backup_[^/]*[.]json$|[.]dump$|[.]bak$|[.]sql$|[.]jks$|[.]keystore$|upload-keystore[.]jks[.]backup$' || true)
+          if [ -n "$BLOCKED_FILES" ]; then
+            echo "::error::Prohibited sensitive backup, dump, SQL, or credential file detected in repository index:"
+            echo "$BLOCKED_FILES"
+            exit 1
+          fi
+          echo "✔ Repository index is free of prohibited backup, dump, SQL, and keystore files."
+
+      - name: Run Gitleaks Secret Scanner
+        # Pin gitleaks/gitleaks-action to immutable commit SHA for v3.0.0 (Node 24 runtime)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Output and leak protection configurations
+          GITLEAKS_ENABLE_SUMMARY: false
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
