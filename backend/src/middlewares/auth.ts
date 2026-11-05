@@ -85,11 +85,32 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       role: effectiveRole,
     };
 
-    // Server-side enforcement: If temporary password was issued, force password change before normal app access
-    if (
-      !req.originalUrl.includes('/change-password') &&
-      !req.originalUrl.includes('/auth/me')
-    ) {
+    // Server-side enforcement: If temporary password was issued, force password change before normal app access.
+    // Strictly match the current-user identity (GET /auth/me) and password-change (POST /auth/change-password)
+    // endpoints using Express's routed pathname context. Query strings, suffixes, and wrong methods never exempt.
+    const requestPath =
+      typeof req.path === 'string'
+        ? `${req.baseUrl || ''}${req.path}`
+        : (req.originalUrl || req.url || '').split('?')[0];
+
+    const normalizedPath = requestPath.replace(/\/+/g, '/').replace(/\/+$/, '').toLowerCase();
+    const method = (req.method || '').toUpperCase();
+
+    const isMeEndpoint =
+      normalizedPath === '/api/v1/auth/me' ||
+      normalizedPath === '/api/auth/me' ||
+      normalizedPath === '/auth/me';
+
+    const isChangePasswordEndpoint =
+      normalizedPath === '/api/v1/auth/change-password' ||
+      normalizedPath === '/api/auth/change-password' ||
+      normalizedPath === '/auth/change-password';
+
+    const isForcedPasswordExempt =
+      (method === 'GET' && isMeEndpoint) ||
+      (method === 'POST' && isChangePasswordEndpoint);
+
+    if (!isForcedPasswordExempt) {
       const isForced = await passwordResetService.isForcedPasswordChangeRequired(decoded.id);
       if (isForced) {
         sendError(
