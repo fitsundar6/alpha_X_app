@@ -90,6 +90,19 @@ if (env.CORS_ORIGIN && env.CORS_ORIGIN !== '*') {
   allowedOrigins.push(...extraOrigins);
 }
 
+// Helper to determine if an origin is an authorized local development origin
+// (e.g. Flutter Web running locally on Chrome / Edge / dev server at http://localhost:<port> or http://127.0.0.1:<port>)
+const isLocalDevOrigin = (origin: string): boolean => {
+  try {
+    const url = new URL(origin);
+    const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+    const isLocalHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    return isHttp && isLocalHost;
+  } catch {
+    return false;
+  }
+};
+
 // CORS configuration (supports native mobile apps, web, and production domains)
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
@@ -101,7 +114,16 @@ const corsOptions: cors.CorsOptions = {
     if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') {
       return callback(null, true);
     }
-    // 3. Strict whitelist check against verified domains (prevents arbitrary .vercel.app reflection)
+    // 3. In production, localhost/127.0.0.1 development origins are allowed ONLY when explicitly enabled via flag
+    const allowLocalhostInProd =
+      env.ENABLE_LOCALHOST_CORS ||
+      process.env.ENABLE_LOCALHOST_CORS === 'true' ||
+      process.env.ENABLE_LOCALHOST_CORS === '1';
+
+    if (allowLocalhostInProd && isLocalDevOrigin(origin)) {
+      return callback(null, true);
+    }
+    // 4. Strict whitelist check against verified domains (prevents arbitrary .vercel.app reflection)
     try {
       const parsedOrigin = new URL(origin).origin;
       const isAllowed = allowedOrigins.some((allowed) => {

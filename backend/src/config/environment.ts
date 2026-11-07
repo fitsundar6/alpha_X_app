@@ -20,6 +20,10 @@ const envSchema = z
     JWT_ACCESS_EXPIRES_IN: z.string().default('30d'),
     JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
     CORS_ORIGIN: z.string().default('https://alpha-x-app.vercel.app,https://alphaxgym.com'),
+    ENABLE_LOCALHOST_CORS: z
+      .string()
+      .default('false')
+      .transform((val) => val.toLowerCase() === 'true' || val === '1'),
     WGER_API_URL: z.string().default('https://wger.de/api/v2'),
     EXERCISE_DB_API_KEY: z.string().optional(),
     GEMINI_API_KEY: z.string().optional(),
