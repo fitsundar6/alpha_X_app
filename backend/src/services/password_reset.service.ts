@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { env } from '../config/environment';
 import { prisma } from '../config/prisma';
 import { adminAuthService } from '../modules/auth/admin_auth.service';
+import { refreshTokenService } from '../modules/auth/refresh_token.service';
 import { emailService } from './email.service';
 import { logActivity } from '../utils/serverLogger';
 import { maskEmail } from '../utils/pii_mask';
@@ -31,6 +32,8 @@ export interface ResetPasswordResult {
   success: boolean;
   message: string;
   error?: string;
+  /** F-04: Updated tokenVersion after password change. Used to mint a fresh JWT for the current user. */
+  tokenVersion?: number;
 }
 
 export interface AdminResetCodeEntry {
@@ -406,20 +409,37 @@ export class PasswordResetService {
         // Hash client password with bcrypt (10 rounds) matching standard registration
         const newHash = await bcrypt.hash(newPassword, 10);
 
-        // Atomic conditional update ensuring token has not been consumed by a concurrent instance
-        const updateResult = await prisma.user.updateMany({
-          where: {
-            id: decoded.userId,
-            passwordHash: {
-              endsWith: decoded.hashSnippet,
+        const updateResult = await prisma.$transaction(async (tx) => {
+          // 1. User-first row lock using SELECT ... FOR UPDATE
+          const lockedUsers = await tx.$queryRaw<Array<{ id: string; passwordHash: string | null }>>`
+            SELECT id, "passwordHash" FROM "users" WHERE id = ${decoded.userId} FOR UPDATE;
+          `;
+
+          if (!lockedUsers || lockedUsers.length === 0) {
+            return { notFound: true, mismatch: false };
+          }
+
+          const user = lockedUsers[0];
+          if (!user.passwordHash || !user.passwordHash.endsWith(decoded.hashSnippet)) {
+            return { notFound: false, mismatch: true };
+          }
+
+          // 2. Atomic password update + tokenVersion increment
+          await tx.user.update({
+            where: { id: decoded.userId },
+            data: {
+              passwordHash: newHash,
+              tokenVersion: { increment: 1 },
             },
-          },
-          data: {
-            passwordHash: newHash,
-          },
+          });
+
+          // 3. Atomically revoke all active refresh tokens for this user
+          await refreshTokenService.revokeAllUserSessions(decoded.userId, 'PASSWORD_RESET', tx);
+
+          return { notFound: false, mismatch: false, success: true };
         });
 
-        if (updateResult.count === 0) {
+        if (updateResult.notFound || updateResult.mismatch) {
           return {
             success: false,
             error: 'TOKEN_ALREADY_USED',
@@ -588,18 +608,28 @@ export class PasswordResetService {
     }
 
     const newHash = await bcrypt.hash(tempPassword, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: newHash,
-        mustChangePassword: true,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      // 1. User-first lock using SELECT ... FOR UPDATE
+      await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${user.id} FOR UPDATE;`;
 
-    // Invalidate any active reset codes in DB
-    await prisma.passwordResetCode.updateMany({
-      where: { userId: user.id, usedAt: null },
-      data: { usedAt: new Date() },
+      // 2. Increment tokenVersion & enforce mustChangePassword
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: newHash,
+          mustChangePassword: true,
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      // 3. Revoke all active refresh tokens for this user
+      await refreshTokenService.revokeAllUserSessions(user.id, 'PASSWORD_RESET', tx);
+
+      // 4. Invalidate any active reset codes in DB
+      await tx.passwordResetCode.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
     });
 
     logActivity({
@@ -682,7 +712,20 @@ export class PasswordResetService {
 
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Query active code with FOR UPDATE row lock to serialize concurrent attempts across all backend instances
+        // 1. Acquire User row lock FIRST (deterministic lock ordering)
+        const lockedUsers = await tx.$queryRaw<Array<{ id: string; email: string }>>`
+          SELECT id, email FROM "users" WHERE id = ${user.id} FOR UPDATE;
+        `;
+
+        if (!lockedUsers || lockedUsers.length === 0) {
+          return {
+            success: false,
+            error: 'USER_NOT_FOUND',
+            message: 'User account not found.',
+          };
+        }
+
+        // 2. Query active code with FOR UPDATE row lock to serialize concurrent attempts across all backend instances
         const activeCodes = await tx.$queryRaw<
           Array<{
             id: string;
@@ -700,7 +743,7 @@ export class PasswordResetService {
           FOR UPDATE
         `;
 
-        if (!activeCodes || activeCodes.length === 0) {
+        if (!activeCodes || activeCodes.length === 0 || activeCodes[0].usedAt !== null) {
           return {
             success: false,
             error: 'CODE_ALREADY_USED',
@@ -779,8 +822,12 @@ export class PasswordResetService {
           data: {
             passwordHash: newHash,
             mustChangePassword: false,
+            tokenVersion: { increment: 1 },
           },
         });
+
+        // Phase 7: Revoke all existing refresh token sessions for this user
+        await refreshTokenService.revokeAllUserSessions(user.id, 'PASSWORD_RESET', tx);
 
         return {
           success: true,
@@ -854,51 +901,87 @@ export class PasswordResetService {
       };
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, passwordHash: true },
-    });
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. User-first FOR UPDATE lock (deterministic lock ordering)
+        const lockedUsers = await tx.$queryRaw<
+          Array<{ id: string; email: string; passwordHash: string | null; tokenVersion: number }>
+        >`
+          SELECT id, email, "passwordHash", "tokenVersion" FROM "users" WHERE id = ${userId} FOR UPDATE;
+        `;
 
-    if (!user || !user.passwordHash) {
+        if (!lockedUsers || lockedUsers.length === 0) {
+          return {
+            success: false,
+            error: 'USER_NOT_FOUND',
+            message: 'User account not found.',
+          };
+        }
+
+        const user = lockedUsers[0];
+        if (!user.passwordHash) {
+          return {
+            success: false,
+            error: 'USER_NOT_FOUND',
+            message: 'User account not found.',
+          };
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!isMatch) {
+          return {
+            success: false,
+            error: 'INVALID_CREDENTIALS',
+            message: 'Current password is incorrect.',
+          };
+        }
+
+        const newHash = await bcrypt.hash(newPassword, 10);
+        const updatedUser = await tx.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: newHash,
+            mustChangePassword: false,
+            // F-04: Increment tokenVersion to invalidate all previously issued access tokens.
+            tokenVersion: { increment: 1 },
+          },
+          select: { tokenVersion: true },
+        });
+
+        // Phase 7: Revoke all existing refresh token sessions for this user
+        await refreshTokenService.revokeAllUserSessions(user.id, 'PASSWORD_CHANGED', tx);
+
+        logActivity({
+          statusCode: 200,
+          activity: 'USER_PASSWORD_CHANGED_SUCCESS',
+          reason: `Password successfully updated by user ${maskEmail(user.email)}`,
+          details: {
+            recipient: maskEmail(user.email),
+            userId: user.id,
+          },
+        });
+
+        return {
+          success: true,
+          message: 'Password has been successfully updated.',
+          tokenVersion: updatedUser.tokenVersion,
+        };
+      });
+
+      return result;
+    } catch (err: any) {
+      logActivity({
+        statusCode: 500,
+        activity: 'USER_PASSWORD_CHANGE_FAILED',
+        reason: `Failed to change password: ${err?.message || err}`,
+        error: err,
+      });
       return {
         success: false,
-        error: 'USER_NOT_FOUND',
-        message: 'User account not found.',
+        error: 'INTERNAL_ERROR',
+        message: 'Failed to update password. Please try again or contact support.',
       };
     }
-
-    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isMatch) {
-      return {
-        success: false,
-        error: 'INVALID_CREDENTIALS',
-        message: 'Current password is incorrect.',
-      };
-    }
-
-    const newHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: newHash,
-        mustChangePassword: false,
-      },
-    });
-
-    logActivity({
-      statusCode: 200,
-      activity: 'USER_PASSWORD_CHANGED_SUCCESS',
-      reason: `Password successfully updated by user ${maskEmail(user.email)}`,
-      details: {
-        recipient: maskEmail(user.email),
-        userId: user.id,
-      },
-    });
-
-    return {
-      success: true,
-      message: 'Password has been successfully updated.',
-    };
   }
 }
 

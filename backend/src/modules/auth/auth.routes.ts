@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { requireAuth } from '../../middlewares/auth';
 import { sendSuccess, sendError } from '../../utils/responseEnvelope';
 import { UserRole, UserStatus } from '../../constants/roles';
@@ -8,6 +9,7 @@ import { env } from '../../config/environment';
 import { HttpStatus } from '../../constants/httpStatus';
 import rateLimit from 'express-rate-limit';
 import { adminAuthService } from './admin_auth.service';
+import { refreshTokenService } from './refresh_token.service';
 import { prisma } from '../../config/prisma';
 import { passwordResetService } from '../../services/password_reset.service';
 import { emailService } from '../../services/email.service';
@@ -122,6 +124,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
   let rejectionReason: string | null = null;
   let rejectedAt: string | null = null;
   let approvedAt: string | null = null;
+  let mustChangePassword = false;
 
   if (!isMasterAdmin) {
     const dbUser = await prisma.user.findUnique({
@@ -131,6 +134,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
         rejectionReason: true,
         rejectedAt: true,
         approvedAt: true,
+        mustChangePassword: true,
       },
     });
     if (dbUser) {
@@ -138,6 +142,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
       rejectionReason = dbUser.rejectionReason;
       rejectedAt = dbUser.rejectedAt ? dbUser.rejectedAt.toISOString() : null;
       approvedAt = dbUser.approvedAt ? dbUser.approvedAt.toISOString() : null;
+      mustChangePassword = dbUser.mustChangePassword ?? false;
     }
 
     const dbProfile = await prisma.clientProfile.findUnique({
@@ -159,6 +164,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     rejectionReason,
     rejectedAt,
     approvedAt,
+    mustChangePassword,
     clientId: profileData?.clientId ?? (role === UserRole.ADMIN ? 'AXG-ADMIN' : null),
     assessmentCompleted: profileData?.onboardingCompleted ?? false,
     onboardingCompleted: profileData?.onboardingCompleted ?? false,
@@ -169,76 +175,207 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/auth/refresh
- * Refreshes an expired or existing valid session token.
- * Accepts Authorization Bearer token (including tokens expired within 30-day grace period).
- * Returns a fresh 30-day JWT access token.
+ * Refreshes a valid, non-expired session token for the currently authenticated user.
+ * F-04: Requires a currently-valid (non-expired) token. The 30-day grace period for
+ * expired tokens has been removed. Expired tokens must re-authenticate via /login.
+ * Returns a fresh JWT with the current tokenVersion embedded.
+ */
+/**
+ * POST /api/v1/auth/refresh
+ * Phase 7: Atomic single-use refresh token rotation.
+ * Accepts { refreshToken } in request body, rotates the token atomically in PostgreSQL,
+ * and issues a new 15-minute access token and new 30-day refresh token.
+ * Master Admin (BUG-04) continues using dedicated durable revocation via Authorization header.
  */
 router.post('/refresh', async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    sendError(res, 'UNAUTHORIZED', 'Missing Authorization header', HttpStatus.UNAUTHORIZED);
-    return;
-  }
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, { ignoreExpiration: true }) as {
-      id: string;
-      email: string;
-      role?: UserRole;
-      exp?: number;
-    };
-    const expTimeMs = (decoded.exp || 0) * 1000;
-    const gracePeriodMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-    if (Date.now() - expTimeMs > gracePeriodMs) {
-      sendError(res, 'TOKEN_EXPIRED', 'Session has expired beyond recovery. Please log in again.', HttpStatus.UNAUTHORIZED);
-      return;
-    }
+  const { refreshToken, deviceInfo } = req.body || {};
 
-    const normalizedEmail = (decoded.email || '').trim().toLowerCase();
-    const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+  // Phase 7 Client Refresh Token Flow
+  if (refreshToken && typeof refreshToken === 'string' && refreshToken.trim().length > 0) {
+    try {
+      const result = await refreshTokenService.rotateRefreshToken(
+        refreshToken,
+        deviceInfo || (req.headers['user-agent'] as string)
+      );
 
-    let user: any = null;
-    let clientId: string | null = null;
-    if (isMasterAdmin) {
-      const adminId = env.ADMIN_ID || `admin_${env.ADMIN_EMAIL.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
-      user = { id: adminId, email: env.ADMIN_EMAIL, role: UserRole.ADMIN, name: 'Alpha X Administrator' };
-      clientId = 'AXG-ADMIN';
-    } else {
-      user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-        include: { clientProfile: true },
-      });
-      if (!user) {
-        sendError(res, 'USER_NOT_FOUND', 'User account not found', HttpStatus.UNAUTHORIZED);
+      if (result.status === 'SUCCESS') {
+        sendSuccess(res, result.data, HttpStatus.OK, 'Token refreshed successfully');
         return;
       }
-      clientId = user.clientProfile?.clientId ?? null;
+
+      sendError(res, result.errorCode, result.message, result.httpStatus);
+      return;
+    } catch (err: any) {
+      sendError(
+        res,
+        'INTERNAL_ERROR',
+        'Token refresh failed',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        undefined,
+        err
+      );
+      return;
     }
+  }
 
-    const effectiveRole = isMasterAdmin ? UserRole.ADMIN : UserRole.CLIENT;
-    const newToken = jwt.sign(
-      {
-        id: user.id,
-        email: normalizedEmail,
-        role: effectiveRole,
-      },
-      env.JWT_ACCESS_SECRET,
-      {
-        expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
+  // Check for Master Admin Bearer token refresh (BUG-04 preservation)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as {
+        id: string;
+        email: string;
+        role?: UserRole;
+        tokenVersion?: number;
+        sessionId?: string;
+      };
+
+      const normalizedEmail = (decoded.email || '').trim().toLowerCase();
+      const isMasterAdmin =
+        normalizedEmail.length > 0 &&
+        normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
+
+      if (isMasterAdmin) {
+        // BUG-04: Master Admin session revocation validation on refresh (durable PostgreSQL backed)
+        try {
+          const isRevoked = await adminAuthService.isRevoked(decoded.sessionId, token);
+          if (isRevoked) {
+            sendError(
+              res,
+              'TOKEN_REVOKED',
+              'Your session has been revoked. Please log in again.',
+              HttpStatus.UNAUTHORIZED
+            );
+            return;
+          }
+        } catch (err: any) {
+          sendError(
+            res,
+            'AUTH_SERVICE_UNAVAILABLE',
+            'Authentication verification service is temporarily unavailable.',
+            HttpStatus.SERVICE_UNAVAILABLE
+          );
+          return;
+        }
+
+        const adminId =
+          env.ADMIN_ID ||
+          `admin_${env.ADMIN_EMAIL.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
+        const newAdminSessionId = decoded.sessionId || crypto.randomUUID();
+
+        const newToken = jwt.sign(
+          {
+            id: adminId,
+            email: env.ADMIN_EMAIL.trim().toLowerCase(),
+            role: UserRole.ADMIN,
+            sessionId: newAdminSessionId,
+          },
+          env.JWT_ACCESS_SECRET,
+          {
+            expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
+          }
+        );
+
+        sendSuccess(res, {
+          token: newToken,
+          mustChangePassword: false,
+          user: {
+            id: adminId,
+            email: env.ADMIN_EMAIL,
+            role: UserRole.ADMIN,
+            clientId: 'AXG-ADMIN',
+            mustChangePassword: false,
+            sessionId: newAdminSessionId,
+          },
+        });
+        return;
       }
-    );
 
-    sendSuccess(res, {
-      token: newToken,
-      user: {
-        id: user.id,
-        email: normalizedEmail,
-        role: effectiveRole,
-        clientId,
-      },
-    });
+      // If client attempts to use an access token as a refresh token: REJECT
+      sendError(
+        res,
+        'MISSING_REFRESH_TOKEN',
+        'Refresh tokens must be sent in the request body as { refreshToken: string }. Access tokens cannot be used to refresh sessions.',
+        HttpStatus.BAD_REQUEST
+      );
+      return;
+    } catch (err: any) {
+      sendError(
+        res,
+        'INVALID_TOKEN',
+        'Session token is invalid or expired. Please log in again.',
+        HttpStatus.UNAUTHORIZED
+      );
+      return;
+    }
+  }
+
+  sendError(
+    res,
+    'MISSING_REFRESH_TOKEN',
+    'A valid refreshToken must be provided in the request body.',
+    HttpStatus.BAD_REQUEST
+  );
+});
+
+/**
+ * POST /api/v1/auth/logout
+ * F-04 / Phase 7: Authenticated server-side logout.
+ * - Single-device: revokes only current sessionId refresh tokens.
+ * - All-devices: locks user, increments tokenVersion, and revokes all refresh tokens.
+ * - BUG-04: Master Admin revokes the current session and token immediately in PostgreSQL.
+ */
+router.post('/logout', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+  // BUG-04: Master Admin session revocation upon logout (durable PostgreSQL backed)
+  if (user.role === UserRole.ADMIN) {
+    const rawToken = req.headers.authorization?.split(' ')[1];
+    const sid = (req as any).adminSessionId;
+    try {
+      await adminAuthService.revokeAdminSession(sid, rawToken);
+    } catch (err: any) {
+      // Fail safely — allow response so client clears local credentials
+    }
+    sendSuccess(res, { message: 'Logged out successfully.' });
+    return;
+  }
+
+  // Client logout
+  const allDevices = req.body?.allDevices === true;
+  const clientSessionId = (req as any).tokenSessionId || (req as any).sessionId;
+  try {
+    if (allDevices) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${user.id} FOR UPDATE;`;
+        await tx.user.update({
+          where: { id: user.id },
+          data: { tokenVersion: { increment: 1 } },
+        });
+        await refreshTokenService.revokeAllUserSessions(user.id, 'LOGOUT_ALL', tx);
+      });
+    } else {
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "users" WHERE id = ${user.id} FOR UPDATE;`;
+        if (clientSessionId && (tx as any).refreshToken) {
+          await (tx as any).refreshToken.updateMany({
+            where: {
+              userId: user.id,
+              sessionId: clientSessionId,
+              isRevoked: false,
+            },
+            data: {
+              isRevoked: true,
+              revokedAt: new Date(),
+              revokedReason: 'LOGOUT_SINGLE',
+            },
+          });
+        }
+      });
+    }
+    sendSuccess(res, { message: 'Logged out successfully.' });
   } catch (err: any) {
-    sendError(res, 'INVALID_TOKEN', 'Session token is invalid or corrupted', HttpStatus.UNAUTHORIZED, undefined, err);
+    sendError(res, 'INTERNAL_ERROR', 'Logout failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }
 });
 
@@ -418,6 +555,7 @@ router.post('/register', registerRateLimiter, async (req: Request, res: Response
         id: newUser.id,
         email: newUser.email,
         role: newUser.role,
+        tokenVersion: newUser.tokenVersion ?? 0,
       },
       env.JWT_ACCESS_SECRET,
       {
@@ -530,6 +668,7 @@ router.post('/google', async (req: Request, res: Response) => {
           id: existingUser.id,
           email: existingUser.email,
           role: existingUser.role,
+          tokenVersion: (existingUser as any).tokenVersion ?? 0,
         },
         env.JWT_ACCESS_SECRET,
         {
@@ -630,6 +769,7 @@ router.post('/google', async (req: Request, res: Response) => {
         id: newUser.id,
         email: newUser.email,
         role: newUser.role,
+        tokenVersion: newUser.tokenVersion ?? 0,
       },
       env.JWT_ACCESS_SECRET,
       {
@@ -785,23 +925,53 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
       data: { lastLoginAt: new Date() },
     }).catch(() => {});
 
-    // Generate JWT
-    const token = jwt.sign(
-      {
-        id: dbUser.id,
-        email: dbUser.email,
-        role: dbUser.role,
-      },
-      env.JWT_ACCESS_SECRET,
-      {
-        expiresIn: env.JWT_ACCESS_EXPIRES_IN as any,
-      }
-    );
+    // Phase 7: Issue short-lived access token (15m) and persistent refresh token (30d)
+    let token: string;
+    let refreshToken: string | null = null;
+    let sessionId: string | null = null;
+
+    if (dbUser.mustChangePassword) {
+      token = jwt.sign(
+        {
+          id: dbUser.id,
+          email: dbUser.email,
+          role: dbUser.role,
+          tokenVersion: (dbUser as any).tokenVersion ?? 0,
+          mustChangePassword: true,
+          scope: 'FORCE_PASSWORD_CHANGE',
+        },
+        env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+    } else {
+      const initialSession = await refreshTokenService.createInitialRefreshToken(
+        dbUser.id,
+        (dbUser as any).tokenVersion ?? 0,
+        (req.body?.deviceInfo as string) || (req.headers['user-agent'] as string)
+      );
+      refreshToken = initialSession.rawRefreshToken;
+      sessionId = initialSession.sessionId;
+
+      token = jwt.sign(
+        {
+          id: dbUser.id,
+          email: dbUser.email,
+          role: dbUser.role,
+          tokenVersion: (dbUser as any).tokenVersion ?? 0,
+          sessionId: initialSession.sessionId,
+          familyId: initialSession.familyId,
+        },
+        env.JWT_ACCESS_SECRET,
+        { expiresIn: '15m' }
+      );
+    }
 
     sendSuccess(
       res,
       {
         token,
+        refreshToken,
+        sessionId,
         clientId: resolvedClientId,
         status: dbUser.status,
         rejectionReason: dbUser.rejectionReason || null,
@@ -1225,11 +1395,13 @@ router.post('/reset-password-with-code', forgotPasswordRateLimiter, async (req: 
  */
 router.get('/gym-contact-info', async (_req: Request, res: Response) => {
   try {
+    const publicSupportEmail = env.SUPPORT_EMAIL || 'support@alphaxgym.com';
     sendSuccess(res, {
       gymName: 'Alpha X Gym',
-      adminEmail: env.ADMIN_EMAIL,
-      instructions: 'Visit the Alpha X Gym front desk or contact your gym administrator to verify your athlete identity and receive a secure single-use reset code.',
-      verificationMethod: 'In-Person or Direct Administrator Verification',
+      supportEmail: publicSupportEmail,
+      adminEmail: publicSupportEmail, // Backwards-compatible alias for existing mobile screens
+      instructions: 'Visit the Alpha X Gym front desk or contact gym support to verify your athlete identity and receive a secure single-use reset code.',
+      verificationMethod: 'In-Person or Direct Support Verification',
       emailConfigured: emailService.isConfigured(),
     }, HttpStatus.OK);
   } catch (err: any) {
@@ -1240,6 +1412,8 @@ router.get('/gym-contact-info', async (_req: Request, res: Response) => {
 /**
  * POST /api/v1/auth/change-password
  * Authenticated password update (used for user settings and forced password changes).
+ * F-04: After a successful password change, tokenVersion is incremented. A fresh JWT
+ * is issued and returned in the response so the current user is not stranded.
  */
 router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -1271,7 +1445,37 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
       return;
     }
 
-    sendSuccess(res, { message: result.message }, HttpStatus.OK);
+    // Phase 7: Issue a fresh 15-minute JWT and 30-day refresh token with the updated tokenVersion
+    const newTokenVersion = result.tokenVersion ?? 0;
+    const initialSession = await refreshTokenService.createInitialRefreshToken(
+      req.user!.id,
+      newTokenVersion,
+      (req.body?.deviceInfo as string) || (req.headers['user-agent'] as string)
+    );
+
+    const freshToken = jwt.sign(
+      {
+        id: req.user!.id,
+        email: req.user!.email,
+        role: req.user!.role,
+        tokenVersion: newTokenVersion,
+        sessionId: initialSession.sessionId,
+        familyId: initialSession.familyId,
+      },
+      env.JWT_ACCESS_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    sendSuccess(
+      res,
+      {
+        message: result.message,
+        token: freshToken,
+        refreshToken: initialSession.rawRefreshToken,
+        sessionId: initialSession.sessionId,
+      },
+      HttpStatus.OK
+    );
   } catch (err: any) {
     sendError(res, 'INTERNAL_ERROR', 'Password change failed', HttpStatus.INTERNAL_SERVER_ERROR, undefined, err);
   }

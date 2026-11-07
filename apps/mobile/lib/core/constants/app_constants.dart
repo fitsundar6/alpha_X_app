@@ -40,8 +40,8 @@ class AppConstants {
   static const Duration connectTimeout = Duration(seconds: 15);
   static const Duration receiveTimeout = Duration(seconds: 15);
 
-  /// Resolves relative image URLs (e.g. /api/v1/transformation-photos/...) to absolute URLs
-  /// with JWT query token for authentication in standard Image.network widgets.
+  /// Resolves relative image URLs (e.g. /api/v1/transformation-photos/...) to absolute URLs.
+  /// Authentication must be sent via standard HTTP Authorization Bearer headers on Image.network.
   static String resolveImageUrl(String? relativeOrAbsoluteUrl, {String? authToken}) {
     if (relativeOrAbsoluteUrl == null || relativeOrAbsoluteUrl.trim().isEmpty) return '';
     final trimmed = relativeOrAbsoluteUrl.trim();
@@ -55,10 +55,6 @@ class AppConstants {
       base = base.substring(0, base.length - '/api'.length);
     }
     final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
-    if (authToken != null && authToken.isNotEmpty && !cleanPath.contains('token=')) {
-      final sep = cleanPath.contains('?') ? '&' : '?';
-      return '$base$cleanPath${sep}token=$authToken';
-    }
     return '$base$cleanPath';
   }
 }

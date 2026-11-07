@@ -2,7 +2,7 @@ import express, { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/environment';
 import { UserRole } from '../../constants/roles';
-import { requireAuth, requireAdmin } from '../../middlewares/auth';
+import { requireAuth, requireAdmin, requireApprovedUser } from '../../middlewares/auth';
 import { foodController } from './food.controller';
 
 const router = Router();
@@ -47,12 +47,12 @@ router.get('/', optionalAuth, (req, res) => foodController.searchFoods(req, res)
 router.get('/:id', optionalAuth, (req, res) => foodController.getFoodById(req, res));
 
 // AI Food Camera Scanner endpoint (strictly authenticated; user quota and abuse protection)
-router.post('/ai-scan', requireAuth, express.json({ limit: '10mb' }), (req, res) => foodController.analyzeFoodImage(req, res));
+router.post('/ai-scan', requireAuth, requireApprovedUser, express.json({ limit: '10mb' }), (req, res) => foodController.analyzeFoodImage(req, res));
 
-// Create custom food (requires authenticated user; derived strictly from token)
-router.post('/', requireAuth, (req, res) => foodController.createCustomFood(req, res));
+// Create custom food (requires authenticated approved user; derived strictly from token)
+router.post('/', requireAuth, requireApprovedUser, (req, res) => foodController.createCustomFood(req, res));
 
-// Delete custom food (requires authenticated user; creator or admin only)
-router.delete('/:id', requireAuth, (req, res) => foodController.deleteFood(req, res));
+// Delete custom food (requires authenticated approved user; creator or admin only)
+router.delete('/:id', requireAuth, requireApprovedUser, (req, res) => foodController.deleteFood(req, res));
 
 export const foodRoutes = router;

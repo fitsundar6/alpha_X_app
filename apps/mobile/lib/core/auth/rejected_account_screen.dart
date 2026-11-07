@@ -84,7 +84,7 @@ class _RejectedAccountScreenState extends State<RejectedAccountScreen> {
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
-            _infoRow(Icons.email_outlined, 'Admin Email', AdminConfig.adminEmail),
+            _infoRow(Icons.email_outlined, 'Support Email', AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'support@alphaxgym.com'),
             const SizedBox(height: 10),
             _infoRow(Icons.phone_outlined, 'Help Desk', '+1 (555) ALPHA-01'),
             const SizedBox(height: 10),

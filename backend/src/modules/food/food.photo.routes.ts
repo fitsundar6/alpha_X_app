@@ -27,9 +27,9 @@ router.get('/cleanup/stats', requireAuth, requireAdmin, (req, res) => foodPhotoC
 // 6. Endpoint for retrieving photo metadata (Auth required)
 router.get('/:id', requireAuth, (req, res) => foodPhotoController.getMealPhotoMetadata(req, res));
 
-// 7. Endpoint for streaming photo binary securely (Auth via header or ?token=)
-router.get('/:id/image', (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
-router.get('/:id/file', (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
+// 7. Endpoint for streaming photo binary securely (Standard Authorization Bearer required)
+router.get('/:id/image', requireAuth, (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
+router.get('/:id/file', requireAuth, (req, res) => foodPhotoController.streamMealPhotoImage(req, res));
 
 // 8. Delete photo
 router.delete('/:id', requireAuth, (req, res) => foodPhotoController.deleteMealPhoto(req, res));

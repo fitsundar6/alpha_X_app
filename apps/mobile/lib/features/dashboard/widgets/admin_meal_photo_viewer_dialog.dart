@@ -70,7 +70,7 @@ class _AdminMealPhotoViewerDialogState extends State<AdminMealPhotoViewerDialog>
           ? photoUrl
           : (photoUrl.isNotEmpty ? '$base$photoUrl' : '$base/food-photos/$photoId/image');
 
-      final uri = Uri.parse('$fullUrl?token=$token');
+      final uri = Uri.parse(fullUrl);
       final headers = <String, String>{};
       if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';

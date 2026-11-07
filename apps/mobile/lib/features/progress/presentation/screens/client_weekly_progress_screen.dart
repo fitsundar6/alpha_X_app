@@ -1199,10 +1199,12 @@ class _ClientWeeklyProgressScreenState extends State<ClientWeeklyProgressScreen>
             height: 120,
             width: double.infinity,
             child: () {
-              final resolvedUrl = AppConstants.resolveImageUrl(photoUrl, authToken: AuthService().token);
+              final token = AuthService().token;
+              final resolvedUrl = AppConstants.resolveImageUrl(photoUrl, authToken: token);
               if (resolvedUrl.isNotEmpty) {
                 return Image.network(
                   resolvedUrl,
+                  headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => _buildNoPhotoPlaceholder(),
                   loadingBuilder: (ctx, child, progress) {

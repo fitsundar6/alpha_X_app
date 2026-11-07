@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
+import 'package:alpha_x_gym/core/auth/forced_change_password_screen.dart';
 import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/activity/data/repositories/activity_repository.dart';
@@ -62,6 +63,11 @@ class _RoleRouterState extends State<RoleRouter> {
           child: CircularProgressIndicator(color: AppColors.primaryRed),
         ),
       );
+    }
+
+    // Forced Password Change Guard: client must update temporary password first
+    if (_auth.mustChangePassword) {
+      return const ForcedChangePasswordScreen();
     }
 
     final role = _auth.currentRole;

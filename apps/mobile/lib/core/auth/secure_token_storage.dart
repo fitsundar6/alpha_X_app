@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// - Test / Fallback: Graceful degradation for headless unit test harnesses
 class SecureTokenStorage {
   static const String _tokenKey = 'alpha_x_secure_session_jwt_token';
+  static const String _refreshTokenKey = 'alpha_x_refresh_token';
   static const String _sessionDataKey = 'alpha_x_secure_session_data';
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
@@ -95,6 +96,74 @@ class SecureTokenStorage {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenKey);
+    } catch (_) {}
+  }
+
+  /// Securely stores the refresh token (Phase 8).
+  /// Production: FlutterSecureStorage (iOS Keychain / Android KeyStore).
+  /// Test: SharedPreferences fallback.
+  static Future<void> writeRefreshToken(String token) async {
+    if (_isTestEnvironment) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_refreshTokenKey, token);
+      } catch (_) {}
+      return;
+    }
+    try {
+      await _storage.write(key: _refreshTokenKey, value: token);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[SecureTokenStorage] writeRefreshToken fallback: $e');
+      }
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_refreshTokenKey, token);
+      } catch (_) {}
+    }
+  }
+
+  /// Securely reads the refresh token (Phase 8).
+  static Future<String?> readRefreshToken() async {
+    if (_isTestEnvironment) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        return prefs.getString(_refreshTokenKey);
+      } catch (_) {
+        return null;
+      }
+    }
+    try {
+      final token = await _storage.read(key: _refreshTokenKey);
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_refreshTokenKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Securely deletes the refresh token (Phase 8).
+  static Future<void> deleteRefreshToken() async {
+    if (_isTestEnvironment) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_refreshTokenKey);
+      } catch (_) {}
+      return;
+    }
+    try {
+      await _storage.delete(key: _refreshTokenKey);
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_refreshTokenKey);
     } catch (_) {}
   }
 

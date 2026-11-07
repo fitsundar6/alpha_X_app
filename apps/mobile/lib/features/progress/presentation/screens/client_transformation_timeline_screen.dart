@@ -156,6 +156,11 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
     return AppConstants.resolveImageUrl(url, authToken: AuthService().token);
   }
 
+  Map<String, String>? get _authHeaders {
+    final token = AuthService().token;
+    return token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null;
+  }
+
   Future<void> _fetchMilestones({int? newlyUploadedWeek}) async {
     setState(() {
       _isLoading = true;
@@ -659,6 +664,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
                 maxScale: 4.0,
                 child: Image.network(
                   imageUrl,
+                  headers: _authHeaders,
                   fit: BoxFit.contain,
                   loadingBuilder: (ctx, child, progress) {
                     if (progress == null) return child;
@@ -1307,6 +1313,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
 
           final beforeWidget = Image.network(
             resolvedBefore,
+            headers: _authHeaders,
             fit: BoxFit.cover,
             width: totalWidth,
             height: constraints.maxHeight,
@@ -1315,6 +1322,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
 
           final afterWidget = Image.network(
             resolvedAfter,
+            headers: _authHeaders,
             fit: BoxFit.cover,
             width: totalWidth,
             height: constraints.maxHeight,
@@ -1554,6 +1562,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
                     ),
                     child: Image.network(
                       resolved,
+                      headers: _authHeaders,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => _buildPhotoErrorPlaceholder(angle),
                       loadingBuilder: (ctx, child, progress) {
@@ -1826,6 +1835,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
               Positioned.fill(
                 child: Image.network(
                   resolved,
+                  headers: _authHeaders,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => _buildPhotoErrorPlaceholder(angle),
                   loadingBuilder: (ctx, child, progress) {

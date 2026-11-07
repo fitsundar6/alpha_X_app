@@ -31,6 +31,159 @@ export interface MealScanAnalysisResponse {
   disclaimer: string;
 }
 
+export const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type AllowedImageMimeType = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
+
+export const MIN_DECODED_IMAGE_BYTES = 1024; // 1 KB
+export const MAX_DECODED_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+// Standard base64 regex with optional valid padding
+const BASE64_REGEX = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Detects image MIME type from binary magic bytes (file signature).
+ *
+ * Supported formats:
+ * - JPEG: FF D8 FF
+ * - PNG:  89 50 4E 47 0D 0A 1A 0A
+ * - WebP: RIFF (bytes 0..3) ... WEBP (bytes 8..11)
+ */
+export function detectImageSignature(buffer: Buffer): AllowedImageMimeType | null {
+  if (!buffer || buffer.length < 12) {
+    return null;
+  }
+
+  // JPEG signature: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return 'image/png';
+  }
+
+  // WebP signature: RIFF at 0..3 and WEBP at 8..11
+  if (
+    buffer[0] === 0x52 && // R
+    buffer[1] === 0x49 && // I
+    buffer[2] === 0x46 && // F
+    buffer[3] === 0x46 && // F
+    buffer[8] === 0x57 && // W
+    buffer[9] === 0x45 && // E
+    buffer[10] === 0x42 && // B
+    buffer[11] === 0x50 // P
+  ) {
+    return 'image/webp';
+  }
+
+  return null;
+}
+
+export interface ValidatedImagePayload {
+  cleanBase64: string;
+  canonicalMimeType: AllowedImageMimeType;
+  buffer: Buffer;
+  byteLength: number;
+}
+
+/**
+ * Validates, checks signatures, and decodes an incoming camera image payload.
+ *
+ * Requirements enforced:
+ * 1. Allowed MIME types: image/jpeg, image/png, image/webp.
+ * 2. Strict base64 character set and padding verification.
+ * 3. Safe decoding without unhandled exceptions.
+ * 4. Image size between 1KB and 8MB.
+ * 5. Strict magic-byte file signature verification matching declared MIME type.
+ *
+ * Rejects malformed, invalid, or mismatched image inputs before AI processing.
+ */
+export function validateAndDecodeImage(
+  rawImage: string,
+  rawMimeType: string
+): ValidatedImagePayload {
+  if (!rawImage || typeof rawImage !== 'string' || !rawImage.trim()) {
+    throw new Error('Image data is required.');
+  }
+
+  // 1. Normalize and validate MIME type
+  const normalizedMime = (rawMimeType || '').trim().toLowerCase();
+  const canonicalMime = normalizedMime === 'image/jpg' ? 'image/jpeg' : normalizedMime;
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.includes(canonicalMime as AllowedImageMimeType)) {
+    throw new Error(
+      `Invalid image MIME type "${rawMimeType}". Only image/jpeg, image/png, and image/webp are supported.`
+    );
+  }
+
+  // 2. Clean and strictly validate Base64 string
+  let cleanBase64 = rawImage.trim();
+  if (cleanBase64.includes('base64,')) {
+    cleanBase64 = cleanBase64.split('base64,')[1];
+  }
+  cleanBase64 = cleanBase64.replace(/[\r\n\s]+/g, '');
+
+  if (!cleanBase64 || cleanBase64.length === 0) {
+    throw new Error('Image base64 payload is empty.');
+  }
+
+  if (cleanBase64.length % 4 !== 0 || !BASE64_REGEX.test(cleanBase64)) {
+    throw new Error('Invalid base64 encoding format in image payload.');
+  }
+
+  // 3. Decode safely into Buffer
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(cleanBase64, 'base64');
+  } catch {
+    throw new Error('Failed to decode base64 image data.');
+  }
+
+  // 4. Enforce decoded image size bounds (1KB to 8MB)
+  if (buffer.length < MIN_DECODED_IMAGE_BYTES) {
+    throw new Error(
+      `Decoded image too small (${buffer.length} bytes). Minimum size is 1KB.`
+    );
+  }
+
+  if (buffer.length > MAX_DECODED_IMAGE_BYTES) {
+    throw new Error(
+      `Decoded image too large (${buffer.length} bytes). Maximum size is 8MB.`
+    );
+  }
+
+  // 5. Verify file signature against declared MIME type
+  const detectedMime = detectImageSignature(buffer);
+  if (!detectedMime) {
+    throw new Error(
+      'Image data does not match any valid image file signature (JPEG, PNG, WebP).'
+    );
+  }
+
+  if (detectedMime !== canonicalMime) {
+    throw new Error(
+      `Image signature mismatch: declared MIME type is "${canonicalMime}" but file signature indicates "${detectedMime}".`
+    );
+  }
+
+  return {
+    cleanBase64,
+    canonicalMimeType: canonicalMime as AllowedImageMimeType,
+    buffer,
+    byteLength: buffer.length,
+  };
+}
+
 // In-memory rate limiting tracker (per user / IP)
 interface UserRateLimitState {
   minuteCount: number;
@@ -45,11 +198,59 @@ export class FoodAiService {
   private rateLimits: Map<string, UserRateLimitState> = new Map();
 
   /**
-   * Rate limiting enforcement per user/device
+   * Rate limiting enforcement per user account and client IP address.
+   *
+   * Enforces:
+   * - Max 5 scans per minute per user account.
+   * - Max 30 scans per day per user account.
+   * - Max 10 scans per minute / 60 per day per client IP (bounds distributed multi-account abuse).
+   *
+   * Note on Serverless Environments (Vercel):
+   * In a distributed serverless runtime, each lambda container maintains its own memory space.
+   * Cold starts and concurrent container scaling cause in-memory rate limits to reset per instance.
+   * This provides essential per-instance abuse protection without introducing external latency.
+   * Production deployments requiring strict distributed rate-limiting across lambdas should
+   * back this limiter with Redis/Upstash or database state.
    */
-  public checkRateLimit(userId: string): { allowed: boolean; retryAfterSeconds?: number; reason?: string } {
+  public checkRateLimit(
+    userId: string,
+    clientIp?: string
+  ): { allowed: boolean; retryAfterSeconds?: number; reason?: string } {
+    // 1. User-account scoped rate limiting (5/min, 30/day)
+    const userCheck = this.enforceRateLimitKey(
+      `user:${userId}`,
+      FoodAiService.MAX_SCANS_PER_MINUTE,
+      FoodAiService.MAX_SCANS_PER_DAY,
+      'User account'
+    );
+    if (!userCheck.allowed) {
+      return userCheck;
+    }
+
+    // 2. Client IP scoped rate limiting (10/min, 60/day across all accounts on same IP)
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+      const ipCheck = this.enforceRateLimitKey(
+        `ip:${clientIp}`,
+        10,
+        60,
+        'IP address'
+      );
+      if (!ipCheck.allowed) {
+        return ipCheck;
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  private enforceRateLimitKey(
+    key: string,
+    maxPerMinute: number,
+    maxPerDay: number,
+    scopeLabel: string
+  ): { allowed: boolean; retryAfterSeconds?: number; reason?: string } {
     const now = Date.now();
-    let state = this.rateLimits.get(userId);
+    let state = this.rateLimits.get(key);
 
     if (!state) {
       state = {
@@ -58,7 +259,7 @@ export class FoodAiService {
         dayCount: 0,
         dayReset: now + 24 * 60 * 60 * 1000,
       };
-      this.rateLimits.set(userId, state);
+      this.rateLimits.set(key, state);
     }
 
     // Reset minute window if expired
@@ -73,7 +274,7 @@ export class FoodAiService {
       state.dayReset = now + 24 * 60 * 60 * 1000;
     }
 
-    if (state.minuteCount >= FoodAiService.MAX_SCANS_PER_MINUTE) {
+    if (state.minuteCount >= maxPerMinute) {
       const waitSeconds = Math.ceil((state.minuteReset - now) / 1000);
       return {
         allowed: false,
@@ -82,10 +283,10 @@ export class FoodAiService {
       };
     }
 
-    if (state.dayCount >= FoodAiService.MAX_SCANS_PER_DAY) {
+    if (state.dayCount >= maxPerDay) {
       return {
         allowed: false,
-        reason: `Daily AI food scan limit reached (${FoodAiService.MAX_SCANS_PER_DAY} scans per day). Please log foods manually or try again tomorrow.`,
+        reason: `Daily AI food scan limit reached (${maxPerDay} scans per day). Please log foods manually or try again tomorrow.`,
       };
     }
 
@@ -101,24 +302,17 @@ export class FoodAiService {
   public async analyzeFoodImage(
     imageBase64: string,
     mimeType: string = 'image/jpeg',
-    userId: string = 'client_athlete'
+    userId: string = 'client_athlete',
+    clientIp?: string
   ): Promise<MealScanAnalysisResponse> {
     // 1. Enforce Cost Control & Rate Limiting
-    const rateLimitCheck = this.checkRateLimit(userId);
+    const rateLimitCheck = this.checkRateLimit(userId, clientIp);
     if (!rateLimitCheck.allowed) {
       throw new Error(rateLimitCheck.reason || 'Rate limit exceeded for AI food scanning.');
     }
 
-    // 2. Clean Base64 payload
-    let cleanBase64 = imageBase64.trim();
-    if (cleanBase64.includes('base64,')) {
-      cleanBase64 = cleanBase64.split('base64,')[1];
-    }
-    cleanBase64 = cleanBase64.replace(/[\r\n\s]+/g, '');
-
-    if (!cleanBase64) {
-      throw new Error('No valid image data provided for food analysis.');
-    }
+    // 2. Strict Image Validation: MIME whitelist, base64 check, buffer bounds (1KB-8MB), file signature
+    const validated = validateAndDecodeImage(imageBase64, mimeType);
 
     // 3. Try Gemini Multimodal Vision API if API Key is configured
     let rawDetections: Array<{
@@ -134,7 +328,7 @@ export class FoodAiService {
 
     if (geminiReliability.hasConfiguredKey() && !geminiReliability.isCircuitTripped()) {
       try {
-        rawDetections = await this.callGeminiVisionApi(cleanBase64, mimeType);
+        rawDetections = await this.callGeminiVisionApi(validated.cleanBase64, validated.canonicalMimeType);
       } catch (err: any) {
         const classified = classifyGeminiError(err);
         console.warn(
@@ -146,7 +340,7 @@ export class FoodAiService {
 
     // 4. Fallback: Intelligent Heuristic Food Plate Recognition
     if (!rawDetections || rawDetections.length === 0) {
-      rawDetections = await this.fallbackHeuristicDetection(cleanBase64);
+      rawDetections = await this.fallbackHeuristicDetection(validated.cleanBase64);
     }
 
     // 5. Connect and match each detected food with existing Alpha X Food Library

@@ -1886,9 +1886,9 @@ export class WorkoutRepository {
 
   async saveWorkoutRecord(clientId: string, data: Omit<StoredWorkoutRecord, 'id' | 'clientId' | 'createdAt' | 'updatedAt'>): Promise<StoredWorkoutRecord> {
     const resolvedUserId = await this.resolveUserId(clientId);
-    const scheduledDate = data.scheduledDate || getTodayISTDateString();
+    const scheduledDate = toISTDateString(data.scheduledDate) || getTodayISTDateString();
     const candidateIds = data.sessionId ? this.resolveSessionCandidateIds(data.sessionId) : [];
-    const lockKey = `${resolvedUserId}_${data.sessionId || 'session'}_${scheduledDate}`;
+    const lockKey = `${resolvedUserId}_${data.assignmentId ? `assign_${data.assignmentId}` : (data.sessionId || 'session')}_${scheduledDate}`;
 
     // Concurrency protection: prevent duplicate concurrent saves / double taps
     if (this.activeSaveLocks.has(lockKey)) {
@@ -1896,6 +1896,11 @@ export class WorkoutRepository {
     }
 
     const saveExecution = (async () => {
+      // BUG-02: Canonical database-enforced unique idempotency key
+      const idempotencyKey = data.assignmentId
+        ? `rec_${resolvedUserId}_assign_${data.assignmentId}_${scheduledDate}`
+        : `rec_${resolvedUserId}_${data.sessionId || 'adhoc'}_${scheduledDate}`;
+
       // 1. Check if session is already completed & locked for this specific scheduledDate
       if (candidateIds.length > 0) {
         try {
@@ -1908,6 +1913,12 @@ export class WorkoutRepository {
             },
           });
           if (existingLocked && existingLocked.isLocked) {
+            // Idempotent retry: Return existing canonical record if same idempotency key
+            if (existingLocked.idempotencyKey === idempotencyKey) {
+              const mapped = mapPrismaRecordToStored(existingLocked);
+              this.records.set(mapped.id, mapped);
+              return mapped;
+            }
             throw new Error(`SESSION_LOCKED: Workout session has already been completed and locked for ${scheduledDate}.`);
           }
         } catch (err: any) {
@@ -1924,6 +1935,9 @@ export class WorkoutRepository {
                  r.isLocked
         );
         if (memExistingLocked) {
+          if ((memExistingLocked as any).idempotencyKey === idempotencyKey) {
+            return memExistingLocked;
+          }
           throw new Error(`SESSION_LOCKED: Workout session has already been completed and locked for ${scheduledDate}.`);
         }
       }
@@ -1931,7 +1945,7 @@ export class WorkoutRepository {
       const id = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const now = new Date().toISOString();
 
-      const memRecord: StoredWorkoutRecord = {
+      const memRecord: StoredWorkoutRecord & { idempotencyKey?: string } = {
         ...data,
         id,
         clientId: resolvedUserId,
@@ -1941,8 +1955,8 @@ export class WorkoutRepository {
         scheduledDate,
         createdAt: now,
         updatedAt: now,
+        idempotencyKey,
       };
-      this.records.set(id, memRecord);
 
       if (data.sessionId && (data.isCompleted ?? true)) {
         for (const assign of this.assignments.values()) {
@@ -1961,63 +1975,94 @@ export class WorkoutRepository {
       }
 
       try {
-        const created = await prisma.workoutRecord.create({
-          data: {
-            clientId: resolvedUserId,
-            sessionId: data.sessionId || null,
-            assignmentId: data.assignmentId || null,
-            sessionTitle: data.sessionTitle,
-            workoutType: data.workoutType,
-            startedAt: data.startedAt ? new Date(data.startedAt) : new Date(),
-            completedAt: data.completedAt ? new Date(data.completedAt) : new Date(),
-            durationSeconds: data.durationSeconds || 0,
-            totalVolume: data.totalVolume || 0,
-            completedSetsCount: data.completedSetsCount || 0,
-            skippedSetsCount: data.skippedSetsCount || 0,
-            averageRpe: data.averageRpe,
-            averageRir: data.averageRir,
-            isCompleted: data.isCompleted ?? true,
-            isLocked: true,
-            lockedAt: new Date(),
-            scheduledDate,
-            personalRecordsJson: data.personalRecords ? JSON.stringify(data.personalRecords) : null,
-            notes: data.notes || null,
-            exerciseRecords: {
-              create: (data.exerciseRecords || []).map((er: any, idx: number) => ({
-                exerciseId: er.exerciseId,
-                exerciseName: er.exerciseName,
-                orderIndex: er.orderIndex ?? idx,
-                supersetTag: er.supersetTag || null,
-                isSkipped: er.isSkipped || false,
-                skipReason: er.skipReason || null,
-                clientNote: er.clientNote || null,
-                adminNote: er.adminNote || null,
-                setRecords: {
-                  create: (er.sets || []).map((sr: any) => ({
-                    setNumber: sr.setNumber,
-                    setType: sr.setType || 'WORKING',
-                    targetReps: sr.targetReps || null,
-                    targetWeight: sr.targetWeight || null,
-                    actualWeight: sr.actualWeight || null,
-                    actualReps: sr.actualReps || null,
-                    actualRir: sr.actualRir || null,
-                    actualRpe: sr.actualRpe || null,
-                    tempo: sr.tempo || null,
-                    isCompleted: sr.isCompleted ?? true,
-                    completedAt: sr.completedAt ? new Date(sr.completedAt) : null,
-                    notes: sr.notes || null,
-                  })),
+        let created: any;
+        try {
+          created = await prisma.workoutRecord.create({
+            data: {
+              idempotencyKey,
+              clientId: resolvedUserId,
+              sessionId: data.sessionId || null,
+              assignmentId: data.assignmentId || null,
+              sessionTitle: data.sessionTitle,
+              workoutType: data.workoutType,
+              startedAt: data.startedAt ? new Date(data.startedAt) : new Date(),
+              completedAt: data.completedAt ? new Date(data.completedAt) : new Date(),
+              durationSeconds: data.durationSeconds || 0,
+              totalVolume: data.totalVolume || 0,
+              completedSetsCount: data.completedSetsCount || 0,
+              skippedSetsCount: data.skippedSetsCount || 0,
+              averageRpe: data.averageRpe,
+              averageRir: data.averageRir,
+              isCompleted: data.isCompleted ?? true,
+              isLocked: true,
+              lockedAt: new Date(),
+              scheduledDate,
+              personalRecordsJson: data.personalRecords ? JSON.stringify(data.personalRecords) : null,
+              notes: data.notes || null,
+              exerciseRecords: {
+                create: (data.exerciseRecords || []).map((er: any, idx: number) => ({
+                  exerciseId: er.exerciseId,
+                  exerciseName: er.exerciseName,
+                  orderIndex: er.orderIndex ?? idx,
+                  supersetTag: er.supersetTag || null,
+                  isSkipped: er.isSkipped || false,
+                  skipReason: er.skipReason || null,
+                  clientNote: er.clientNote || null,
+                  adminNote: er.adminNote || null,
+                  setRecords: {
+                    create: (er.sets || []).map((sr: any) => ({
+                      setNumber: sr.setNumber,
+                      setType: sr.setType || 'WORKING',
+                      targetReps: sr.targetReps || null,
+                      targetWeight: sr.targetWeight || null,
+                      actualWeight: sr.actualWeight || null,
+                      actualReps: sr.actualReps || null,
+                      actualRir: sr.actualRir || null,
+                      actualRpe: sr.actualRpe || null,
+                      tempo: sr.tempo || null,
+                      isCompleted: sr.isCompleted ?? true,
+                      completedAt: sr.completedAt ? new Date(sr.completedAt) : null,
+                      notes: sr.notes || null,
+                    })),
+                  },
+                })),
+              },
+            },
+            include: {
+              exerciseRecords: {
+                include: { setRecords: true },
+                orderBy: { orderIndex: 'asc' },
+              },
+            },
+          });
+        } catch (createErr: any) {
+          // Concurrency / Idempotency handling: If unique constraint violation on idempotencyKey, return existing record
+          if (
+            createErr?.code === 'P2002' ||
+            (createErr?.message && (createErr.message.includes('idempotencyKey') || createErr.message.includes('Unique constraint')))
+          ) {
+            const existing = await prisma.workoutRecord.findFirst({
+              where: {
+                idempotencyKey,
+                clientId: resolvedUserId,
+                scheduledDate,
+                ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
+              },
+              include: {
+                exerciseRecords: {
+                  include: { setRecords: true },
+                  orderBy: { orderIndex: 'asc' },
                 },
-              })),
-            },
-          },
-          include: {
-            exerciseRecords: {
-              include: { setRecords: true },
-              orderBy: { orderIndex: 'asc' },
-            },
-          },
-        });
+              },
+            });
+            if (existing) {
+              const mapped = mapPrismaRecordToStored(existing);
+              this.records.set(mapped.id, mapped);
+              return mapped;
+            }
+          }
+          throw createErr;
+        }
 
         if (data.sessionId) {
           // Delete any incomplete in-progress records for this session
@@ -2071,7 +2116,9 @@ export class WorkoutRepository {
             }
           }
         }
-        return mapPrismaRecordToStored(created);
+        const stored = mapPrismaRecordToStored(created);
+        this.records.set(stored.id, stored);
+        return stored;
       } catch (e: any) {
         if (e.message && e.message.includes('SESSION_LOCKED')) {
           throw e;
@@ -2086,6 +2133,7 @@ export class WorkoutRepository {
             }
           }
         }
+        this.records.set(id, memRecord);
         return memRecord;
       }
     })();
@@ -2407,23 +2455,8 @@ export class WorkoutRepository {
       if (dbErr.message && dbErr.message.includes('SESSION_LOCKED')) {
         throw dbErr;
       }
-      console.warn('[WorkoutRepository] DB notice during saveSetCompletion:', dbErr?.message);
-    }
-
-    // Determine counts from in-memory fallback if DB count is 0 or offline
-    if (totalCompletedSetsCount === 0 || exerciseCompletedCount === 0) {
-      let memTotal = 0;
-      let memEx = 0;
-      for (const [k, v] of this.activeSetRecords.entries()) {
-        if (k.startsWith(`${resolvedUserId}_`) && v.isCompleted) {
-          memTotal++;
-          if (v.exerciseId === payload.exerciseId) {
-            memEx++;
-          }
-        }
-      }
-      if (totalCompletedSetsCount === 0) totalCompletedSetsCount = memTotal;
-      if (exerciseCompletedCount === 0) exerciseCompletedCount = memEx;
+      console.error('[WorkoutRepository] DB error during saveSetCompletion:', dbErr?.message);
+      throw dbErr;
     }
 
     const isExerciseCompleted = exerciseCompletedCount >= totalRequiredSets && totalRequiredSets > 0;
@@ -2618,19 +2651,12 @@ export class WorkoutRepository {
         }
         return results;
       }
-    } catch (_) {}
-
-    // In-memory fallback: active in-progress records for candidateIds
-    const results: any[] = [];
-    for (const sid of candidateIds) {
-      const prefix = `${resolvedUserId}_${sid}_`;
-      for (const [k, v] of this.activeSetRecords.entries()) {
-        if (k.startsWith(prefix)) {
-          results.push(v);
-        }
-      }
+    } catch (err: any) {
+      console.error('[WorkoutRepository] DB error in getActiveSetCompletions:', err?.message);
+      throw err;
     }
-    return results;
+
+    return [];
   }
 
   async overlayActiveSetsOnSession(session: StoredWorkoutSession, clientId: string): Promise<StoredWorkoutSession> {
@@ -3460,6 +3486,35 @@ export class WorkoutRepository {
       days: storedDays,
     };
 
+    // BUG-02: Persist split plan to PostgreSQL via Prisma
+    try {
+      await (prisma as any).workoutSplitPlan.upsert({
+        where: { id: splitId },
+        create: {
+          id: splitId,
+          title: splitTitle,
+          splitType,
+          description,
+          frequencyPerWeek: frequency,
+          clientId: resolvedClientId || null,
+          clientIdsJson: JSON.stringify(resolvedClientIds),
+          daysJson: JSON.stringify(storedDays),
+        },
+        update: {
+          title: splitTitle,
+          splitType,
+          description,
+          frequencyPerWeek: frequency,
+          clientId: resolvedClientId || null,
+          clientIdsJson: JSON.stringify(resolvedClientIds),
+          daysJson: JSON.stringify(storedDays),
+          updatedAt: new Date(),
+        },
+      });
+    } catch (e: any) {
+      console.warn('[WorkoutRepository] Notice: could not persist workoutSplitPlan to DB:', e?.message);
+    }
+
     this.splitPlans.set(splitId, splitPlan);
     for (const cid of resolvedClientIds) {
       this.clientSplitMap.set(cid, splitId);
@@ -3558,7 +3613,41 @@ export class WorkoutRepository {
 
     const firstActive = days.find((d) => !d.isRestDay);
     const splitId = this.clientSplitMap.get(resolvedUserId) || this.clientSplitMap.get(clientId);
-    const existingPlan = splitId ? this.splitPlans.get(splitId) : null;
+    let existingPlan = splitId ? this.splitPlans.get(splitId) : null;
+
+    // BUG-02: Query persistent split plan from PostgreSQL if memory cache missed
+    if (!existingPlan) {
+      try {
+        const dbPlan = await (prisma as any).workoutSplitPlan.findFirst({
+          where: {
+            OR: [
+              { clientId: resolvedUserId },
+              ...(clientId ? [{ clientId }] : []),
+            ],
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (dbPlan) {
+          existingPlan = {
+            id: dbPlan.id,
+            title: dbPlan.title,
+            splitType: dbPlan.splitType,
+            description: dbPlan.description,
+            frequencyPerWeek: dbPlan.frequencyPerWeek,
+            clientId: dbPlan.clientId,
+            clientIds: dbPlan.clientIdsJson ? JSON.parse(dbPlan.clientIdsJson) : (dbPlan.clientId ? [dbPlan.clientId] : []),
+            createdAt: dbPlan.createdAt instanceof Date ? dbPlan.createdAt.toISOString() : dbPlan.createdAt,
+            updatedAt: dbPlan.updatedAt instanceof Date ? dbPlan.updatedAt.toISOString() : dbPlan.updatedAt,
+            days: dbPlan.daysJson ? JSON.parse(dbPlan.daysJson) : [],
+          };
+          this.splitPlans.set(existingPlan.id, existingPlan);
+          this.clientSplitMap.set(resolvedUserId, existingPlan.id);
+        }
+      } catch (err: any) {
+        console.warn('[WorkoutRepository] Failed to query client split plan from DB:', err?.message);
+      }
+    }
+
     const splitTitle = existingPlan?.title || (firstActive ? `${firstActive.name.split('—')[0].trim()} Split` : 'Personalized Workout Split');
 
     return {
@@ -3634,13 +3723,97 @@ export class WorkoutRepository {
         if (dayData.exercises) day.exercises = updated?.exercises || dayData.exercises;
         day.sessionId = sessionId;
       }
+      // BUG-02: Persist updated split days to PostgreSQL
+      try {
+        await (prisma as any).workoutSplitPlan.update({
+          where: { id: splitId },
+          data: {
+            daysJson: JSON.stringify(plan.days),
+            updatedAt: new Date(),
+          },
+        });
+      } catch (_) {}
+    } else {
+      // Try to load from DB and update
+      try {
+        const dbPlan = await (prisma as any).workoutSplitPlan.findUnique({
+          where: { id: splitId },
+        });
+        if (dbPlan) {
+          const days = dbPlan.daysJson ? JSON.parse(dbPlan.daysJson) : [];
+          const day = days.find((d: any) => d.id === sessionId || d.sessionId === sessionId || d.id === dayId || d.dayOfWeek === dayData.dayOfWeek);
+          if (day) {
+            if (dayData.name) day.name = dayData.name;
+            if (dayData.targetMuscleGroup) day.targetMuscleGroup = dayData.targetMuscleGroup;
+            if (dayData.workoutType) day.workoutType = dayData.workoutType;
+            if (dayData.estimatedDurationMinutes) day.estimatedDurationMinutes = dayData.estimatedDurationMinutes;
+            if (dayData.exercises) day.exercises = updated?.exercises || dayData.exercises;
+            day.sessionId = sessionId;
+          }
+          await (prisma as any).workoutSplitPlan.update({
+            where: { id: splitId },
+            data: {
+              daysJson: JSON.stringify(days),
+              updatedAt: new Date(),
+            },
+          });
+        }
+      } catch (_) {}
     }
 
     return updated;
   }
 
   async getWorkoutSplitById(splitId: string): Promise<StoredWorkoutSplitPlan | null> {
-    return this.splitPlans.get(splitId) || null;
+    const mem = this.splitPlans.get(splitId);
+    if (mem) return mem;
+
+    // BUG-02: Query PostgreSQL if not in memory (multi-instance / cold start safety)
+    try {
+      const dbPlan = await (prisma as any).workoutSplitPlan.findUnique({
+        where: { id: splitId },
+      });
+      if (dbPlan) {
+        const plan: StoredWorkoutSplitPlan = {
+          id: dbPlan.id,
+          title: dbPlan.title,
+          splitType: dbPlan.splitType,
+          description: dbPlan.description,
+          frequencyPerWeek: dbPlan.frequencyPerWeek,
+          clientId: dbPlan.clientId,
+          clientIds: dbPlan.clientIdsJson ? JSON.parse(dbPlan.clientIdsJson) : (dbPlan.clientId ? [dbPlan.clientId] : []),
+          createdAt: dbPlan.createdAt instanceof Date ? dbPlan.createdAt.toISOString() : dbPlan.createdAt,
+          updatedAt: dbPlan.updatedAt instanceof Date ? dbPlan.updatedAt.toISOString() : dbPlan.updatedAt,
+          days: dbPlan.daysJson ? JSON.parse(dbPlan.daysJson) : [],
+        };
+        this.splitPlans.set(plan.id, plan);
+        return plan;
+      }
+    } catch (err: any) {
+      console.warn('[WorkoutRepository] Failed to query workoutSplitPlan by id:', err?.message);
+    }
+
+    return null;
+  }
+
+  /**
+   * Resets in-memory maps (strictly for testing cold starts / serverless recycling).
+   */
+  public clearMemoryForTesting(): void {
+    this.splitPlans.clear();
+    this.clientSplitMap.clear();
+    this.activeSetRecords.clear();
+    this.activeSaveLocks.clear();
+    this.records.clear();
+    this.assignments.clear();
+    this.sessions.clear();
+  }
+
+  /**
+   * Returns copy of in-memory stored workout records (strictly for testing warm-container state).
+   */
+  public getMemoryRecordsForTesting(): StoredWorkoutRecord[] {
+    return Array.from(this.records.values());
   }
 }
 

@@ -12,6 +12,10 @@ class ServerConfigDialog extends StatefulWidget {
   const ServerConfigDialog({super.key});
 
   static Future<void> show(BuildContext context) {
+    if (ApiConfig.effectiveIsReleaseMode) {
+      debugPrint('[SECURITY] ServerConfigDialog access is blocked in release mode.');
+      return Future.value();
+    }
     return showDialog(
       context: context,
       builder: (ctx) => const ServerConfigDialog(),
@@ -107,6 +111,10 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
   }
 
   Future<void> _saveAndApply() async {
+    if (ApiConfig.effectiveIsReleaseMode) {
+      debugPrint('[SECURITY] Modifying API origin is forbidden in release builds.');
+      return;
+    }
     final cleanUrl = _urlController.text.trim();
     final normalized = cleanUrl.isNotEmpty ? ApiConfig.normalizeUrl(cleanUrl) : '';
     if (normalized.isNotEmpty && ApiConfig.isInvalidLoopback(normalized)) {
@@ -149,6 +157,9 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (ApiConfig.effectiveIsReleaseMode) {
+      return const SizedBox.shrink();
+    }
     return AlertDialog(
       backgroundColor: AppColors.surfaceCard,
       shape: RoundedRectangleBorder(

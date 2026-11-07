@@ -161,8 +161,34 @@ const generalLimiter = rateLimit({
 app.use(generalLimiter);
 
 // Parse JSON and urlencoded request bodies (constrained to 1MB to prevent DoS; photo/scan routes use isolated limits)
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+const standardJsonParser = express.json({ limit: '1mb' });
+const standardUrlencodedParser = express.urlencoded({ extended: true, limit: '1mb' });
+
+// Legitimate photo upload and AI camera scan routes have isolated 10MB parsers configured at route level.
+// Bypassing the global 1MB parser prevents premature HTTP 413 shadowing for high-resolution images.
+const isUploadOrScanRoute = (req: Request): boolean => {
+  if (req.method !== 'POST') return false;
+  const path = req.originalUrl || req.url || '';
+  return (
+    /^\/(api\/)?(v1\/)?foods\/ai-scan(\?.*)?$/.test(path) ||
+    /^\/(api\/)?(v1\/)?food-photos(\/live)?\/?(\?.*)?$/.test(path) ||
+    /^\/(api\/)?(v1\/)?transformation-photos\/upload\/?(\?.*)?$/.test(path)
+  );
+};
+
+app.use((req: Request, res: Response, next) => {
+  if (isUploadOrScanRoute(req)) {
+    return next();
+  }
+  standardJsonParser(req, res, next);
+});
+
+app.use((req: Request, res: Response, next) => {
+  if (isUploadOrScanRoute(req)) {
+    return next();
+  }
+  standardUrlencodedParser(req, res, next);
+});
 
 // Query / Path Normalizer Middleware (Handles accidental /api?v1 typos or missing slashes)
 app.use((req: Request, _res: Response, next) => {

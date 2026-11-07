@@ -223,23 +223,41 @@ export class FoodController {
       }
 
       const userId = user.clientId || user.id;
+      const clientIp = req.ip || req.socket?.remoteAddress;
 
       const scanResult = await foodAiService.analyzeFoodImage(
         rawImage,
         mimeType || 'image/jpeg',
-        userId
+        userId,
+        clientIp
       );
 
       sendSuccess(res, scanResult);
     } catch (err: any) {
       const message = err.message || 'Food analysis is temporarily unavailable. Please check your internet connection and try again.';
       const isRateLimit = message.includes('limit') || message.includes('Too many camera scans');
-      sendError(
-        res,
-        isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'AI_SCAN_ERROR',
-        message,
-        isRateLimit ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      const isValidation =
+        message.includes('MIME') ||
+        message.includes('base64') ||
+        message.includes('Decoded image') ||
+        message.includes('signature') ||
+        message.includes('Image data is required') ||
+        message.includes('too small') ||
+        message.includes('too large');
+
+      const statusCode = isRateLimit
+        ? HttpStatus.TOO_MANY_REQUESTS
+        : isValidation
+        ? HttpStatus.BAD_REQUEST
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+      const errorCode = isRateLimit
+        ? 'RATE_LIMIT_EXCEEDED'
+        : isValidation
+        ? 'VALIDATION_ERROR'
+        : 'AI_SCAN_ERROR';
+
+      sendError(res, errorCode, message, statusCode);
     }
   }
 

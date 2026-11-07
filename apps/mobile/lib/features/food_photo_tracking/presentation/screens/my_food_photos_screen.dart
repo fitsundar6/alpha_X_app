@@ -168,11 +168,12 @@ class _MyFoodPhotosScreenState extends State<MyFoodPhotosScreen> {
     final token = AuthService().currentToken;
     final fullUrl = photo.photoUrl.startsWith('http')
         ? photo.photoUrl
-        : '${AppConstants.apiBaseUrl.replaceAll('/api/v1', '')}${photo.photoUrl}?token=$token';
+        : '${AppConstants.apiBaseUrl.replaceAll('/api/v1', '')}${photo.photoUrl}';
 
     if (photo.photoUrl.isNotEmpty && (photo.photoUrl.startsWith('http') || photo.photoUrl.startsWith('/api'))) {
       return Image.network(
         fullUrl,
+        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
         height: height,
         width: double.infinity,
         fit: fit,

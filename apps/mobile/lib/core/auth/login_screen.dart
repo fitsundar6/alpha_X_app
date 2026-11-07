@@ -179,13 +179,8 @@ class _LoginScreenState extends State<LoginScreen>
       // Forced Password Change Gate (for temporary passwords issued by admin):
       if (result['mustChangePassword'] == true) {
         Navigator.of(context).pushNamedAndRemoveUntil(
-          '/reset-password',
+          '/forced-change-password',
           (route) => false,
-          arguments: {
-            'mode': 'code',
-            'forcedChange': true,
-            'identifier': normalizedIdentifier,
-          },
         );
         return;
       }

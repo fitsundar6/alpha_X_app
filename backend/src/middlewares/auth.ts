@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/environment';
+import { env, isProduction } from '../config/environment';
 import { HttpStatus } from '../constants/httpStatus';
 import { UserRole, UserStatus } from '../constants/roles';
 import { sendError } from '../utils/responseEnvelope';
 import { prisma } from '../config/prisma';
 import { passwordResetService } from '../services/password_reset.service';
+import { adminAuthService } from '../modules/auth/admin_auth.service';
 
 export interface AuthenticatedUser {
   id: string;
@@ -47,7 +48,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
   const token = authHeader.split(' ')[1];
 
   // Development / test mock tokens bypass (strictly disabled in production)
-  if (env.NODE_ENV !== 'production') {
+  if (!isProduction()) {
     if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
       req.user = {
         id: 'admin_alex_stone',
@@ -69,7 +70,16 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as { id: string; email: string; role?: UserRole };
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as {
+      id: string;
+      email: string;
+      role?: UserRole;
+      tokenVersion?: number;
+      sessionId?: string;
+      familyId?: string;
+      mustChangePassword?: boolean;
+      scope?: string;
+    };
 
     const normalizedEmail = (decoded.email || '').trim().toLowerCase();
     const isMasterAdmin = normalizedEmail.length > 0 && normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase();
@@ -84,6 +94,137 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       email: normalizedEmail,
       role: effectiveRole,
     };
+
+    // ── F-04 / BUG-04: tokenVersion & admin revocation check ────────────────
+    if (isMasterAdmin) {
+      // BUG-04: Master Admin session revocation check (durable PostgreSQL backed)
+      try {
+        const isRevoked = await adminAuthService.isRevoked(decoded.sessionId, token);
+        if (isRevoked) {
+          sendError(
+            res,
+            'TOKEN_REVOKED',
+            'Your session has been revoked. Please log in again.',
+            HttpStatus.UNAUTHORIZED,
+            undefined,
+            undefined,
+            {
+              activity: 'Verify Authentication Token',
+              explanation: 'Admin session was revoked upon logout.',
+            }
+          );
+          return;
+        }
+      } catch (err: any) {
+        // FAIL CLOSED: Never grant admin access if revocation state cannot be verified
+        sendError(
+          res,
+          'AUTH_SERVICE_UNAVAILABLE',
+          'Authentication verification service is temporarily unavailable. Access denied.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+          undefined,
+          err,
+          {
+            activity: 'Verify Authentication Token',
+            explanation: 'Database connection failed during admin revocation check. Failing closed for security.',
+          }
+        );
+        return;
+      }
+      (req as any).adminSessionId = decoded.sessionId;
+    } else {
+      // Phase 7: Reject legacy client JWTs without sessionId or familyId
+      if (!decoded.sessionId || !decoded.familyId) {
+        sendError(
+          res,
+          'TOKEN_UPGRADE_REQUIRED',
+          'Security upgrade required. Please log in again to renew your credentials.',
+          HttpStatus.UNAUTHORIZED,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Authentication Token',
+            explanation:
+              'Legacy session token detected without Phase 7 family binding. Immediate re-authentication required.',
+          }
+        );
+        return;
+      }
+
+      // Query user and verify active session family bound by (sessionId, familyId)
+      const dbUser = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: {
+          tokenVersion: true,
+          refreshTokens: {
+            where: {
+              sessionId: decoded.sessionId,
+              familyId: decoded.familyId,
+              isRevoked: false,
+              expiresAt: { gt: new Date() },
+            },
+            take: 1,
+            select: { id: true },
+          },
+        },
+      });
+
+      // User deleted → reject immediately
+      if (!dbUser) {
+        sendError(
+          res,
+          'INVALID_TOKEN',
+          'Session token is invalid or corrupted',
+          HttpStatus.UNAUTHORIZED,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Authentication Token',
+            explanation: 'User account not found. Please log in again.',
+          }
+        );
+        return;
+      }
+
+      // TokenVersion mismatch (password reset / all-device logout) → reject immediately
+      const claimedVersion = typeof decoded.tokenVersion === 'number' ? decoded.tokenVersion : 0;
+      if (claimedVersion !== dbUser.tokenVersion) {
+        sendError(
+          res,
+          'TOKEN_REVOKED',
+          'Your session has been revoked. Please log in again.',
+          HttpStatus.UNAUTHORIZED,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Authentication Token',
+            explanation: 'Token version mismatch: the token was invalidated by a password change, reset, or logout.',
+          }
+        );
+        return;
+      }
+
+      // Active session check: ensure unrevoked refresh token exists in this exact family
+      if (!dbUser.refreshTokens || dbUser.refreshTokens.length === 0) {
+        sendError(
+          res,
+          'TOKEN_REVOKED',
+          'Your session has been revoked or expired. Please log in again.',
+          HttpStatus.UNAUTHORIZED,
+          undefined,
+          undefined,
+          {
+            activity: 'Verify Authentication Token',
+            explanation: 'Session family has been revoked or expired.',
+          }
+        );
+        return;
+      }
+
+      (req as any).tokenSessionId = decoded.sessionId;
+      (req as any).tokenFamilyId = decoded.familyId;
+    }
+    // ── end F-04 / Phase 7 session verification ─────────────────────────────
 
     // Server-side enforcement: If temporary password was issued, force password change before normal app access.
     // Strictly match the current-user identity (GET /auth/me) and password-change (POST /auth/change-password)
@@ -241,7 +382,7 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
   const token = authHeader.split(' ')[1];
   if (!token) return next();
 
-  if (env.NODE_ENV !== 'production') {
+  if (!isProduction()) {
     if (token === 'alpha_x_mock_token_for_admin' || token === 'local_admin_session_token') {
       req.user = {
         id: 'admin_alex_stone',

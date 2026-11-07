@@ -10,7 +10,8 @@ import { foodPhotoCleanupService } from './food_photo_cleanup.service';
 
 export class FoodPhotoController {
   /**
-   * Helper: Extract authenticated user from header or query token (for image rendering in mobile Image.network)
+   * Helper: Extract authenticated user from requireAuth middleware or Authorization header.
+   * Query-string token (?token=) authentication is strictly disabled to prevent token leakage in access logs.
    */
   private resolveUserFromRequest(req: Request): { id: string; email: string; role: UserRole; clientId?: string } | null {
     // 1. Check req.user set by requireAuth middleware
@@ -18,13 +19,11 @@ export class FoodPhotoController {
       return (req as any).user;
     }
 
-    // 2. Check Authorization header or query token (for direct network image loading in Flutter Image.network)
+    // 2. Check Authorization header (Bearer token)
     let token = '';
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
-    } else if (req.query.token && typeof req.query.token === 'string') {
-      token = req.query.token;
     }
 
     if (!token) return null;
@@ -266,7 +265,9 @@ export class FoodPhotoController {
 
       // Security check: Client can only view their own photo. Admin can view authorized clients' photos.
       if (authUser.role !== UserRole.ADMIN) {
-        if (photo.clientProfile.userId !== authUser.id && photo.clientProfile.id !== authUser.id) {
+        const clientProf = photo.clientProfile;
+        const isOwner = clientProf && (clientProf.userId === authUser.id || clientProf.id === authUser.id);
+        if (!isOwner) {
           sendError(res, 'FORBIDDEN', 'Access to another client meal photo is strictly denied', HttpStatus.FORBIDDEN);
           return;
         }
@@ -276,7 +277,7 @@ export class FoodPhotoController {
       if (photo.itemsJson) {
         try {
           parsedItems = JSON.parse(photo.itemsJson);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       sendSuccess(res, {
@@ -335,7 +336,9 @@ export class FoodPhotoController {
 
       // Authorization verification
       if (authUser.role !== UserRole.ADMIN) {
-        if (photo.clientProfile.userId !== authUser.id && photo.clientProfile.id !== authUser.id) {
+        const clientProf = photo.clientProfile;
+        const isOwner = clientProf && (clientProf.userId === authUser.id || clientProf.id === authUser.id);
+        if (!isOwner) {
           res.status(HttpStatus.FORBIDDEN).json({
             success: false,
             error: { code: 'FORBIDDEN', message: 'Access denied: photo belongs to another client' },
@@ -356,7 +359,8 @@ export class FoodPhotoController {
       if (photo.fileSizeBytes && photo.fileSizeBytes > 0) {
         res.setHeader('Content-Length', photo.fileSizeBytes);
       }
-      res.setHeader('Cache-Control', 'private, max-age=86400'); // Private cache for authorized user only
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('Content-Disposition', `inline; filename="meal_${photo.id}.jpg"`);
 
       const stream = mealPhotoStorageService.getFileStream(photo.storagePath);
@@ -727,7 +731,7 @@ export class FoodPhotoController {
               source: 'ADMIN',
             },
           });
-        } catch (_) {}
+        } catch (_) { }
       }
 
       sendSuccess(res, {

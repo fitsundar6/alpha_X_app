@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/alpha_x_button.dart';
 import '../widgets/alpha_x_logo.dart';
+import '../config/api_config.dart';
 import '../widgets/server_config_dialog.dart';
 import 'auth_service.dart';
 import '../../config/admin_config.dart';
@@ -29,7 +30,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _identifier;
   Map<String, dynamic> _gymContactInfo = {
     'gymName': 'Alpha X Gym',
-    'adminEmail': AdminConfig.adminEmail,
+    'supportEmail': AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'support@alphaxgym.com',
+    'adminEmail': AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'support@alphaxgym.com',
     'deskPhone': '+1 (555) 019-2834',
     'deskHours': 'Mon-Sun 6:00 AM - 10:00 PM',
     'instructions':
@@ -130,19 +132,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                       ),
                       const Spacer(),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                      if (!ApiConfig.effectiveIsReleaseMode)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.4),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          ),
+                          child: IconButton(
+                            key: const Key('forgot_password_server_config_button'),
+                            icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 18),
+                            tooltip: 'Server Settings',
+                            onPressed: () => ServerConfigDialog.show(context),
+                          ),
                         ),
-                        child: IconButton(
-                          key: const Key('forgot_password_server_config_button'),
-                          icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 18),
-                          tooltip: 'Server Settings',
-                          onPressed: () => ServerConfigDialog.show(context),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -294,7 +297,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                         _buildContactRow(
                                           Icons.email_outlined,
                                           'Email',
-                                          _gymContactInfo['adminEmail']?.toString() ?? AdminConfig.adminEmail,
+                                          _gymContactInfo['supportEmail']?.toString() ??
+                                              _gymContactInfo['adminEmail']?.toString() ??
+                                              (AdminConfig.adminEmail.isNotEmpty
+                                                  ? AdminConfig.adminEmail
+                                                  : 'support@alphaxgym.com'),
                                         ),
                                         if (_gymContactInfo['deskHours'] != null) ...[
                                           const SizedBox(height: 6),

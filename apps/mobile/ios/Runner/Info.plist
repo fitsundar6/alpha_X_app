@@ -44,9 +44,7 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
+		<false/>
 	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

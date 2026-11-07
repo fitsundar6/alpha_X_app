@@ -10,7 +10,7 @@ class AdminConfig {
   /// Master Administrator Email
   static const String adminEmail = String.fromEnvironment(
     'ADMIN_EMAIL',
-    defaultValue: 'fitsundar6@gmail.com',
+    defaultValue: '',
   );
 
   /// Master Administrator Password

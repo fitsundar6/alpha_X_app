@@ -16,7 +16,8 @@ export interface AuthenticatedUser {
 
 export class TransformationPhotoController {
   /**
-   * Helper: Resolves authenticated user from Authorization header OR ?token= query parameter.
+   * Helper: Resolves authenticated user from requireAuth middleware or Authorization header.
+   * Query-string token (?token=) authentication is strictly disabled to prevent token leakage in access logs.
    */
   public resolveUserFromRequest(req: Request): AuthenticatedUser | null {
     // 1. Existing req.user from middleware
@@ -28,13 +29,11 @@ export class TransformationPhotoController {
       };
     }
 
-    // 2. Extract token from header or query param
+    // 2. Extract Bearer token from Authorization header
     let token = '';
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
-    } else if (req.query.token && typeof req.query.token === 'string') {
-      token = req.query.token;
     }
 
     if (!token) return null;
@@ -325,7 +324,8 @@ export class TransformationPhotoController {
 
       res.setHeader('Content-Type', extracted.mimeType || 'image/jpeg');
       res.setHeader('Content-Length', extracted.buffer.length);
-      res.setHeader('Cache-Control', 'private, max-age=86400');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('Content-Disposition', `inline; filename="transformation_${milestone.weekNumber}_${angle}.jpg"`);
 
       res.send(extracted.buffer);

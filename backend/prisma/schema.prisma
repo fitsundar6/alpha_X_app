@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -42,6 +43,7 @@ model User {
   oneSignalPlayerId    String? // Push notification device token
   notificationsEnabled Boolean    @default(true) // Client can opt out
   mustChangePassword   Boolean    @default(false)
+  tokenVersion         Int        @default(0)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
@@ -52,6 +54,7 @@ model User {
   sessionOverrides ClientSessionOverride[] @relation("ClientSessionOverrides")
   verificationLogs UserVerificationLog[]  @relation("UserVerificationLogs")
   passwordResetCodes PasswordResetCode[]  @relation("UserPasswordResetCodes")
+  refreshTokens      RefreshToken[]       @relation("UserRefreshTokens")
 
   @@map("users")
 }
@@ -439,6 +442,7 @@ model ClientSessionOverride {
 
 model WorkoutRecord {
   id                  String          @id @default(uuid())
+  idempotencyKey      String?         @unique
   clientId            String
   client              User            @relation("ClientWorkoutRecords", fields: [clientId], references: [id], onDelete: Cascade)
   sessionId           String?
@@ -920,3 +924,73 @@ model AIAuditLog {
   @@index([createdAt])
   @@map("ai_audit_logs")
 }
+
+// ==========================================
+// MASTER ADMIN TOKEN REVOCATION (BUG-04)
+// ==========================================
+
+model RevokedAdminSession {
+  id         String   @id @default(uuid())
+  sessionId  String?  @unique
+  tokenHash  String?  @unique
+  adminEmail String
+  reason     String   @default("LOGOUT")
+  revokedAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([sessionId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("revoked_admin_sessions")
+}
+
+// ==========================================
+// WORKOUT SPLIT PLANS (BUG-02)
+// ==========================================
+
+model WorkoutSplitPlan {
+  id               String   @id @default(uuid())
+  title            String
+  splitType        String   @default("Custom")
+  description      String?
+  frequencyPerWeek Int      @default(3)
+  clientId         String?
+  clientIdsJson    String? // JSON serialized string array of client IDs
+  daysJson         String? // JSON serialized StoredWorkoutSplitDay array
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("workout_split_plans")
+}
+
+// ==========================================
+// REFRESH TOKENS (PHASE 7 SECURITY)
+// ==========================================
+
+model RefreshToken {
+  id            String    @id @default(uuid())
+  tokenHash     String    @unique
+  tokenVersion  Int
+  userId        String
+  sessionId     String
+  familyId      String
+  deviceInfo    String?
+  expiresAt     DateTime
+  isRevoked     Boolean   @default(false)
+  revokedAt     DateTime?
+  revokedReason String?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation("UserRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@index([userId, sessionId, familyId, isRevoked])
+  @@map("refresh_tokens")
+}
+
+
+

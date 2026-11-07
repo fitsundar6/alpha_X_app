@@ -14,6 +14,7 @@ import 'core/auth/rejected_account_screen.dart';
 import 'core/auth/suspended_account_screen.dart';
 import 'core/auth/forgot_password_screen.dart';
 import 'core/auth/reset_password_screen.dart';
+import 'core/auth/forced_change_password_screen.dart';
 import 'core/widgets/alpha_x_splash_screen.dart';
 import 'features/navigation/navigation_shell.dart';
 import 'features/workout/data/repositories/workout_repository.dart';
@@ -94,6 +95,9 @@ Widget getInitialScreen({
       );
     } else {
       // Central Client Verification Gate
+      if (auth.mustChangePassword) {
+        return const ForcedChangePasswordScreen();
+      }
       if (auth.isPending) {
         return const PendingVerificationScreen();
       }
@@ -221,16 +225,43 @@ class AlphaXGymAppState extends State<AlphaXGymApp> {
             ),
         onGenerateRoute: _onGenerateRoute,
         routes: {
-          '/dashboard': (context) => NavigationShell(
-            workoutRepository: _workoutRepository,
-            activityRepository: _activityRepository,
-            macroRepository: _macroRepository,
-            weeklyProgressRepository: _weeklyProgressRepository,
-          ),
+          '/dashboard': (context) {
+            final auth = _authService;
+            if (auth.isAuthenticated && !auth.isAdmin) {
+              if (auth.mustChangePassword) {
+                return const ForcedChangePasswordScreen();
+              }
+              if (auth.isPending) {
+                return const PendingVerificationScreen();
+              }
+              if (auth.isRejected) {
+                return const RejectedAccountScreen();
+              }
+              if (auth.isSuspended) {
+                return const SuspendedAccountScreen();
+              }
+              if (!auth.onboardingCompleted) {
+                return const ClientOnboardingScreen();
+              }
+            }
+            return NavigationShell(
+              workoutRepository: _workoutRepository,
+              activityRepository: _activityRepository,
+              macroRepository: _macroRepository,
+              weeklyProgressRepository: _weeklyProgressRepository,
+            );
+          },
           '/login': (context) => const LoginScreen(animateLogo: false),
           '/register': (context) => const CreateAccountScreen(),
           '/admin/login': (context) => const AdminLoginScreen(),
-          '/onboarding': (context) => const ClientOnboardingScreen(),
+          '/onboarding': (context) {
+            final auth = _authService;
+            if (auth.isAuthenticated && !auth.isAdmin && auth.mustChangePassword) {
+              return const ForcedChangePasswordScreen();
+            }
+            return const ClientOnboardingScreen();
+          },
+          '/forced-change-password': (context) => const ForcedChangePasswordScreen(),
           '/pending-verification': (context) => const PendingVerificationScreen(),
           '/rejected-account': (context) => const RejectedAccountScreen(),
           '/suspended-account': (context) => const SuspendedAccountScreen(),
@@ -319,6 +350,14 @@ Route<dynamic>? buildAppRoute(
       builder: (_) => ResetPasswordScreen(initialToken: tokenArg),
       settings: settings,
     );
+  }
+
+  // Forced Password Change route (Client authenticated only)
+  if (path == '/forced-change-password') {
+    if (!auth.isAuthenticated || auth.isAdmin) {
+      return MaterialPageRoute(builder: (_) => const LoginScreen(animateLogo: false));
+    }
+    return MaterialPageRoute(builder: (_) => const ForcedChangePasswordScreen());
   }
 
   // Master Administrator Login route (Public portal)
@@ -429,6 +468,9 @@ Route<dynamic>? buildAppRoute(
   // Central Client Verification Gate for all private athlete features
   if (path.startsWith('/client') || path == '/dashboard' || path == '/onboarding') {
     if (!auth.isAdmin && auth.isAuthenticated) {
+      if (auth.mustChangePassword) {
+        return MaterialPageRoute(builder: (_) => const ForcedChangePasswordScreen());
+      }
       if (auth.isPending) {
         return MaterialPageRoute(builder: (_) => const PendingVerificationScreen());
       }

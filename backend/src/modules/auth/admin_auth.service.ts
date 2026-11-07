@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { env } from '../../config/environment';
+import crypto from 'crypto';
+import { env, isProduction } from '../../config/environment';
 import { UserRole } from '../../constants/roles';
+import { prisma } from '../../config/prisma';
 
 /**
  * Service managing secure single-administrator authentication & verification.
@@ -11,6 +13,7 @@ import { UserRole } from '../../constants/roles';
  * 2. Password verified using bcrypt with constant-time comparison.
  * 3. Never logs, prints, or exposes plain-text passwords or hashes.
  * 4. Supports pre-computed bcrypt hash (ADMIN_PASSWORD_HASH) or secure env password (ADMIN_PASSWORD).
+ * 5. BUG-04: Durable PostgreSQL-backed session revocation across Vercel serverless containers.
  */
 export class AdminAuthService {
   private static instance: AdminAuthService;
@@ -25,6 +28,113 @@ export class AdminAuthService {
       AdminAuthService.instance = new AdminAuthService();
     }
     return AdminAuthService.instance;
+  }
+
+  /**
+   * Resets the singleton instance (strictly for testing cold starts / serverless recycling).
+   */
+  public static resetInstanceForTesting(): void {
+    (AdminAuthService as any).instance = undefined;
+  }
+
+  /**
+   * Computes SHA-256 hash of a raw token for storage in the revocation blacklist.
+   */
+  public hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Durably revokes an active master administrator session in PostgreSQL.
+   * Uses actual JWT expiry (from exp claim) or 30-day default fallback.
+   */
+  public async revokeAdminSession(
+    sessionId?: string,
+    rawToken?: string,
+    customExpiresAt?: Date,
+    reason = 'LOGOUT'
+  ): Promise<void> {
+    if (!sessionId && !rawToken) return;
+
+    let expiresAt = customExpiresAt;
+    if (!expiresAt && rawToken) {
+      try {
+        const decoded = jwt.decode(rawToken) as any;
+        if (decoded && typeof decoded.exp === 'number') {
+          expiresAt = new Date(decoded.exp * 1000);
+        }
+      } catch (_) {
+        // fallback to default below
+      }
+    }
+    if (!expiresAt) {
+      expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const tokenHash = rawToken ? this.hashToken(rawToken) : null;
+    const adminEmail = this.getAdminEmail();
+
+    try {
+      await prisma.revokedAdminSession.create({
+        data: {
+          sessionId: sessionId || null,
+          tokenHash,
+          adminEmail,
+          reason,
+          expiresAt,
+        },
+      });
+    } catch (err: any) {
+      // If already revoked (Prisma unique constraint P2002), treat as success
+      if (err?.code === 'P2002') {
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Revokes a specific admin JWT by its cryptographic hash.
+   */
+  public async revokeAdminToken(rawToken: string, customExpiresAt?: Date): Promise<void> {
+    await this.revokeAdminSession(undefined, rawToken, customExpiresAt);
+  }
+
+  /**
+   * Checks whether a given admin session ID or raw token hash has been revoked in PostgreSQL.
+   * Throws if database is unreachable, enabling callers to FAIL CLOSED.
+   */
+  public async isRevoked(sessionId?: string, rawToken?: string): Promise<boolean> {
+    const tokenHash = rawToken ? this.hashToken(rawToken) : undefined;
+    const orConditions: any[] = [];
+    if (sessionId && typeof sessionId === 'string' && sessionId.trim().length > 0) {
+      orConditions.push({ sessionId: sessionId.trim() });
+    }
+    if (tokenHash) {
+      orConditions.push({ tokenHash });
+    }
+    if (orConditions.length === 0) {
+      return false;
+    }
+
+    const revoked = await prisma.revokedAdminSession.findFirst({
+      where: {
+        OR: orConditions,
+      },
+      select: { id: true },
+    });
+    return Boolean(revoked);
+  }
+
+  /**
+   * Clears the revocation registry (strictly for testing).
+   */
+  public async clearRevocationsForTesting(): Promise<void> {
+    try {
+      await prisma.revokedAdminSession.deleteMany({});
+    } catch (_) {
+      // ignore if table does not exist or test environment mock handles it
+    }
   }
 
   /**
@@ -47,15 +157,14 @@ export class AdminAuthService {
     }
 
     // If neither is set:
-    if (env.NODE_ENV === 'production') {
+    if (isProduction()) {
       console.error('❌ CRITICAL SECURITY ERROR: Neither ADMIN_PASSWORD_HASH nor ADMIN_PASSWORD is set in production environment!');
       process.exit(1);
     } else {
-      // In development only: fallback to a known dev hash for 'AlphaXAdmin2026!'
-      // Generated with bcrypt salt rounds 12
-      this.activePasswordHash = '$2b$12$e0lXq9aVqG0Ew8w8oKqjVu4pI29nS/jR/qVl32h7jF7Q4D4y8eYCe';
-      console.warn('⚠️  [SECURITY NOTICE]: ADMIN_PASSWORD or ADMIN_PASSWORD_HASH not detected in .env.');
-      console.warn('⚠️  Using development admin hash. In production, configure ADMIN_PASSWORD_HASH in environment variables.');
+      // Fail safely: do not set a static default password hash. Require explicit configuration.
+      this.activePasswordHash = null;
+      console.warn('⚠️  [SECURITY NOTICE]: ADMIN_PASSWORD or ADMIN_PASSWORD_HASH not detected in environment.');
+      console.warn('⚠️  Admin authentication is disabled until ADMIN_PASSWORD or ADMIN_PASSWORD_HASH is explicitly configured.');
     }
   }
 
@@ -106,25 +215,28 @@ export class AdminAuthService {
   /**
    * Generates a signed JWT session token for the authorized administrator.
    */
-  public generateAdminSession(): {
+  public generateAdminSession(customSessionId?: string): {
     token: string;
     user: {
       id: string;
       email: string;
       name: string;
       role: UserRole;
+      sessionId: string;
     };
   } {
     const adminEmail = this.getAdminEmail();
     const id = env.ADMIN_ID || `admin_${adminEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`.toLowerCase();
     const name = 'Alpha X Administrator';
     const role = UserRole.ADMIN;
+    const sessionId = customSessionId || crypto.randomUUID();
 
     const token = jwt.sign(
       {
         id,
         email: adminEmail,
         role,
+        sessionId,
       },
       env.JWT_ACCESS_SECRET,
       {
@@ -139,6 +251,7 @@ export class AdminAuthService {
         email: adminEmail,
         name,
         role,
+        sessionId,
       },
     };
   }

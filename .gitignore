@@ -43,6 +43,7 @@ backups/
 backend/backups/
 *.dump
 *.sql
+!backend/prisma/migrations/**/*.sql
 *.bak
 db_backup_*.json
 

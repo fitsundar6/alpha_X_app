@@ -108,11 +108,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasValidSigningConfig) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Production release builds must strictly use release signingConfig (no debug fallback)
+            signingConfig = signingConfigs.getByName("release")
             // Disable minification and resource shrinking to avoid R8/ProGuard issues in CI
             isMinifyEnabled = false
             isShrinkResources = false
@@ -132,14 +129,9 @@ gradle.taskGraph.whenReady {
         if (hasValidSigningConfig) {
             println("✔ [SIGNING] Using production keystore configuration from 'apps/mobile/android/key.properties'.")
         } else {
-            println(
-                "\n========================================================================\n" +
-                "ℹ️ NOTICE: 'key.properties' not configured with valid production credentials.\n" +
-                "Signing release artifact with debug keys (suitable for direct sideloading and CI testing).\n" +
-                "To sign with your official production keystore for Google Play:\n" +
-                "  1. Ensure your keystore exists (e.g. apps/mobile/android/app/upload-keystore.jks)\n" +
-                "  2. Configure 'apps/mobile/android/key.properties' (see key.properties.example)\n" +
-                "========================================================================\n"
+            throw GradleException(
+                "Release build failed: Missing or invalid production signing configuration in 'apps/mobile/android/key.properties'. " +
+                "Release builds must use production signing only and cannot fall back to debug signing."
             )
         }
     }

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/alpha_x_button.dart';
 import '../widgets/alpha_x_logo.dart';
+import '../config/api_config.dart';
 import '../widgets/server_config_dialog.dart';
 import 'auth_service.dart';
 
@@ -281,19 +282,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                       ),
                       const Spacer(),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                      if (!ApiConfig.effectiveIsReleaseMode)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.4),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          ),
+                          child: IconButton(
+                            key: const Key('reset_password_server_config_button'),
+                            icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 18),
+                            tooltip: 'Server Settings',
+                            onPressed: () => ServerConfigDialog.show(context),
+                          ),
                         ),
-                        child: IconButton(
-                          key: const Key('reset_password_server_config_button'),
-                          icon: const Icon(Icons.settings_ethernet, color: AppColors.textTertiary, size: 18),
-                          tooltip: 'Server Settings',
-                          onPressed: () => ServerConfigDialog.show(context),
-                        ),
-                      ),
                     ],
                   ),
                 ),

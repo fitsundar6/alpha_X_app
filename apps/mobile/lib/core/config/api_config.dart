@@ -42,6 +42,67 @@ class ApiConfig {
     defaultValue: 'https://alpha-x-app.vercel.app/api/v1',
   );
 
+  /// Explicitly approved production API hosts.
+  /// Release builds strictly reject any origin not present in or matching this list.
+  static const List<String> approvedProductionHosts = [
+    'alpha-x-app.vercel.app',
+    'alphaxgym.com',
+    'api.alphaxgym.com',
+    'app.alphaxgym.com',
+  ];
+
+  /// Validates whether a URL strictly satisfies production security requirements:
+  /// 1. Must use HTTPS scheme.
+  /// 2. Must target an explicitly approved production API host.
+  /// 3. Rejects all arbitrary domains, plain HTTP, and unapproved origins.
+  static bool isApprovedProductionOrigin(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return false;
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return false;
+
+    // Enforce HTTPS
+    if (uri.scheme.toLowerCase() != 'https') {
+      return false;
+    }
+
+    final host = uri.host.toLowerCase();
+    if (host.isEmpty) return false;
+
+    // Check against approved hosts whitelist
+    if (approvedProductionHosts.contains(host)) {
+      return true;
+    }
+
+    // Allow subdomains of alphaxgym.com
+    if (host.endsWith('.alphaxgym.com')) {
+      return true;
+    }
+
+    // Allow host defined in compile-time productionUrl if valid HTTPS
+    final prodUri = Uri.tryParse(productionUrl);
+    if (prodUri != null && prodUri.scheme.toLowerCase() == 'https' && prodUri.host.toLowerCase() == host) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Extracts the normalized RFC-6454 origin (scheme://host[:port]) from a URL string.
+  static String extractOrigin(String url) {
+    try {
+      final uri = Uri.parse(url.trim());
+      final portPart = uri.hasPort ? ':${uri.port}' : '';
+      return '${uri.scheme.toLowerCase()}://${uri.host.toLowerCase()}$portPart';
+    } catch (_) {
+      return url.trim().toLowerCase();
+    }
+  }
+
+  /// Returns the origin of the currently active baseUrl.
+  static String get baseUrlOrigin => extractOrigin(baseUrl);
+
   // --- Storage & Runtime State ---
 
   /// SharedPreferences key for persisting runtime custom server override
@@ -124,6 +185,18 @@ class ApiConfig {
       final saved = prefs.getString(storageKey) ?? prefs.getString('custom_api_url');
       if (saved != null && saved.trim().isNotEmpty) {
         final normalized = normalizeUrl(saved.trim());
+
+        // In release mode, prune any saved custom server URL that is not an approved HTTPS production origin
+        if (effectiveIsReleaseMode) {
+          if (!isApprovedProductionOrigin(normalized)) {
+            debugPrint('[SECURITY] Pruning unapproved runtime server URL in release mode: $normalized');
+            customServerUrl = null;
+            await prefs.remove(storageKey);
+            await prefs.remove('custom_api_url');
+            return;
+          }
+        }
+
         if (isInvalidLoopback(normalized)) {
           debugPrint('[API CONFIG] Pruning obsolete/unusable loopback server URL: $normalized -> resetting to production $productionUrl');
           customServerUrl = null;
@@ -138,6 +211,12 @@ class ApiConfig {
 
   /// Persist a custom server URL override from UI (e.g. ServerConfigDialog)
   static Future<void> setCustomUrl(String? rawUrl) async {
+    // Release builds must not allow changing API origin
+    if (effectiveIsReleaseMode) {
+      debugPrint('[SECURITY] Modifying API origin is forbidden in release builds.');
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     if (rawUrl == null || rawUrl.trim().isEmpty) {
       customServerUrl = null;
@@ -208,6 +287,38 @@ class ApiConfig {
   /// 7. Compile-time `--dart-define=ENV=lan` / `physical` -> [physicalLanUrl]
   /// 8. Default for ALL platforms (Mobile, Web, Desktop) -> [productionUrl] (HTTPS production cloud backend)
   static String get baseUrl {
+    // -------------------------------------------------------------
+    // RELEASE MODE SECURITY ENFORCEMENT
+    // -------------------------------------------------------------
+    if (effectiveIsReleaseMode) {
+      // 1. Release builds reject arbitrary runtime overrides.
+      if (customServerUrl != null && customServerUrl!.trim().isNotEmpty) {
+        final normalized = normalizeUrl(customServerUrl!);
+        if (isApprovedProductionOrigin(normalized)) {
+          return normalized;
+        }
+        debugPrint('[SECURITY] Rejected unapproved customServerUrl in release mode: $customServerUrl');
+      }
+
+      // 2. If compile-time API_BASE_URL is provided, verify it is an approved HTTPS production origin.
+      if (_envApiBaseUrl.trim().isNotEmpty) {
+        final normalized = normalizeUrl(_envApiBaseUrl.trim());
+        if (isApprovedProductionOrigin(normalized)) {
+          return normalized;
+        }
+        debugPrint('[SECURITY] Rejected unapproved compile-time API URL in release mode: $_envApiBaseUrl');
+      }
+
+      // 3. Fallback strictly to verified approved production URL
+      if (isApprovedProductionOrigin(productionUrl)) {
+        return productionUrl;
+      }
+      return 'https://alpha-x-app.vercel.app/api/v1';
+    }
+
+    // -------------------------------------------------------------
+    // DEBUG / DEVELOPMENT MODE RESOLUTION
+    // -------------------------------------------------------------
     // 1. Runtime override (if not an unusable loopback)
     if (customServerUrl != null && customServerUrl!.trim().isNotEmpty) {
       final normalized = normalizeUrl(customServerUrl!);

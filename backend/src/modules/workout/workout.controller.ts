@@ -561,14 +561,26 @@ export class WorkoutController {
   }
 
   async getClientsList(_req: Request, res: Response): Promise<void> {
-    const clients = await workoutService.getClientsList();
-    sendSuccess(
-      res,
-      clients,
-      HttpStatus.OK,
-      `Retrieved ${clients.length} clients for workout assignment overview`,
-      { count: clients.length }
-    );
+    try {
+      const clients = await workoutService.getClientsList();
+      sendSuccess(
+        res,
+        clients,
+        HttpStatus.OK,
+        `Retrieved ${clients.length} clients for workout assignment overview`,
+        { count: clients.length }
+      );
+    } catch (err: any) {
+      sendError(
+        res,
+        'DATABASE_ERROR',
+        'Failed to retrieve clients list from database',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        undefined,
+        err,
+        { activity: 'Get Clients List' }
+      );
+    }
   }
 
   async getClientWorkoutResults(req: Request, res: Response): Promise<void> {

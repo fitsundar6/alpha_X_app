@@ -149,48 +149,24 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
         }
         return;
       }
-    } catch (e) {
-      debugPrint('[AUTH DEBUG] AdminPortal backend unreachable: $e');
-      // Backend unreachable — fall through to local check below
-    }
 
-    // ── Step 2: Local Fallback (only when backend is unreachable) ──────────────
-    // Uses compile-time dart-define values. Works for development without backend.
-    final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
-    final configuredPassword = AdminConfig.adminPassword;
-
-    final isEmailMatch =
-        (enteredEmail == configuredEmail) ||
-        (enteredEmail == 'fitsundar6@gmail.com');
-    // configuredPassword may be empty if not compiled with --dart-define
-    final isPasswordMatch =
-        configuredPassword.isNotEmpty && enteredPassword == configuredPassword;
-
-    if (isEmailMatch && isPasswordMatch) {
-      debugPrint(
-        '[AUTH DEBUG] AdminPortal local fallback auth successful (backend offline)',
-      );
-      final auth = AuthService();
-      await auth.setAdminSession(
-        email: enteredEmail,
-        password: enteredPassword,
-      );
-
+      // Any other unexpected non-200 status code
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/admin');
+        setState(() {
+          _errorMessage = 'Admin authentication failed. Please try again.';
+          _isLoading = false;
+        });
       }
       return;
-    }
-
-    // All authentication methods failed
-    debugPrint(
-      '[AUTH DEBUG] AdminPortal authentication failed — all methods exhausted',
-    );
-    if (mounted) {
-      setState(() {
-        _errorMessage = 'Invalid admin email or password.';
-        _isLoading = false;
-      });
+    } catch (e) {
+      debugPrint('[AUTH DEBUG] AdminPortal backend unreachable: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to connect to the authentication server. Please check your network connection and try again.';
+          _isLoading = false;
+        });
+      }
+      return;
     }
   }
 
@@ -258,24 +234,25 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                   .pushReplacementNamed('/login'),
                         ),
                       ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.35),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.12),
+                      if (!ApiConfig.effectiveIsReleaseMode)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.12),
+                            ),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.settings_ethernet,
+                              color: AppColors.textTertiary,
+                              size: 20,
+                            ),
+                            tooltip: 'Server Settings',
+                            onPressed: () => ServerConfigDialog.show(context),
                           ),
                         ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.settings_ethernet,
-                            color: AppColors.textTertiary,
-                            size: 20,
-                          ),
-                          tooltip: 'Server Settings',
-                          onPressed: () => ServerConfigDialog.show(context),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -498,7 +475,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                     fontSize: 13,
                                                   ),
                                                   hintText:
-                                                      AdminConfig.adminEmail,
+                                                      AdminConfig.adminEmail.isNotEmpty
+                                                          ? AdminConfig.adminEmail
+                                                          : 'admin@alphaxgym.com',
                                                   hintStyle: TextStyle(
                                                     color: AppColors
                                                         .textTertiary

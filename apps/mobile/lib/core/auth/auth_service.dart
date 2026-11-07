@@ -35,6 +35,16 @@ class AuthService extends ChangeNotifier {
   static const String _storageKeySession = 'alpha_x_local_active_session';
   static const String _storageKeyPendingAssessment = 'alpha_x_pending_assessment_sync';
 
+  /// Isolated test fixture for unit testing admin authentication (strictly for test environments).
+  static String? _testAdminPassword;
+  static String? _testAdminEmail;
+
+  @visibleForTesting
+  static void setTestAdminCredentials({String? email, String? password}) {
+    _testAdminEmail = email;
+    _testAdminPassword = password;
+  }
+
   UserRole _role = UserRole.client;
   String _userId = '';
   String _clientId = '';
@@ -43,6 +53,7 @@ class AuthService extends ChangeNotifier {
   String? _userPhone;
   String? _photoUrl;
   String _token = '';
+  bool _mustChangePassword = false;
   bool _isAuthenticated = false;
   bool _isInitialized = false;
   bool _onboardingCompleted = false;
@@ -87,6 +98,7 @@ class AuthService extends ChangeNotifier {
   bool get isApproved => !_isAuthenticated || _role == UserRole.admin || _userStatus == 'APPROVED';
   bool get isRejected => _isAuthenticated && _role == UserRole.client && _userStatus == 'REJECTED';
   bool get isSuspended => _isAuthenticated && _role == UserRole.client && _userStatus == 'SUSPENDED';
+  bool get mustChangePassword => _isAuthenticated && _role == UserRole.client && _mustChangePassword;
   String? get rejectionReason => _rejectionReason;
   String? get rejectedAt => _rejectedAt;
   String? get approvedAt => _approvedAt;
@@ -132,8 +144,9 @@ class AuthService extends ChangeNotifier {
 
   /// Authenticates with the backend to refresh an existing client session token.
   /// Automatically deduplicates concurrent refresh requests using in-flight lock.
+  /// Phase 8: No longer requires a non-empty in-memory _token — relies on stored refresh token.
   Future<String?> refreshClientToken() async {
-    if (_token.isEmpty || _role != UserRole.client) return null;
+    if (_role != UserRole.client) return null;
     if (_clientRefreshFuture != null) {
       return await _clientRefreshFuture;
     }
@@ -148,41 +161,56 @@ class AuthService extends ChangeNotifier {
 
   Future<String?> _performRefreshClientToken() async {
     try {
+      // Phase 8: Read stored refresh token from secure storage
+      final storedRefreshToken = await SecureTokenStorage.readRefreshToken();
+      if (storedRefreshToken == null || storedRefreshToken.isEmpty) {
+        debugPrint('[AuthService] No stored refresh token found. Purging session.');
+        await logout();
+        return null;
+      }
+
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
       final client = _customHttpClient;
+      // Phase 8: Send refresh token in request body (no Bearer fallback for client refresh)
+      final body = jsonEncode({'refreshToken': storedRefreshToken});
+      final headers = {'Content-Type': 'application/json'};
       final res = client != null
-          ? await client.post(
-              url,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $_token',
-              },
-            ).timeout(const Duration(seconds: 8))
-          : await http.post(
-              url,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $_token',
-              },
-            ).timeout(const Duration(seconds: 8));
+          ? await client.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8))
+          : await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        final token = (decoded['data'] is Map ? decoded['data']['token'] : decoded['token'])?.toString();
-        if (token != null && token.isNotEmpty) {
-          _token = token;
+        final data = decoded['data'] is Map ? decoded['data'] : decoded;
+        final newAccessToken = data['token']?.toString();
+        final newRefreshToken = data['refreshToken']?.toString();
+
+        if (newAccessToken != null && newAccessToken.isNotEmpty) {
+          // Phase 8: Store successor refresh token BEFORE updating in-memory state.
+          // Fail closed if storage write fails — require re-login rather than lose the token.
+          if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+            try {
+              await SecureTokenStorage.writeRefreshToken(newRefreshToken);
+            } catch (e) {
+              debugPrint('[AuthService] CRITICAL: Failed to persist rotated refresh token. Failing closed.');
+              await logout();
+              return null;
+            }
+          }
+          _token = newAccessToken;
           await _saveActiveSession();
-          debugPrint('[AuthService] Successfully acquired fresh Client JWT token');
+          debugPrint('[AuthService] Successfully acquired fresh Client JWT token via refresh rotation');
           notifyListeners();
-          return token;
+          return newAccessToken;
         }
-      } else if (res.statusCode == 401 || res.statusCode == 403) {
-        // Backend explicitly rejected the session (expired beyond 30-day grace period, user deleted, or invalid token)
-        debugPrint('[AuthService] Client session expired beyond recovery or invalid (${res.statusCode}). Purging session.');
+      } else if (res.statusCode == 400 || res.statusCode == 401 || res.statusCode == 403) {
+        // Backend explicitly rejected: MISSING_REFRESH_TOKEN, TOKEN_REVOKED, TOKEN_REUSE_DETECTED,
+        // TOKEN_UPGRADE_REQUIRED, or invalid token. Purge local session safely.
+        debugPrint('[AuthService] Refresh token rejected by backend (${res.statusCode}). Purging session.');
         await logout();
         return null;
       }
     } catch (e) {
+      // Network failure or timeout — do NOT retry blindly. Preserve session for next app foreground.
       debugPrint('[AuthService] Client token refresh network notice (offline or transient): $e');
     }
     return null;
@@ -225,6 +253,32 @@ class AuthService extends ChangeNotifier {
     if (kIsWeb) return false;
     try {
       return Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Authoritatively validates an existing stored admin token against backend /auth/me.
+  /// Strictly requires HTTP 200 and data.role == 'ADMIN'.
+  Future<bool> _verifyAdminTokenWithBackend(String candidateToken) async {
+    if (candidateToken.isEmpty || candidateToken == 'local_admin_session_token') {
+      return false;
+    }
+    try {
+      final client = _customHttpClient;
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/me');
+      final res = client != null
+          ? await client.get(url, headers: {'Authorization': 'Bearer $candidateToken'}).timeout(const Duration(seconds: 8))
+          : await http.get(url, headers: {'Authorization': 'Bearer $candidateToken'}).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        final data = decoded is Map ? (decoded['data'] as Map?) : null;
+        if (data != null && data['role'] == 'ADMIN') {
+          return true;
+        }
+      }
+      return false;
     } catch (_) {
       return false;
     }
@@ -278,12 +332,22 @@ class AuthService extends ChangeNotifier {
       if (session != null && session.isNotEmpty) {
         final savedRole = (session['role'] as String? ?? 'CLIENT').trim().toUpperCase();
         final savedEmail = (session['email'] as String? ?? '').trim().toLowerCase();
-        final effectiveToken = (secureToken != null && secureToken.isNotEmpty)
-            ? secureToken
-            : (session['token']?.toString() ?? '');
+        // F-04: Token is sourced exclusively from SecureTokenStorage (Keychain/KeyStore).
+        //        Never read it from the SharedPreferences session JSON.
+        final effectiveToken = (secureToken != null && secureToken.isNotEmpty) ? secureToken : '';
 
         if (savedRole == 'ADMIN') {
-          if (savedEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
+          // Never trust SharedPreferences alone for ADMIN privileges.
+          // Require authoritative backend verification of the secure stored token.
+          bool isValidAdmin = false;
+          if (effectiveToken.isNotEmpty && effectiveToken != 'local_admin_session_token') {
+            isValidAdmin = await _verifyAdminTokenWithBackend(effectiveToken);
+          } else if (_isTestEnvironment && _customHttpClient == null && effectiveToken.isNotEmpty) {
+            // Unit test environment fallback only when no custom HTTP client was provided
+            isValidAdmin = true;
+          }
+
+          if (isValidAdmin) {
             _role = UserRole.admin;
             _userId = session['id'] ?? 'admin_alex_stone';
             _clientId = 'AXG-ADMIN';
@@ -291,18 +355,18 @@ class AuthService extends ChangeNotifier {
             _userEmail = savedEmail;
             _userPhone = null;
             _photoUrl = null;
+            _token = effectiveToken;
             _isAuthenticated = true;
-            final isProd = kReleaseMode || AppConstants.apiBaseUrl.contains('vercel.app');
-            _token = effectiveToken.isNotEmpty && effectiveToken != 'local_admin_session_token'
-                ? effectiveToken
-                : (isProd ? '' : 'local_admin_session_token');
-            unawaited(refreshAdminToken());
+            _mustChangePassword = false;
           } else {
+            // On failure, invalid/expired token, or unreachable backend: clear/downgrade admin session safely
             await logout();
+            return;
           }
         } else if (savedRole == 'CLIENT') {
           // Strictly prevent Admin email from restoring as Client
-          if (savedEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
+          final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
+          if (configuredAdminEmail.isNotEmpty && savedEmail == configuredAdminEmail) {
             await logout();
             return;
           }
@@ -330,6 +394,7 @@ class AuthService extends ChangeNotifier {
           _approvedAt = session['approvedAt']?.toString();
           _suspendedAt = session['suspendedAt']?.toString();
           _isAuthenticated = true;
+          _mustChangePassword = session['mustChangePassword'] == true;
           _token = effectiveToken;
 
           // Migrate to Secure Storage if not yet present
@@ -338,12 +403,20 @@ class AuthService extends ChangeNotifier {
           }
 
           // Handle token expiry and proactive refresh on startup
-          if (_token.isNotEmpty && (!_isTestEnvironment || _customHttpClient != null)) {
-            if (isTokenExpired) {
+          if (!_isTestEnvironment || _customHttpClient != null) {
+            if (_token.isEmpty || isTokenExpired) {
+              // Phase 8: Check for stored refresh token before attempting refresh
+              final secureRefreshToken = await SecureTokenStorage.readRefreshToken();
+              if (secureRefreshToken == null || secureRefreshToken.isEmpty) {
+                // No refresh token available — cannot recover session
+                debugPrint('[AuthService] Access token expired and no refresh token stored. Purging session.');
+                await logout();
+                return;
+              }
               debugPrint('[AuthService] Client access token expired on startup. Attempting proactive refresh...');
-              // Proactively refresh the expired token.
-              // Note: _performRefreshClientToken() will explicitly call logout() only if the backend confirms
-              // an unrecoverable auth error (HTTP 401/403). Normal network/offline failures preserve the session!
+              // Proactively refresh the expired token using the stored refresh token.
+              // _performRefreshClientToken() will explicitly call logout() only if the backend confirms
+              // an unrecoverable auth error (HTTP 400/401/403). Normal network/offline failures preserve the session!
               await refreshClientToken();
             } else {
               // If status is PENDING or onboarding is not completed, await checkVerificationStatus()
@@ -381,8 +454,32 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Updates and persists the custom backend server API URL.
+  /// If the API origin changes in an authorized debug flow, existing authentication
+  /// tokens and session data are safely purged to prevent cross-origin token leakage.
   Future<void> updateServerUrl(String url) async {
-    await ApiConfig.setCustomUrl(url);
+    if (ApiConfig.effectiveIsReleaseMode) {
+      debugPrint('[SECURITY] Modifying API origin is forbidden in release builds.');
+      return;
+    }
+
+    final oldOrigin = ApiConfig.baseUrlOrigin;
+    await ApiConfig.setCustomUrl(url.trim().isEmpty ? null : url);
+    final newOrigin = ApiConfig.baseUrlOrigin;
+
+    if (oldOrigin != newOrigin) {
+      debugPrint('[SECURITY] API origin changed ($oldOrigin -> $newOrigin). Safely purging authentication tokens.');
+      _token = '';
+      _resetSession();
+      try {
+        await SecureTokenStorage.deleteAuthToken();
+        await SecureTokenStorage.deleteSessionData();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_storageKeySession);
+      } catch (e) {
+        debugPrint('[SECURITY] Error clearing tokens on origin change: $e');
+      }
+    }
+
     notifyListeners();
   }
 
@@ -411,8 +508,11 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Saves the active authenticated session into SecureTokenStorage and SharedPreferences.
+  /// F-04: JWT token is stored ONLY in SecureTokenStorage (Keychain/KeyStore).
+  ///       SharedPreferences receives non-sensitive profile data only (no token field).
   Future<void> _saveActiveSession() async {
     try {
+      // Build the session map WITHOUT the token — token lives exclusively in SecureTokenStorage.
       final session = {
         'id': _userId,
         'clientId': _clientId,
@@ -421,12 +521,13 @@ class AuthService extends ChangeNotifier {
         'phone': _userPhone,
         'photoUrl': _photoUrl,
         'role': _role == UserRole.admin ? 'ADMIN' : 'CLIENT',
-        'token': _token,
+        // F-04: 'token' intentionally omitted here — do not add it back.
         'status': _userStatus,
         'rejectionReason': _rejectionReason,
         'rejectedAt': _rejectedAt,
         'approvedAt': _approvedAt,
         'suspendedAt': _suspendedAt,
+        'mustChangePassword': _mustChangePassword,
         'onboardingCompleted': _onboardingCompleted,
         'assessmentCompleted': _onboardingCompleted,
         'onboardingStep': _onboardingStep,
@@ -441,7 +542,8 @@ class AuthService extends ChangeNotifier {
       }
       await SecureTokenStorage.writeSessionData(session);
 
-      // 2. Persist in SharedPreferences as fallback
+      // 2. Persist non-sensitive profile data in SharedPreferences as cold-start fallback.
+      //    Token is intentionally excluded — only SecureTokenStorage holds the JWT.
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_storageKeySession, jsonEncode(session));
     } catch (e) {
@@ -533,7 +635,9 @@ class AuthService extends ChangeNotifier {
     if (password.length < 6) throw Exception('Password must meet the required security rules');
     if (password != confirmPassword) throw Exception('Passwords do not match.');
 
-    if (cleanEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
+    final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
+    final expectedAdminEmail = configuredAdminEmail.isNotEmpty ? configuredAdminEmail : _testAdminEmail;
+    if (expectedAdminEmail != null && expectedAdminEmail.isNotEmpty && cleanEmail == expectedAdminEmail.toLowerCase().trim()) {
       throw Exception('This email is reserved for administration. Please sign in via Admin Portal.');
     }
 
@@ -594,6 +698,7 @@ class AuthService extends ChangeNotifier {
           _onboardingStep = 0;
           _clientProfile = Map<String, dynamic>.from(profile);
           _isAuthenticated = true;
+          _mustChangePassword = false;
 
           await _saveClientAccountLocally(
             id: _userId,
@@ -666,6 +771,7 @@ class AuthService extends ChangeNotifier {
         _token = 'test_client_jwt_token';
         _userStatus = 'PENDING';
         _rejectionReason = null;
+    _mustChangePassword = false;
         _rejectedAt = null;
         _approvedAt = null;
         _suspendedAt = null;
@@ -727,7 +833,8 @@ class AuthService extends ChangeNotifier {
 
     // 1. Check if user is entering Master Admin credentials
     final normalizedInput = cleanId.toLowerCase();
-    if (normalizedInput == AdminConfig.adminEmail.trim().toLowerCase()) {
+    final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
+    if (configuredAdminEmail.isNotEmpty && normalizedInput == configuredAdminEmail) {
       await adminLogin(email: cleanId, password: password);
       return {
         'role': 'ADMIN',
@@ -790,6 +897,14 @@ class AuthService extends ChangeNotifier {
           _onboardingStep = step;
           _clientProfile = Map<String, dynamic>.from(profile);
           _isAuthenticated = true;
+          _mustChangePassword = data['mustChangePassword'] == true || user['mustChangePassword'] == true;
+
+          // Phase 8: Securely store the refresh token from login response.
+          // Backend sends refreshToken: null for forced-password-change sessions — do not store null.
+          final loginRefreshToken = data['refreshToken']?.toString();
+          if (loginRefreshToken != null && loginRefreshToken.isNotEmpty && !_mustChangePassword) {
+            await SecureTokenStorage.writeRefreshToken(loginRefreshToken);
+          }
 
           if (_onboardingCompleted) {
             try {
@@ -832,7 +947,7 @@ class AuthService extends ChangeNotifier {
             'assessmentCompleted': _onboardingCompleted,
             'onboardingCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
-            'mustChangePassword': data['mustChangePassword'] == true,
+            'mustChangePassword': _mustChangePassword,
           };
         }
       }
@@ -891,6 +1006,7 @@ class AuthService extends ChangeNotifier {
           _onboardingStep = matched['onboardingStep'] is int ? matched['onboardingStep'] : 0;
           _clientProfile = matched['profile'] is Map ? Map<String, dynamic>.from(matched['profile']) : {};
           _isAuthenticated = true;
+          _mustChangePassword = matched['mustChangePassword'] == true;
           await _saveActiveSession();
           notifyListeners();
           return {
@@ -905,6 +1021,7 @@ class AuthService extends ChangeNotifier {
             'assessmentCompleted': _onboardingCompleted,
             'onboardingCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
+            'mustChangePassword': _mustChangePassword,
           };
         }
       }
@@ -1115,21 +1232,16 @@ class AuthService extends ChangeNotifier {
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     final configuredEmail = AdminConfig.adminEmail.trim().toLowerCase();
-    final configured = AdminConfig.adminPassword;
+    final expectedEmail = configuredEmail.isNotEmpty ? configuredEmail : _testAdminEmail;
 
-    final isEmailMatch = (cleanEmail == configuredEmail) ||
-        (cleanEmail == 'fitsundar6@gmail.com');
-
-    if (!isEmailMatch) {
+    if (expectedEmail != null && expectedEmail.isNotEmpty && cleanEmail != expectedEmail.toLowerCase().trim()) {
       throw Exception('Invalid admin email or password.');
     }
 
-    // In unit test environment without a real or custom HTTP client, verify against test credentials
+    // In unit test environment without a real or custom HTTP client, verify against isolated test fixture
     if (_isTestEnvironment && _customHttpClient == null) {
-      final isTestMatch = password.isNotEmpty &&
-          (password == 'AlphaXAdmin2026' ||
-           password == 'AlphaXAdmin2026!' ||
-           (configured.isNotEmpty && password == configured));
+      final configured = AdminConfig.adminPassword.isNotEmpty ? AdminConfig.adminPassword : _testAdminPassword;
+      final isTestMatch = password.isNotEmpty && configured != null && password == configured;
       if (!isTestMatch) {
         throw Exception('Invalid admin email or password.');
       }
@@ -1187,7 +1299,7 @@ class AuthService extends ChangeNotifier {
       debugPrint('[AUTH] Admin backend sync note: $e');
     }
 
-    if (isProd && _token.isEmpty) {
+    if (_token.isEmpty || (isProd && _token == 'local_admin_session_token')) {
       _isAuthenticated = false;
       await _saveActiveSession();
       notifyListeners();
@@ -1226,30 +1338,32 @@ class AuthService extends ChangeNotifier {
 
       // Authoritative Backend JWT Token Acquisition (only when token was not already provided)
       try {
-        final client = _customHttpClient;
-        final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
-        final headers = {'Content-Type': 'application/json'};
-        final reqBody = jsonEncode({
-          'email': _userEmail,
-          'password': password.isNotEmpty ? password : AdminConfig.adminPassword,
-        });
+        if (password.isNotEmpty) {
+          final client = _customHttpClient;
+          final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+          final headers = {'Content-Type': 'application/json'};
+          final reqBody = jsonEncode({
+            'email': _userEmail,
+            'password': password,
+          });
 
-        final res = client != null
-            ? await client.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8))
-            : await http.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8));
+          final res = client != null
+              ? await client.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8))
+              : await http.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 8));
 
-        if (res.statusCode == 200) {
-          final decoded = jsonDecode(res.body);
-          final candidateToken = (decoded is Map ? (decoded['data']?['token'] ?? decoded['token']) : null)?.toString();
-          if (candidateToken != null && candidateToken.trim().isNotEmpty) {
-            _token = candidateToken.trim();
+          if (res.statusCode == 200) {
+            final decoded = jsonDecode(res.body);
+            final candidateToken = (decoded is Map ? (decoded['data']?['token'] ?? decoded['token']) : null)?.toString();
+            if (candidateToken != null && candidateToken.trim().isNotEmpty) {
+              _token = candidateToken.trim();
+            }
           }
         }
       } catch (e) {
         debugPrint('[AUTH] Admin backend sync note: $e');
       }
 
-      if (isProd && _token.isEmpty) {
+      if (_token.isEmpty || (isProd && _token == 'local_admin_session_token')) {
         _isAuthenticated = false;
         await _saveActiveSession();
         notifyListeners();
@@ -1280,36 +1394,24 @@ class AuthService extends ChangeNotifier {
 
   Future<String?> _performRefreshAdminToken() async {
     try {
-      final email = AdminConfig.adminEmail.trim().toLowerCase();
-      final password = AdminConfig.adminPassword;
-      if (password.isEmpty) {
-        debugPrint('[AuthService] Admin token refresh skipped: no cached credential available.');
+      if (_token.isEmpty || _token == 'local_admin_session_token') {
+        debugPrint('[AuthService] Admin token refresh skipped: no active session token available.');
         return null;
       }
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
       final client = _customHttpClient;
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_token',
+      };
 
       final res = client != null
-          ? await client.post(
-              url,
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'email': email,
-                'password': password,
-              }),
-            ).timeout(const Duration(seconds: 10))
-          : await http.post(
-              url,
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'email': email,
-                'password': password,
-              }),
-            ).timeout(const Duration(seconds: 10));
+          ? await client.post(url, headers: headers).timeout(const Duration(seconds: 10))
+          : await http.post(url, headers: headers).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
-        final token = (decoded['data'] is Map ? decoded['data']['token'] : decoded['token'])?.toString();
+        final token = (decoded is Map ? (decoded['data']?['token'] ?? decoded['token']) : null)?.toString();
         if (token != null && token.isNotEmpty) {
           _token = token;
           if (_role == UserRole.admin) {
@@ -1321,9 +1423,12 @@ class AuthService extends ChangeNotifier {
         }
       } else {
         debugPrint('[AuthService] Admin token refresh failed with status: ${res.statusCode}');
+        if (res.statusCode == 401 || res.statusCode == 403) {
+          await logout();
+        }
       }
     } catch (e) {
-      debugPrint('[AuthService] Admin token refresh error: $e');
+      debugPrint('[AuthService] Admin token refresh note: $e');
     }
     return null;
   }
@@ -1334,7 +1439,9 @@ class AuthService extends ChangeNotifier {
     required String password,
   }) async {
     final cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail == AdminConfig.adminEmail.trim().toLowerCase()) {
+    final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
+    final expectedEmail = configuredAdminEmail.isNotEmpty ? configuredAdminEmail : _testAdminEmail;
+    if (expectedEmail != null && expectedEmail.isNotEmpty && cleanEmail == expectedEmail.toLowerCase().trim()) {
       await adminLogin(email: email, password: password);
       return UserRole.admin;
     }
@@ -1376,7 +1483,12 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Complete logout: purges active session and resets state.
-  Future<void> logout() async {
+  /// F-04: Calls the backend /auth/logout endpoint to invalidate token server-side,
+  ///        immediately invalidating all previously issued tokens for this user.
+  ///        Local credentials are always cleared even if the network call fails.
+  /// Phase 8: Supports allDevices parameter. Default (false) = single-device logout.
+  ///          When allDevices is true, sends { "allDevices": true } to revoke every session.
+  Future<void> logout({bool allDevices = false}) async {
     String? tokenToUnregister = _token;
     if (tokenToUnregister.isEmpty) {
       try {
@@ -1384,6 +1496,32 @@ class AuthService extends ChangeNotifier {
       } catch (_) {}
     }
     final userToUnregister = _userId;
+    final tokenForLogout = tokenToUnregister;
+
+    // F-04: Call backend logout to invalidate token server-side (best-effort).
+    // Admin sessions are stateless; skip backend call for them.
+    if (_role == UserRole.client && tokenForLogout != null && tokenForLogout.isNotEmpty) {
+      try {
+        final client = _customHttpClient;
+        final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/logout');
+        final headers = {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $tokenForLogout',
+        };
+        // Phase 8: Send allDevices in body when requested
+        final body = allDevices ? jsonEncode({'allDevices': true}) : jsonEncode({});
+        if (client != null) {
+          await client.post(url, headers: headers, body: body).timeout(const Duration(seconds: 5));
+        } else {
+          await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 5));
+        }
+        debugPrint('[AuthService] Backend logout successful${allDevices ? ' (all devices)' : ''}.');
+      } catch (e) {
+        // Network unavailable or server error — local logout still proceeds safely.
+        debugPrint('[AuthService] Backend logout notice (offline or transient): $e');
+      }
+    }
+
     try {
       // Must await push notification unregistration BEFORE clearing credentials and session
       await PushNotificationService.instance.onUserLogout(
@@ -1396,6 +1534,7 @@ class AuthService extends ChangeNotifier {
     _resetSession();
     try {
       await SecureTokenStorage.deleteAuthToken();
+      await SecureTokenStorage.deleteRefreshToken();
       await SecureTokenStorage.deleteSessionData();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKeySession);
@@ -1417,6 +1556,7 @@ class AuthService extends ChangeNotifier {
     _rejectedAt = null;
     _approvedAt = null;
     _suspendedAt = null;
+    _mustChangePassword = false;
     _isAuthenticated = false;
     _onboardingCompleted = false;
     _onboardingStep = 0;
@@ -1433,6 +1573,7 @@ class AuthService extends ChangeNotifier {
         'onboardingCompleted': _onboardingCompleted,
         'assessmentCompleted': _onboardingCompleted,
         'onboardingStep': _onboardingStep,
+        'mustChangePassword': _mustChangePassword,
       };
     }
 
@@ -1465,6 +1606,9 @@ class AuthService extends ChangeNotifier {
           _rejectedAt = data['rejectedAt']?.toString();
           _approvedAt = data['approvedAt']?.toString();
           _suspendedAt = data['suspendedAt']?.toString();
+          if (data['mustChangePassword'] != null) {
+            _mustChangePassword = data['mustChangePassword'] == true;
+          }
 
           final profile = data['profile'] is Map ? Map<String, dynamic>.from(data['profile']) : null;
           final backendOnboardingCompleted = data['onboardingCompleted'] == true ||
@@ -1504,6 +1648,7 @@ class AuthService extends ChangeNotifier {
             'onboardingCompleted': _onboardingCompleted,
             'assessmentCompleted': _onboardingCompleted,
             'onboardingStep': _onboardingStep,
+            'mustChangePassword': _mustChangePassword,
           };
         }
       }
@@ -1659,6 +1804,9 @@ class AuthService extends ChangeNotifier {
       final data = jsonDecode(res.body);
 
       if (res.statusCode == 200 && data['success'] == true) {
+        _mustChangePassword = false;
+        await _saveActiveSession();
+        notifyListeners();
         return {
           'valid': true,
           'email': data['data']?['email'],
@@ -1737,6 +1885,9 @@ class AuthService extends ChangeNotifier {
 
       final data = jsonDecode(res.body);
       if (res.statusCode == 200 && data['success'] == true) {
+        _mustChangePassword = false;
+        await _saveActiveSession();
+        notifyListeners();
         return {
           'success': true,
           'message': data['data']?['message'] ??
@@ -1763,9 +1914,11 @@ class AuthService extends ChangeNotifier {
   /// Fetches official gym contact details for admin verification and assistance.
   Future<Map<String, dynamic>> getGymContactInfo() async {
     if (_isTestEnvironment) {
+      final defaultSupportEmail = AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'support@alphaxgym.com';
       return {
         'gymName': 'Alpha X Gym',
-        'adminEmail': AdminConfig.adminEmail,
+        'supportEmail': defaultSupportEmail,
+        'adminEmail': defaultSupportEmail,
         'deskPhone': '+1 (555) 019-2834',
         'deskHours': 'Mon-Sun 6:00 AM - 10:00 PM',
         'instructions':
@@ -1806,9 +1959,11 @@ class AuthService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AuthService] getGymContactInfo error: $e');
     }
+    final defaultSupportEmail = AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'support@alphaxgym.com';
     return {
       'gymName': 'Alpha X Gym',
-      'adminEmail': AdminConfig.adminEmail,
+      'supportEmail': defaultSupportEmail,
+      'adminEmail': defaultSupportEmail,
       'deskPhone': '+1 (555) 019-2834',
       'deskHours': 'Mon-Sun 6:00 AM - 10:00 PM',
       'instructions':
@@ -1925,6 +2080,9 @@ class AuthService extends ChangeNotifier {
     required String confirmPassword,
   }) async {
     if (_isTestEnvironment) {
+      _mustChangePassword = false;
+      await _saveActiveSession();
+      notifyListeners();
       return {
         'success': true,
         'message': 'Password has been successfully updated.',
@@ -1951,6 +2109,24 @@ class AuthService extends ChangeNotifier {
 
       final data = jsonDecode(res.body);
       if (res.statusCode == 200 && data['success'] == true) {
+        _mustChangePassword = false;
+        // F-04: Backend returns a fresh JWT with the updated tokenVersion.
+        //        Update in-memory token and persist to SecureTokenStorage so the
+        //        current user stays authenticated after their password change.
+        final freshToken = data['data']?['token']?.toString();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          _token = freshToken;
+          debugPrint('[AuthService] Fresh JWT received after password change — session updated.');
+        }
+        // Phase 8: Backend returns a new refresh token after password change.
+        //          Store it securely to maintain the authenticated session.
+        final freshRefreshToken = data['data']?['refreshToken']?.toString();
+        if (freshRefreshToken != null && freshRefreshToken.isNotEmpty) {
+          await SecureTokenStorage.writeRefreshToken(freshRefreshToken);
+          debugPrint('[AuthService] New refresh token stored after password change.');
+        }
+        await _saveActiveSession();
+        notifyListeners();
         return {
           'success': true,
           'message': data['data']?['message'] ??
@@ -1987,6 +2163,7 @@ class AuthService extends ChangeNotifier {
     bool onboardingCompleted = true,
     String status = 'APPROVED',
     String? rejectionReason,
+    bool mustChangePassword = false,
   }) {
     _role = role;
     _userEmail = email;
@@ -1998,6 +2175,7 @@ class AuthService extends ChangeNotifier {
     _userStatus = status.toUpperCase();
     _rejectionReason = rejectionReason;
     _onboardingCompleted = onboardingCompleted;
+    _mustChangePassword = mustChangePassword;
     _isAuthenticated = true;
     _isInitialized = true;
     notifyListeners();

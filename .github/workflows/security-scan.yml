@@ -29,17 +29,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify Prohibited Backup, Dump, SQL & Keystore Patterns
+      - name: Verify Prohibited Upload, Backup, Dump, SQL & Keystore Patterns
         shell: bash
         run: |
-          echo "Checking repository index for prohibited dump, backup, SQL, and keystore files..."
-          BLOCKED_FILES=$(git ls-files | grep -v -E '^backend/prisma/migrations/[^/]+/migration[.]sql$' | grep -i -E '(^|/)db_backup_[^/]*[.]json$|[.]dump$|[.]bak$|[.]sql$|[.]jks$|[.]keystore$|upload-keystore[.]jks[.]backup$' || true)
+          echo "Checking repository index for prohibited upload, dump, backup, SQL, and keystore files..."
+          BLOCKED_FILES=$(git ls-files | grep -v -E '^backend/prisma/migrations/[^/]+/migration[.]sql$' | grep -i -E '(^|/)db_backup_[^/]*[.]json$|[.]dump$|[.]bak$|[.]sql$|[.]jks$|[.]keystore$|upload-keystore[.]jks[.]backup$|(^|/)uploads/|(^|/)backend/uploads/' || true)
           if [ -n "$BLOCKED_FILES" ]; then
-            echo "::error::Prohibited sensitive backup, dump, SQL, or credential file detected in repository index:"
+            echo "::error::Prohibited sensitive upload, backup, dump, SQL, or credential file detected in repository index:"
             echo "$BLOCKED_FILES"
             exit 1
           fi
-          echo "✔ Repository index is free of prohibited backup, dump, SQL, and keystore files."
+          echo "✔ Repository index is free of prohibited upload, backup, dump, SQL, and keystore files."
 
       - name: Run Gitleaks Secret Scanner
         # Pin gitleaks/gitleaks-action to immutable commit SHA for v3.0.0 (Node 24 runtime)

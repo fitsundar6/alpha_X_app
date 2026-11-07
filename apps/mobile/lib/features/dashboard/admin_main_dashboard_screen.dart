@@ -2671,14 +2671,20 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
               ),
               subtitle: Text(
-                AppConstants.apiBaseUrl,
+                ApiConfig.effectiveIsReleaseMode
+                    ? '${AppConstants.apiBaseUrl} (Locked)'
+                    : AppConstants.apiBaseUrl,
                 style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
-              trailing: Icon(Icons.edit_outlined, size: 18, color: colors.textSecondary),
-              onTap: () async {
-                await ServerConfigDialog.show(context);
-                if (mounted) setState(() {});
-              },
+              trailing: ApiConfig.effectiveIsReleaseMode
+                  ? Icon(Icons.lock_outline, size: 18, color: colors.textSecondary.withOpacity(0.5))
+                  : Icon(Icons.edit_outlined, size: 18, color: colors.textSecondary),
+              onTap: ApiConfig.effectiveIsReleaseMode
+                  ? null
+                  : () async {
+                      await ServerConfigDialog.show(context);
+                      if (mounted) setState(() {});
+                    },
             ),
             const SizedBox(height: 24),
 

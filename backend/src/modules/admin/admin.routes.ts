@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth, requireAdmin } from '../../middlewares/auth';
 import { adminAuthService } from '../auth/admin_auth.service';
+import { refreshTokenService } from '../auth/refresh_token.service';
 import { workoutController } from '../workout/workout.controller';
 import { exerciseController } from '../exercise/exercise.controller';
 import { HttpStatus } from '../../constants/httpStatus';
@@ -260,39 +261,53 @@ router.post('/verification/:userId/reject', async (req: Request, res: Response) 
   const reason = (req.body?.reason as string || '').trim() || 'Not a gym member';
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: targetId },
-      include: { clientProfile: true },
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // 1. Acquire User row lock first using SELECT ... FOR UPDATE
+      const lockedUsers = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+        SELECT id, status FROM "users" WHERE id = ${targetId} FOR UPDATE;
+      `;
+
+      if (!lockedUsers || lockedUsers.length === 0) {
+        return null;
+      }
+
+      const previousStatus = lockedUsers[0].status;
+
+      // 2. Update account status, audit fields, and increment tokenVersion
+      const user = await tx.user.update({
+        where: { id: targetId },
+        data: {
+          status: UserStatus.REJECTED,
+          tokenVersion: { increment: 1 },
+          rejectedAt: new Date(),
+          rejectedBy: adminEmail,
+          rejectionReason: reason,
+        },
+        include: { clientProfile: true },
+      });
+
+      // 3. Revoke all active refresh tokens for this user
+      await refreshTokenService.revokeAllUserSessions(targetId, 'ACCOUNT_REJECTED', tx);
+
+      // 4. Record audit log
+      await tx.userVerificationLog.create({
+        data: {
+          userId: targetId,
+          adminId: adminUser.id,
+          adminEmail,
+          previousStatus: previousStatus as UserStatus,
+          newStatus: UserStatus.REJECTED,
+          reason,
+        },
+      });
+
+      return user;
     });
 
-    if (!user) {
+    if (!updatedUser) {
       sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
       return;
     }
-
-    const previousStatus = user.status;
-    const updatedUser = await prisma.user.update({
-      where: { id: targetId },
-      data: {
-        status: UserStatus.REJECTED,
-        rejectedAt: new Date(),
-        rejectedBy: adminEmail,
-        rejectionReason: reason,
-      },
-      include: { clientProfile: true },
-    });
-
-    // Record audit log
-    await prisma.userVerificationLog.create({
-      data: {
-        userId: targetId,
-        adminId: adminUser.id,
-        adminEmail,
-        previousStatus,
-        newStatus: UserStatus.REJECTED,
-        reason,
-      },
-    });
 
     sendSuccess(res, {
       user: {
@@ -320,38 +335,53 @@ router.post('/verification/:userId/suspend', async (req: Request, res: Response)
   const reason = (req.body?.reason as string || '').trim() || 'Suspended by administrator';
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: targetId },
-      include: { clientProfile: true },
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      // 1. Acquire User row lock first using SELECT ... FOR UPDATE
+      const lockedUsers = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+        SELECT id, status FROM "users" WHERE id = ${targetId} FOR UPDATE;
+      `;
+
+      if (!lockedUsers || lockedUsers.length === 0) {
+        return null;
+      }
+
+      const previousStatus = lockedUsers[0].status;
+
+      // 2. Update account status, audit fields, and increment tokenVersion
+      const user = await tx.user.update({
+        where: { id: targetId },
+        data: {
+          status: UserStatus.SUSPENDED,
+          tokenVersion: { increment: 1 },
+          suspendedAt: new Date(),
+          suspendedBy: adminEmail,
+          rejectionReason: reason,
+        },
+        include: { clientProfile: true },
+      });
+
+      // 3. Revoke all active refresh tokens for this user
+      await refreshTokenService.revokeAllUserSessions(targetId, 'ACCOUNT_SUSPENDED', tx);
+
+      // 4. Record audit log
+      await tx.userVerificationLog.create({
+        data: {
+          userId: targetId,
+          adminId: adminUser.id,
+          adminEmail,
+          previousStatus: previousStatus as UserStatus,
+          newStatus: UserStatus.SUSPENDED,
+          reason,
+        },
+      });
+
+      return user;
     });
 
-    if (!user) {
+    if (!updatedUser) {
       sendError(res, 'USER_NOT_FOUND', `User with ID "${targetId}" not found`, HttpStatus.NOT_FOUND);
       return;
     }
-
-    const previousStatus = user.status;
-    const updatedUser = await prisma.user.update({
-      where: { id: targetId },
-      data: {
-        status: UserStatus.SUSPENDED,
-        suspendedAt: new Date(),
-        suspendedBy: adminEmail,
-        rejectionReason: reason,
-      },
-      include: { clientProfile: true },
-    });
-
-    await prisma.userVerificationLog.create({
-      data: {
-        userId: targetId,
-        adminId: adminUser.id,
-        adminEmail,
-        previousStatus,
-        newStatus: UserStatus.SUSPENDED,
-        reason,
-      },
-    });
 
     sendSuccess(res, {
       user: {
