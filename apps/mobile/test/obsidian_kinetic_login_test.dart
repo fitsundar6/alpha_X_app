@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/auth/login_screen.dart';
 import 'package:alpha_x_gym/core/auth/widgets/seismic_disintegration_overlay.dart';
-import 'package:alpha_x_gym/core/constants/user_role.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

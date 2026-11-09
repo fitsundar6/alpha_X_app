@@ -2,8 +2,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:alpha_x_gym/core/theme/app_colors.dart';
-import 'package:alpha_x_gym/core/widgets/alpha_x_logo.dart';
 import 'auth_service.dart';
 import 'create_account_screen.dart';
 import 'widgets/seismic_disintegration_overlay.dart';

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -219,7 +218,7 @@ class _AuthenticatedFoodPhotoImageState extends State<AuthenticatedFoodPhotoImag
         height: widget.height,
         width: widget.width,
         fit: widget.fit,
-        errorBuilder: (_, __, ___) => _buildErrorWidget(),
+        errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
       );
     } else if (_isLoading) {
       content = Container(

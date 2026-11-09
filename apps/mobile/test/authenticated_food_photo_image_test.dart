@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/constants/app_constants.dart';
-import 'package:alpha_x_gym/core/constants/user_role.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/data/models/food_photo_model.dart';
 import 'package:alpha_x_gym/features/food_photo_tracking/presentation/widgets/authenticated_food_photo_image.dart';
 
