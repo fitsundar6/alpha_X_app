@@ -407,8 +407,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                       borderRadius: BorderRadius.circular(12),
                                                       border: Border.all(color: _borderColor),
                                                     ),
-                                                    child: const Center(
-                                                      child: Icon(Icons.fitness_center, color: Colors.white, size: 24),
+                                                    child: Center(
+                                                      child: Image.asset(
+                                                        'assets/images/alpha_x_logo.png',
+                                                        width: 26,
+                                                        height: 26,
+                                                        fit: BoxFit.contain,
+                                                      ),
                                                     ),
                                                   ),
                                                   const SizedBox(height: 12),
