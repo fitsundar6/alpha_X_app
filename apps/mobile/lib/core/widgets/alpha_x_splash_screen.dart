@@ -11,11 +11,10 @@ import '../../features/progress/data/repositories/weekly_progress_repository.dar
 
 /// The official Alpha X Gym startup splash screen.
 ///
-/// Implements the Stitch rubber-ball squash & stretch physics animation for "Λ L P H Λ - X":
-/// 1. Dead-centered vector wordmark with organic stagger and realistic multi-bounce physics.
-/// 2. White ambient neon tube bloom with subtle resting pulse glow.
-/// 3. Pure black background (#000000).
-/// 4. 1.6s resting hold followed by smooth 0.8s pure opacity fade-out into app entry.
+/// Implements the finalized cinematic loading sequence for "Λ L P H Λ - X":
+/// 1. Phase 1 (0.00 – 0.35): Pure white ambient wordmark reveal with neon tube bloom.
+/// 2. Phase 2 (0.35 – 0.55): In-place morph of letter 'H' into the pure white dumbbell silhouette.
+/// 3. Phase 3 (0.55 – 1.00): 3D camera zoom actor breaches the camera lens directly into app entry.
 ///
 /// Error-safe: Features a watchdog timer (widget.animationDuration + 400ms) and tap-to-skip
 /// so app startup and session restoration are never delayed or blocked.

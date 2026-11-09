@@ -8,7 +8,7 @@ on:
 jobs:
   build-ios:
     name: 🍎 Build iOS Release
-    runs-on: macos-14 # Apple Silicon cloud runner
+    runs-on: macos-latest # Apple Silicon cloud runner
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
