@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/auth/auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/models/food_photo_model.dart';
 import '../../data/services/food_photo_tracking_service.dart';
