@@ -7,25 +7,24 @@ import 'package:alpha_x_gym/core/widgets/alpha_x_logo_animation.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Alpha X Energy Reveal Launch Animation Tests', () {
-    testWidgets('1. Phase 1 & 2: Pure dark background and subtle ambient red energy stage', (tester) async {
+  group('Alpha X Rubber Physics Splash Screen Tests', () {
+    testWidgets('1. Pure black background and wordmark animation stage', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: AlphaXSplashScreen(),
         ),
       );
 
-      // Verify deep black background
+      // Verify deep black background (#000000)
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       expect(scaffold.backgroundColor, equals(Colors.black));
 
-      // Verify AlphaXLogoAnimation is mounted with showBrandLine = true
+      // Verify AlphaXLogoAnimation is mounted with 4800ms duration
       final animWidget = tester.widget<AlphaXLogoAnimation>(find.byType(AlphaXLogoAnimation));
-      expect(animWidget.showBrandLine, isTrue);
-      expect(animWidget.duration, equals(const Duration(milliseconds: 1400)));
+      expect(animWidget.duration, equals(const Duration(milliseconds: 4800)));
     });
 
-    testWidgets('2. Phase 4: Preserves exact Alpha X logo asset without alteration', (tester) async {
+    testWidgets('2. Preserves asset image for test and background compatibility', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: AlphaXSplashScreen(),
@@ -42,25 +41,28 @@ void main() {
       expect(imageWidget.fit, equals(BoxFit.contain));
     });
 
-    testWidgets('3. Phase 6: Brand line reveals "STRENGTH • CONDITIONING • BOXING • TRANSFORMATION"', (tester) async {
+    testWidgets('3. Renders 7 animated wordmark glyphs for Λ L P H Λ - X', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: AlphaXSplashScreen(),
         ),
       );
 
-      // Advance into Phase 6 (around ~800ms)
-      await tester.pump(const Duration(milliseconds: 800));
+      // Advance into settled state (~2600ms)
+      await tester.pump(const Duration(milliseconds: 2600));
 
-      final brandLineFinder = find.text('STRENGTH • CONDITIONING • BOXING • TRANSFORMATION');
-      expect(brandLineFinder, findsOneWidget);
+      final painters = find.byType(CustomPaint);
+      expect(painters, findsWidgets);
 
-      final textWidget = tester.widget<Text>(brandLineFinder);
-      expect(textWidget.style?.letterSpacing, greaterThanOrEqualTo(2.0));
-      expect(textWidget.style?.fontWeight, equals(FontWeight.w600));
+      // Check for WordmarkCharPainter instances
+      final customPaints = tester.widgetList<CustomPaint>(painters);
+      final wordmarkPainters = customPaints
+          .where((cp) => cp.painter is WordmarkCharPainter)
+          .toList();
+      expect(wordmarkPainters.length, equals(7));
     });
 
-    testWidgets('4. Phase 7: Smooth transition into destination upon completion', (tester) async {
+    testWidgets('4. Smooth transition into destination upon completion', (tester) async {
       bool navigated = false;
       await tester.pumpWidget(
         MaterialApp(
@@ -75,8 +77,8 @@ void main() {
 
       expect(navigated, isFalse);
 
-      // Advance past full duration (1400ms + transition)
-      await tester.pump(const Duration(milliseconds: 1450));
+      // Advance past full duration (4800ms + transition)
+      await tester.pump(const Duration(milliseconds: 4850));
       await tester.pumpAndSettle();
 
       expect(navigated, isTrue);
@@ -97,7 +99,7 @@ void main() {
         ),
       );
 
-      // Tap early in Phase 1 (100ms)
+      // Tap early (100ms)
       await tester.pump(const Duration(milliseconds: 100));
       expect(navigated, isFalse);
 
@@ -142,9 +144,15 @@ void main() {
         ),
       );
 
-      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pump(const Duration(milliseconds: 2600));
       expect(tester.takeException(), isNull);
-      expect(find.text('STRENGTH • CONDITIONING • BOXING • TRANSFORMATION'), findsOneWidget);
+
+      final painters = find.byType(CustomPaint);
+      final customPaints = tester.widgetList<CustomPaint>(painters);
+      final wordmarkPainters = customPaints
+          .where((cp) => cp.painter is WordmarkCharPainter)
+          .toList();
+      expect(wordmarkPainters.length, equals(7));
     });
   });
 }

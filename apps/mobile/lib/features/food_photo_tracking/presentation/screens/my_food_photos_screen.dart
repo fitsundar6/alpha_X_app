@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/models/food_photo_model.dart';
 import '../../data/services/food_photo_tracking_service.dart';
 import 'live_food_camera_screen.dart';
+import '../widgets/authenticated_food_photo_image.dart';
 
 /// Screen displaying the athlete's Live Food Photo history and coach verification statuses.
 class MyFoodPhotosScreen extends StatefulWidget {
@@ -165,37 +166,11 @@ class _MyFoodPhotosScreenState extends State<MyFoodPhotosScreen> {
   }
 
   Widget _buildPhotoImage(FoodPhotoModel photo, {double height = 90, BoxFit fit = BoxFit.cover}) {
-    final token = AuthService().currentToken;
-    final fullUrl = photo.photoUrl.startsWith('http')
-        ? photo.photoUrl
-        : '${AppConstants.apiBaseUrl.replaceAll('/api/v1', '')}${photo.photoUrl}';
-
-    if (photo.photoUrl.isNotEmpty && (photo.photoUrl.startsWith('http') || photo.photoUrl.startsWith('/api'))) {
-      return Image.network(
-        fullUrl,
-        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
-        height: height,
-        width: double.infinity,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => _buildFallbackThumbnail(),
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: height,
-            color: AppColors.surfaceCard,
-            child: const Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    return _buildFallbackThumbnail();
+    return AuthenticatedFoodPhotoImage.fromModel(
+      photo,
+      height: height,
+      fit: fit,
+    );
   }
 
   Widget _buildFallbackThumbnail() {

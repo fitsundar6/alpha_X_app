@@ -65,10 +65,10 @@ class _AdminMealPhotoViewerDialogState extends State<AdminMealPhotoViewerDialog>
     }
 
     try {
-      final base = AppConstants.apiBaseUrl;
-      final fullUrl = photoUrl.startsWith('http')
+      final effectivePath = photoUrl.isNotEmpty
           ? photoUrl
-          : (photoUrl.isNotEmpty ? '$base$photoUrl' : '$base/food-photos/$photoId/image');
+          : '/api/v1/food-photos/$photoId/image';
+      final fullUrl = AppConstants.resolveImageUrl(effectivePath);
 
       final uri = Uri.parse(fullUrl);
       final headers = <String, String>{};

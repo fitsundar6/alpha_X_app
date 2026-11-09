@@ -11,16 +11,14 @@ import '../../features/progress/data/repositories/weekly_progress_repository.dar
 
 /// The official Alpha X Gym startup splash screen.
 ///
-/// Implements the cinematic "ALPHA X ENERGY REVEAL" launch sequence:
-/// 1. Phase 1 (Dark Start): Pure deep black background, subtle dark red ambient glow.
-/// 2. Phase 2 (Ambient Energy): Smooth, slow red ambient light movement in the background.
-/// 3. Phase 3 (Energy Trace): Razor-thin crimson light beam sweeps across screen to reveal logo.
-/// 4. Phase 4 (Logo Reveal): Existing Alpha X logo appears, soft-to-sharp with 96% -> 100% scale.
-/// 5. Phase 5 (Red Light Sweep): Elegant specular crimson sweep across the logo.
-/// 6. Phase 6 (Brand Line): Briefly reveals "STRENGTH • CONDITIONING • BOXING • TRANSFORMATION".
-/// 7. Phase 7 (Transition): Smooth fade into the existing client dashboard or login screen.
+/// Implements the Stitch rubber-ball squash & stretch physics animation for "Λ L P H Λ - X":
+/// 1. Dead-centered vector wordmark with organic stagger and realistic multi-bounce physics.
+/// 2. White ambient neon tube bloom with subtle resting pulse glow.
+/// 3. Pure black background (#000000).
+/// 4. 1.6s resting hold followed by smooth 0.8s pure opacity fade-out into app entry.
 ///
-/// Fully error-safe: Features a watchdog timer and tap-to-skip so the app startup is never blocked.
+/// Error-safe: Features a watchdog timer (widget.animationDuration + 400ms) and tap-to-skip
+/// so app startup and session restoration are never delayed or blocked.
 class AlphaXSplashScreen extends StatefulWidget {
   final AuthService? authService;
   final WorkoutRepository? workoutRepository;
@@ -37,7 +35,7 @@ class AlphaXSplashScreen extends StatefulWidget {
     this.activityRepository,
     this.macroRepository,
     this.weeklyProgressRepository,
-    this.animationDuration = const Duration(milliseconds: 1400),
+    this.animationDuration = const Duration(milliseconds: 4800),
     this.destinationBuilder,
   });
 
@@ -52,9 +50,9 @@ class AlphaXSplashScreenState extends State<AlphaXSplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Watchdog fallback: guarantees app moves to destination even if animations or frames stall
+    // Safety watchdog timer: guarantees navigation proceeds even if frame pipeline stalls
     _safetyWatchdogTimer = Timer(
-      widget.animationDuration + const Duration(milliseconds: 350),
+      widget.animationDuration + const Duration(milliseconds: 400),
       navigateToDestination,
     );
   }
@@ -71,7 +69,7 @@ class AlphaXSplashScreenState extends State<AlphaXSplashScreen> {
     _hasNavigated = true;
     _safetyWatchdogTimer?.cancel();
 
-    // Ensure LoginScreen opens directly in its settled form without replaying the logo reveal
+    // Ensure LoginScreen opens directly in settled state without replaying intro
     LoginScreen.hasPlayedIntro = true;
 
     final destination = widget.destinationBuilder != null
@@ -105,13 +103,14 @@ class AlphaXSplashScreenState extends State<AlphaXSplashScreen> {
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: navigateToDestination,
-        child: Center(
-          child: AlphaXLogoAnimation(
-            size: 160.0,
-            duration: widget.animationDuration,
-            allowTapToSkip: false, // Handled immediately by outer GestureDetector
-            onComplete: navigateToDestination,
-            showBrandLine: true,
+        child: SizedBox.expand(
+          child: Center(
+            child: AlphaXLogoAnimation(
+              duration: widget.animationDuration,
+              allowTapToSkip: false, // Handled immediately by outer GestureDetector
+              onComplete: navigateToDestination,
+              showBrandLine: true,
+            ),
           ),
         ),
       ),

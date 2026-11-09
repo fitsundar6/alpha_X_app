@@ -140,7 +140,8 @@ const corsOptions: cors.CorsOptions = {
     } catch {
       // Invalid URL in origin header
     }
-    return callback(new Error(`CORS policy: Origin ${origin} not allowed`));
+    // Disallow origin cleanly without triggering an unhandled 500 Internal Server Error
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],

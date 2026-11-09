@@ -5,6 +5,7 @@ import { requireAuth } from './middlewares/auth';
 import { passwordResetService } from './services/password_reset.service';
 import { HttpStatus } from './constants/httpStatus';
 import { UserRole } from './constants/roles';
+import { prisma } from './config/prisma';
 
 interface MockResponse {
   statusCode: number | null;
@@ -93,6 +94,18 @@ async function runSecurityRegressionSuite() {
     if (userId === FORCED_USER_ID) return true;
     if (userId === NORMAL_USER_ID) return false;
     return originalIsForced.call(passwordResetService, userId);
+  };
+
+  // F-04: Mock prisma.user.findUnique so the tokenVersion DB check succeeds
+  // without a real database connection. Test tokens have no tokenVersion claim,
+  // so requireAuth defaults to claimedVersion=0; return tokenVersion:0 to match.
+  const originalFindUnique = prisma.user.findUnique;
+  (prisma.user.findUnique as any) = async (args: any) => {
+    const id = args?.where?.id;
+    if (id === FORCED_USER_ID || id === NORMAL_USER_ID) {
+      return { tokenVersion: 0 };
+    }
+    return null;
   };
 
   let totalTests = 0;
@@ -704,8 +717,9 @@ async function runSecurityRegressionSuite() {
     console.log(`✅ ALL ${passedTests}/${totalTests} SECURITY REGRESSION CHECKS PASSED SUCCESSFULLY!`);
     console.log('================================================================');
   } finally {
-    // Restore original service method
+    // Restore original service method and Prisma mock
     passwordResetService.isForcedPasswordChangeRequired = originalIsForced;
+    prisma.user.findUnique = originalFindUnique;
   }
 }
 

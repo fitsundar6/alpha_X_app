@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:alpha_x_gym/config/admin_config.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
+import 'package:alpha_x_gym/core/auth/secure_token_storage.dart';
 import 'package:alpha_x_gym/core/auth/login_screen.dart';
 import 'package:alpha_x_gym/core/auth/admin_login_screen.dart';
 import 'package:alpha_x_gym/core/constants/user_role.dart';
@@ -22,10 +23,15 @@ void main() {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
       auth = AuthService();
+      AuthService.setTestAdminCredentials(
+        email: 'admin@alphaxgym.com',
+        password: 'test_isolated_admin_secret_2026',
+      );
     });
 
     tearDown(() async {
       await auth.logout();
+      AuthService.setTestAdminCredentials(email: null, password: null);
     });
 
     test('TEST 1: Authorized Admin session grants ADMIN privileges', () {
@@ -209,35 +215,15 @@ void main() {
       expect(find.byIcon(Icons.visibility), findsOneWidget);
     });
 
-    test('TEST 10: Local Admin login verifies against AdminConfig and rejects wrong credentials', () async {
+    test('TEST 10: Admin login verifies against isolated test credentials and rejects wrong credentials', () async {
       await auth.initialize();
 
-      // Successful Admin Login with configured credentials
+      // Successful Admin Login with isolated test credentials
       final role = await auth.login(
-        email: AdminConfig.adminEmail,
-        password: AdminConfig.adminPassword,
+        email: 'admin@alphaxgym.com',
+        password: 'test_isolated_admin_secret_2026',
       );
       expect(role, UserRole.admin);
-      expect(auth.isAdmin, isTrue);
-
-      await auth.logout();
-
-      // Successful Admin Login with fitsundar6@gmail.com and AlphaXAdmin2026!
-      final role1 = await auth.login(
-        email: 'fitsundar6@gmail.com',
-        password: 'AlphaXAdmin2026!',
-      );
-      expect(role1, UserRole.admin);
-      expect(auth.isAdmin, isTrue);
-
-      await auth.logout();
-
-      // Successful Admin Login without exclamation mark
-      final role2 = await auth.login(
-        email: 'fitsundar6@gmail.com',
-        password: 'AlphaXAdmin2026',
-      );
-      expect(role2, UserRole.admin);
       expect(auth.isAdmin, isTrue);
 
       await auth.logout();
@@ -245,8 +231,21 @@ void main() {
       // Failed Admin Login with incorrect password
       expect(
         () => auth.login(
-          email: AdminConfig.adminEmail,
+          email: 'admin@alphaxgym.com',
           password: 'WrongPassword123!',
+        ),
+        throwsA(isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          contains('Invalid admin email or password.'),
+        )),
+      );
+
+      // Failed Admin Login with unauthorized email
+      expect(
+        () => auth.adminLogin(
+          email: 'imposter@external.com',
+          password: 'test_isolated_admin_secret_2026',
         ),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
@@ -267,7 +266,7 @@ void main() {
       expect(
         () => auth.registerClientAccount(
           name: 'Imposter Admin',
-          email: AdminConfig.adminEmail,
+          email: 'admin@alphaxgym.com',
           phone: clientPhone,
           password: clientPassword,
           confirmPassword: clientPassword,
@@ -322,6 +321,24 @@ void main() {
 
       expect(find.byType(AdminLoginScreen), findsOneWidget);
       expect(find.text('ADMINISTRATOR ACCESS'), findsOneWidget);
+    });
+
+    test('TEST 13: Cold start without valid secure token never restores authenticated ADMIN state', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('alpha_x_local_active_session', jsonEncode({
+        'role': 'ADMIN',
+        'email': 'admin@alphaxgym.com',
+        'id': 'admin_alex_stone',
+      }));
+
+      // Invalidate secure storage token
+      await SecureTokenStorage.deleteAuthToken();
+
+      await auth.initialize();
+
+      expect(auth.isAdmin, isFalse);
+      expect(auth.isAuthenticated, isFalse);
+      expect(auth.currentRole, UserRole.client);
     });
   });
 }

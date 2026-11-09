@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../../../core/auth/auth_service.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/models/food_photo_model.dart';
 import '../../data/services/food_photo_tracking_service.dart';
+import '../widgets/authenticated_food_photo_image.dart';
 
 /// Screen integrated into Master Admin Dashboard allowing trainers to visually follow
 /// what clients eat throughout the day and verify meal photos.
@@ -19,10 +21,12 @@ class AdminFoodPhotosMonitoringScreen extends StatefulWidget {
   });
 
   @override
-  State<AdminFoodPhotosMonitoringScreen> createState() => _AdminFoodPhotosMonitoringScreenState();
+  State<AdminFoodPhotosMonitoringScreen> createState() =>
+      _AdminFoodPhotosMonitoringScreenState();
 }
 
-class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitoringScreen> {
+class _AdminFoodPhotosMonitoringScreenState
+    extends State<AdminFoodPhotosMonitoringScreen> {
   final _service = FoodPhotoTrackingService();
   final TextEditingController _searchController = TextEditingController();
 
@@ -34,8 +38,19 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
   String _selectedMealType = 'ALL';
   String _selectedStatus = 'ALL';
 
-  final List<String> _mealFilterOptions = const ['ALL', 'Breakfast', 'Lunch', 'Snack', 'Dinner'];
-  final List<String> _statusFilterOptions = const ['ALL', 'PENDING', 'VERIFIED', 'NEEDS_ATTENTION'];
+  final List<String> _mealFilterOptions = const [
+    'ALL',
+    'Breakfast',
+    'Lunch',
+    'Snack',
+    'Dinner',
+  ];
+  final List<String> _statusFilterOptions = const [
+    'ALL',
+    'PENDING',
+    'VERIFIED',
+    'NEEDS_ATTENTION',
+  ];
 
   @override
   void initState() {
@@ -60,7 +75,9 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
         dateString: _selectedDate,
         mealType: _selectedMealType == 'ALL' ? null : _selectedMealType,
         status: _selectedStatus == 'ALL' ? null : _selectedStatus,
-        search: _searchController.text.trim().isNotEmpty ? _searchController.text.trim() : null,
+        search: _searchController.text.trim().isNotEmpty
+            ? _searchController.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -107,7 +124,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
     }
   }
 
-  Future<void> _verifyPhoto(FoodPhotoModel photo, String newStatus, {String? adminNote}) async {
+  Future<void> _verifyPhoto(
+    FoodPhotoModel photo,
+    String newStatus, {
+    String? adminNote,
+  }) async {
     final success = await _service.adminVerifyFoodPhoto(
       photoId: photo.id,
       status: newStatus,
@@ -117,7 +138,9 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: newStatus == 'VERIFIED' ? Colors.green.shade800 : AppColors.surfaceElevated,
+          backgroundColor: newStatus == 'VERIFIED'
+              ? Colors.green.shade800
+              : AppColors.surfaceElevated,
           duration: const Duration(seconds: 2),
           content: Text(
             newStatus == 'VERIFIED'
@@ -140,11 +163,19 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: const [
-            Icon(Icons.warning_amber_rounded, color: AppColors.primaryRed, size: 22),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.primaryRed,
+              size: 22,
+            ),
             SizedBox(width: 8),
             Text(
               'Diet Attention Guidance',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -154,7 +185,10 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
           children: [
             Text(
               'Flag ${photo.clientName ?? photo.clientId}\'s ${photo.mealType} for diet follow-up. Add guidance notes below (optional):',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -163,12 +197,24 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
               style: const TextStyle(color: Colors.white, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'e.g. Please follow the assigned diet for dinner: reduce simple carbs.',
-                hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                hintStyle: const TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                ),
                 filled: true,
                 fillColor: AppColors.surfaceCard,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.primaryRed),
+                ),
               ),
             ),
           ],
@@ -176,15 +222,30 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              _verifyPhoto(photo, 'NEEDS_ATTENTION', adminNote: noteCtrl.text.trim());
+              _verifyPhoto(
+                photo,
+                'NEEDS_ATTENTION',
+                adminNote: noteCtrl.text.trim(),
+              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
-            child: const Text('Flag for Attention', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+            ),
+            child: const Text(
+              'Flag for Attention',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -211,8 +272,14 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: _buildPhotoImage(photo, height: 360, fit: BoxFit.contain),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: _buildPhotoImage(
+                      photo,
+                      height: 360,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -224,7 +291,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                           children: [
                             Text(
                               photo.clientName ?? photo.clientId,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
                             ),
                             _buildStatusBadge(photo),
                           ],
@@ -232,11 +303,21 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                         const SizedBox(height: 4),
                         Text(
                           '${photo.mealType.toUpperCase()} • ${photo.formattedDateTime}',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
-                        if (photo.clientNote != null && photo.clientNote!.isNotEmpty) ...[
+                        if (photo.clientNote != null &&
+                            photo.clientNote!.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          Text('Client Note: ${photo.clientNote!}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          Text(
+                            'Client Note: ${photo.clientNote!}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 16),
                         Row(
@@ -249,10 +330,22 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF16A34A),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                icon: const Icon(Icons.check_circle, color: Colors.white, size: 16),
-                                label: const Text('VERIFY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                icon: const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'VERIFY',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -264,10 +357,22 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primaryRed,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                icon: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
-                                label: const Text('ATTENTION', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                icon: const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'ATTENTION',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -292,38 +397,16 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
     );
   }
 
-  Widget _buildPhotoImage(FoodPhotoModel photo, {double height = 90, BoxFit fit = BoxFit.cover}) {
-    final token = AuthService().currentToken;
-    final fullUrl = photo.photoUrl.startsWith('http')
-        ? photo.photoUrl
-        : '${AppConstants.apiBaseUrl.replaceAll('/api/v1', '')}${photo.photoUrl}';
-
-    if (photo.photoUrl.isNotEmpty && (photo.photoUrl.startsWith('http') || photo.photoUrl.startsWith('/api'))) {
-      return Image.network(
-        fullUrl,
-        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
-        height: height,
-        width: double.infinity,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => _buildFallbackThumbnail(),
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            height: height,
-            color: AppColors.surfaceCard,
-            child: const Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    return _buildFallbackThumbnail();
+  Widget _buildPhotoImage(
+    FoodPhotoModel photo, {
+    double height = 90,
+    BoxFit fit = BoxFit.cover,
+  }) {
+    return AuthenticatedFoodPhotoImage.fromModel(
+      photo,
+      height: height,
+      fit: fit,
+    );
   }
 
   Widget _buildFallbackThumbnail() {
@@ -372,7 +455,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -398,7 +485,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.calendar_today, color: AppColors.primaryRed, size: 20),
+                  icon: const Icon(
+                    Icons.calendar_today,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
                   tooltip: 'Filter Date',
                   onPressed: _selectDate,
                 ),
@@ -414,7 +505,10 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
         children: [
           // 1. Search Bar & Date Indicator
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -423,11 +517,22 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Search client by name or ID...',
-                      hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                      hintStyle: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16, color: AppColors.textSecondary),
+                              icon: const Icon(
+                                Icons.clear,
+                                size: 16,
+                                color: AppColors.textSecondary,
+                              ),
                               onPressed: () {
                                 _searchController.clear();
                                 _loadPhotos();
@@ -436,10 +541,24 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                           : null,
                       filled: true,
                       fillColor: AppColors.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: AppColors.primaryRed,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     onSubmitted: (_) => _loadPhotos(),
                   ),
@@ -449,7 +568,10 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                   onTap: _selectDate,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(10),
@@ -457,13 +579,24 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.event, color: AppColors.primaryRed, size: 16),
+                        const Icon(
+                          Icons.event,
+                          color: AppColors.primaryRed,
+                          size: 16,
+                        ),
                         const SizedBox(width: 6),
                         Text(
-                          _selectedDate == DateFormat('yyyy-MM-dd').format(DateTime.now())
+                          _selectedDate ==
+                                  DateFormat('yyyy-MM-dd')
+                                      .format(DateTime.now())
                               ? 'TODAY'
-                              : DateFormat('dd MMM').format(DateTime.parse(_selectedDate)),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              : DateFormat('dd MMM')
+                                    .format(DateTime.parse(_selectedDate)),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
@@ -481,7 +614,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: const Icon(Icons.refresh, color: Colors.white, size: 16),
+                      child: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                        size: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -503,9 +640,13 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                     child: ChoiceChip(
                       label: Text(type),
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary,
                         fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                       ),
                       selected: isSelected,
                       selectedColor: AppColors.primaryRed,
@@ -527,25 +668,29 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                   final label = st == 'ALL'
                       ? 'All Status'
                       : st == 'PENDING'
-                          ? '🟡 Pending'
-                          : st == 'VERIFIED'
-                              ? '🟢 Verified'
-                              : '🔴 Attention';
+                      ? '🟡 Pending'
+                      : st == 'VERIFIED'
+                      ? '🟢 Verified'
+                      : '🔴 Attention';
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),
                     child: ChoiceChip(
                       label: Text(label),
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary,
                         fontSize: 11,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                       ),
                       selected: isSelected,
                       selectedColor: st == 'VERIFIED'
                           ? const Color(0xFF16A34A)
                           : st == 'NEEDS_ATTENTION'
-                              ? AppColors.primaryRed
-                              : Colors.amber.shade700,
+                          ? AppColors.primaryRed
+                          : Colors.amber.shade700,
                       backgroundColor: AppColors.surface,
                       visualDensity: VisualDensity.compact,
                       onSelected: (val) {
@@ -564,7 +709,10 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
 
           // 3. Summary Stats Banner
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 4.0,
+            ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -575,10 +723,26 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem('TOTAL', '${_summary['total'] ?? _photos.length}', Colors.white),
-                  _buildStatItem('PENDING', '${_summary['pendingCount'] ?? 0}', Colors.amber),
-                  _buildStatItem('VERIFIED', '${_summary['verifiedCount'] ?? 0}', const Color(0xFF4ADE80)),
-                  _buildStatItem('ATTENTION', '${_summary['needsAttentionCount'] ?? 0}', const Color(0xFFF87171)),
+                  _buildStatItem(
+                    'TOTAL',
+                    '${_summary['total'] ?? _photos.length}',
+                    Colors.white,
+                  ),
+                  _buildStatItem(
+                    'PENDING',
+                    '${_summary['pendingCount'] ?? 0}',
+                    Colors.amber,
+                  ),
+                  _buildStatItem(
+                    'VERIFIED',
+                    '${_summary['verifiedCount'] ?? 0}',
+                    const Color(0xFF4ADE80),
+                  ),
+                  _buildStatItem(
+                    'ATTENTION',
+                    '${_summary['needsAttentionCount'] ?? 0}',
+                    const Color(0xFFF87171),
+                  ),
                 ],
               ),
             ),
@@ -588,30 +752,45 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
           // 4. Photo Cards List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primaryRed))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryRed,
+                    ),
+                  )
                 : _photos.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.camera_alt_outlined, color: Colors.white24, size: 48),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No food photos found for $_selectedDate',
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.camera_alt_outlined,
+                          color: Colors.white24,
+                          size: 48,
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadPhotos,
-                        color: AppColors.primaryRed,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                          itemCount: _photos.length,
-                          itemBuilder: (ctx, idx) => _buildAdminPhotoCard(_photos[idx]),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No food photos found for $_selectedDate',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
                         ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadPhotos,
+                    color: AppColors.primaryRed,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 6.0,
                       ),
+                      itemCount: _photos.length,
+                      itemBuilder: (ctx, idx) =>
+                          _buildAdminPhotoCard(_photos[idx]),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -623,12 +802,21 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
       children: [
         Text(
           value,
-          style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: color,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+          style: const TextStyle(
+            color: AppColors.textTertiary,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.6,
+          ),
         ),
       ],
     );
@@ -669,7 +857,11 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                       backgroundColor: AppColors.primaryRed.withOpacity(0.15),
                       child: Text(
                         _getClientInitial(photo),
-                        style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 11),
+                        style: const TextStyle(
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -678,11 +870,18 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                       children: [
                         Text(
                           photo.clientName ?? photo.clientId,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                         Text(
                           photo.clientId,
-                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                          ),
                         ),
                       ],
                     ),
@@ -708,14 +907,23 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                       height: 90,
                       child: Stack(
                         children: [
-                          Positioned.fill(child: _buildPhotoImage(photo, height: 90)),
+                          Positioned.fill(
+                            child: _buildPhotoImage(photo, height: 90),
+                          ),
                           Positioned(
                             bottom: 2,
                             right: 2,
                             child: Container(
                               padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                              child: const Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.zoom_in,
+                                color: Colors.white,
+                                size: 14,
+                              ),
                             ),
                           ),
                         ],
@@ -733,40 +941,57 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.primaryRed.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 photo.mealType.toUpperCase(),
-                                style: const TextStyle(color: AppColors.primaryRed, fontSize: 10, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: AppColors.primaryRed,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const Spacer(),
                             Text(
                               photo.formattedTime,
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
-                        if (photo.clientNote != null && photo.clientNote!.isNotEmpty) ...[
+                        if (photo.clientNote != null &&
+                            photo.clientNote!.isNotEmpty) ...[
                           Text(
                             photo.clientNote!,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 4),
                         ],
-                        if (photo.adminNote != null && photo.adminNote!.isNotEmpty) ...[
+                        if (photo.adminNote != null &&
+                            photo.adminNote!.isNotEmpty) ...[
                           Text(
                             'Admin: ${photo.adminNote!}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: photo.isNeedsAttention ? AppColors.primaryRed : Colors.green.shade300,
+                              color: photo.isNeedsAttention
+                                  ? AppColors.primaryRed
+                                  : Colors.green.shade300,
                               fontSize: 11,
                               fontStyle: FontStyle.italic,
                             ),
@@ -790,10 +1015,18 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _verifyPhoto(photo, 'VERIFIED'),
-                    icon: const Icon(Icons.check, color: Color(0xFF4ADE80), size: 16),
+                    icon: const Icon(
+                      Icons.check,
+                      color: Color(0xFF4ADE80),
+                      size: 16,
+                    ),
                     label: const Text(
                       'VERIFY',
-                      style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(
+                        color: Color(0xFF4ADE80),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -801,10 +1034,18 @@ class _AdminFoodPhotosMonitoringScreenState extends State<AdminFoodPhotosMonitor
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _showAttentionDialog(photo),
-                    icon: const Icon(Icons.warning_amber_rounded, color: AppColors.primaryRed, size: 16),
+                    icon: const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.primaryRed,
+                      size: 16,
+                    ),
                     label: const Text(
                       'ATTENTION',
-                      style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(
+                        color: AppColors.primaryRed,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
