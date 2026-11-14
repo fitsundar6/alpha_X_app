@@ -19,7 +19,7 @@ class AppTheme {
       cardColor: AppColors.surface,
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
-        onPrimary: AppColors.onPrimary, // #0A0A0A dark text on gold
+        onPrimary: AppColors.onPrimary, // #000000 pure black text on white
         secondary: AppColors.secondary,
         onSecondary: Colors.white,
         surface: AppColors.surfaceCard,
@@ -66,7 +66,9 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.onPrimary, // Dark text on gold
+          foregroundColor: AppColors.onPrimary, // Black text on white
+          disabledBackgroundColor: const Color(0xFF2A2A2A),
+          disabledForegroundColor: const Color(0xFF888888),
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
@@ -76,14 +78,17 @@ class AppTheme {
             fontSize: 14,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
+            color: AppColors.onPrimary,
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.secondaryCard,
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.border, width: 1.2),
+          backgroundColor: const Color(0xFF202020),
+          foregroundColor: const Color(0xFFFFFFFF),
+          disabledBackgroundColor: const Color(0xFF1E1E1E),
+          disabledForegroundColor: const Color(0xFF707070),
+          side: const BorderSide(color: Color(0xFF444444), width: 1.2),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
@@ -92,6 +97,7 @@ class AppTheme {
             fontSize: 14,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.4,
+            color: const Color(0xFFFFFFFF),
           ),
         ),
       ),
@@ -196,6 +202,27 @@ class AppTheme {
       drawerTheme: const DrawerThemeData(
         backgroundColor: AppColors.surface,
       ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceElevated,
+        disabledColor: AppColors.disabledBackground,
+        selectedColor: AppColors.primary,
+        secondarySelectedColor: AppColors.primary,
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+        ),
+        secondaryLabelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppColors.onPrimary,
+        ),
+        checkmarkColor: AppColors.onPrimary,
+        side: const BorderSide(color: AppColors.border, width: 1.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
     );
   }
 
@@ -212,7 +239,7 @@ class AppTheme {
       fontFamily: 'Poppins',
       colorScheme: const ColorScheme.light(
         primary: AppColors.lightPrimary,
-        onPrimary: AppColors.lightOnPrimary, // #111111 dark text on gold
+        onPrimary: AppColors.lightOnPrimary, // #FFFFFF text on black
         secondary: AppColors.lightSecondary,
         onSecondary: Colors.white,
         surface: AppColors.lightSurface,
@@ -387,6 +414,27 @@ class AppTheme {
       ),
       drawerTheme: const DrawerThemeData(
         backgroundColor: AppColors.lightSurface,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.lightSurfaceElevated,
+        disabledColor: const Color(0xFFE5E5E5),
+        selectedColor: AppColors.lightPrimary,
+        secondarySelectedColor: AppColors.lightPrimary,
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.lightTextSecondary,
+        ),
+        secondaryLabelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: AppColors.lightOnPrimary,
+        ),
+        checkmarkColor: AppColors.lightOnPrimary,
+        side: const BorderSide(color: AppColors.lightBorder, width: 1.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
     );
   }

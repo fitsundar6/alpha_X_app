@@ -3,16 +3,14 @@ import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/exercise/domain/models/exercise_model.dart';
 import 'package:alpha_x_gym/features/exercise/data/repositories/exercise_repository.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
+
 import 'admin_create_edit_exercise_screen.dart';
 import '../widgets/exercise_detail_modal.dart';
 
 class AdminExerciseDatabaseScreen extends StatefulWidget {
   final WorkoutRepository? workoutRepository;
 
-  const AdminExerciseDatabaseScreen({
-    super.key,
-    this.workoutRepository,
-  });
+  const AdminExerciseDatabaseScreen({super.key, this.workoutRepository});
 
   @override
   State<AdminExerciseDatabaseScreen> createState() =>
@@ -89,18 +87,14 @@ class _AdminExerciseDatabaseScreenState
 
   void _openCreateExercise() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const AdminCreateEditExerciseScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AdminCreateEditExerciseScreen()),
     );
   }
 
   void _openEditExercise(Exercise exercise) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => AdminCreateEditExerciseScreen(
-          exerciseToEdit: exercise,
-        ),
+        builder: (_) => AdminCreateEditExerciseScreen(exerciseToEdit: exercise),
       ),
     );
   }
@@ -118,25 +112,38 @@ class _AdminExerciseDatabaseScreenState
   void _toggleArchiveExercise(Exercise exercise) {
     if (exercise.isActive) {
       // Safety check: is exercise used in history?
-      final isUsed = widget.workoutRepository?.isExerciseUsedInHistory(exercise.id) ?? false;
+      final isUsed =
+          widget.workoutRepository?.isExerciseUsedInHistory(exercise.id) ??
+          false;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surfaceElevated,
-          title: const Text('Archive Exercise', style: TextStyle(color: AppColors.textPrimary)),
+          title: const Text(
+            'Archive Exercise',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
           content: Text(
             isUsed
                 ? 'This exercise has been logged in historical workout sessions. Archiving it will preserve all historical client records while hiding it from future workout builders.'
                 : 'Are you sure you want to archive "${exercise.displayName}"? It will be hidden from the active exercise list.',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.warning,
+              ),
               onPressed: () {
                 _repo.archiveExercise(exercise.id);
                 Navigator.of(ctx).pop();
@@ -147,7 +154,13 @@ class _AdminExerciseDatabaseScreenState
                   ),
                 );
               },
-              child: const Text('Archive', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Archive',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -156,7 +169,9 @@ class _AdminExerciseDatabaseScreenState
       _repo.restoreExercise(exercise.id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Restored "${exercise.displayName}" to active library.'),
+          content: Text(
+            'Restored "${exercise.displayName}" to active library.',
+          ),
           backgroundColor: AppColors.success,
         ),
       );
@@ -196,13 +211,19 @@ class _AdminExerciseDatabaseScreenState
                   hintStyle: const TextStyle(color: AppColors.textTertiary),
                   filled: true,
                   fillColor: AppColors.surfaceCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               const Text(
                 'Available Equipment Library:',
-                style: TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 8),
               ConstrainedBox(
@@ -213,7 +234,13 @@ class _AdminExerciseDatabaseScreenState
                     runSpacing: 6,
                     children: _repo.availableEquipment.map((eq) {
                       return Chip(
-                        label: Text(eq, style: const TextStyle(fontSize: 11, color: AppColors.textPrimary)),
+                        label: Text(
+                          eq,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                         backgroundColor: AppColors.surfaceCard,
                         side: const BorderSide(color: AppColors.border),
                       );
@@ -227,10 +254,16 @@ class _AdminExerciseDatabaseScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () {
               final text = textController.text.trim();
               if (text.isNotEmpty) {
@@ -238,7 +271,13 @@ class _AdminExerciseDatabaseScreenState
               }
               Navigator.of(ctx).pop();
             },
-            child: const Text('Add Equipment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Add Equipment',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -284,7 +323,11 @@ class _AdminExerciseDatabaseScreenState
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.fitness_center, color: AppColors.textSecondary, size: 20),
+            icon: const Icon(
+              Icons.fitness_center,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
             tooltip: 'Manage Equipment',
             onPressed: _openCustomEquipmentDialog,
           ),
@@ -292,19 +335,25 @@ class _AdminExerciseDatabaseScreenState
             padding: const EdgeInsets.only(right: 12),
             child: ElevatedButton.icon(
               onPressed: _openCreateExercise,
-              icon: const Icon(Icons.add, size: 16, color: Colors.white),
+              icon: const Icon(Icons.add, size: 16, color: Colors.black),
               label: const Text(
                 '+ ADD EXERCISE',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Colors.black,
                   fontWeight: FontWeight.w800,
                   fontSize: 12,
                 ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                foregroundColor: AppColors.onPrimary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -322,14 +371,28 @@ class _AdminExerciseDatabaseScreenState
                 TextField(
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Search by exercise name, muscle, equipment, pattern...',
-                    hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textTertiary, size: 18),
+                    hintStyle: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppColors.textTertiary,
+                      size: 18,
+                    ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16, color: AppColors.textTertiary),
+                            icon: const Icon(
+                              Icons.clear,
+                              size: 16,
+                              color: AppColors.textTertiary,
+                            ),
                             onPressed: () {
                               _searchController.clear();
                               setState(() {});
@@ -338,7 +401,10 @@ class _AdminExerciseDatabaseScreenState
                         : null,
                     filled: true,
                     fillColor: AppColors.surfaceCard,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: AppColors.border),
@@ -374,12 +440,14 @@ class _AdminExerciseDatabaseScreenState
                           labelStyle: TextStyle(
                             fontSize: 11,
                             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                             side: BorderSide(
-                              color: isSelected ? AppColors.primaryRed : AppColors.border,
+                              color: isSelected
+                                  ? AppColors.primaryRed
+                                  : AppColors.border,
                             ),
                           ),
                           onSelected: (val) {
@@ -409,15 +477,32 @@ class _AdminExerciseDatabaseScreenState
                             value: _sortOption,
                             isExpanded: true,
                             dropdownColor: AppColors.surfaceElevated,
-                            style: const TextStyle(color: AppColors.textPrimary, fontSize: 11),
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 11,
+                            ),
                             items: const [
-                              DropdownMenuItem(value: ExerciseSortOption.nameAsc, child: Text('Sort: Name (A–Z)')),
-                              DropdownMenuItem(value: ExerciseSortOption.nameDesc, child: Text('Sort: Name (Z–A)')),
-                              DropdownMenuItem(value: ExerciseSortOption.categoryAsc, child: Text('Sort: Category')),
-                              DropdownMenuItem(value: ExerciseSortOption.recentlyUpdated, child: Text('Sort: Updated')),
+                              DropdownMenuItem(
+                                value: ExerciseSortOption.nameAsc,
+                                child: Text('Sort: Name (A–Z)'),
+                              ),
+                              DropdownMenuItem(
+                                value: ExerciseSortOption.nameDesc,
+                                child: Text('Sort: Name (Z–A)'),
+                              ),
+                              DropdownMenuItem(
+                                value: ExerciseSortOption.categoryAsc,
+                                child: Text('Sort: Category'),
+                              ),
+                              DropdownMenuItem(
+                                value: ExerciseSortOption.recentlyUpdated,
+                                child: Text('Sort: Updated'),
+                              ),
                             ],
                             onChanged: (val) {
-                              if (val != null) setState(() => _sortOption = val);
+                              if (val != null) {
+                                setState(() => _sortOption = val);
+                              }
                             },
                           ),
                         ),
@@ -432,7 +517,9 @@ class _AdminExerciseDatabaseScreenState
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: _showArchived ? AppColors.warning : AppColors.textSecondary,
+                          color: _showArchived
+                              ? AppColors.warning
+                              : AppColors.textSecondary,
                         ),
                       ),
                       selected: _showArchived,
@@ -441,7 +528,9 @@ class _AdminExerciseDatabaseScreenState
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(
-                          color: _showArchived ? AppColors.warning : AppColors.border,
+                          color: _showArchived
+                              ? AppColors.warning
+                              : AppColors.border,
                         ),
                       ),
                       onSelected: (val) => setState(() => _showArchived = val),
@@ -469,7 +558,10 @@ class _AdminExerciseDatabaseScreenState
                 ),
                 Text(
                   '${_repo.activeExercises.length} Active • ${_repo.archivedExercises.length} Archived',
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                  style: const TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -484,7 +576,11 @@ class _AdminExerciseDatabaseScreenState
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.search_off_rounded, size: 52, color: AppColors.textTertiary),
+                          const Icon(
+                            Icons.search_off_rounded,
+                            size: 52,
+                            color: AppColors.textTertiary,
+                          ),
                           const SizedBox(height: 12),
                           const Text(
                             'No Exercises Matched Filter',
@@ -497,14 +593,30 @@ class _AdminExerciseDatabaseScreenState
                           const SizedBox(height: 6),
                           const Text(
                             'Try clearing search or filters to see available exercises.',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             onPressed: _openCreateExercise,
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Create New Exercise'),
-                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+                            icon: const Icon(
+                              Icons.add,
+                              size: 16,
+                              color: Colors.black,
+                            ),
+                            label: const Text(
+                              'Create New Exercise',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryRed,
+                              foregroundColor: AppColors.onPrimary,
+                            ),
                           ),
                         ],
                       ),
@@ -524,11 +636,12 @@ class _AdminExerciseDatabaseScreenState
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateExercise,
         backgroundColor: AppColors.primaryRed,
-        icon: const Icon(Icons.add, color: Colors.white),
+        foregroundColor: AppColors.onPrimary,
+        icon: const Icon(Icons.add, color: Colors.black),
         label: const Text(
           '+ ADD EXERCISE',
           style: TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.8,
           ),
@@ -544,7 +657,9 @@ class _AdminExerciseDatabaseScreenState
         color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: ex.isActive ? AppColors.border : AppColors.warning.withOpacity(0.4),
+          color: ex.isActive
+              ? AppColors.border
+              : AppColors.warning.withOpacity(0.4),
         ),
       ),
       child: InkWell(
@@ -571,7 +686,10 @@ class _AdminExerciseDatabaseScreenState
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: ex.isActive
                                     ? AppColors.primaryRed.withOpacity(0.18)
@@ -581,7 +699,9 @@ class _AdminExerciseDatabaseScreenState
                               child: Text(
                                 ex.category.toUpperCase(),
                                 style: TextStyle(
-                                  color: ex.isActive ? AppColors.primaryRed : AppColors.textTertiary,
+                                  color: ex.isActive
+                                      ? AppColors.primaryRed
+                                      : AppColors.textTertiary,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.6,
@@ -590,7 +710,10 @@ class _AdminExerciseDatabaseScreenState
                             ),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.surfaceElevated,
                                 borderRadius: BorderRadius.circular(4),
@@ -607,7 +730,10 @@ class _AdminExerciseDatabaseScreenState
                             if (!ex.isActive) ...[
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.warning.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(4),
@@ -637,7 +763,11 @@ class _AdminExerciseDatabaseScreenState
                     ),
                   ),
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: AppColors.textTertiary, size: 20),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: AppColors.textTertiary,
+                      size: 20,
+                    ),
                     color: AppColors.surfaceElevated,
                     onSelected: (action) {
                       switch (action) {
@@ -666,7 +796,11 @@ class _AdminExerciseDatabaseScreenState
                         value: 'details',
                         child: Row(
                           children: [
-                            Icon(Icons.info_outline, size: 18, color: AppColors.textPrimary),
+                            Icon(
+                              Icons.info_outline,
+                              size: 18,
+                              color: AppColors.textPrimary,
+                            ),
                             SizedBox(width: 10),
                             Text('View Details'),
                           ],
@@ -676,7 +810,11 @@ class _AdminExerciseDatabaseScreenState
                         value: 'edit',
                         child: Row(
                           children: [
-                            Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color: AppColors.textPrimary,
+                            ),
                             SizedBox(width: 10),
                             Text('Edit Exercise'),
                           ],
@@ -686,7 +824,11 @@ class _AdminExerciseDatabaseScreenState
                         value: 'duplicate',
                         child: Row(
                           children: [
-                            Icon(Icons.copy_outlined, size: 18, color: AppColors.textPrimary),
+                            Icon(
+                              Icons.copy_outlined,
+                              size: 18,
+                              color: AppColors.textPrimary,
+                            ),
                             SizedBox(width: 10),
                             Text('Duplicate'),
                           ],
@@ -697,9 +839,13 @@ class _AdminExerciseDatabaseScreenState
                         child: Row(
                           children: [
                             Icon(
-                              ex.isActive ? Icons.archive_outlined : Icons.unarchive_outlined,
+                              ex.isActive
+                                  ? Icons.archive_outlined
+                                  : Icons.unarchive_outlined,
                               size: 18,
-                              color: ex.isActive ? AppColors.warning : AppColors.success,
+                              color: ex.isActive
+                                  ? AppColors.warning
+                                  : AppColors.success,
                             ),
                             const SizedBox(width: 10),
                             Text(ex.isActive ? 'Archive' : 'Restore'),
@@ -713,17 +859,27 @@ class _AdminExerciseDatabaseScreenState
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.adjust, size: 14, color: AppColors.primaryRed),
+                  const Icon(
+                    Icons.adjust,
+                    size: 14,
+                    color: AppColors.primaryRed,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       ex.primaryMusclesDisplay,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   Text(
                     '${ex.difficulty} • ${ex.movementPattern}',
-                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),

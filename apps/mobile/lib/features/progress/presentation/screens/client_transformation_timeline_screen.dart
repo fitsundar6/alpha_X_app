@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/auth/auth_service.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/metal_card.dart';
 
 class ClientTransformationTimelineScreen extends StatefulWidget {
   final String? adminTargetClientId; // If non-null, Admin is viewing this client
@@ -570,7 +571,10 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
               child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () async {
                 Navigator.pop(ctx);
                 await _saveMilestone(
@@ -581,7 +585,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
                   selectedDate,
                 );
               },
-              child: const Text('SAVE MILESTONE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+              child: const Text('SAVE MILESTONE', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12)),
             ),
           ],
         ),
@@ -875,11 +879,12 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.camera_alt_outlined, size: 16),
-                label: const Text('RECORD WEEK 1 BASELINE PHOTO', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5)),
+                icon: const Icon(Icons.camera_alt_outlined, size: 16, color: Colors.black),
+                label: const Text('RECORD WEEK 1 BASELINE PHOTO', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11.5)),
                 onPressed: () {
                   _showPhotoOptionsSheet(
                     weekNumber: 1,
@@ -947,11 +952,12 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.add_a_photo_outlined, size: 16),
-                label: const Text('UPLOAD NEXT CHECK-IN PHOTO', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5)),
+                icon: const Icon(Icons.add_a_photo_outlined, size: 16, color: Colors.black),
+                label: const Text('UPLOAD NEXT CHECK-IN PHOTO', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11.5)),
                 onPressed: () {
                   final nextWeek = (singleWeek == 1) ? 4 : (singleWeek + 4);
                   _openAddMilestoneDialog(nextWeek);
@@ -1099,13 +1105,14 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryRed,
+                          foregroundColor: AppColors.onPrimary,
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: _applyComparison,
                         child: const Text(
                           'COMPARE',
-                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 0.5),
+                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 10.5, letterSpacing: 0.5),
                         ),
                       ),
                     ),
@@ -1458,7 +1465,7 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
         child: Text(
           angle,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
             fontWeight: FontWeight.w900,
             fontSize: 9.5,
           ),
@@ -1642,16 +1649,12 @@ class _ClientTransformationTimelineScreenState extends State<ClientTransformatio
 
     final isBaseline = week == 1;
 
-    return Container(
+    return MetalCard(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: hasData ? AppColors.primaryRed.withOpacity(0.4) : AppColors.border,
-          width: hasData ? 1.4 : 1.0,
-        ),
-      ),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(20),
+      glowColor: hasData ? AppColors.primaryRed : null,
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

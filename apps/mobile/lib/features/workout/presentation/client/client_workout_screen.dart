@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/theme/app_colors.dart';
@@ -7,6 +8,7 @@ import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/widgets/alpha_x_widgets.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
 import 'package:alpha_x_gym/features/workout/domain/models/workout_models.dart';
+
 import 'client_session_overview_screen.dart';
 import 'client_workout_history_screen.dart';
 import 'client_workout_execution_screen.dart';
@@ -90,12 +92,21 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     final clientId = AuthService().currentUserId;
     final hasActive = widget.workoutRepository.hasActiveSavedSession;
     final activeSession = widget.workoutRepository.activeSession;
-    final todaySession = widget.workoutRepository.getTodaySessionForClient(clientId, enforceVisibilityWindow: true)
-                      ?? widget.workoutRepository.getRecommendedSessionForClient(clientId, enforceVisibilityWindow: true);
-    final hasAssignedWorkouts = widget.workoutRepository.hasAssignedWorkoutsForClient(clientId);
+    final todaySession =
+        widget.workoutRepository.getTodaySessionForClient(
+          clientId,
+          enforceVisibilityWindow: true,
+        ) ??
+        widget.workoutRepository.getRecommendedSessionForClient(
+          clientId,
+          enforceVisibilityWindow: true,
+        );
+    final hasAssignedWorkouts = widget.workoutRepository
+        .hasAssignedWorkoutsForClient(clientId);
 
     final isRestDay = todaySession == null && !hasActive && hasAssignedWorkouts;
-    final hasNoWorkoutsAtAll = todaySession == null && !hasActive && !hasAssignedWorkouts;
+    final hasNoWorkoutsAtAll =
+        todaySession == null && !hasActive && !hasAssignedWorkouts;
 
     final content = RefreshIndicator(
       color: isDark ? AppColors.primary : AppColors.lightPrimary,
@@ -160,7 +171,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
         actions: [
           TextButton.icon(
             onPressed: _openWorkoutHistory,
-            icon: Icon(Icons.history, color: isDark ? AppColors.primary : AppColors.lightPrimary, size: 18),
+            icon: Icon(
+              Icons.history,
+              color: isDark ? AppColors.primary : AppColors.lightPrimary,
+              size: 18,
+            ),
             label: Text(
               'History',
               style: GoogleFonts.poppins(
@@ -175,27 +190,23 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     );
   }
 
-  Widget _buildActiveResumeBanner(WorkoutSession active, ClientThemeColors colors, bool isDark) {
+  Widget _buildActiveResumeBanner(
+    WorkoutSession active,
+    ClientThemeColors colors,
+    bool isDark,
+  ) {
     final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
     final totalSets = active.totalSets;
     final completedSets = active.totalCompletedSets;
-    final percent = totalSets > 0 ? ((completedSets / totalSets) * 100).round() : 0;
+    final percent = totalSets > 0
+        ? ((completedSets / totalSets) * 100).round()
+        : 0;
 
-    return Container(
+    return MetalCard(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: accentLime, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: accentLime.withOpacity(0.2),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(20),
+      glowColor: accentLime,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -203,7 +214,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: accentLime.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(999),
@@ -244,27 +258,49 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     context: context,
                     builder: (ctx) => AlertDialog(
                       backgroundColor: colors.surfaceCard,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
                       title: Text(
                         'Discard Workout?',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: colors.textPrimary),
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                        ),
                       ),
                       content: Text(
                         'Your logged sets in this active workout will be discarded.',
-                        style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 13),
+                        style: GoogleFonts.poppins(
+                          color: colors.textSecondary,
+                          fontSize: 13,
+                        ),
                       ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.of(ctx).pop(false),
-                          child: Text('Keep', style: GoogleFonts.poppins(color: colors.textSecondary)),
+                          child: Text(
+                            'Keep',
+                            style: GoogleFonts.poppins(
+                              color: colors.textSecondary,
+                            ),
+                          ),
                         ),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.primaryRed,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            foregroundColor: colors.onPrimaryRed,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           onPressed: () => Navigator.of(ctx).pop(true),
-                          child: Text('Discard', style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: Colors.white)),
+                          child: Text(
+                            'Discard',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -300,7 +336,9 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: totalSets > 0 ? (completedSets / totalSets).clamp(0.0, 1.0) : 0.0,
+              value: totalSets > 0
+                  ? (completedSets / totalSets).clamp(0.0, 1.0)
+                  : 0.0,
               minHeight: 6,
               backgroundColor: colors.border,
               valueColor: AlwaysStoppedAnimation<Color>(accentLime),
@@ -317,7 +355,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 shape: const StadiumBorder(),
                 elevation: 0,
               ),
-              icon: const Icon(Icons.play_arrow_rounded, color: AppColors.onPrimary, size: 22),
+              icon: const Icon(
+                Icons.play_arrow_rounded,
+                color: AppColors.onPrimary,
+                size: 22,
+              ),
               label: Text(
                 'RESUME WORKOUT',
                 style: GoogleFonts.poppins(
@@ -474,7 +516,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ),
             const SizedBox(height: 10),
             TextButton.icon(
-              icon: Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+              icon: Icon(
+                Icons.refresh_rounded,
+                size: 16,
+                color: colors.textSecondary,
+              ),
               label: Text(
                 'Check for Updates',
                 style: GoogleFonts.poppins(
@@ -485,7 +531,9 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               ),
               onPressed: () async {
                 AlphaXHaptics.selection();
-                await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+                await widget.workoutRepository.fetchClientWorkouts(
+                  forceRefresh: true,
+                );
                 if (mounted) setState(() {});
               },
             ),
@@ -616,7 +664,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   shape: const StadiumBorder(),
                   elevation: 0,
                 ),
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: AppColors.onPrimary),
+                icon: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 18,
+                  color: AppColors.onPrimary,
+                ),
                 label: Text(
                   'CONTACT YOUR TRAINER',
                   style: GoogleFonts.poppins(
@@ -632,11 +684,16 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     SnackBar(
                       content: Text(
                         'Trainer notified! Your coach will assign your workout program shortly.',
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       backgroundColor: colors.surfaceCard,
                       behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   );
                 },
@@ -644,7 +701,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
             ),
             const SizedBox(height: 10),
             TextButton.icon(
-              icon: Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
+              icon: Icon(
+                Icons.refresh_rounded,
+                size: 16,
+                color: colors.textSecondary,
+              ),
               label: Text(
                 'Check for Updates',
                 style: GoogleFonts.poppins(
@@ -655,7 +716,9 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
               ),
               onPressed: () async {
                 AlphaXHaptics.selection();
-                await widget.workoutRepository.fetchClientWorkouts(forceRefresh: true);
+                await widget.workoutRepository.fetchClientWorkouts(
+                  forceRefresh: true,
+                );
                 if (mounted) setState(() {});
               },
             ),
@@ -677,24 +740,25 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     );
   }
 
-  Widget _buildRecommendedCard(WorkoutSession session, ClientThemeColors colors, bool isDark) {
-    final totalSets = session.exercises.fold(0, (acc, ex) => acc + ex.sets.length);
+  Widget _buildRecommendedCard(
+    WorkoutSession session,
+    ClientThemeColors colors,
+    bool isDark,
+  ) {
+    final totalSets = session.exercises.fold(
+      0,
+      (acc, ex) => acc + ex.sets.length,
+    );
     final accentLime = isDark ? AppColors.primary : AppColors.lightPrimary;
-    final isCompletedOrLocked = session.isLocked || session.isCompleted || session.status == 'COMPLETED';
+    final isCompletedOrLocked =
+        session.isLocked ||
+        session.isCompleted ||
+        session.status == 'COMPLETED';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentLime, width: 1.8),
-        boxShadow: [
-          BoxShadow(
-            color: accentLime.withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+    return MetalCard(
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(20),
+      glowColor: isCompletedOrLocked ? null : accentLime,
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,7 +771,8 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(height: 80, color: colors.surfaceElevated),
+                errorBuilder: (context, error, stackTrace) =>
+                    Container(height: 80, color: colors.surfaceElevated),
               ),
               Container(
                 height: 120,
@@ -717,7 +782,8 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.black.withOpacity(0.3),
-                      (isDark ? AppColors.surfaceCard : Colors.white).withOpacity(0.95),
+                      (isDark ? AppColors.surfaceCard : Colors.white)
+                          .withOpacity(0.95),
                     ],
                   ),
                 ),
@@ -726,7 +792,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 top: 12,
                 left: 14,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.75),
                     borderRadius: BorderRadius.circular(999),
@@ -735,7 +804,9 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        isCompletedOrLocked ? Icons.check_circle_rounded : Icons.star_rounded,
+                        isCompletedOrLocked
+                            ? Icons.check_circle_rounded
+                            : Icons.star_rounded,
                         color: AppColors.gold,
                         size: 14,
                       ),
@@ -757,7 +828,10 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                 top: 12,
                 right: 14,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(999),
@@ -804,12 +878,17 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   spacing: 8,
                   runSpacing: 6,
                   children: [
-                    _metaChip(Icons.fitness_center_rounded, '${session.exercises.length} Exercises', colors),
+                    _metaChip(
+                      Icons.fitness_center_rounded,
+                      '${session.exercises.length} Exercises',
+                      colors,
+                    ),
                     _metaChip(Icons.repeat_rounded, '$totalSets Sets', colors),
                     _metaChip(Icons.speed_rounded, session.difficulty, colors),
                   ],
                 ),
-                if (session.description != null && session.description!.isNotEmpty) ...[
+                if (session.description != null &&
+                    session.description!.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
                     session.description!,
@@ -842,8 +921,12 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: session.isLocked ? colors.surfaceElevated : accentLime,
-                      foregroundColor: session.isLocked ? colors.textSecondary : AppColors.onPrimary, // #0A0B0D dark text on lime
+                      backgroundColor: session.isLocked
+                          ? colors.surfaceElevated
+                          : accentLime,
+                      foregroundColor: session.isLocked
+                          ? colors.textSecondary
+                          : AppColors.onPrimary, // #0A0B0D dark text on lime
                       shape: const StadiumBorder(),
                       elevation: 0,
                     ),
@@ -854,11 +937,16 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                           SnackBar(
                             content: Text(
                               'Today\'s workout has been completed and locked. It remains visible until 9:00 PM IST. If completed by mistake, your trainer or admin can release it.',
-                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             backgroundColor: colors.surfaceCard,
                             behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         );
                         return;
@@ -869,15 +957,23 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          isCompletedOrLocked ? Icons.lock_rounded : Icons.play_arrow_rounded,
-                          color: isCompletedOrLocked ? colors.textSecondary : AppColors.onPrimary,
+                          isCompletedOrLocked
+                              ? Icons.lock_rounded
+                              : Icons.play_arrow_rounded,
+                          color: isCompletedOrLocked
+                              ? colors.textSecondary
+                              : AppColors.onPrimary,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          isCompletedOrLocked ? 'COMPLETED & LOCKED' : 'START WORKOUT',
+                          isCompletedOrLocked
+                              ? 'COMPLETED & LOCKED'
+                              : 'START WORKOUT',
                           style: GoogleFonts.poppins(
-                            color: isCompletedOrLocked ? colors.textSecondary : AppColors.onPrimary,
+                            color: isCompletedOrLocked
+                                ? colors.textSecondary
+                                : AppColors.onPrimary,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.1,
                             fontSize: 14,
@@ -895,8 +991,6 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
     );
   }
 
-
-
   Widget _metaChip(IconData icon, String label, ClientThemeColors colors) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -912,7 +1006,11 @@ class _ClientWorkoutScreenState extends State<ClientWorkoutScreen> {
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.poppins(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+            style: GoogleFonts.poppins(
+              color: colors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

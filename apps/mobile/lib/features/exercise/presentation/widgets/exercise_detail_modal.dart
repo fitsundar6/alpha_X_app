@@ -508,7 +508,7 @@ class ExerciseDetailModal extends StatelessWidget {
                           label: const Text('Edit'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),

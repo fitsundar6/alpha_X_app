@@ -23,7 +23,7 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  static const Color _goldAccent = Color(0xFFD4A034);
+  static const Color _goldAccent = AppColors.primary;
 
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();

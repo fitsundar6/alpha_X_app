@@ -384,25 +384,28 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
+                        disabledBackgroundColor: const Color(0xFF2A2A2A),
+                        disabledForegroundColor: const Color(0xFF888888),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
                       onPressed: _isChecking ? null : _handleManualCheck,
                       child: _isChecking
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: colors.onPrimary),
                             )
-                          : const Row(
+                          : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.refresh, size: 20, color: Colors.white),
-                                SizedBox(width: 8),
+                                Icon(Icons.refresh, size: 20, color: colors.onPrimary),
+                                const SizedBox(width: 8),
                                 Text(
                                   'CHECK APPROVAL STATUS',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: colors.onPrimary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 0.8,
@@ -419,19 +422,21 @@ class _PendingVerificationScreenState extends State<PendingVerificationScreen> {
                     height: 48,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colors.border),
+                        backgroundColor: const Color(0xFF202020),
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFF444444)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: _showContactAdminDialog,
-                      child: Row(
+                      child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.headset_mic_outlined, size: 18, color: colors.textSecondary),
-                          const SizedBox(width: 8),
+                          Icon(Icons.headset_mic_outlined, size: 18, color: Colors.white),
+                          SizedBox(width: 8),
                           Text(
                             'CONTACT ADMIN',
                             style: TextStyle(
-                              color: colors.textPrimary,
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.6,

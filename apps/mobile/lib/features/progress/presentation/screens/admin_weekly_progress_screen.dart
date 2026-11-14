@@ -293,7 +293,7 @@ class _AdminWeeklyProgressScreenState extends State<AdminWeeklyProgressScreen> {
                           child: Text(
                             (c['name'] ?? 'A').toString().substring(0, 1).toUpperCase(),
                             style: TextStyle(
-                              color: isSelected ? Colors.white : AlphaXColors.textSecondary,
+                              color: isSelected ? AlphaXColors.onPrimary : AlphaXColors.textSecondary,
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
@@ -599,7 +599,7 @@ class _AdminWeeklyProgressScreenState extends State<AdminWeeklyProgressScreen> {
                       Text(
                         'Week ${item.weekNumber}',
                         style: TextStyle(
-                          color: isSelected ? Colors.white : AlphaXColors.textSecondary,
+                          color: isSelected ? AlphaXColors.onPrimary : AlphaXColors.textSecondary,
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                         ),

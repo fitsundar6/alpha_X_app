@@ -250,10 +250,11 @@ class _MyFoodPhotosScreenState extends State<MyFoodPhotosScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCamera,
         backgroundColor: AppColors.primaryRed,
-        icon: const Icon(Icons.photo_camera, color: Colors.white),
+        foregroundColor: AppColors.onPrimary,
+        icon: const Icon(Icons.photo_camera, color: Colors.black),
         label: const Text(
           'TAKE FOOD PHOTO',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, letterSpacing: 0.8),
         ),
       ),
       body: _isLoading
@@ -319,11 +320,12 @@ class _MyFoodPhotosScreenState extends State<MyFoodPhotosScreen> {
                             onPressed: _openCamera,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primaryRed,
+                              foregroundColor: AppColors.onPrimary,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
-                            label: const Text('Capture Today\'s Meal', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.camera_alt, color: Colors.black, size: 16),
+                            label: const Text('Capture Today\'s Meal', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),

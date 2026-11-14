@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/client_theme_service.dart';
 import '../../../../core/widgets/alpha_x_progress.dart';
+import '../../../../core/widgets/metal_card.dart';
 import '../../domain/models/daily_macro_summary.dart';
 import '../../domain/models/food_log_entry.dart';
 import 'animated_macro_counter.dart';
@@ -35,23 +36,10 @@ class DailyMacroProgressDashboard extends StatelessWidget {
         ? '${summary.overCalories.round()} kcal over'
         : '${summary.safeRemainingCalories.round()} kcal left';
 
-    return Container(
+    return MetalCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isCalOver ? colors.danger.withOpacity(0.5) : colors.border,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(20),
+      glowColor: isCalOver ? colors.danger : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

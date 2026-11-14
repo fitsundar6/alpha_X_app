@@ -418,7 +418,7 @@ class _AdminChangeRequestsScreenState extends State<AdminChangeRequestsScreen> {
       labelStyle: TextStyle(
         fontSize: 11,
         fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-        color: isSelected ? (isBadge ? Colors.black : Colors.white) : AppColors.textSecondary,
+        color: isSelected ? (isBadge ? Colors.black : AppColors.onPrimary) : AppColors.textSecondary,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),

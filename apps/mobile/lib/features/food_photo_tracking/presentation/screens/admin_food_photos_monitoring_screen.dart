@@ -236,11 +236,12 @@ class _AdminFoodPhotosMonitoringScreenState
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
             ),
             child: const Text(
               'Flag for Attention',
               style: TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -355,19 +356,20 @@ class _AdminFoodPhotosMonitoringScreenState
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primaryRed,
+                                  foregroundColor: AppColors.onPrimary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                                 icon: const Icon(
                                   Icons.warning_amber_rounded,
-                                  color: Colors.white,
+                                  color: Colors.black,
                                   size: 16,
                                 ),
                                 label: const Text(
                                   'ATTENTION',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: Colors.black,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -630,7 +632,7 @@ class _AdminFoodPhotosMonitoringScreenState
                       label: Text(type),
                       labelStyle: TextStyle(
                         color: isSelected
-                            ? Colors.white
+                            ? AppColors.onPrimary
                             : AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: isSelected
@@ -667,7 +669,7 @@ class _AdminFoodPhotosMonitoringScreenState
                       label: Text(label),
                       labelStyle: TextStyle(
                         color: isSelected
-                            ? Colors.white
+                            ? AppColors.onPrimary
                             : AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: isSelected

@@ -83,16 +83,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     // The backend bcrypt-verifies the password against the secure hash.
     // This is the canonical login path — always tried first.
     try {
-      final res = await http
-          .post(
-            Uri.parse('${AppConstants.apiBaseUrl}/admin/login'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': enteredEmail,
-              'password': enteredPassword,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
+      final client = AuthService().customHttpClient;
+      final url = Uri.parse('${AppConstants.apiBaseUrl}/admin/login');
+      final headers = {'Content-Type': 'application/json'};
+      final reqBody = jsonEncode({
+        'email': enteredEmail,
+        'password': enteredPassword,
+      });
+
+      final res = client != null
+          ? await client.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 10))
+          : await http.post(url, headers: headers, body: reqBody).timeout(const Duration(seconds: 10));
 
       debugPrint('[AUTH DEBUG] AdminPortal backend status: ${res.statusCode}');
 
@@ -679,9 +680,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                   style: ElevatedButton.styleFrom(
                                                     backgroundColor:
                                                         AppColors.primaryRed,
+                                                    foregroundColor:
+                                                        AppColors.onPrimary,
                                                     disabledBackgroundColor:
-                                                        AppColors.primaryRed
-                                                            .withOpacity(0.4),
+                                                        const Color(0xFF2A2A2A),
+                                                    disabledForegroundColor:
+                                                        const Color(0xFF888888),
                                                     shape: RoundedRectangleBorder(
                                                       borderRadius:
                                                           BorderRadius.circular(
@@ -699,7 +703,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                                 strokeWidth:
                                                                     2.2,
                                                                 color: Colors
-                                                                    .white,
+                                                                    .black,
                                                               ),
                                                         )
                                                       : const FittedBox(
@@ -713,7 +717,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                                 Icons
                                                                     .lock_open_rounded,
                                                                 color:
-                                                                    Colors.white,
+                                                                    Colors.black,
                                                                 size: 18,
                                                               ),
                                                               SizedBox(width: 8),
@@ -721,7 +725,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                                                 'AUTHENTICATE ADMINISTRATOR',
                                                                 style: TextStyle(
                                                                   color: Colors
-                                                                      .white,
+                                                                      .black,
                                                                   fontSize: 12.5,
                                                                   fontWeight:
                                                                       FontWeight

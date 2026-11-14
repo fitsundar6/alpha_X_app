@@ -420,11 +420,12 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
                 onPressed: _initializeCamera,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                label: const Text('Grant Permission & Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.refresh, color: Colors.black),
+                label: const Text('Grant Permission & Retry', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -445,8 +446,11 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _takeLivePhoto,
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
-                child: const Text('Capture Sample Photo', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
+                ),
+                child: const Text('Capture Sample Photo', style: TextStyle(color: Colors.black)),
               ),
             ],
           ),
@@ -767,7 +771,7 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
                 label: Text(
                   type,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
                     fontSize: 13,
                   ),
@@ -820,10 +824,12 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
                   child: OutlinedButton.icon(
                     onPressed: _isUploading ? null : _retakePhoto,
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border, width: 1.5),
+                      backgroundColor: const Color(0xFF202020),
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Color(0xFF444444), width: 1.2),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.refresh, color: Colors.white70, size: 18),
+                    icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
                     label: const Text(
                       'RETAKE',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
@@ -840,20 +846,22 @@ class _LiveFoodCameraScreenState extends State<LiveFoodCameraScreen>
                     onPressed: _isUploading ? null : _confirmAndUpload,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryRed,
-                      disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.5),
+                      foregroundColor: AppColors.onPrimary,
+                      disabledBackgroundColor: const Color(0xFF2A2A2A),
+                      disabledForegroundColor: const Color(0xFF888888),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: _isUploading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(color: AppColors.onPrimary, strokeWidth: 2),
                           )
-                        : const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 20),
+                        : Icon(Icons.cloud_upload_outlined, color: AppColors.onPrimary, size: 20),
                     label: Text(
                       _isUploading ? 'UPLOADING...' : 'CONFIRM & UPLOAD',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.onPrimary,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
                         letterSpacing: 0.8,

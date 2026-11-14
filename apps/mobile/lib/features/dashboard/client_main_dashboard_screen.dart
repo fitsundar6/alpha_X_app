@@ -728,20 +728,10 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
       }
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(colors.isDark ? 0.35 : 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return MetalCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: BorderRadius.circular(20),
+      glowColor: hasActive ? AppColors.warning : (recommended != null ? colors.primaryRed : null),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -829,7 +819,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.primaryRed,
-                foregroundColor: Colors.white,
+                foregroundColor: colors.onPrimaryRed,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -1045,7 +1035,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colors.primaryRed,
-                      foregroundColor: Colors.white,
+                      foregroundColor: colors.onPrimaryRed,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1116,9 +1106,19 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
-        color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
+        gradient: colors.isDark
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF222328), Color(0xFF141518)],
+              )
+            : null,
+        color: colors.isDark ? null : colors.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.borderSubtle),
+        border: Border.all(
+          color: colors.isDark ? const Color(0x28A0A5B2) : colors.borderSubtle,
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1272,7 +1272,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: isAvailable ? colors.primaryRed : (colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated),
-                foregroundColor: isAvailable ? Colors.white : colors.textPrimary,
+                foregroundColor: isAvailable ? colors.onPrimaryRed : colors.textPrimary,
                 elevation: 0,
                 side: isAvailable ? BorderSide.none : BorderSide(color: colors.border),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1280,7 +1280,7 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               icon: Icon(
                 isAvailable ? Icons.event_available_rounded : Icons.insights_rounded,
                 size: 18,
-                color: isAvailable ? Colors.white : colors.primaryRed,
+                color: isAvailable ? colors.onPrimaryRed : colors.primaryRed,
               ),
               label: Text(
                 isAvailable ? 'START WEEK $weekNum CHECK-IN' : 'VIEW PROGRESS SUMMARY',
@@ -1308,9 +1308,19 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       decoration: BoxDecoration(
-        color: colors.isDark ? const Color(0xFF1E1E1E) : colors.surfaceElevated,
+        gradient: colors.isDark
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF222328), Color(0xFF141518)],
+              )
+            : null,
+        color: colors.isDark ? null : colors.surfaceElevated,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.borderSubtle),
+        border: Border.all(
+          color: colors.isDark ? const Color(0x28A0A5B2) : colors.borderSubtle,
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1485,7 +1495,103 @@ class _ClientMainDashboardScreenState extends State<ClientMainDashboardScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+
+          // Gamified Athlete Level & Streak Milestone Card
+          AlphaXSubtleEntrance(
+            delay: const Duration(milliseconds: 20),
+            child: MetalCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              borderRadius: BorderRadius.circular(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFB800), Color(0xFFFFA000)],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'LVL 7',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'ATHLETE PROGRESSION',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: colors.textSecondary,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            Text(
+                              '750 / 1000 XP',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: colors.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: const LinearProgressIndicator(
+                            value: 0.75,
+                            minHeight: 5,
+                            backgroundColor: Color(0xFF222328),
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFB800)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1B1B1E),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0x3DF1F5F9), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('🔥', style: TextStyle(fontSize: 13)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '12D',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // 2. Clear Section Header: TODAY'S PLAN
           AlphaXSubtleEntrance(
@@ -1813,7 +1919,7 @@ class _ClientProgressSubScreenState extends State<_ClientProgressSubScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AlphaXColors.redAccent,
-              foregroundColor: Colors.white,
+              foregroundColor: Colors.black,
             ),
             onPressed: () async {
               final w = double.tryParse(weightController.text.trim());
@@ -1978,7 +2084,7 @@ class _ClientProgressSubScreenState extends State<_ClientProgressSubScreen> {
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AlphaXColors.redAccent,
-                        foregroundColor: Colors.white,
+                        foregroundColor: Colors.black,
                       ),
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('LOG FIRST CHECK-IN'),

@@ -253,6 +253,7 @@ class _RejectedAccountScreenState extends State<RejectedAccountScreen> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryRed,
+                        foregroundColor: AppColors.onPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
@@ -260,12 +261,12 @@ class _RejectedAccountScreenState extends State<RejectedAccountScreen> {
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.headset_mic, size: 18, color: Colors.white),
+                          Icon(Icons.headset_mic, size: 18, color: Colors.black),
                           SizedBox(width: 8),
                           Text(
                             'CONTACT ADMIN',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Colors.black,
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
@@ -283,7 +284,9 @@ class _RejectedAccountScreenState extends State<RejectedAccountScreen> {
                     height: 48,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colors.border),
+                        backgroundColor: const Color(0xFF202020),
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFF444444)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: _isRechecking ? null : _handleRecheck,
@@ -293,10 +296,10 @@ class _RejectedAccountScreenState extends State<RejectedAccountScreen> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : Text(
+                          : const Text(
                               'CHECK IF STATUS CHANGED',
                               style: TextStyle(
-                                color: colors.textSecondary,
+                                color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               ),

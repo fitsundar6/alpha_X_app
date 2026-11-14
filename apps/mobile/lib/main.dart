@@ -408,13 +408,14 @@ Route<dynamic>? buildAppRoute(
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryRed,
+                      foregroundColor: AppColors.onPrimary,
                     ),
                     onPressed: () =>
                         Navigator.of(ctx).pushReplacementNamed('/dashboard'),
                     child: const Text(
                       'Return to Client Dashboard',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.onPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

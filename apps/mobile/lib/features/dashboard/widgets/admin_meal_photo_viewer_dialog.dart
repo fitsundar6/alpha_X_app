@@ -122,9 +122,12 @@ class _AdminMealPhotoViewerDialogState extends State<AdminMealPhotoViewerDialog>
             child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('DELETE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('DELETE', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

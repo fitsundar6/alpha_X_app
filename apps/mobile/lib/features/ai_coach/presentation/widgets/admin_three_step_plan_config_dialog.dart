@@ -1460,11 +1460,11 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
           children: _allWeekdays.map((day) {
             final isChosen = _selectedWeekdays.contains(day);
             return FilterChip(
-              label: Text(day, style: TextStyle(fontSize: 11, color: isChosen ? Colors.white : AppColors.textSecondary)),
+              label: Text(day, style: TextStyle(fontSize: 11, color: isChosen ? AppColors.onPrimary : AppColors.textSecondary)),
               selected: isChosen,
               selectedColor: AppColors.primaryRed,
               backgroundColor: AppColors.surfaceCard,
-              checkmarkColor: Colors.white,
+              checkmarkColor: AppColors.onPrimary,
               onSelected: (selected) {
                 setState(() {
                   if (selected) {
@@ -2642,14 +2642,14 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                     key: const Key('admin_plan_config_continue_button'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryRed,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.arrow_forward, size: 16),
+                    icon: const Icon(Icons.arrow_forward, size: 16, color: Colors.black),
                     label: Text(
                       _currentStep == 1 ? 'Continue to Plan Type' : 'Continue to Configuration',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
                     ),
                     onPressed: () {
                       if (_currentStep == 1 && (_selectedClientId == null || _selectedClientId!.isEmpty)) {
@@ -2668,22 +2668,41 @@ class _AdminThreeStepPlanConfigDialogState extends State<AdminThreeStepPlanConfi
                       backgroundColor: _selectedPlanType == AiProposalType.workout
                           ? AppColors.primaryRed
                           : AppColors.statusGreen,
-                      foregroundColor: Colors.white,
+                      foregroundColor: _selectedPlanType == AiProposalType.workout
+                          ? AppColors.onPrimary
+                          : Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     icon: _isGenerating
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: _selectedPlanType == AiProposalType.workout
+                                  ? AppColors.onPrimary
+                                  : Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
-                        : const Icon(Icons.auto_awesome, size: 16),
+                        : Icon(
+                            Icons.auto_awesome,
+                            size: 16,
+                            color: _selectedPlanType == AiProposalType.workout
+                                ? AppColors.onPrimary
+                                : Colors.white,
+                          ),
                     label: Text(
                       _isGenerating
                           ? 'Generating Plan...'
                           : 'Generate ${_selectedPlanType == AiProposalType.workout ? 'Workout' : 'Diet'} Proposal (PENDING)',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: _selectedPlanType == AiProposalType.workout
+                            ? AppColors.onPrimary
+                            : Colors.white,
+                      ),
                     ),
                     onPressed: _isGenerating ? null : _handleGenerateProposal,
                   ),

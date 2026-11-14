@@ -151,7 +151,7 @@ class _ClientExerciseLibraryTabState extends State<ClientExerciseLibraryTab> {
                         selected: isSelected,
                         label: Text(cat),
                         labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                          color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
                           fontSize: 12,
                         ),

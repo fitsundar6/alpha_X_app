@@ -177,7 +177,7 @@ class _AdminAiProposalReviewDialogState
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.onPrimary,
             ),
             onPressed: () {
               final reason = reasonController.text.trim();

@@ -109,10 +109,13 @@ class _NotificationPreferencesDialogState extends State<NotificationPreferencesD
         ),
         ElevatedButton(
           onPressed: _isSaving ? null : _save,
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primaryRed,
+            foregroundColor: AppColors.onPrimary,
+          ),
           child: _isSaving
-              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('SAVE PREFERENCES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+              : const Text('SAVE PREFERENCES', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12)),
         ),
       ],
     );

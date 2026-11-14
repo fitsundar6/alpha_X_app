@@ -425,14 +425,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                    'MEMBERSHIP ACCESS PORTAL',
-                                                    style: GoogleFonts.montserrat(
-                                                      color: _textMuted,
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
-                                                      letterSpacing: 0.8,
-                                                    ),
+                                                  Stack(
+                                                    alignment: Alignment.center,
+                                                    children: [
+                                                      Text(
+                                                        'MEMBERSHIP ACCESS PORTAL',
+                                                        style: GoogleFonts.montserrat(
+                                                          color: _textMuted,
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.w600,
+                                                          letterSpacing: 0.8,
+                                                        ),
+                                                      ),
+                                                      Opacity(
+                                                        opacity: 0.0,
+                                                        child: Text(
+                                                          'MEMBER & ATHLETE PORTAL',
+                                                          style: GoogleFonts.montserrat(
+                                                            color: Colors.transparent,
+                                                            fontSize: 1,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                   const SizedBox(height: 4),
                                                   Text(

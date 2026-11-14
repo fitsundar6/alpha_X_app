@@ -434,7 +434,7 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
                                   child: Text(
                                     _authService.currentClientId,
                                     style: const TextStyle(
-                                      color: Colors.white,
+                                      color: AppColors.onPrimary,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 10,
                                       fontFamily: 'monospace',
@@ -535,11 +535,11 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
                             )
                           : Text(
                               _currentStep == _reviewStep ? 'SUBMIT ASSESSMENT' : 'NEXT',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.8),
+                              style: const TextStyle(color: AppColors.onPrimary, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 0.8),
                             ),
                     ),
                   ),
@@ -708,7 +708,7 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: ChoiceChip(
-                  label: Text(g, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500, color: isSel ? Colors.white : AppColors.textSecondary)),
+                  label: Text(g, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500, color: isSel ? AppColors.onPrimary : AppColors.textSecondary)),
                   selected: isSel,
                   selectedColor: AppColors.primaryRed,
                   backgroundColor: AppColors.surfaceCard,
@@ -782,7 +782,7 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
                   child: Text(
                     daysCount.toString(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                      color: isSelected ? AppColors.onPrimary : AppColors.textPrimary,
                       fontWeight: FontWeight.w900,
                       fontSize: 18,
                     ),
@@ -802,9 +802,10 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
           children: daysOfWeek.map((day) {
             final isSel = _preferredDays.contains(day);
             return FilterChip(
-              label: Text(day, style: TextStyle(color: isSel ? Colors.white : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
+              label: Text(day, style: TextStyle(color: isSel ? AppColors.onPrimary : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
               selected: isSel,
               selectedColor: AppColors.primaryRed,
+              checkmarkColor: AppColors.onPrimary,
               backgroundColor: AppColors.surfaceCard,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSel ? AppColors.primaryRed : AppColors.border)),
               onSelected: (sel) {
@@ -881,9 +882,10 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
             children: areas.map((a) {
               final isSel = _selectedInjuryAreas.contains(a);
               return FilterChip(
-                label: Text(a, style: TextStyle(color: isSel ? Colors.white : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
+                label: Text(a, style: TextStyle(color: isSel ? AppColors.onPrimary : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
                 selected: isSel,
                 selectedColor: AppColors.primaryRed,
+                checkmarkColor: AppColors.onPrimary,
                 backgroundColor: AppColors.surfaceCard,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: isSel ? AppColors.primaryRed : AppColors.border)),
                 onSelected: (sel) {
@@ -1062,7 +1064,7 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
           children: sleepRanges.map((s) {
             final isSel = _sleepHours == s;
             return ChoiceChip(
-              label: Text('$s hrs', style: TextStyle(color: isSel ? Colors.white : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
+              label: Text('$s hrs', style: TextStyle(color: isSel ? AppColors.onPrimary : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
               selected: isSel,
               selectedColor: AppColors.primaryRed,
               backgroundColor: AppColors.surfaceCard,
@@ -1099,9 +1101,10 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
           children: prefs.map((p) {
             final isSel = _trainingPreferences.contains(p);
             return FilterChip(
-              label: Text(p, style: TextStyle(color: isSel ? Colors.white : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
+              label: Text(p, style: TextStyle(color: isSel ? AppColors.onPrimary : AppColors.textSecondary, fontWeight: isSel ? FontWeight.w800 : FontWeight.w500)),
               selected: isSel,
               selectedColor: AppColors.primaryRed,
+              checkmarkColor: AppColors.onPrimary,
               backgroundColor: AppColors.surfaceCard,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: isSel ? AppColors.primaryRed : AppColors.border)),
@@ -1323,7 +1326,7 @@ class _ClientOnboardingScreenState extends State<ClientOnboardingScreen> {
                   color: isSelected ? AppColors.primaryRed : Colors.transparent,
                   border: Border.all(color: isSelected ? AppColors.primaryRed : AppColors.textTertiary, width: 1.5),
                 ),
-                child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                child: isSelected ? const Icon(Icons.check, size: 14, color: AppColors.onPrimary) : null,
               ),
             ],
           ),

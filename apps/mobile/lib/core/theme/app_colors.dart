@@ -5,71 +5,73 @@ import 'package:flutter/material.dart';
 /// Dark Mode (Primary Identity) & Light Mode (Premium Clean Style)
 class AppColors {
   // ===========================================================================
-  // DARK MODE TOKENS (Official Alpha X Design Guide)
+  // DARK MODE TOKENS (Clean Premium Minimalist Black & White Theme)
   // ===========================================================================
-  static const Color background = Color(0xFF0A0A0A);          // Deep Black #0A0A0A (Background)
-  static const Color secondaryBackground = Color(0xFF151515); // Charcoal #151515
-  static const Color surface = Color(0xFF151515);
-  static const Color card = Color(0xFF151515);                 // Charcoal #151515 (Cards)
-  static const Color surfaceCard = Color(0xFF151515);
-  static const Color secondaryCard = Color(0xFF1E1E1E);        // Slate #1E1E1E (Secondary)
-  static const Color surfaceElevated = Color(0xFF1E1E1E);      // Slate #1E1E1E
-  static const Color surfaceGlass = Color(0xF0151515);
+  static const Color background = Color(0xFF000000);          // Pure Black #000000 (Primary Background)
+  static const Color secondaryBackground = Color(0xFF171717); // Dark Charcoal #171717 (Secondary Background)
+  static const Color surface = Color(0xFF171717);             // Dark Charcoal #171717
+  static const Color card = Color(0xFF171717);                // Dark Charcoal #171717 (Cards)
+  static const Color surfaceCard = Color(0xFF171717);         // Dark Charcoal #171717
+  static const Color secondaryCard = Color(0xFF202020);        // Dark Charcoal #202020 (Modals & Secondary Buttons)
+  static const Color surfaceElevated = Color(0xFF202020);      // Dark Charcoal #202020
+  static const Color surfaceGlass = Color(0xF0171717);
 
-  // Borders
-  static const Color border = Color(0xFF242424);               // Dark border
-  static const Color borderSubtle = Color(0xFF1E1E1E);         // Subtle separator
-  static const Color borderActive = Color(0xFFD4AF37);         // Active Gold border
+  // Borders & Dividers
+  static const Color border = Color(0xFF444444);               // Subtle Grey #444444 (Borders & Dividers)
+  static const Color borderSubtle = Color(0xFF333333);         // Subtle separator
+  static const Color borderActive = Color(0xFFFFFFFF);         // Active White border
 
-  // Primary Brand Accent: Gold
-  static const Color primary = Color(0xFFD4AF37);              // Gold #D4AF37 (Accent)
-  static const Color primaryGold = Color(0xFFD4AF37);
-  static const Color brightGold = Color(0xFFF2C94C);             // Bright Gold #F2C94C
-  static const Color lightGold = Color(0xFFF5E6B3);              // Light Gold #F5E6B3 (Highlights)
-  static const Color primaryPressed = Color(0xFFC49E27);
-  static const Color onPrimary = Color(0xFF0A0A0A);              // Deep Black text on gold button
+  // Primary Brand Accent: Crisp White (Monochrome Athletic Style)
+  static const Color primary = Color(0xFFFFFFFF);              // White #FFFFFF (Primary buttons & accents)
+  static const Color primaryGold = Color(0xFFFFFFFF);
+  static const Color brightGold = Color(0xFFFFFFFF);
+  static const Color lightGold = Color(0xFFE5E5E5);
+  static const Color primaryPressed = Color(0xFFE5E5E5);
+  static const Color onPrimary = Color(0xFF000000);            // Pure Black #000000 text on white button
 
   // Typography
-  static const Color textPrimary = Color(0xFFFFFFFF);            // White #FFFFFF (Text)
-  static const Color textSecondary = Color(0xFFA0A0A0);          // Gray #A0A0A0 (Secondary Text)
-  static const Color textMuted = Color(0xFF707070);              // Muted #707070
-  static const Color textTertiary = Color(0xFFA0A0A0);
-  static const Color textDisabled = Color(0xFF555555);           // Disabled #555555
+  static const Color textPrimary = Color(0xFFFFFFFF);          // White #FFFFFF (Primary text)
+  static const Color textSecondary = Color(0xFFA0A0A0);        // Soft Grey #A0A0A0 (Secondary text)
+  static const Color textMuted = Color(0xFF707070);            // Muted #707070
+  static const Color textTertiary = Color(0xFFA0A0A0);         // Soft Grey #A0A0A0
+  static const Color textDisabled = Color(0xFF888888);         // Disabled Muted Grey #888888
+  static const Color disabledBackground = Color(0xFF2A2A2A);   // Disabled Dark Grey #2A2A2A
+  static const Color disabledText = Color(0xFF888888);         // Disabled Muted Grey #888888
 
-  // Functional Status
-  static const Color success = Color(0xFF22C55E);                // Green #22C55E (Success)
-  static const Color warning = Color(0xFFF59E0B);                // Orange #F59E0B (Warning)
-  static const Color danger = Color(0xFFEF4444);                 // Red #EF4444 (Error)
-  static const Color error = Color(0xFFEF4444);                  // Red #EF4444 (Error)
-  static const Color info = Color(0xFF3B82F6);                   // Info #3B82F6
+  // Functional Status (Preserved for status communications)
+  static const Color success = Color(0xFF22C55E);              // Green #22C55E (Success)
+  static const Color warning = Color(0xFFF59E0B);              // Orange #F59E0B (Warning)
+  static const Color danger = Color(0xFFEF4444);               // Red #EF4444 (Error)
+  static const Color error = Color(0xFFEF4444);                // Red #EF4444 (Error)
+  static const Color info = Color(0xFF3B82F6);                 // Info #3B82F6
   static const Color secondary = Color(0xFF3B82F6);
 
   // Subtle Glow
-  static const Color glow = Color(0x33D4AF37);                   // Subtle gold glow
+  static const Color glow = Color(0x22FFFFFF);                 // Subtle white glow
 
   // ===========================================================================
-  // LIGHT MODE TOKENS (Premium Alpha X Style)
+  // LIGHT MODE TOKENS (Premium Clean Style)
   // ===========================================================================
-  static const Color lightBackground = Color(0xFFF7F7F5);        // Primary background #F7F7F5
-  static const Color lightSecondaryBackground = Color(0xFFFFFFFF);// Secondary background #FFFFFF
+  static const Color lightBackground = Color(0xFFFFFFFF);        // Primary background #FFFFFF
+  static const Color lightSecondaryBackground = Color(0xFFF7F7F7);// Secondary background #F7F7F7
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightCard = Color(0xFFFFFFFF);             // Card #FFFFFF
   static const Color lightSurfaceCard = Color(0xFFFFFFFF);
-  static const Color lightSecondaryCard = Color(0xFFF1F1EE);     // Secondary card #F1F1EE
-  static const Color lightSurfaceElevated = Color(0xFFF1F1EE);
-  static const Color lightBorder = Color(0xFFE2E2DE);           // Border #E2E2DE
-  static const Color lightBorderActive = Color(0xFFB89620);
+  static const Color lightSecondaryCard = Color(0xFFF0F0F0);     // Secondary card #F0F0F0
+  static const Color lightSurfaceElevated = Color(0xFFF0F0F0);
+  static const Color lightBorder = Color(0xFFE5E5E5);           // Border #E5E5E5
+  static const Color lightBorderActive = Color(0xFF000000);
 
-  // Light Mode Gold
-  static const Color lightPrimary = Color(0xFFB89620);          // Primary Gold #B89620
-  static const Color lightBrightGold = Color(0xFFC9A227);       // Bright Gold #C9A227
-  static const Color lightLightGold = Color(0xFF8A7218);        // Light Gold #8A7218
-  static const Color lightPrimaryPressed = Color(0xFFC9A227);
-  static const Color lightOnPrimary = Color(0xFF111111);        // Dark text on gold button
+  // Light Mode Monochrome Accent
+  static const Color lightPrimary = Color(0xFF000000);          // Primary Black #000000
+  static const Color lightBrightGold = Color(0xFF222222);
+  static const Color lightLightGold = Color(0xFF444444);
+  static const Color lightPrimaryPressed = Color(0xFF333333);
+  static const Color lightOnPrimary = Color(0xFFFFFFFF);        // Pure White text on black button
 
   // Light Mode Typography
-  static const Color lightTextPrimary = Color(0xFF111111);      // Primary Text #111111
-  static const Color lightTextSecondary = Color(0xFF5F5F5F);    // Secondary Text #5F5F5F
+  static const Color lightTextPrimary = Color(0xFF000000);      // Primary Text #000000
+  static const Color lightTextSecondary = Color(0xFF666666);    // Secondary Text #666666
   static const Color lightTextMuted = Color(0xFF999999);        // Disabled Text #999999
   static const Color lightTextDisabled = Color(0xFF999999);
 
@@ -82,7 +84,7 @@ class AppColors {
   static const Color lightSecondary = Color(0xFF2563EB);
 
   // Subtle Light Glow
-  static const Color lightGlow = Color(0x33B89620);
+  static const Color lightGlow = Color(0x1A000000);
 
   // ===========================================================================
   // GRADIENTS
@@ -90,28 +92,29 @@ class AppColors {
   static const LinearGradient gradientGold = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFD4AF37), Color(0xFFF2C94C)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFCCCCCC)],
   );
 
   static const LinearGradient gradientEnergy = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFD4AF37), Color(0xFFF2C94C)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFCCCCCC)],
   );
 
   static const LinearGradient gradientViolet = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+    colors: [Color(0xFF333333), Color(0xFF171717)],
   );
 
   // Gamification & Badges
-  static const Color gold = Color(0xFFD4AF37);
+  static const Color gold = Color(0xFFFFFFFF);
   static const Color silver = Color(0xFFC0C0C0);
   static const Color bronze = Color(0xFFCD7F32);
 
   // Backward-compatible aliases for smooth migration across existing screens
   static const Color primaryRed = primary;
+  static const Color onPrimaryRed = onPrimary;
   static const Color primaryRedHover = primaryPressed;
   static const Color accentRed = primary;
   static const Color glowRed = glow;

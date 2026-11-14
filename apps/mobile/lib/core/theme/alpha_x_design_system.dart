@@ -25,9 +25,10 @@ class AlphaXColors {
 
   // Backward compatibility aliases
   static const Color redAccent = AppColors.primary;
+  static const Color onPrimaryRed = AppColors.onPrimaryRed;
   static const Color redAccentHover = AppColors.primaryPressed;
   static const Color redGlow = AppColors.glow;
-  static const Color redSubtle = Color(0x26D4AF37);
+  static const Color redSubtle = Color(0x22FFFFFF);
 
   // High-Contrast Borders
   static const Color border = AppColors.border;
@@ -130,7 +131,7 @@ class AlphaXShadows {
 
   static List<BoxShadow> goldGlow = [
     const BoxShadow(
-      color: Color(0x33D4AF37),
+      color: Color(0x22FFFFFF),
       blurRadius: 18,
       spreadRadius: 1,
       offset: Offset(0, 4),

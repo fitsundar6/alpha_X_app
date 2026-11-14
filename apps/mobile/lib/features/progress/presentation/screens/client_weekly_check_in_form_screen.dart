@@ -194,9 +194,12 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
                 child: const Text('Keep Editing', style: TextStyle(color: AlphaXColors.textSecondary, fontWeight: FontWeight.w600)),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AlphaXColors.redAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AlphaXColors.redAccent,
+                  foregroundColor: Colors.black,
+                ),
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Discard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                child: const Text('Discard', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
               ),
             ],
           ),
@@ -609,6 +612,9 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
                     onPressed: _isSubmitting ? null : _submitForm,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AlphaXColors.redAccent,
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor: const Color(0xFF2A2A2A),
+                      disabledForegroundColor: const Color(0xFF888888),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AlphaXRadius.md)),
                       elevation: 4,
                     ),
@@ -616,12 +622,12 @@ class _ClientWeeklyCheckInFormScreenState extends State<ClientWeeklyCheckInFormS
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                           )
                         : Text(
                             'SUBMIT WEEK ${widget.weekNumber} CHECK-IN',
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Colors.black,
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.0,

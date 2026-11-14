@@ -61,11 +61,14 @@ class AlphaXButton extends StatelessWidget {
         ),
       );
     } else {
-      final textColor = variant == AlphaXButtonVariant.primary
-          ? onPrimaryColor
-          : (variant == AlphaXButtonVariant.danger
-              ? (isDark ? AppColors.error : AppColors.lightError)
-              : (isDark ? AppColors.textPrimary : AppColors.lightTextPrimary));
+      final isEnabled = !isLoading && onPressed != null;
+      final textColor = !isEnabled
+          ? (isDark ? const Color(0xFF888888) : AppColors.lightTextDisabled)
+          : (variant == AlphaXButtonVariant.primary
+              ? onPrimaryColor
+              : (variant == AlphaXButtonVariant.danger
+                  ? (isDark ? AppColors.error : AppColors.lightError)
+                  : (isDark ? AppColors.textPrimary : AppColors.lightTextPrimary)));
 
       final textStyle = GoogleFonts.poppins(
         fontWeight: FontWeight.w700,
@@ -101,10 +104,12 @@ class AlphaXButton extends StatelessWidget {
     if (variant == AlphaXButtonVariant.secondary) {
       buttonWidget = OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isDark ? AppColors.secondaryCard : AppColors.lightSecondaryCard,
-          foregroundColor: isDark ? AppColors.textPrimary : AppColors.lightTextPrimary,
+          backgroundColor: isDark ? const Color(0xFF202020) : AppColors.lightSecondaryCard,
+          foregroundColor: isDark ? const Color(0xFFFFFFFF) : AppColors.lightTextPrimary,
+          disabledBackgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFEEEEEE),
+          disabledForegroundColor: isDark ? const Color(0xFF707070) : const Color(0xFF9E9E9E),
           side: BorderSide(
-            color: isDark ? AppColors.border : AppColors.lightBorder,
+            color: isDark ? const Color(0xFF444444) : AppColors.lightBorder,
             width: 1.2,
           ),
           shape: RoundedRectangleBorder(borderRadius: effectiveRadius),
@@ -138,7 +143,7 @@ class AlphaXButton extends StatelessWidget {
         child: childWidget,
       );
     } else {
-      // Primary Gold CTA Button with subtle glow
+      // Primary White CTA Button with subtle glow
       buttonWidget = Container(
         decoration: BoxDecoration(
           borderRadius: effectiveRadius,
@@ -154,7 +159,9 @@ class AlphaXButton extends StatelessWidget {
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryColor,
-            foregroundColor: onPrimaryColor, // Dark text on gold
+            foregroundColor: onPrimaryColor,
+            disabledBackgroundColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE0E0E0),
+            disabledForegroundColor: isDark ? const Color(0xFF888888) : const Color(0xFF9E9E9E),
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: effectiveRadius),
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -211,7 +218,7 @@ class AlphaXActionButton extends StatelessWidget {
     this.icon,
     this.trailingIcon,
     this.hiddenTestLabels = const [],
-    this.goldColor = const Color(0xFFD4A034),
+    this.goldColor = AppColors.primary,
     this.backgroundColor,
     this.textStyle,
   });
@@ -228,7 +235,7 @@ class AlphaXActionButton extends StatelessWidget {
     this.icon,
     this.trailingIcon,
     this.hiddenTestLabels = const [],
-    this.goldColor = const Color(0xFFD4A034),
+    this.goldColor = AppColors.primary,
     this.backgroundColor,
     this.textStyle,
   }) : variant = AlphaXActionButtonVariant.solid;
@@ -245,7 +252,7 @@ class AlphaXActionButton extends StatelessWidget {
     this.icon,
     this.trailingIcon,
     this.hiddenTestLabels = const [],
-    this.goldColor = const Color(0xFFD4A034),
+    this.goldColor = AppColors.primary,
     this.backgroundColor,
     this.textStyle,
   }) : variant = AlphaXActionButtonVariant.outlined;
@@ -254,7 +261,10 @@ class AlphaXActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveRadius = borderRadius ?? BorderRadius.circular(12);
     final isSolid = variant == AlphaXActionButtonVariant.solid;
-    final primaryTextColor = isSolid ? const Color(0xFF0A0A0A) : goldColor;
+    final isEnabled = !isLoading && onPressed != null;
+    final primaryTextColor = !isEnabled
+        ? const Color(0xFF888888)
+        : (isSolid ? const Color(0xFF000000) : (backgroundColor != null ? Colors.white : goldColor));
     final effectiveWidth = isFullWidth ? (width ?? double.infinity) : width;
 
     final defaultTextStyle = GoogleFonts.poppins(
@@ -355,7 +365,7 @@ class AlphaXActionButton extends StatelessWidget {
           borderRadius: effectiveRadius,
           boxShadow: [
             BoxShadow(
-              color: goldColor.withOpacity(0.35),
+              color: goldColor.withOpacity(0.18),
               blurRadius: 14,
               spreadRadius: 0,
               offset: const Offset(0, 3),
@@ -366,8 +376,9 @@ class AlphaXActionButton extends StatelessWidget {
           onPressed: isLoading ? null : onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: goldColor,
-            foregroundColor: const Color(0xFF0A0A0A),
-            disabledBackgroundColor: goldColor.withOpacity(0.5),
+            foregroundColor: const Color(0xFF000000),
+            disabledBackgroundColor: const Color(0xFF2A2A2A),
+            disabledForegroundColor: const Color(0xFF888888),
             elevation: 0,
             shadowColor: Colors.transparent,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
@@ -386,10 +397,11 @@ class AlphaXActionButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            backgroundColor: backgroundColor ?? Colors.white.withOpacity(0.04),
-            foregroundColor: goldColor,
-            disabledForegroundColor: goldColor.withOpacity(0.4),
-            side: BorderSide(color: goldColor, width: 1.4),
+            backgroundColor: backgroundColor ?? const Color(0xFF202020),
+            foregroundColor: const Color(0xFFFFFFFF),
+            disabledBackgroundColor: const Color(0xFF1E1E1E),
+            disabledForegroundColor: const Color(0xFF707070),
+            side: const BorderSide(color: Color(0xFF444444), width: 1.4),
             elevation: 0,
             shadowColor: Colors.transparent,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),

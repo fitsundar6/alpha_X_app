@@ -971,7 +971,10 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Restore Original', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
@@ -1066,7 +1069,7 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: colors.primaryRed,
-              foregroundColor: Colors.white,
+              foregroundColor: colors.onPrimaryRed,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
@@ -1228,9 +1231,12 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: colors.primaryRed),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colors.primaryRed,
+                    foregroundColor: colors.onPrimaryRed,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Back to Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  child: const Text('Back to Dashboard', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
@@ -1264,9 +1270,12 @@ class _ClientWorkoutExecutionScreenState extends State<ClientWorkoutExecutionScr
                 child: Text('Stay & Train', style: TextStyle(color: colors.textSecondary)),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: colors.primaryRed),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.primaryRed,
+                  foregroundColor: colors.onPrimaryRed,
+                ),
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Exit to Overview', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                child: const Text('Exit to Overview', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
               ),
             ],
           ),

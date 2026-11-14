@@ -77,9 +77,12 @@ class ClientSessionOverviewScreen extends StatelessWidget {
               child: const Text('Discard & Start New', style: TextStyle(color: AppColors.textTertiary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: colors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primaryRed,
+                foregroundColor: colors.onPrimaryRed,
+              ),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('RESUME PREVIOUS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              child: const Text('RESUME PREVIOUS', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
             ),
           ],
         ),
@@ -344,13 +347,14 @@ class ClientSessionOverviewScreen extends StatelessWidget {
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.primaryRed,
+                            foregroundColor: colors.onPrimaryRed,
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                          icon: const Icon(Icons.play_arrow_rounded, color: Colors.black, size: 18),
                           label: const Text(
                             'RESUME WORKOUT',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12),
                           ),
                           onPressed: () {
                             Navigator.of(context).push(
@@ -499,6 +503,7 @@ class ClientSessionOverviewScreen extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               elevation: 6,
@@ -507,12 +512,12 @@ class ClientSessionOverviewScreen extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(isSameActiveSession ? Icons.restore_rounded : Icons.play_arrow, color: Colors.white, size: 22),
+                Icon(isSameActiveSession ? Icons.restore_rounded : Icons.play_arrow, color: Colors.black, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   isSameActiveSession ? 'RESUME WORKOUT' : 'START WORKOUT',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Colors.black,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.2,
                     fontSize: 16,

@@ -349,7 +349,7 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
                       child: Text(
                         cat,
                         style: TextStyle(
-                          color: isSel ? Colors.white : AppColors.textSecondary,
+                          color: isSel ? AppColors.onPrimary : AppColors.textSecondary,
                           fontWeight: isSel ? FontWeight.w800 : FontWeight.w600,
                           fontSize: 11,
                         ),
@@ -828,7 +828,10 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () {
               final val = double.tryParse(controller.text.trim());
               if (val != null && val > 0) {
@@ -839,7 +842,7 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
                 }
               }
             },
-            child: const Text('Apply', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            child: const Text('Apply', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -883,7 +886,7 @@ class _AddFoodBottomSheetState extends State<AddFoodBottomSheet> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
             fontSize: 10,
             fontWeight: FontWeight.w800,
           ),

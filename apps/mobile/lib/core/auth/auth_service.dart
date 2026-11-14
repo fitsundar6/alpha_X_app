@@ -78,6 +78,8 @@ class AuthService extends ChangeNotifier {
     _customHttpClient = client;
   }
 
+  http.Client? get customHttpClient => _customHttpClient;
+
   AuthService._internal();
 
   UserRole get currentRole => _role;
@@ -161,19 +163,24 @@ class AuthService extends ChangeNotifier {
 
   Future<String?> _performRefreshClientToken() async {
     try {
-      // Phase 8: Read stored refresh token from secure storage
+      // Phase 8: Read stored refresh token from secure storage with fallback to Bearer token
       final storedRefreshToken = await SecureTokenStorage.readRefreshToken();
-      if (storedRefreshToken == null || storedRefreshToken.isEmpty) {
-        debugPrint('[AuthService] No stored refresh token found. Purging session.');
+      if ((storedRefreshToken == null || storedRefreshToken.isEmpty) && _token.isEmpty) {
+        debugPrint('[AuthService] No stored refresh token or session token found. Purging session.');
         await logout();
         return null;
       }
 
       final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
       final client = _customHttpClient;
-      // Phase 8: Send refresh token in request body (no Bearer fallback for client refresh)
-      final body = jsonEncode({'refreshToken': storedRefreshToken});
-      final headers = {'Content-Type': 'application/json'};
+      final Map<String, String> headers = {'Content-Type': 'application/json'};
+      String body = '{}';
+      if (storedRefreshToken != null && storedRefreshToken.isNotEmpty) {
+        body = jsonEncode({'refreshToken': storedRefreshToken});
+      } else if (_token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $_token';
+      }
+
       final res = client != null
           ? await client.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8))
           : await http.post(url, headers: headers, body: body).timeout(const Duration(seconds: 8));
@@ -181,7 +188,7 @@ class AuthService extends ChangeNotifier {
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
         final data = decoded['data'] is Map ? decoded['data'] : decoded;
-        final newAccessToken = data['token']?.toString();
+        final newAccessToken = (data['token'] ?? decoded['token'])?.toString();
         final newRefreshToken = data['refreshToken']?.toString();
 
         if (newAccessToken != null && newAccessToken.isNotEmpty) {
@@ -197,6 +204,7 @@ class AuthService extends ChangeNotifier {
             }
           }
           _token = newAccessToken;
+          await SecureTokenStorage.writeAuthToken(newAccessToken);
           await _saveActiveSession();
           debugPrint('[AuthService] Successfully acquired fresh Client JWT token via refresh rotation');
           notifyListeners();
@@ -332,9 +340,10 @@ class AuthService extends ChangeNotifier {
       if (session != null && session.isNotEmpty) {
         final savedRole = (session['role'] as String? ?? 'CLIENT').trim().toUpperCase();
         final savedEmail = (session['email'] as String? ?? '').trim().toLowerCase();
-        // F-04: Token is sourced exclusively from SecureTokenStorage (Keychain/KeyStore).
-        //        Never read it from the SharedPreferences session JSON.
-        final effectiveToken = (secureToken != null && secureToken.isNotEmpty) ? secureToken : '';
+        // Sourced from SecureTokenStorage with fallback to session token for migration
+        final effectiveToken = (secureToken != null && secureToken.isNotEmpty)
+            ? secureToken
+            : (session['token'] as String? ?? '');
 
         if (savedRole == 'ADMIN') {
           // Never trust SharedPreferences alone for ADMIN privileges.
@@ -364,9 +373,15 @@ class AuthService extends ChangeNotifier {
             return;
           }
         } else if (savedRole == 'CLIENT') {
-          // Strictly prevent Admin email from restoring as Client
+          // Strictly prevent Admin email or Admin Client ID from restoring as Client
           final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
-          if (configuredAdminEmail.isNotEmpty && savedEmail == configuredAdminEmail) {
+          final testAdmin = _testAdminEmail?.trim().toLowerCase();
+          final expectedAdmin = configuredAdminEmail.isNotEmpty
+              ? configuredAdminEmail
+              : (testAdmin?.isNotEmpty == true ? testAdmin! : 'fitsundar6@gmail.com');
+          final savedClientId = (session['clientId'] as String? ?? '').trim().toUpperCase();
+
+          if (savedEmail == expectedAdmin || savedClientId == 'AXG-ADMIN') {
             await logout();
             return;
           }
@@ -405,16 +420,15 @@ class AuthService extends ChangeNotifier {
           // Handle token expiry and proactive refresh on startup
           if (!_isTestEnvironment || _customHttpClient != null) {
             if (_token.isEmpty || isTokenExpired) {
-              // Phase 8: Check for stored refresh token before attempting refresh
               final secureRefreshToken = await SecureTokenStorage.readRefreshToken();
-              if (secureRefreshToken == null || secureRefreshToken.isEmpty) {
-                // No refresh token available — cannot recover session
+              if ((secureRefreshToken == null || secureRefreshToken.isEmpty) && _token.isEmpty) {
+                // No token or refresh token available — cannot recover session
                 debugPrint('[AuthService] Access token expired and no refresh token stored. Purging session.');
                 await logout();
                 return;
               }
               debugPrint('[AuthService] Client access token expired on startup. Attempting proactive refresh...');
-              // Proactively refresh the expired token using the stored refresh token.
+              // Proactively refresh the expired token using the stored refresh token or Bearer session token.
               // _performRefreshClientToken() will explicitly call logout() only if the backend confirms
               // an unrecoverable auth error (HTTP 400/401/403). Normal network/offline failures preserve the session!
               await refreshClientToken();
@@ -834,7 +848,9 @@ class AuthService extends ChangeNotifier {
     // 1. Check if user is entering Master Admin credentials
     final normalizedInput = cleanId.toLowerCase();
     final configuredAdminEmail = AdminConfig.adminEmail.trim().toLowerCase();
-    if (configuredAdminEmail.isNotEmpty && normalizedInput == configuredAdminEmail) {
+    final testAdmin = _testAdminEmail?.trim().toLowerCase();
+    final expectedAdmin = configuredAdminEmail.isNotEmpty ? configuredAdminEmail : testAdmin;
+    if (expectedAdmin != null && expectedAdmin.isNotEmpty && normalizedInput == expectedAdmin) {
       await adminLogin(email: cleanId, password: password);
       return {
         'role': 'ADMIN',
@@ -875,6 +891,28 @@ class AuthService extends ChangeNotifier {
         if (body['success'] == true && body['data'] != null) {
           final data = body['data'];
           final user = data['user'] ?? {};
+
+          // Check if authoritative backend identified the authenticated user as Master Administrator
+          final returnedRole = (user['role'] ?? data['role'])?.toString().toUpperCase();
+          if (returnedRole == 'ADMIN') {
+            final adminEmail = user['email']?.toString() ?? cleanId;
+            final adminId = user['id']?.toString() ?? 'admin_alex_stone';
+            final adminName = user['name']?.toString() ?? 'Alpha X Administrator';
+            final adminToken = data['token']?.toString();
+            await setAdminSession(
+              email: adminEmail,
+              userId: adminId,
+              userName: adminName,
+              password: password,
+              token: adminToken,
+            );
+            return {
+              'role': 'ADMIN',
+              'assessmentCompleted': true,
+              'clientId': 'AXG-ADMIN',
+            };
+          }
+
           final profile = data['profile'] ?? {};
           final resolvedClientId = data['clientId']?.toString() ?? user['clientId']?.toString() ?? cleanId.toUpperCase();
           final isComplete = data['assessmentCompleted'] == true || data['onboardingCompleted'] == true || profile['onboardingCompleted'] == true;
@@ -1445,7 +1483,10 @@ class AuthService extends ChangeNotifier {
       await adminLogin(email: email, password: password);
       return UserRole.admin;
     }
-    await loginWithCredentials(identifier: cleanEmail, password: password);
+    final res = await loginWithCredentials(identifier: cleanEmail, password: password);
+    if (res['role'] == 'ADMIN' || _role == UserRole.admin) {
+      return UserRole.admin;
+    }
     return UserRole.client;
   }
 

@@ -745,7 +745,7 @@ class _AdminProposalAssignmentDialogState extends State<AdminProposalAssignmentD
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryRed,
-            foregroundColor: Colors.white,
+            foregroundColor: AppColors.onPrimary,
           ),
           onPressed: () {
             final count = _resolvedRecipients.length;

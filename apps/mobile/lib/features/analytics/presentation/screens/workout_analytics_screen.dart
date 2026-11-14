@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/theme/client_theme_service.dart';
+import 'package:alpha_x_gym/core/widgets/metal_card.dart';
 import 'package:alpha_x_gym/core/theme/alpha_x_motion.dart';
 import 'package:alpha_x_gym/features/analytics/domain/models/workout_analytics_models.dart';
 import 'package:alpha_x_gym/features/analytics/domain/services/workout_analytics_calculator.dart';
@@ -227,21 +228,9 @@ class _WorkoutAnalyticsScreenState extends State<WorkoutAnalyticsScreen> {
 
   // --- Header Banner ---
   Widget _buildScreenBanner(ClientThemeColors colors) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.primary.withOpacity(0.08),
-            colors.surfaceCard,
-          ],
-        ),
-      ),
+    return MetalCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         children: [
           Container(
@@ -413,6 +402,7 @@ class _WorkoutAnalyticsScreenState extends State<WorkoutAnalyticsScreen> {
                 icon: Icons.scale_rounded,
                 isPositive: (data.volumeChangePercent ?? 0) >= 0,
                 colors: colors,
+                isMetallic: true,
               ),
             ),
           ],
@@ -430,6 +420,7 @@ class _WorkoutAnalyticsScreenState extends State<WorkoutAnalyticsScreen> {
                 icon: Icons.emoji_events_rounded,
                 isPositive: data.prsDiff >= 0,
                 colors: colors,
+                isMetallic: true,
               ),
             ),
             const SizedBox(width: 10),
@@ -500,15 +491,9 @@ class _WorkoutAnalyticsScreenState extends State<WorkoutAnalyticsScreen> {
     required IconData icon,
     required bool isPositive,
     required ClientThemeColors colors,
+    bool isMetallic = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surfaceCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
+    final content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -561,7 +546,24 @@ class _WorkoutAnalyticsScreenState extends State<WorkoutAnalyticsScreen> {
             ],
           ),
         ],
+      );
+
+    if (isMetallic) {
+      return MetalCard(
+        padding: const EdgeInsets.all(14),
+        borderRadius: BorderRadius.circular(14),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
       ),
+      child: content,
     );
   }
 

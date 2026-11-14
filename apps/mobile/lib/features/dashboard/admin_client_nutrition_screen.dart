@@ -165,7 +165,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
                         label: const Text('UPDATE DIET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryRed,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.onPrimary,
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           visualDensity: VisualDensity.compact,
                         ),
@@ -316,7 +316,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                     ),
                   ),
                   selected: isSelected,
@@ -575,7 +575,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primaryRed,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.onPrimary,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -703,7 +703,10 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
             const Text('Create and assign a structured nutrition protocol for this client.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
             const SizedBox(height: 16),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () => _openCreateEditDiet(),
               child: const Text('CREATE DIET PLAN'),
             ),
@@ -853,6 +856,7 @@ class _AdminClientNutritionScreenState extends State<AdminClientNutritionScreen>
           label: const Text('UPDATE / REPLACE DIET PLAN'),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryRed,
+            foregroundColor: AppColors.onPrimary,
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),

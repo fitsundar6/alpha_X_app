@@ -111,9 +111,12 @@ class _AdminAttentionCenterViewState extends State<AdminAttentionCenterView> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('MARK REVIEWED', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('MARK REVIEWED', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -285,7 +288,7 @@ class _AdminAttentionCenterViewState extends State<AdminAttentionCenterView> {
                 selectedColor: AppColors.primaryRed,
                 backgroundColor: AppColors.surface,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                 ),

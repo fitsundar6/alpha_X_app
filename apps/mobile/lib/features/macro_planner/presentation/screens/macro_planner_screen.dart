@@ -325,13 +325,10 @@ class _MacroPlannerScreenState extends State<MacroPlannerScreen> {
               const SizedBox(height: 8),
               AlphaXPressable(
                 onTap: () => _showPrescribedMealsSheet(context, widget.repository.assignedDietPlan!),
-                child: Container(
+                child: MetalCard(
+                  isSubtle: true,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colors.primary.withOpacity(0.35)),
-                  ),
+                  borderRadius: BorderRadius.circular(12),
                   child: Row(
                     children: [
                       Icon(Icons.restaurant_menu, size: 14, color: colors.primary),

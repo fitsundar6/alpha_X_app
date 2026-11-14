@@ -486,7 +486,7 @@ class _AdminCreateEditSessionScreenState
                             Text(
                               shortName.toUpperCase(),
                               style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.textPrimary,
+                                color: isSelected ? AppColors.onPrimary : AppColors.textPrimary,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
                               ),
@@ -496,7 +496,7 @@ class _AdminCreateEditSessionScreenState
                               isRest ? 'Rest' : '$exCount ex',
                               style: TextStyle(
                                 color: isSelected
-                                    ? Colors.white.withOpacity(0.9)
+                                    ? AppColors.onPrimary.withOpacity(0.85)
                                     : (isRest ? AppColors.textSecondary : AppColors.primaryRed),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -776,7 +776,10 @@ class _AdminCreateEditSessionScreenState
               child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () {
                 final title = titleController.text.trim();
                 if (title.isNotEmpty) {
@@ -794,7 +797,7 @@ class _AdminCreateEditSessionScreenState
                 }
                 Navigator.of(ctx).pop();
               },
-              child: const Text('Add Section', style: TextStyle(color: Colors.white)),
+              child: const Text('Add Section', style: TextStyle(color: Colors.black)),
             ),
           ],
         ),
@@ -1212,10 +1215,11 @@ class _AdminCreateEditSessionScreenState
                   children: [
                     ElevatedButton.icon(
                       onPressed: _pickExerciseFromDatabase,
-                      icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                      label: const Text('+ ADD EXERCISE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+                      icon: const Icon(Icons.add, size: 16, color: Colors.black),
+                      label: const Text('+ ADD EXERCISE', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800, fontSize: 12)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryRed,
+                        foregroundColor: AppColors.onPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1349,6 +1353,7 @@ class _AdminCreateEditSessionScreenState
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1361,10 +1366,10 @@ class _AdminCreateEditSessionScreenState
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: Colors.black,
                       ),
                     )
-                  : const Icon(Icons.save, color: Colors.white),
+                  : const Icon(Icons.save, color: Colors.black),
               label: Text(
                 _isSaving
                     ? 'SAVING...'
@@ -1374,7 +1379,7 @@ class _AdminCreateEditSessionScreenState
                             ? 'UPDATE WORKOUT PLAN (V${(widget.sessionToEdit?.planVersion.versionNumber ?? 1) + 1})'
                             : 'CREATE WORKOUT PLAN',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.black,
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
                   letterSpacing: 1.0,
@@ -1398,7 +1403,7 @@ class _AdminCreateEditSessionScreenState
       labelStyle: TextStyle(
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-        color: isSelected ? Colors.white : AppColors.textSecondary,
+        color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -2532,13 +2537,14 @@ class _ExerciseEditDialogState extends State<_ExerciseEditDialog> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _submit,
                 child: Text(
                   widget.existingExercise != null ? 'SAVE CHANGES' : 'ADD TO WORKOUT',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900),
                 ),
               ),
             ),

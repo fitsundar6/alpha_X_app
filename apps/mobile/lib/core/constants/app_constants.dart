@@ -41,20 +41,28 @@ class AppConstants {
   static const Duration receiveTimeout = Duration(seconds: 15);
 
   /// Resolves relative image URLs (e.g. /api/v1/transformation-photos/...) to absolute URLs.
-  /// Authentication must be sent via standard HTTP Authorization Bearer headers on Image.network.
+  /// If [authToken] is provided, safely appends it as a query parameter for authenticated access.
   static String resolveImageUrl(String? relativeOrAbsoluteUrl, {String? authToken}) {
     if (relativeOrAbsoluteUrl == null || relativeOrAbsoluteUrl.trim().isEmpty) return '';
     final trimmed = relativeOrAbsoluteUrl.trim();
+    String fullUrl;
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
+      fullUrl = trimmed;
+    } else {
+      String base = currentBaseUrl;
+      if (base.endsWith('/api/v1')) {
+        base = base.substring(0, base.length - '/api/v1'.length);
+      } else if (base.endsWith('/api')) {
+        base = base.substring(0, base.length - '/api'.length);
+      }
+      final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+      fullUrl = '$base$cleanPath';
     }
-    String base = currentBaseUrl;
-    if (base.endsWith('/api/v1')) {
-      base = base.substring(0, base.length - '/api/v1'.length);
-    } else if (base.endsWith('/api')) {
-      base = base.substring(0, base.length - '/api'.length);
+
+    if (authToken != null && authToken.trim().isNotEmpty && !fullUrl.contains('token=')) {
+      final separator = fullUrl.contains('?') ? '&' : '?';
+      return '$fullUrl${separator}token=$authToken';
     }
-    final cleanPath = trimmed.startsWith('/') ? trimmed : '/$trimmed';
-    return '$base$cleanPath';
+    return fullUrl;
   }
 }

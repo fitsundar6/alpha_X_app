@@ -1,4 +1,6 @@
 export 'alpha_x_button.dart';
+export 'game_button.dart';
+export 'metal_card.dart';
 export 'alpha_x_card.dart';
 export 'alpha_x_input.dart';
 export 'alpha_x_hero.dart';

@@ -159,9 +159,12 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
               child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Save Anyway', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+              child: const Text('Save Anyway', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
             ),
           ],
         ),
@@ -593,12 +596,12 @@ class _CustomFoodDialogState extends State<CustomFoodDialog> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                             )
                           : const Text(
                               'SAVE TO GLOBAL DATABASE',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Colors.black,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.8,

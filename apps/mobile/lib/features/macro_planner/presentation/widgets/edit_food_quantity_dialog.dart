@@ -75,7 +75,7 @@ class _EditFoodQuantityDialogState extends State<EditFoodQuantityDialog> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.onPrimary,
             ),
             onPressed: () {
               Navigator.of(ctx).pop(); // pop confirmation
@@ -252,7 +252,7 @@ class _EditFoodQuantityDialogState extends State<EditFoodQuantityDialog> {
                           child: Text(
                             'UPDATE QUANTITY',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Colors.black,
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,

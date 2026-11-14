@@ -209,6 +209,12 @@ class WorkoutRepository extends ChangeNotifier {
     _workoutHistory.insert(0, record);
     notifyListeners();
   }
+
+  void setClientsForTesting(List<Map<String, String>> clients) {
+    _clients.clear();
+    _clients.addAll(clients);
+    notifyListeners();
+  }
   int get pendingSyncCount => _pendingSyncRecords.length;
   int get pendingSetCompletionsCount => _pendingSetCompletions.length;
   DateTime? get activeSessionSavedAt => _activeSessionSavedAt;

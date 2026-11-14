@@ -503,7 +503,7 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primaryRed,
-                              foregroundColor: Colors.white,
+                              foregroundColor: AppColors.onPrimary,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
@@ -622,7 +622,10 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('CANCEL')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () {
               if (controller.text.trim().isNotEmpty) {
                 setState(() {
@@ -1020,7 +1023,7 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
             child: ElevatedButton.icon(
               onPressed: _isSaving ? null : _saveAndAssignDiet,
               icon: _isSaving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                   : const Icon(Icons.check_circle, size: 18),
               label: Text(
                 _isSaving ? 'ASSIGNING TO CLIENT...' : 'ASSIGN DIET PLAN TO CLIENT',
@@ -1028,7 +1031,7 @@ class _AdminCreateEditDietPlanScreenState extends State<AdminCreateEditDietPlanS
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

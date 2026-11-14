@@ -23,7 +23,9 @@ import 'package:alpha_x_gym/features/food_photo_tracking/presentation/screens/ad
 import 'package:alpha_x_gym/features/dashboard/widgets/admin_attention_center_view.dart';
 import 'package:alpha_x_gym/features/ai_coach/presentation/admin_ai_coach_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/data/repositories/ai_coach_repository.dart';
+
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:alpha_x_gym/features/dashboard/admin_client_verification_screen.dart';
 import 'package:alpha_x_gym/features/ai_coach/domain/models/ai_coach_models.dart';
@@ -39,6 +41,7 @@ class AdminMainDashboardScreen extends StatefulWidget {
   final ActivityRepository activityRepository;
   final MacroRepository macroRepository;
   final WeeklyProgressRepository? weeklyProgressRepository;
+  final int initialIndex;
 
   const AdminMainDashboardScreen({
     super.key,
@@ -46,15 +49,17 @@ class AdminMainDashboardScreen extends StatefulWidget {
     required this.activityRepository,
     required this.macroRepository,
     this.weeklyProgressRepository,
+    this.initialIndex = 0,
   });
 
   @override
-  State<AdminMainDashboardScreen> createState() => _AdminMainDashboardScreenState();
+  State<AdminMainDashboardScreen> createState() =>
+      _AdminMainDashboardScreenState();
 }
 
 class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
-  int _selectedIndex = 0;
-  final List<int> _tabHistory = [0];
+  late int _selectedIndex;
+  late final List<int> _tabHistory;
   DateTime? _lastBackPressTime;
   double? _dragStartX;
   bool _isLoadingClients = false;
@@ -69,14 +74,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   int _pendingVerificationCount = 0;
 
   // Push Notification state
-  final TextEditingController _pushTitleController = TextEditingController(text: '⚡ Alpha X Coach Alert');
-  final TextEditingController _pushBodyController = TextEditingController(text: 'Hydration and training reminder from your coach.');
+  final TextEditingController _pushTitleController = TextEditingController(
+    text: '⚡ Alpha X Coach Alert',
+  );
+  final TextEditingController _pushBodyController = TextEditingController(
+    text: 'Hydration and training reminder from your coach.',
+  );
   Map<String, dynamic>? _audiencePreview;
   bool _isLoadingAudiencePreview = false;
   bool _isSendingPush = false;
   Map<String, dynamic>? _pushResult;
   String? _pushError;
-  String _pushRecipientMode = 'SINGLE_CLIENT'; // 'SINGLE_CLIENT' (DEFAULT) or 'BROADCAST'
+  String _pushRecipientMode =
+      'SINGLE_CLIENT'; // 'SINGLE_CLIENT' (DEFAULT) or 'BROADCAST'
   String? _selectedPushClientId; // Selected client User ID / UUID
   bool _confirmBroadcastChecked = false;
   bool _isCheckingDeliveryReport = false;
@@ -98,7 +108,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _weeklyProgressRepo = widget.weeklyProgressRepository ?? WeeklyProgressRepository();
+    _selectedIndex = widget.initialIndex;
+    _tabHistory = [widget.initialIndex];
+    _weeklyProgressRepo =
+        widget.weeklyProgressRepository ?? WeeklyProgressRepository();
     _aiCoachRepo = AiCoachRepository();
     // Memoize the future so it is only created once — not on every rebuild.
     // Calling getDailySummary() directly inside build() would spawn a new HTTP
@@ -128,19 +141,22 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     try {
       final token = await AuthService().getValidToken();
       if (token.isEmpty) return;
-      final res = await http.get(
-        Uri.parse('${AppConstants.apiBaseUrl}/admin/verification/metrics'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 8));
+      final res = await http
+          .get(
+            Uri.parse('${AppConstants.apiBaseUrl}/admin/verification/metrics'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
         if (decoded['success'] == true && decoded['data'] != null) {
           if (mounted) {
             setState(() {
-              _pendingVerificationCount = (decoded['data']['pending'] as num?)?.toInt() ?? 0;
+              _pendingVerificationCount =
+                  (decoded['data']['pending'] as num?)?.toInt() ?? 0;
             });
           }
         }
@@ -206,7 +222,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       _clientsError = null;
     });
     try {
-      await widget.workoutRepository.fetchClientsList(forceRefresh: forceRefresh);
+      await widget.workoutRepository.fetchClientsList(
+        forceRefresh: forceRefresh,
+      );
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -226,7 +244,20 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     if (raw == null || raw.trim().isEmpty) return 'Recent';
     try {
       final dt = DateTime.parse(raw).toLocal();
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
     } catch (_) {
       return raw;
@@ -246,13 +277,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         // Double-back to exit protection at root Dashboard tab
         final now = DateTime.now();
         if (_lastBackPressTime == null ||
-            now.difference(_lastBackPressTime!) > const Duration(seconds: 2, milliseconds: 500)) {
+            now.difference(_lastBackPressTime!) >
+                const Duration(seconds: 2, milliseconds: 500)) {
           _lastBackPressTime = now;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text(
                 'Press back again to exit Admin Panel',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               duration: const Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
@@ -274,121 +309,161 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         },
         onHorizontalDragEnd: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
-          final isLeftEdgeSwipe = _dragStartX != null && _dragStartX! <= 60.0 && (details.primaryVelocity ?? 0) > 150;
-          final isRightEdgeSwipe = _dragStartX != null && _dragStartX! >= (screenWidth - 60.0) && (details.primaryVelocity ?? 0) < -150;
+          final isLeftEdgeSwipe =
+              _dragStartX != null &&
+              _dragStartX! <= 60.0 &&
+              (details.primaryVelocity ?? 0) > 150;
+          final isRightEdgeSwipe =
+              _dragStartX != null &&
+              _dragStartX! >= (screenWidth - 60.0) &&
+              (details.primaryVelocity ?? 0) < -150;
           if (isLeftEdgeSwipe || isRightEdgeSwipe) {
             _navigateBack();
           }
           _dragStartX = null;
         },
         child: Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        titleSpacing: 16,
-        backgroundColor: colors.background,
-        elevation: 0,
-        iconTheme: IconThemeData(color: colors.textPrimary),
-        title: Row(
-          children: [
-            const AlphaXLogo.appBar(size: 28),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'ADMIN',
-                style: TextStyle(
-                  color: colors.onPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 11,
-                  letterSpacing: 1.0,
+          key: _scaffoldKey,
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            titleSpacing: 16,
+            backgroundColor: colors.background,
+            elevation: 0,
+            iconTheme: IconThemeData(color: colors.textPrimary),
+            title: Row(
+              children: [
+                const AlphaXLogo.appBar(size: 28),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'ADMIN',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _selectedIndex < _tabTitles.length
-                    ? _tabTitles[_selectedIndex]
-                    : 'ALPHA X ADMIN',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1,
-                  fontSize: 15,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _selectedIndex < _tabTitles.length
+                          ? _tabTitles[_selectedIndex]
+                          : 'ALPHA X ADMIN',
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: _isLoadingClients
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.primary,
+                        ),
+                      )
+                    : Icon(
+                        Icons.refresh,
+                        size: 20,
+                        color: colors.textSecondary,
+                      ),
+                tooltip: 'Refresh Clients',
+                onPressed: _isLoadingClients
+                    ? null
+                    : () => _loadClients(forceRefresh: true),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: _isLoadingClients
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
-                  )
-                : Icon(Icons.refresh, size: 20, color: colors.textSecondary),
-            tooltip: 'Refresh Clients',
-            onPressed: _isLoadingClients ? null : () => _loadClients(forceRefresh: true),
+              IconButton(
+                icon: Icon(Icons.logout, size: 20, color: colors.textSecondary),
+                tooltip: 'Logout',
+                onPressed: () async {
+                  await AuthService().logout();
+                  if (context.mounted) {
+                    Navigator.of(context).pushReplacementNamed('/login');
+                  }
+                },
+              ),
+            ],
           ),
-          IconButton(
-            icon: Icon(Icons.logout, size: 20, color: colors.textSecondary),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await AuthService().logout();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacementNamed('/login');
-              }
-            },
+          drawer: _buildAdminDrawer(colors),
+          body: _buildCurrentTab(),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: colors.border, width: 1)),
+              color: colors.surfaceCard,
+            ),
+            child: NavigationBar(
+              selectedIndex: _selectedIndex > 3 ? 0 : _selectedIndex,
+              onDestinationSelected: _selectAdminTab,
+              backgroundColor: colors.surfaceCard,
+              indicatorColor: colors.glow,
+              elevation: 0,
+              destinations: [
+                NavigationDestination(
+                  icon: Icon(
+                    Icons.smart_toy_outlined,
+                    color: colors.textSecondary,
+                  ),
+                  selectedIcon: Icon(Icons.smart_toy, color: colors.primary),
+                  label: 'AI Coach',
+                ),
+                NavigationDestination(
+                  icon: Icon(
+                    Icons.groups_outlined,
+                    color: colors.textSecondary,
+                  ),
+                  selectedIcon: Icon(Icons.groups, color: colors.primary),
+                  label: 'Clients',
+                ),
+                NavigationDestination(
+                  icon: Icon(
+                    Icons.fitness_center_outlined,
+                    color: colors.textSecondary,
+                  ),
+                  selectedIcon: Icon(
+                    Icons.fitness_center,
+                    color: colors.primary,
+                  ),
+                  label: 'Workout',
+                ),
+                NavigationDestination(
+                  icon: Icon(
+                    Icons.restaurant_menu_outlined,
+                    color: colors.textSecondary,
+                  ),
+                  selectedIcon: Icon(
+                    Icons.restaurant_menu,
+                    color: colors.primary,
+                  ),
+                  label: 'Macro / Diet',
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      drawer: _buildAdminDrawer(colors),
-      body: _buildCurrentTab(),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: colors.border, width: 1)),
-          color: colors.surfaceCard,
-        ),
-        child: NavigationBar(
-          selectedIndex: _selectedIndex > 3 ? 0 : _selectedIndex,
-          onDestinationSelected: _selectAdminTab,
-          backgroundColor: colors.surfaceCard,
-          indicatorColor: colors.glow,
-          elevation: 0,
-          destinations: [
-            NavigationDestination(
-              icon: Icon(Icons.smart_toy_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.smart_toy, color: colors.primary),
-              label: 'AI Coach',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.groups_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.groups, color: colors.primary),
-              label: 'Clients',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.fitness_center_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.fitness_center, color: colors.primary),
-              label: 'Workout',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.restaurant_menu_outlined, color: colors.textSecondary),
-              selectedIcon: Icon(Icons.restaurant_menu, color: colors.primary),
-              label: 'Macro / Diet',
-            ),
-          ],
         ),
       ),
-      ),
-    ),
     );
   }
 
@@ -443,8 +518,22 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ALPHA X GYM', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16)),
-                        Text('ADMIN CONTROL PANEL', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                        Text(
+                          'ALPHA X GYM',
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          'ADMIN CONTROL PANEL',
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -460,8 +549,21 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           _drawerItem(0, 'Dashboard', Icons.dashboard_outlined, colors),
           ListTile(
             leading: const Text('🤖', style: TextStyle(fontSize: 20)),
-            title: Text('Alpha X AI Coach', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
-            subtitle: Text('Master Intelligence Controller', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+            title: Text(
+              'Alpha X AI Coach',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              'Master Intelligence Controller',
+              style: TextStyle(
+                color: colors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
@@ -479,7 +581,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           ListTile(
             leading: Icon(
               Icons.verified_user_outlined,
-              color: _pendingVerificationCount > 0 ? const Color(0xFFF59E0B) : colors.textSecondary,
+              color: _pendingVerificationCount > 0
+                  ? const Color(0xFFF59E0B)
+                  : colors.textSecondary,
             ),
             title: Row(
               children: [
@@ -487,15 +591,22 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   child: Text(
                     'Users & Verification',
                     style: TextStyle(
-                      color: _selectedIndex == 8 ? colors.primary : colors.textPrimary,
-                      fontWeight: _selectedIndex == 8 ? FontWeight.w800 : FontWeight.w600,
+                      color: _selectedIndex == 8
+                          ? colors.primary
+                          : colors.textPrimary,
+                      fontWeight: _selectedIndex == 8
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (_pendingVerificationCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF59E0B),
                       borderRadius: BorderRadius.circular(10),
@@ -517,7 +628,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   ? '$_pendingVerificationCount new users awaiting approval'
                   : 'Manage approvals & account statuses',
               style: TextStyle(
-                color: _pendingVerificationCount > 0 ? const Color(0xFFF59E0B) : colors.textSecondary,
+                color: _pendingVerificationCount > 0
+                    ? const Color(0xFFF59E0B)
+                    : colors.textSecondary,
                 fontSize: 10,
               ),
             ),
@@ -527,35 +640,66 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               _selectAdminTab(8);
             },
           ),
-          _drawerItem(2, 'Workout Sessions', Icons.fitness_center_outlined, colors),
+          _drawerItem(
+            2,
+            'Workout Sessions',
+            Icons.fitness_center_outlined,
+            colors,
+          ),
           ListTile(
             leading: Icon(Icons.storage_outlined, color: colors.textSecondary),
-            title: Text('Exercise Database', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500)),
+            title: Text(
+              'Exercise Database',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (ctx) => const AdminExerciseDatabaseScreen()),
+                MaterialPageRoute(
+                  builder: (ctx) => const AdminExerciseDatabaseScreen(),
+                ),
               );
             },
           ),
           ListTile(
-            leading: Icon(Icons.swap_calls_outlined, color: colors.textSecondary),
+            leading: Icon(
+              Icons.swap_calls_outlined,
+              color: colors.textSecondary,
+            ),
             title: Row(
               children: [
                 Expanded(
                   child: Text(
                     'Change Requests',
-                    style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (widget.workoutRepository.changeRequests.where((r) => r.isPending).isNotEmpty)
+                if (widget.workoutRepository.changeRequests
+                    .where((r) => r.isPending)
+                    .isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     child: Text(
                       '${widget.workoutRepository.changeRequests.where((r) => r.isPending).length}',
-                      style: TextStyle(color: colors.onPrimary, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: colors.onPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
               ],
@@ -564,19 +708,32 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               Navigator.of(context).pop();
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (ctx) => AdminChangeRequestsScreen(workoutRepository: widget.workoutRepository),
+                  builder: (ctx) => AdminChangeRequestsScreen(
+                    workoutRepository: widget.workoutRepository,
+                  ),
                 ),
               );
             },
           ),
           ListTile(
-            leading: Icon(Icons.analytics_outlined, color: colors.textSecondary),
-            title: Text('Athlete Performance', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500)),
+            leading: Icon(
+              Icons.analytics_outlined,
+              color: colors.textSecondary,
+            ),
+            title: Text(
+              'Athlete Performance',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             onTap: () {
               Navigator.of(context).pop();
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (ctx) => AdminPerformanceDashboardScreen(workoutRepository: widget.workoutRepository),
+                  builder: (ctx) => AdminPerformanceDashboardScreen(
+                    workoutRepository: widget.workoutRepository,
+                  ),
                 ),
               );
             },
@@ -584,12 +741,28 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           _drawerItem(3, 'Assignments', Icons.calendar_month_outlined, colors),
           _drawerItem(4, 'Settings', Icons.settings_outlined, colors),
           _drawerItem(5, 'Weekly Progress', Icons.insights_rounded, colors),
-          _drawerItem(6, 'Client Attention', Icons.warning_amber_rounded, colors),
-          _drawerItem(7, 'Client Food Photos', Icons.camera_alt_outlined, colors),
+          _drawerItem(
+            6,
+            'Client Attention',
+            Icons.warning_amber_rounded,
+            colors,
+          ),
+          _drawerItem(
+            7,
+            'Client Food Photos',
+            Icons.camera_alt_outlined,
+            colors,
+          ),
           Divider(color: colors.border),
           ListTile(
             leading: Icon(Icons.logout, color: colors.primary),
-            title: Text('Sign Out', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
+            title: Text(
+              'Sign Out',
+              style: TextStyle(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             onTap: () async {
               Navigator.of(context).pop();
               await AuthService().logout();
@@ -603,10 +776,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  Widget _drawerItem(int index, String title, IconData icon, ClientThemeColors colors) {
+  Widget _drawerItem(
+    int index,
+    String title,
+    IconData icon,
+    ClientThemeColors colors,
+  ) {
     final isSelected = _selectedIndex == index;
     return ListTile(
-      leading: Icon(icon, color: isSelected ? colors.primary : colors.textSecondary),
+      leading: Icon(
+        icon,
+        color: isSelected ? colors.primary : colors.textSecondary,
+      ),
       title: Text(
         title,
         style: TextStyle(
@@ -637,7 +818,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               onTap: () => _selectAdminTab(8),
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -646,7 +830,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.7), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.7),
+                    width: 1.5,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -656,7 +843,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         color: const Color(0xFFF59E0B).withOpacity(0.25),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.person_add_alt_1, color: Color(0xFFF59E0B), size: 22),
+                      child: const Icon(
+                        Icons.person_add_alt_1,
+                        color: Color(0xFFF59E0B),
+                        size: 22,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -676,7 +867,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF59E0B),
                                   borderRadius: BorderRadius.circular(10),
@@ -695,12 +889,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                           const SizedBox(height: 4),
                           Text(
                             '$_pendingVerificationCount ${_pendingVerificationCount == 1 ? "client has" : "clients have"} joined and ${_pendingVerificationCount == 1 ? "is" : "are"} waiting for verification.',
-                            style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+                            style: const TextStyle(
+                              color: AlphaXColors.textSecondary,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios, color: Color(0xFFF59E0B), size: 16),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Color(0xFFF59E0B),
+                      size: 16,
+                    ),
                   ],
                 ),
               ),
@@ -710,8 +911,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         ],
         // Operational Header Banner
         AlphaXSubtleEntrance(
-          child: AlphaXCard(
+          child: MetalCard(
+            isSubtle: true,
             padding: const EdgeInsets.all(20),
+            borderRadius: BorderRadius.circular(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -725,7 +928,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Center(
-                        child: Icon(Icons.shield_outlined, color: AlphaXColors.redAccent, size: 18),
+                        child: Icon(
+                          Icons.shield_outlined,
+                          color: AlphaXColors.redAccent,
+                          size: 18,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -759,7 +966,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 const SizedBox(height: 12),
                 const Text(
                   'Prescribe elite workout sessions, configure superset programming, manage athlete roster, and track transformation progress in real time.',
-                  style: TextStyle(color: AlphaXColors.textSecondary, fontSize: 13, height: 1.4),
+                  style: TextStyle(
+                    color: AlphaXColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -800,7 +1011,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: AlphaXStatCard(
                       label: 'ACTIVE MEMBERS',
                       value: '${clients.length}',
-                      subtext: clients.isEmpty ? '0 active athletes' : '100% database verified',
+                      subtext: clients.isEmpty
+                          ? '0 active athletes'
+                          : '100% database verified',
                       icon: Icons.check_circle_outline,
                       accentColor: AlphaXColors.redAccent,
                     ),
@@ -815,11 +1028,22 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       builder: (context) {
                         final engagementRate = clients.isEmpty
                             ? 0
-                            : ((clients.where((c) => assignments.any((a) => a.clientId == c['id'])).length / clients.length) * 100).round();
+                            : ((clients
+                                              .where(
+                                                (c) => assignments.any(
+                                                  (a) => a.clientId == c['id'],
+                                                ),
+                                              )
+                                              .length /
+                                          clients.length) *
+                                      100)
+                                  .round();
                         return AlphaXStatCard(
                           label: 'ATHLETE ENGAGEMENT',
                           value: '$engagementRate%',
-                          subtext: clients.isEmpty ? '0 active athletes' : 'Active training roster',
+                          subtext: clients.isEmpty
+                              ? '0 active athletes'
+                              : 'Active training roster',
                           icon: Icons.trending_up,
                           accentColor: AlphaXColors.textPrimary,
                         );
@@ -831,13 +1055,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: Builder(
                       builder: (context) {
                         final history = widget.workoutRepository.workoutHistory;
-                        final completed = history.where((r) => r.isCompleted).length;
+                        final completed = history
+                            .where((r) => r.isCompleted)
+                            .length;
                         final total = history.length;
-                        final completionRate = total > 0 ? ((completed / total) * 100).round() : 0;
+                        final completionRate = total > 0
+                            ? ((completed / total) * 100).round()
+                            : 0;
                         return AlphaXStatCard(
                           label: 'WORKOUT COMPLETION',
                           value: '$completionRate%',
-                          subtext: total > 0 ? '$completed of $total completed' : 'No workout sessions yet',
+                          subtext: total > 0
+                              ? '$completed of $total completed'
+                              : 'No workout sessions yet',
                           icon: Icons.fitness_center_outlined,
                           accentColor: AlphaXColors.redAccent,
                         );
@@ -853,7 +1083,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: AlphaXStatCard(
                       label: 'WORKOUT SESSIONS',
                       value: '${sessions.length}',
-                      subtext: sessions.isEmpty ? 'No created sessions' : '${sessions.length} library routines',
+                      subtext: sessions.isEmpty
+                          ? 'No created sessions'
+                          : '${sessions.length} library routines',
                       icon: Icons.fitness_center_outlined,
                       accentColor: AlphaXColors.textPrimary,
                     ),
@@ -863,7 +1095,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: AlphaXStatCard(
                       label: 'ASSIGNED PLANS',
                       value: '${assignments.length}',
-                      subtext: assignments.isEmpty ? 'No active plans' : '${assignments.length} assigned routines',
+                      subtext: assignments.isEmpty
+                          ? 'No active plans'
+                          : '${assignments.length} assigned routines',
                       icon: Icons.calendar_month_outlined,
                       accentColor: AlphaXColors.redAccent,
                     ),
@@ -895,37 +1129,55 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ),
               );
             }),
-            _adminActionChip('New Workout Session', Icons.add_circle_outline, () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (ctx) => AdminCreateEditSessionScreen(
-                    workoutRepository: widget.workoutRepository,
+            _adminActionChip(
+              'New Workout Session',
+              Icons.add_circle_outline,
+              () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => AdminCreateEditSessionScreen(
+                      workoutRepository: widget.workoutRepository,
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              },
+            ),
             _adminActionChip('Exercise Database', Icons.storage_outlined, () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (ctx) => const AdminExerciseDatabaseScreen()),
+                MaterialPageRoute(
+                  builder: (ctx) => const AdminExerciseDatabaseScreen(),
+                ),
               );
             }),
             _adminActionChip('Change Requests', Icons.swap_calls_outlined, () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (ctx) => AdminChangeRequestsScreen(workoutRepository: widget.workoutRepository),
+                  builder: (ctx) => AdminChangeRequestsScreen(
+                    workoutRepository: widget.workoutRepository,
+                  ),
                 ),
               );
             }),
-            _adminActionChip('Athlete Performance', Icons.analytics_outlined, () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (ctx) => AdminPerformanceDashboardScreen(workoutRepository: widget.workoutRepository),
-                ),
-              );
-            }),
-            _adminActionChip('Client Food Photos', Icons.camera_alt_outlined, () {
-              _selectAdminTab(7);
-            }),
+            _adminActionChip(
+              'Athlete Performance',
+              Icons.analytics_outlined,
+              () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => AdminPerformanceDashboardScreen(
+                      workoutRepository: widget.workoutRepository,
+                    ),
+                  ),
+                );
+              },
+            ),
+            _adminActionChip(
+              'Client Food Photos',
+              Icons.camera_alt_outlined,
+              () {
+                _selectAdminTab(7);
+              },
+            ),
             _adminActionChip(
               _pendingVerificationCount > 0
                   ? 'Verification ($_pendingVerificationCount)'
@@ -968,7 +1220,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Center(
-                      child: Icon(Icons.fitness_center, color: AlphaXColors.redAccent, size: 20),
+                      child: Icon(
+                        Icons.fitness_center,
+                        color: AlphaXColors.redAccent,
+                        size: 20,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -987,12 +1243,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         const SizedBox(height: 3),
                         Text(
                           '${session.targetMuscleGroup.toUpperCase()} • ${session.exercises.length} exercises • ~${session.estimatedDurationMinutes}m',
-                          style: const TextStyle(color: AlphaXColors.textSecondary, fontSize: 12),
+                          style: const TextStyle(
+                            color: AlphaXColors.textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AlphaXColors.textSecondary),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AlphaXColors.textSecondary,
+                  ),
                 ],
               ),
             ),
@@ -1021,7 +1283,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.primaryRed.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.primaryRed, width: 1.5),
+                      border: Border.all(
+                        color: AppColors.primaryRed,
+                        width: 1.5,
+                      ),
                     ),
                     child: const Center(
                       child: Text('🤖', style: TextStyle(fontSize: 18)),
@@ -1054,20 +1319,33 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.statusGreen.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.statusGreen.withOpacity(0.4)),
+                      border: Border.all(
+                        color: AppColors.statusGreen.withOpacity(0.4),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.bolt, color: AppColors.statusGreen, size: 12),
+                        const Icon(
+                          Icons.bolt,
+                          color: AppColors.statusGreen,
+                          size: 12,
+                        ),
                         const SizedBox(width: 4),
                         const Text(
                           'ONLINE',
-                          style: TextStyle(color: AppColors.statusGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: AppColors.statusGreen,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -1085,13 +1363,29 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ),
                 child: Column(
                   children: [
-                    _aiSummaryRow(Icons.fitness_center, '${summary.workoutsCompleted} workouts completed today', AppColors.statusGreen),
+                    _aiSummaryRow(
+                      Icons.fitness_center,
+                      '${summary.workoutsCompleted} workouts completed today',
+                      AppColors.statusGreen,
+                    ),
                     const SizedBox(height: 8),
-                    _aiSummaryRow(Icons.restaurant, '${summary.foodLogsRecorded} food logs recorded', Colors.amber),
+                    _aiSummaryRow(
+                      Icons.restaurant,
+                      '${summary.foodLogsRecorded} food logs recorded',
+                      Colors.amber,
+                    ),
                     const SizedBox(height: 8),
-                    _aiSummaryRow(Icons.assignment_outlined, '${summary.weeklyCheckInsPending} weekly check-ins pending', Colors.lightBlueAccent),
+                    _aiSummaryRow(
+                      Icons.assignment_outlined,
+                      '${summary.weeklyCheckInsPending} weekly check-ins pending',
+                      Colors.lightBlueAccent,
+                    ),
                     const SizedBox(height: 8),
-                    _aiSummaryRow(Icons.warning_amber_rounded, '${summary.clientsNeedReview} clients need review', AppColors.primaryRed),
+                    _aiSummaryRow(
+                      Icons.warning_amber_rounded,
+                      '${summary.clientsNeedReview} clients need review',
+                      AppColors.primaryRed,
+                    ),
                   ],
                 ),
               ),
@@ -1101,13 +1395,25 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
+                    foregroundColor: AppColors.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 18),
+                  icon: const Icon(
+                    Icons.chat_bubble_outline,
+                    color: Colors.black,
+                    size: 18,
+                  ),
                   label: const Text(
                     'Open AI Coach',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5),
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   onPressed: () {
                     Navigator.of(context).push(
@@ -1137,13 +1443,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
     );
   }
-
 
   Widget _adminActionChip(String label, IconData icon, VoidCallback onTap) {
     return InkWell(
@@ -1175,12 +1484,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-
-
   // --- TAB 1: 👥 CLIENTS TAB ---
   Widget _buildClientsTab() {
     final clients = widget.workoutRepository.clientsList;
-    final activeCount = clients.where((c) => c['onboardingCompleted'] == 'true').length;
+    final activeCount = clients
+        .where((c) => c['onboardingCompleted'] == 'true')
+        .length;
     final pendingCount = clients.length - activeCount;
 
     final filteredClients = _clientSearchQuery.trim().isEmpty
@@ -1189,8 +1498,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             final query = _clientSearchQuery.trim().toLowerCase();
             final name = (c['name'] ?? '').toString().toLowerCase();
             final email = (c['email'] ?? '').toString().toLowerCase();
-            final cid = (c['clientId'] ?? c['id'] ?? '').toString().toLowerCase();
-            return name.contains(query) || email.contains(query) || cid.contains(query);
+            final cid = (c['clientId'] ?? c['id'] ?? '')
+                .toString()
+                .toLowerCase();
+            return name.contains(query) ||
+                email.contains(query) ||
+                cid.contains(query);
           }).toList();
 
     return RefreshIndicator(
@@ -1267,14 +1580,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           Container(
             height: 46,
             decoration: BoxDecoration(
-              color: const Color(0xFF151515),
+              color: AppColors.surfaceCard,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF242424)),
+              border: Border.all(color: AppColors.border),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
-                const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                const Icon(
+                  Icons.search,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
@@ -1307,7 +1624,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         _clientSearchQuery = '';
                       });
                     },
-                    child: const Icon(Icons.close, color: AppColors.textSecondary, size: 18),
+                    child: const Icon(
+                      Icons.close,
+                      color: AppColors.textSecondary,
+                      size: 18,
+                    ),
                   ),
               ],
             ),
@@ -1333,15 +1654,24 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Live roster synchronized with Alpha X Neon Cloud Database.',
-                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 12),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh, size: 20, color: AppColors.primaryRed),
+                icon: const Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: AppColors.primaryRed,
+                ),
                 tooltip: 'Refresh Roster',
-                onPressed: _isLoadingClients ? null : () => _loadClients(forceRefresh: true),
+                onPressed: _isLoadingClients
+                    ? null
+                    : () => _loadClients(forceRefresh: true),
               ),
             ],
           ),
@@ -1352,21 +1682,37 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primaryRed.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primaryRed.withOpacity(0.5)),
+                border: Border.all(
+                  color: AppColors.primaryRed.withOpacity(0.5),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.primaryRed, size: 20),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.primaryRed,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Sync notice: $_clientsError',
-                      style: const TextStyle(color: AppColors.primaryRed, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.primaryRed,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   TextButton(
                     onPressed: () => _loadClients(forceRefresh: true),
-                    child: const Text('RETRY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: const Text(
+                      'RETRY',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1381,7 +1727,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   SizedBox(height: 16),
                   Text(
                     'Loading registered clients from database...',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -1399,26 +1748,51 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
+                    const Icon(
+                      Icons.people_outline,
+                      size: 48,
+                      color: AppColors.textTertiary,
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       'No Clients Yet',
-                      style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'New clients will appear here after registration.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryRed,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        foregroundColor: AppColors.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
-                      icon: const Icon(Icons.refresh, size: 16, color: Colors.white),
-                      label: const Text('REFRESH ROSTER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 16,
+                        color: Colors.black,
+                      ),
+                      label: const Text(
+                        'REFRESH ROSTER',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () => _loadClients(forceRefresh: true),
                     ),
                   ],
@@ -1438,16 +1812,27 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.search_off_rounded, size: 44, color: AppColors.textTertiary),
+                    const Icon(
+                      Icons.search_off_rounded,
+                      size: 44,
+                      color: AppColors.textTertiary,
+                    ),
                     const SizedBox(height: 10),
                     Text(
                       'No Matching Clients',
-                      style: GoogleFonts.poppins(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 15),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'No athletes match "$_clientSearchQuery"',
-                      style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 12),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     TextButton(
@@ -1455,7 +1840,13 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                         _clientSearchController.clear();
                         setState(() => _clientSearchQuery = '');
                       },
-                      child: const Text('Clear Search', style: TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Clear Search',
+                        style: TextStyle(
+                          color: AppColors.primaryRed,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1482,43 +1873,73 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   borderRadius: BorderRadius.circular(14),
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     leading: CircleAvatar(
                       radius: 22,
                       backgroundColor: AppColors.primaryRed,
-                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                          ? NetworkImage(photoUrl)
+                          : null,
                       child: (photoUrl == null || photoUrl.isEmpty)
                           ? Text(
-                              (client['name'] ?? 'A').isNotEmpty ? (client['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
-                              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w900),
+                              (client['name'] ?? 'A').isNotEmpty
+                                  ? (client['name'] ?? 'A')
+                                        .substring(0, 1)
+                                        .toUpperCase()
+                                  : 'A',
+                              style: GoogleFonts.poppins(
+                                color: AppColors.onPrimary,
+                                fontWeight: FontWeight.w900,
+                              ),
                             )
                           : null,
                     ),
                     title: Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            client['name'] ?? 'Athlete',
-                            style: GoogleFonts.poppins(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              client['name'] ?? 'Athlete',
+                              style: GoogleFonts.poppins(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                              maxLines: 1,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.15),
+                            color:
+                                (isOnboarded
+                                        ? AppColors.success
+                                        : Colors.orangeAccent)
+                                    .withOpacity(0.15),
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent, width: 0.8),
+                            border: Border.all(
+                              color: isOnboarded
+                                  ? AppColors.success
+                                  : Colors.orangeAccent,
+                              width: 0.8,
+                            ),
                           ),
                           child: Text(
                             isOnboarded ? 'Active' : 'Pending',
                             style: GoogleFonts.poppins(
-                              color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                              color: isOnboarded
+                                  ? AppColors.success
+                                  : Colors.orangeAccent,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1531,7 +1952,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.primaryRed.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(4),
@@ -1550,7 +1974,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                           Expanded(
                             child: Text(
                               client['email'] ?? '',
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -1562,10 +1989,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       children: [
                         Text(
                           joinDate,
-                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 11,
+                          ),
                         ),
                         const SizedBox(width: 4),
-                        const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.textTertiary,
+                          size: 20,
+                        ),
                       ],
                     ),
                     onTap: () => _showClientProfileModal(context, client),
@@ -1593,16 +2027,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : const Color(0xFF1E1E1E),
+          color: isSelected ? AppColors.primary : AppColors.secondaryCard,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: isSelected ? AppColors.primary : const Color(0xFF282828),
+            color: isSelected ? AppColors.primary : AppColors.border,
           ),
         ),
         child: Text(
           title,
           style: GoogleFonts.poppins(
-            color: isSelected ? const Color(0xFF0A0A0A) : Colors.white,
+            color: isSelected ? AppColors.onPrimary : Colors.white,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 12,
           ),
@@ -1619,9 +2053,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF151515),
+        color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF242424)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1667,7 +2101,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   }
 
   /// Displays the Complete Client Detail Screen (Profile, Workout, Nutrition) for Master Admin.
-  void _showClientProfileModal(BuildContext context, Map<String, dynamic> client) {
+  void _showClientProfileModal(
+    BuildContext context,
+    Map<String, dynamic> client,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AdminClientDetailScreen(
@@ -1702,13 +2139,23 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       indicator: BoxDecoration(
                         color: colors.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      labelColor: Colors.white,
+                      labelColor: colors.onPrimary,
                       unselectedLabelColor: colors.textSecondary,
-                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11),
+                      labelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                      unselectedLabelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 10),
                       tabs: const [
                         Tab(text: '🏋️ SESSIONS'),
                         Tab(text: '🤖 AI PROPOSALS'),
@@ -1721,11 +2168,24 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    foregroundColor: colors.onPrimary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                  label: const Text('CREATE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  icon: Icon(Icons.add, size: 16, color: colors.onPrimary),
+                  label: Text(
+                    'CREATE',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1783,13 +2243,23 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       indicator: BoxDecoration(
                         color: colors.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      labelColor: Colors.white,
+                      labelColor: colors.onPrimary,
                       unselectedLabelColor: colors.textSecondary,
-                      labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 11),
+                      labelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                      unselectedLabelStyle: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 10),
                       tabs: const [
                         Tab(text: '🥗 ATHLETES'),
                         Tab(text: '📖 FOOD LIBRARY'),
@@ -1802,11 +2272,24 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    foregroundColor: colors.onPrimary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                  label: const Text('NEW PLAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  icon: Icon(Icons.add, size: 16, color: colors.onPrimary),
+                  label: Text(
+                    'NEW PLAN',
+                    style: TextStyle(
+                      color: colors.onPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   onPressed: () => _showSelectClientForDietDialog(),
                 ),
               ],
@@ -1830,7 +2313,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     final clients = widget.workoutRepository.clientsList;
     if (clients.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No registered clients available.'), backgroundColor: AppColors.warning),
+        const SnackBar(
+          content: Text('No registered clients available.'),
+          backgroundColor: AppColors.warning,
+        ),
       );
       return;
     }
@@ -1839,20 +2325,31 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
         return Container(
           padding: const EdgeInsets.all(20),
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Select Athlete for Diet Plan',
-                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 8),
-              const Text('Choose a client to configure and assign their daily macros & meals:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const Text(
+                'Choose a client to configure and assign their daily macros & meals:',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
               const SizedBox(height: 14),
               Expanded(
                 child: ListView.builder(
@@ -1864,13 +2361,34 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       leading: CircleAvatar(
                         backgroundColor: AppColors.primaryRed,
                         child: Text(
-                          (c['name'] ?? 'A').isNotEmpty ? (c['name'] ?? 'A').substring(0, 1).toUpperCase() : 'A',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          (c['name'] ?? 'A').isNotEmpty
+                              ? (c['name'] ?? 'A').substring(0, 1).toUpperCase()
+                              : 'A',
+                          style: const TextStyle(
+                            color: AppColors.onPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      title: Text(c['name'] ?? 'Athlete', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                      subtitle: Text('${c['clientId'] ?? c['id']} • Goal: ${c['primaryGoal'] ?? 'Fitness'}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textTertiary),
+                      title: Text(
+                        c['name'] ?? 'Athlete',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${c['clientId'] ?? c['id']} • Goal: ${c['primaryGoal'] ?? 'Fitness'}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: AppColors.textTertiary,
+                      ),
                       onTap: () {
                         Navigator.of(ctx).pop();
                         Navigator.of(context).push(
@@ -1893,10 +2411,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  Widget _buildAthleteDietsSubTab(ClientThemeColors colors, List<Map<String, dynamic>> clients) {
+  Widget _buildAthleteDietsSubTab(
+    ClientThemeColors colors,
+    List<Map<String, dynamic>> clients,
+  ) {
     if (clients.isEmpty) {
       return Center(
-        child: Text('No clients found.', style: TextStyle(color: colors.textSecondary)),
+        child: Text(
+          'No clients found.',
+          style: TextStyle(color: colors.textSecondary),
+        ),
       );
     }
 
@@ -1907,7 +2431,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         final client = clients[i];
         final photoUrl = client['photoUrl']?.toString();
         final name = client['name']?.toString() ?? 'Athlete';
-        final cid = client['clientId']?.toString() ?? client['id']?.toString() ?? '';
+        final cid =
+            client['clientId']?.toString() ?? client['id']?.toString() ?? '';
         final goal = client['primaryGoal']?.toString() ?? 'General Fitness';
 
         return Container(
@@ -1926,9 +2451,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   CircleAvatar(
                     radius: 20,
                     backgroundColor: colors.primary,
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                        ? NetworkImage(photoUrl)
+                        : null,
                     child: (photoUrl == null || photoUrl.isEmpty)
-                        ? Text(name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'A', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                        ? Text(
+                            name.isNotEmpty
+                                ? name.substring(0, 1).toUpperCase()
+                                : 'A',
+                            style: TextStyle(
+                              color: colors.onPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
                         : null,
                   ),
                   const SizedBox(width: 12),
@@ -1936,34 +2471,73 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
-                        Text('$cid • Goal: $goal', style: TextStyle(color: colors.textSecondary, fontSize: 11)),
+                        Text(
+                          name,
+                          style: GoogleFonts.poppins(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          '$cid • Goal: $goal',
+                          style: TextStyle(
+                            color: colors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.more_vert, color: AppColors.textSecondary, size: 18),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: AppColors.textSecondary,
+                      size: 18,
+                    ),
                     tooltip: 'Macro Options',
                     onPressed: () {
                       showModalBottomSheet(
                         context: context,
                         backgroundColor: colors.surfaceCard,
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
+                        ),
                         builder: (ctx) => SafeArea(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               ListTile(
-                                leading: const Icon(Icons.tune, color: AppColors.primaryRed),
-                                title: const Text('Quick Assign Macro Targets', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                leading: const Icon(
+                                  Icons.tune,
+                                  color: AppColors.primaryRed,
+                                ),
+                                title: const Text(
+                                  'Quick Assign Macro Targets',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 onTap: () {
                                   Navigator.pop(ctx);
                                   _showMacroTargetsDialog(context, client);
                                 },
                               ),
                               ListTile(
-                                leading: const Icon(Icons.playlist_add_check, color: AppColors.info),
-                                title: const Text('Assign Saved Diet Plan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                leading: const Icon(
+                                  Icons.playlist_add_check,
+                                  color: AppColors.info,
+                                ),
+                                title: const Text(
+                                  'Assign Saved Diet Plan',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 onTap: () {
                                   Navigator.pop(ctx);
                                   _showAssignDietPlanDialog(context, client);
@@ -1985,10 +2559,23 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: colors.border),
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      icon: const Icon(Icons.restaurant, size: 14, color: AppColors.accentRed),
-                      label: const Text('PRESCRIBE PLAN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      icon: const Icon(
+                        Icons.restaurant,
+                        size: 14,
+                        color: AppColors.accentRed,
+                      ),
+                      label: const Text(
+                        'PRESCRIBE PLAN',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -2006,11 +2593,25 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      icon: const Icon(Icons.lunch_dining, size: 14, color: Colors.white),
-                      label: const Text('VIEW FOOD LOGS', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      icon: Icon(
+                        Icons.lunch_dining,
+                        size: 14,
+                        color: colors.onPrimary,
+                      ),
+                      label: Text(
+                        'VIEW FOOD LOGS',
+                        style: TextStyle(
+                          color: colors.onPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -2057,11 +2658,21 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(f.name, style: GoogleFonts.poppins(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
+                    Text(
+                      f.name,
+                      style: GoogleFonts.poppins(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       '${f.servingDisplay} • P:${f.protein.toInt()}g C:${f.carbs.toInt()}g F:${f.fat.toInt()}g Fib:${f.fiber.toInt()}g',
-                      style: TextStyle(color: colors.textSecondary, fontSize: 11),
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -2074,7 +2685,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 ),
                 child: Text(
                   '${f.calories.toInt()} kcal',
-                  style: TextStyle(color: colors.primary, fontWeight: FontWeight.w900, fontSize: 12),
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -2098,22 +2713,42 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           children: [
             const Text(
               'SESSION ASSIGNMENTS',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.1),
+              style: TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
             ),
             Text(
               '${assignments.length} Active',
-              style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w700, fontSize: 12),
+              style: const TextStyle(
+                color: AppColors.primaryRed,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         if (assignments.isEmpty)
-          const Center(child: Text('No active assignments', style: TextStyle(color: AppColors.textSecondary)))
+          const Center(
+            child: Text(
+              'No active assignments',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          )
         else
           ...assignments.map((assign) {
-            final session = sessions.where((s) => s.id == assign.sessionId).firstOrNull;
-            final client = clients.where((c) => c['id'] == assign.clientId).firstOrNull;
-            final targetLabel = assign.clientId == null ? 'All Clients' : (client?['name'] ?? assign.clientId!);
+            final session = sessions
+                .where((s) => s.id == assign.sessionId)
+                .firstOrNull;
+            final client = clients
+                .where((c) => c['id'] == assign.clientId)
+                .firstOrNull;
+            final targetLabel = assign.clientId == null
+                ? 'All Clients'
+                : (client?['name'] ?? assign.clientId!);
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -2122,7 +2757,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 color: AppColors.surfaceCard,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: assign.isRecommended ? AppColors.primaryRed : AppColors.border,
+                  color: assign.isRecommended
+                      ? AppColors.primaryRed
+                      : AppColors.border,
                   width: assign.isRecommended ? 1.5 : 1.0,
                 ),
               ),
@@ -2136,36 +2773,65 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                           children: [
                             if (assign.isRecommended)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 margin: const EdgeInsets.only(right: 6),
                                 decoration: BoxDecoration(
                                   color: AppColors.glowRed,
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: AppColors.primaryRed, width: 0.6),
+                                  border: Border.all(
+                                    color: AppColors.primaryRed,
+                                    width: 0.6,
+                                  ),
                                 ),
                                 child: const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.star, size: 11, color: AppColors.gold),
+                                    Icon(
+                                      Icons.star,
+                                      size: 11,
+                                      color: AppColors.gold,
+                                    ),
                                     SizedBox(width: 4),
-                                    Text('RECOMMENDED', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                                    Text(
+                                      'RECOMMENDED',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
                             Text(
                               session?.title ?? 'Session',
-                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.arrow_forward, size: 12, color: AppColors.textTertiary),
+                            const Icon(
+                              Icons.arrow_forward,
+                              size: 12,
+                              color: AppColors.textTertiary,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Assigned to: $targetLabel',
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -2173,10 +2839,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+                    icon: const Icon(
+                      Icons.remove_circle_outline,
+                      color: AppColors.error,
+                      size: 20,
+                    ),
                     tooltip: 'Unassign',
                     onPressed: () {
-                      widget.workoutRepository.unassignSession(assign.sessionId, assign.clientId);
+                      widget.workoutRepository.unassignSession(
+                        assign.sessionId,
+                        assign.clientId,
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Unassigned from $targetLabel'),
@@ -2193,8 +2866,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-
-  void _showMacroTargetsDialog(BuildContext context, Map<String, dynamic> client) {
+  void _showMacroTargetsDialog(
+    BuildContext context,
+    Map<String, dynamic> client,
+  ) {
     final clientId = client['clientId'] ?? client['id'] ?? '';
     final clientName = client['name'] ?? 'Client';
     final calCtrl = TextEditingController(text: '2400');
@@ -2208,46 +2883,91 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('ASSIGN MACRO TARGETS ($clientName)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+        title: Text(
+          'ASSIGN MACRO TARGETS ($clientName)',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 15,
+          ),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Client ID: $clientId', style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 12)),
+              Text(
+                'Client ID: $clientId',
+                style: const TextStyle(
+                  color: AppColors.primaryRed,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: calCtrl,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'Daily Calories (kcal)', suffixText: 'kcal'),
+                decoration: const InputDecoration(
+                  labelText: 'Daily Calories (kcal)',
+                  suffixText: 'kcal',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: proCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Protein (g)', suffixText: 'g'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Protein (g)',
+                  suffixText: 'g',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: carbCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Carbohydrates (g)', suffixText: 'g'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Carbohydrates (g)',
+                  suffixText: 'g',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: fatCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Fat (g)', suffixText: 'g'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Fat (g)',
+                  suffixText: 'g',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: fiberCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: const InputDecoration(labelText: 'Fiber (g)', suffixText: 'g'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Fiber (g)',
+                  suffixText: 'g',
+                ),
               ),
             ],
           ),
@@ -2255,10 +2975,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCEL', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () async {
               final cal = int.tryParse(calCtrl.text) ?? 2400;
               final p = double.tryParse(proCtrl.text) ?? 175.0;
@@ -2277,20 +3003,31 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Assigned macro targets for $clientName saved to database.'),
+                    content: Text(
+                      'Assigned macro targets for $clientName saved to database.',
+                    ),
                     backgroundColor: AppColors.primaryRed,
                   ),
                 );
               }
             },
-            child: const Text('SAVE TARGETS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'SAVE TARGETS',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _showAssignDietPlanDialog(BuildContext context, Map<String, dynamic> client) {
+  void _showAssignDietPlanDialog(
+    BuildContext context,
+    Map<String, dynamic> client,
+  ) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2305,14 +3042,23 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   // ── Push Notification Audience Preview ────────────────────────────────────
   Future<void> _loadAudiencePreview() async {
     if (_isLoadingAudiencePreview) return;
-    setState(() { _isLoadingAudiencePreview = true; });
+    setState(() {
+      _isLoadingAudiencePreview = true;
+    });
     try {
       final token = await AuthService().getValidToken();
       if (token.isEmpty) return;
-      final res = await http.get(
-        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/audience-preview'),
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
-      ).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(
+            Uri.parse(
+              '${AppConstants.apiBaseUrl}/notifications/admin/audience-preview',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
       if (res.statusCode == 200 && mounted) {
         final body = jsonDecode(res.body);
         final data = body['data'] as Map<String, dynamic>?;
@@ -2321,11 +3067,15 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           if (_selectedPushClientId == null) {
             final clients = widget.workoutRepository.clientsList;
             if (clients.isNotEmpty) {
-              _selectedPushClientId = clients.first['id']?.toString() ?? clients.first['clientId']?.toString();
+              _selectedPushClientId =
+                  clients.first['id']?.toString() ??
+                  clients.first['clientId']?.toString();
             } else {
               final candidates = data?['candidates'] as List<dynamic>? ?? [];
               if (candidates.isNotEmpty) {
-                _selectedPushClientId = candidates.first['id']?.toString() ?? candidates.first['clientId']?.toString();
+                _selectedPushClientId =
+                    candidates.first['id']?.toString() ??
+                    candidates.first['clientId']?.toString();
               }
             }
           }
@@ -2334,7 +3084,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     } catch (e) {
       debugPrint('[AdminDashboard] Audience preview failed: $e');
     } finally {
-      if (mounted) setState(() { _isLoadingAudiencePreview = false; });
+      if (mounted) {
+        setState(() {
+          _isLoadingAudiencePreview = false;
+        });
+      }
     }
   }
 
@@ -2362,53 +3116,84 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       try {
         final token = await AuthService().getValidToken();
         if (token.isEmpty) {
-          setState(() { _pushError = 'Authentication failed. Please log in again.'; });
+          setState(() {
+            _pushError = 'Authentication failed. Please log in again.';
+          });
           return;
         }
 
-        final res = await http.post(
-          Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/send-to-client'),
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
-          body: jsonEncode({
-            'clientId': _selectedPushClientId,
-            'title': title,
-            'message': body,
-            'targetMethod': 'EXTERNAL_ID',
-          }),
-        ).timeout(const Duration(seconds: 25));
+        final res = await http
+            .post(
+              Uri.parse(
+                '${AppConstants.apiBaseUrl}/notifications/admin/send-to-client',
+              ),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'clientId': _selectedPushClientId,
+                'title': title,
+                'message': body,
+                'targetMethod': 'EXTERNAL_ID',
+              }),
+            )
+            .timeout(const Duration(seconds: 25));
 
         if (mounted) {
           final decoded = jsonDecode(res.body) as Map<String, dynamic>;
           if (res.statusCode == 200 && decoded['success'] == true) {
-            setState(() { _pushResult = decoded['data'] as Map<String, dynamic>?; });
+            setState(() {
+              _pushResult = decoded['data'] as Map<String, dynamic>?;
+            });
           } else {
             final err = decoded['error'] as Map<String, dynamic>?;
             setState(() {
-              _pushError = err?['message'] as String? ?? 'Push request rejected (HTTP ${res.statusCode})';
+              _pushError =
+                  err?['message'] as String? ??
+                  'Push request rejected (HTTP ${res.statusCode})';
             });
           }
         }
       } catch (e) {
-        if (mounted) setState(() { _pushError = 'Network error: $e'; });
+        if (mounted) {
+          setState(() {
+            _pushError = 'Network error: $e';
+          });
+        }
       } finally {
-        if (mounted) setState(() { _isSendingPush = false; });
+        if (mounted) {
+          setState(() {
+            _isSendingPush = false;
+          });
+        }
       }
     } else {
       // BROADCAST MODE
       if (!_confirmBroadcastChecked) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please check the broadcast confirmation checkbox.')),
+          const SnackBar(
+            content: Text('Please check the broadcast confirmation checkbox.'),
+          ),
         );
         return;
       }
 
-      final eligibleCount = (_audiencePreview?['summary']?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
+      final eligibleCount =
+          (_audiencePreview?['summary']?['eligiblePushRecipientsCount'] as num?)
+              ?.toInt() ??
+          0;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFF1A1A2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Confirm Mass Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Confirm Mass Broadcast',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2417,7 +3202,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               const SizedBox(height: 8),
               _confirmRow('Message', body),
               const SizedBox(height: 8),
-              _confirmRow('Audience', 'All Eligible Clients ($eligibleCount devices)'),
+              _confirmRow(
+                'Audience',
+                'All Eligible Clients ($eligibleCount devices)',
+              ),
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(10),
@@ -2437,12 +3225,24 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white54),
+              ),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
+              ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Send Broadcast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Send Broadcast',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -2459,51 +3259,81 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       try {
         final token = await AuthService().getValidToken();
         if (token.isEmpty) {
-          setState(() { _pushError = 'Authentication failed. Please log in again.'; });
+          setState(() {
+            _pushError = 'Authentication failed. Please log in again.';
+          });
           return;
         }
 
-        final res = await http.post(
-          Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/broadcast'),
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
-          body: jsonEncode({
-            'title': title,
-            'body': body,
-            'targetAudience': 'ALL_ELIGIBLE',
-            'confirmBroadcast': true,
-          }),
-        ).timeout(const Duration(seconds: 30));
+        final res = await http
+            .post(
+              Uri.parse(
+                '${AppConstants.apiBaseUrl}/notifications/admin/broadcast',
+              ),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'title': title,
+                'body': body,
+                'targetAudience': 'ALL_ELIGIBLE',
+                'confirmBroadcast': true,
+              }),
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (mounted) {
           final decoded = jsonDecode(res.body) as Map<String, dynamic>;
           if (res.statusCode == 200 && decoded['success'] == true) {
-            setState(() { _pushResult = decoded['data'] as Map<String, dynamic>?; });
+            setState(() {
+              _pushResult = decoded['data'] as Map<String, dynamic>?;
+            });
           } else {
             final err = decoded['error'] as Map<String, dynamic>?;
             setState(() {
-              _pushError = err?['message'] as String? ?? 'Broadcast failed (HTTP ${res.statusCode})';
+              _pushError =
+                  err?['message'] as String? ??
+                  'Broadcast failed (HTTP ${res.statusCode})';
             });
           }
         }
       } catch (e) {
-        if (mounted) setState(() { _pushError = 'Network error: $e'; });
+        if (mounted) {
+          setState(() {
+            _pushError = 'Network error: $e';
+          });
+        }
       } finally {
-        if (mounted) setState(() { _isSendingPush = false; });
+        if (mounted) {
+          setState(() {
+            _isSendingPush = false;
+          });
+        }
       }
     }
   }
 
   // ── Query Live Delivery Status from OneSignal REST API ────────────────────
   Future<void> _fetchLiveDeliveryStatus(String notificationId) async {
-    setState(() { _isCheckingDeliveryReport = true; });
+    setState(() {
+      _isCheckingDeliveryReport = true;
+    });
     try {
       final token = await AuthService().getValidToken();
       if (token.isEmpty) return;
 
-      final res = await http.get(
-        Uri.parse('${AppConstants.apiBaseUrl}/notifications/admin/delivery-status/$notificationId'),
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
-      ).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(
+            Uri.parse(
+              '${AppConstants.apiBaseUrl}/notifications/admin/delivery-status/$notificationId',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200 && mounted) {
         final decoded = jsonDecode(res.body) as Map<String, dynamic>;
@@ -2514,7 +3344,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     } catch (e) {
       debugPrint('[AdminDashboard] Delivery status check failed: $e');
     } finally {
-      if (mounted) setState(() { _isCheckingDeliveryReport = false; });
+      if (mounted) {
+        setState(() {
+          _isCheckingDeliveryReport = false;
+        });
+      }
     }
   }
 
@@ -2523,8 +3357,17 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       text: TextSpan(
         style: const TextStyle(color: Colors.white70, fontSize: 13),
         children: [
-          TextSpan(text: '$label: ', style: const TextStyle(color: Colors.white54)),
-          TextSpan(text: value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(color: Colors.white54),
+          ),
+          TextSpan(
+            text: value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -2561,7 +3404,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 border: Border.all(color: colors.border),
                 boxShadow: [
                   BoxShadow(
-                    color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.04),
+                    color: isDark
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.04),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -2572,7 +3417,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.palette_outlined, size: 20, color: colors.primary),
+                      Icon(
+                        Icons.palette_outlined,
+                        size: 20,
+                        color: colors.primary,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Theme Mode',
@@ -2590,7 +3439,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     subtitle: 'Clean, bright interface with crisp contrast',
                     icon: Icons.wb_sunny_rounded,
                     selected: currentMode == ClientThemeMode.light,
-                    onTap: () => themeService.setThemeMode(ClientThemeMode.light),
+                    onTap: () =>
+                        themeService.setThemeMode(ClientThemeMode.light),
                     colors: colors,
                   ),
                   Divider(color: colors.border, height: 16),
@@ -2599,7 +3449,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     subtitle: 'Classic Alpha X sleek dark appearance',
                     icon: Icons.nightlight_round,
                     selected: currentMode == ClientThemeMode.dark,
-                    onTap: () => themeService.setThemeMode(ClientThemeMode.dark),
+                    onTap: () =>
+                        themeService.setThemeMode(ClientThemeMode.dark),
                     colors: colors,
                   ),
                   Divider(color: colors.border, height: 16),
@@ -2608,7 +3459,8 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     subtitle: 'Automatically follow device appearance setting',
                     icon: Icons.settings_brightness_rounded,
                     selected: currentMode == ClientThemeMode.system,
-                    onTap: () => themeService.setThemeMode(ClientThemeMode.system),
+                    onTap: () =>
+                        themeService.setThemeMode(ClientThemeMode.system),
                     colors: colors,
                   ),
                 ],
@@ -2631,10 +3483,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 borderRadius: BorderRadius.circular(14),
                 side: BorderSide(color: colors.border),
               ),
-              leading: Icon(Icons.verified_user_outlined, color: colors.primary),
+              leading: Icon(
+                Icons.verified_user_outlined,
+                color: colors.primary,
+              ),
               title: Text(
                 'Single Master Admin Authorized',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
                 'Backend verified email: ${AuthService().currentUserEmail}',
@@ -2651,7 +3509,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               leading: Icon(Icons.security, color: colors.textSecondary),
               title: Text(
                 'Security & RBAC Enforcement',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
                 'Admin Only • Strict Client Data Isolation Enforced',
@@ -2668,7 +3529,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               leading: Icon(Icons.cloud_sync_outlined, color: colors.primary),
               title: Text(
                 'Backend API Server Endpoint',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
                 ApiConfig.effectiveIsReleaseMode
@@ -2677,8 +3541,16 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
               trailing: ApiConfig.effectiveIsReleaseMode
-                  ? Icon(Icons.lock_outline, size: 18, color: colors.textSecondary.withOpacity(0.5))
-                  : Icon(Icons.edit_outlined, size: 18, color: colors.textSecondary),
+                  ? Icon(
+                      Icons.lock_outline,
+                      size: 18,
+                      color: colors.textSecondary.withOpacity(0.5),
+                    )
+                  : Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: colors.textSecondary,
+                    ),
               onTap: ApiConfig.effectiveIsReleaseMode
                   ? null
                   : () async {
@@ -2708,25 +3580,34 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               leading: Icon(Icons.system_update_rounded, color: colors.primary),
               title: Text(
                 'Installed App Version: v${AppConstants.appVersion}',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
                 'Tap to check if a new version release is available',
                 style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
-              trailing: Icon(Icons.arrow_forward_ios, size: 14, color: colors.textSecondary),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: colors.textSecondary,
+              ),
               onTap: () async {
                 AlphaXHaptics.selection();
-                final prompted = await AppVersionService.instance.promptUpdateIfNeeded(
-                  context,
-                  forcePrompt: true,
-                );
+                final prompted = await AppVersionService.instance
+                    .promptUpdateIfNeeded(context, forcePrompt: true);
                 if (!prompted && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 18),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF10B981),
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'You are running the latest version of Alpha X Gym (v${AppConstants.appVersion})',
@@ -2752,16 +3633,26 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 borderRadius: BorderRadius.circular(14),
                 side: BorderSide(color: colors.border),
               ),
-              leading: Icon(Icons.published_with_changes_rounded, color: AppColors.primaryGold),
+              leading: Icon(
+                Icons.published_with_changes_rounded,
+                color: AppColors.primaryGold,
+              ),
               title: Text(
                 'Manage App Releases & Force Updates',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
                 'Set minimum required version, release notes, and toggle mandatory update locks',
                 style: TextStyle(color: colors.textSecondary, fontSize: 12),
               ),
-              trailing: Icon(Icons.tune_rounded, size: 18, color: colors.textSecondary),
+              trailing: Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: colors.textSecondary,
+              ),
               onTap: () async {
                 AlphaXHaptics.selection();
                 await AdminVersionConfigSheet.show(context);
@@ -2790,33 +3681,53 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   // ── Admin Push Notification Control Panel ─────────────────────────────────
   Widget _buildPushNotificationPanel(ClientThemeColors colors, bool isDark) {
     final summary = _audiencePreview?['summary'] as Map<String, dynamic>?;
-    final eligibleCount = (summary?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
-    final totalClients = (summary?['totalRegisteredClients'] as num?)?.toInt() ?? 0;
-    final unregistered = (summary?['unregisteredDeviceCount'] as num?)?.toInt() ?? 0;
+    final eligibleCount =
+        (summary?['eligiblePushRecipientsCount'] as num?)?.toInt() ?? 0;
+    final totalClients =
+        (summary?['totalRegisteredClients'] as num?)?.toInt() ?? 0;
+    final unregistered =
+        (summary?['unregisteredDeviceCount'] as num?)?.toInt() ?? 0;
     final optedOut = (summary?['optedOutCount'] as num?)?.toInt() ?? 0;
 
     final clients = widget.workoutRepository.clientsList;
     // Map of clients by their ID or clientId
     Map<String, dynamic>? selectedClient;
     if (_selectedPushClientId != null) {
-      final match = clients.where((c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId)).firstOrNull;
+      final match = clients
+          .where(
+            (c) =>
+                (c['id']?.toString() == _selectedPushClientId ||
+                c['clientId']?.toString() == _selectedPushClientId),
+          )
+          .firstOrNull;
       if (match != null) {
         selectedClient = Map<String, dynamic>.from(match);
       } else if (_audiencePreview?['candidates'] != null) {
         final candList = _audiencePreview!['candidates'] as List<dynamic>;
-        final candMatch = candList.where((c) => (c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId)).firstOrNull;
+        final candMatch = candList
+            .where(
+              (c) =>
+                  (c['id']?.toString() == _selectedPushClientId ||
+                  c['clientId']?.toString() == _selectedPushClientId),
+            )
+            .firstOrNull;
         if (candMatch != null && candMatch is Map<String, dynamic>) {
           selectedClient = candMatch;
         }
       }
     }
 
-    final selectedClientName = selectedClient?['name']?.toString() ?? 'Selected Client';
-    final selectedClientUuid = selectedClient?['id']?.toString() ?? _selectedPushClientId ?? 'Unknown';
+    final selectedClientName =
+        selectedClient?['name']?.toString() ?? 'Selected Client';
+    final selectedClientUuid =
+        selectedClient?['id']?.toString() ?? _selectedPushClientId ?? 'Unknown';
     final selectedClientCode = selectedClient?['clientId']?.toString() ?? '';
-    final hasDeviceToken = selectedClient?['hasDeviceToken'] == true ||
-        (selectedClient?['oneSignalPlayerId'] != null && selectedClient!['oneSignalPlayerId'].toString().isNotEmpty) ||
-        (selectedClient?['pushToken'] != null && selectedClient!['pushToken'].toString().isNotEmpty);
+    final hasDeviceToken =
+        selectedClient?['hasDeviceToken'] == true ||
+        (selectedClient?['oneSignalPlayerId'] != null &&
+            selectedClient!['oneSignalPlayerId'].toString().isNotEmpty) ||
+        (selectedClient?['pushToken'] != null &&
+            selectedClient!['pushToken'].toString().isNotEmpty);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -2826,7 +3737,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         border: Border.all(color: colors.border),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.06),
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.black.withOpacity(0.06),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -2844,7 +3757,11 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                   color: AppColors.primaryRed.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.notifications_active_rounded, color: AppColors.primaryRed, size: 22),
+                child: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: AppColors.primaryRed,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2861,7 +3778,10 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     ),
                     Text(
                       'Target individual clients via OneSignal External ID or broadcast safely',
-                      style: TextStyle(color: colors.textSecondary, fontSize: 11),
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -2873,7 +3793,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           // 1. Recipient Selection Mode Toggle (Single Client is DEFAULT)
           Text(
             'TARGET AUDIENCE SELECTION',
-            style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0),
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
           ),
           const SizedBox(height: 8),
           Container(
@@ -2908,7 +3833,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       child: Text(
                         '🎯 Single Client (Default)',
                         style: TextStyle(
-                          color: _pushRecipientMode == 'SINGLE_CLIENT' ? Colors.white : colors.textSecondary,
+                          color: _pushRecipientMode == 'SINGLE_CLIENT'
+                              ? Colors.white
+                              : colors.textSecondary,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -2940,7 +3867,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                       child: Text(
                         '📢 Broadcast (All)',
                         style: TextStyle(
-                          color: _pushRecipientMode == 'BROADCAST' ? Colors.white : colors.textSecondary,
+                          color: _pushRecipientMode == 'BROADCAST'
+                              ? Colors.white
+                              : colors.textSecondary,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -2956,42 +3885,88 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           // 2. Mode Content
           if (_pushRecipientMode == 'SINGLE_CLIENT') ...[
             // Single Client Mode: Dropdown Selector
-            Text('Select Target Client', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(
+              'Select Target Client',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: (clients.any((c) => c['id']?.toString() == _selectedPushClientId || c['clientId']?.toString() == _selectedPushClientId))
+              value:
+                  (clients.any(
+                    (c) =>
+                        c['id']?.toString() == _selectedPushClientId ||
+                        c['clientId']?.toString() == _selectedPushClientId,
+                  ))
                   ? _selectedPushClientId
-                  : (clients.isNotEmpty ? clients.first['id']?.toString() ?? clients.first['clientId']?.toString() : null),
+                  : (clients.isNotEmpty
+                        ? clients.first['id']?.toString() ??
+                              clients.first['clientId']?.toString()
+                        : null),
               dropdownColor: isDark ? const Color(0xFF141424) : Colors.white,
               decoration: InputDecoration(
                 filled: true,
-                fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
+                fillColor: isDark
+                    ? const Color(0xFF141424)
+                    : const Color(0xFFF4F6FF),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: colors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: colors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.primaryRed),
+                ),
               ),
               items: clients.map((c) {
-                final cId = c['id']?.toString() ?? c['clientId']?.toString() ?? '';
+                final cId =
+                    c['id']?.toString() ?? c['clientId']?.toString() ?? '';
                 final cName = c['name']?.toString() ?? 'Unknown';
                 final code = c['clientId']?.toString() ?? '';
-                final isReg = (c['oneSignalPlayerId'] != null && c['oneSignalPlayerId'].toString().isNotEmpty) ||
-                    (c['pushToken'] != null && c['pushToken'].toString().isNotEmpty);
+                final isReg =
+                    (c['oneSignalPlayerId'] != null &&
+                        c['oneSignalPlayerId'].toString().isNotEmpty) ||
+                    (c['pushToken'] != null &&
+                        c['pushToken'].toString().isNotEmpty);
                 return DropdownMenuItem<String>(
                   value: cId,
                   child: Row(
                     children: [
                       Text(
                         '$cName ($code)',
-                        style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: isReg ? Colors.greenAccent.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+                          color: isReg
+                              ? Colors.greenAccent.withOpacity(0.12)
+                              : Colors.orange.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: isReg ? Colors.greenAccent.withOpacity(0.4) : Colors.orange.withOpacity(0.4)),
+                          border: Border.all(
+                            color: isReg
+                                ? Colors.greenAccent.withOpacity(0.4)
+                                : Colors.orange.withOpacity(0.4),
+                          ),
                         ),
                         child: Text(
                           isReg ? 'Device Active' : 'No Token',
@@ -3023,7 +3998,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF121220) : const Color(0xFFF7F8FC),
+                color: isDark
+                    ? const Color(0xFF121220)
+                    : const Color(0xFFF7F8FC),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: colors.border),
               ),
@@ -3032,22 +4009,38 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.link_rounded, size: 14, color: AppColors.primaryRed),
+                      const Icon(
+                        Icons.link_rounded,
+                        size: 14,
+                        color: AppColors.primaryRed,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'OneSignal External ID Identity Link',
-                        style: TextStyle(color: colors.textPrimary, fontSize: 11, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Target User UUID: $selectedClientUuid${selectedClientCode.isNotEmpty ? ' ($selectedClientCode)' : ''}',
-                    style: TextStyle(color: colors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                   Text(
                     'Target Method: OneSignal External ID (linked via Flutter OneSignal.login)',
-                    style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (!hasDeviceToken) ...[
                     const SizedBox(height: 4),
@@ -3064,40 +4057,90 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             GestureDetector(
               onTap: _loadAudiencePreview,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                  color: isDark
+                      ? const Color(0xFF141424)
+                      : const Color(0xFFF4F6FF),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: eligibleCount > 0 ? Colors.greenAccent.withOpacity(0.35) : colors.border,
+                    color: eligibleCount > 0
+                        ? Colors.greenAccent.withOpacity(0.35)
+                        : colors.border,
                   ),
                 ),
                 child: _isLoadingAudiencePreview
-                    ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)))
+                    ? const Center(
+                        child: SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primaryRed,
+                          ),
+                        ),
+                      )
                     : summary == null
-                        ? Row(
+                    ? Row(
+                        children: [
+                          Icon(
+                            Icons.refresh_rounded,
+                            size: 16,
+                            color: colors.textSecondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Tap to load audience preview',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AUDIENCE PREVIEW',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Icon(Icons.refresh_rounded, size: 16, color: colors.textSecondary),
-                              const SizedBox(width: 8),
-                              Text('Tap to load audience preview', style: TextStyle(color: colors.textSecondary, fontSize: 13)),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('AUDIENCE PREVIEW', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  _audienceStat('Eligible', '$eligibleCount', Colors.greenAccent),
-                                  _audienceStat('Total Clients', '$totalClients', colors.primary),
-                                  _audienceStat('No Token', '$unregistered', Colors.orange),
-                                  _audienceStat('Opted Out', '$optedOut', Colors.white54),
-                                ],
+                              _audienceStat(
+                                'Eligible',
+                                '$eligibleCount',
+                                Colors.greenAccent,
+                              ),
+                              _audienceStat(
+                                'Total Clients',
+                                '$totalClients',
+                                colors.primary,
+                              ),
+                              _audienceStat(
+                                'No Token',
+                                '$unregistered',
+                                Colors.orange,
+                              ),
+                              _audienceStat(
+                                'Opted Out',
+                                '$optedOut',
+                                Colors.white54,
                               ),
                             ],
                           ),
+                        ],
+                      ),
               ),
             ),
             const SizedBox(height: 12),
@@ -3108,7 +4151,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primaryRed.withOpacity(0.3)),
+                border: Border.all(
+                  color: AppColors.primaryRed.withOpacity(0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -3116,13 +4161,19 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
                     value: _confirmBroadcastChecked,
                     activeColor: AppColors.primaryRed,
                     onChanged: (val) {
-                      setState(() { _confirmBroadcastChecked = val ?? false; });
+                      setState(() {
+                        _confirmBroadcastChecked = val ?? false;
+                      });
                     },
                   ),
                   Expanded(
                     child: Text(
                       'I confirm sending this broadcast push notification to all $eligibleCount eligible devices.',
-                      style: TextStyle(color: colors.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -3132,7 +4183,14 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           const SizedBox(height: 16),
 
           // Title Field
-          Text('Notification Title', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            'Notification Title',
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _pushTitleController,
@@ -3140,20 +4198,47 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             maxLength: 80,
             decoration: InputDecoration(
               hintText: 'e.g. ⚡ Alpha X Coach Alert',
-              hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
+              hintStyle: TextStyle(
+                color: colors.textSecondary.withOpacity(0.5),
+                fontSize: 13,
+              ),
               filled: true,
-              fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
-              counterStyle: TextStyle(color: colors.textSecondary, fontSize: 10),
+              fillColor: isDark
+                  ? const Color(0xFF141424)
+                  : const Color(0xFFF4F6FF),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.primaryRed),
+              ),
+              counterStyle: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 10,
+              ),
             ),
           ),
           const SizedBox(height: 12),
 
           // Message Body Field
-          Text('Message Body', style: TextStyle(color: colors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            'Message Body',
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _pushBodyController,
@@ -3162,14 +4247,34 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             maxLines: 3,
             decoration: InputDecoration(
               hintText: 'e.g. Your training session is ready. Check in with coach today! 💪',
-              hintStyle: TextStyle(color: colors.textSecondary.withOpacity(0.5), fontSize: 13),
+              hintStyle: TextStyle(
+                color: colors.textSecondary.withOpacity(0.5),
+                fontSize: 13,
+              ),
               filled: true,
-              fillColor: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primaryRed)),
-              counterStyle: TextStyle(color: colors.textSecondary, fontSize: 10),
+              fillColor: isDark
+                  ? const Color(0xFF141424)
+                  : const Color(0xFFF4F6FF),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.primaryRed),
+              ),
+              counterStyle: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 10,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -3178,27 +4283,49 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _isSendingPush ||
-                      (_pushTitleController.text.trim().isEmpty || _pushBodyController.text.trim().isEmpty) ||
-                      (_pushRecipientMode == 'BROADCAST' && !_confirmBroadcastChecked)
+              onPressed:
+                  _isSendingPush ||
+                      (_pushTitleController.text.trim().isEmpty ||
+                          _pushBodyController.text.trim().isEmpty) ||
+                      (_pushRecipientMode == 'BROADCAST' &&
+                          !_confirmBroadcastChecked)
                   ? null
                   : _sendPushNotification,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
-                disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.3),
+                foregroundColor: AppColors.onPrimary,
+                disabledBackgroundColor: const Color(0xFF2A2A2A),
+                disabledForegroundColor: const Color(0xFF888888),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               icon: _isSendingPush
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.black,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.send_rounded,
+                      color: Colors.black,
+                      size: 18,
+                    ),
               label: Text(
                 _isSendingPush
                     ? 'Transmitting...'
                     : _pushRecipientMode == 'SINGLE_CLIENT'
-                        ? 'Send Test Push to $selectedClientName'
-                        : 'Send Broadcast to $eligibleCount Clients',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
+                    ? 'Send Test Push to $selectedClientName'
+                    : 'Send Broadcast to $eligibleCount Clients',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
               ),
             ),
           ),
@@ -3220,9 +4347,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.red, size: 16),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Colors.red,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(_pushError!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+                  Expanded(
+                    child: Text(
+                      _pushError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3235,8 +4371,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
   Widget _audienceStat(String label, String value, Color color) {
     return Column(
       children: [
-        Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900)),
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 10),
+        ),
       ],
     );
   }
@@ -3245,8 +4391,12 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     final result = _pushResult!;
     final lifecycle = result['deliveryLifecycle'] as Map<String, dynamic>?;
     final gateway = result['gatewayResponse'] as Map<String, dynamic>?;
-    final notifId = result['notificationId']?.toString() ?? gateway?['notificationId']?.toString();
-    final externalId = result['externalId']?.toString() ?? lifecycle?['recipientExternalId']?.toString();
+    final notifId =
+        result['notificationId']?.toString() ??
+        gateway?['notificationId']?.toString();
+    final externalId =
+        result['externalId']?.toString() ??
+        lifecycle?['recipientExternalId']?.toString();
     final isBroadcast = _pushRecipientMode == 'BROADCAST';
 
     return Container(
@@ -3261,11 +4411,21 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 18),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.greenAccent,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
-                isBroadcast ? 'Broadcast Accepted by Gateway' : 'Notification Accepted by Gateway',
-                style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w800, fontSize: 13),
+                isBroadcast
+                    ? 'Broadcast Accepted by Gateway'
+                    : 'Notification Accepted by Gateway',
+                style: const TextStyle(
+                  color: Colors.greenAccent,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
@@ -3274,28 +4434,66 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _resultRow('OneSignal Notification ID', notifId, colors),
+                  child: _resultRow(
+                    'OneSignal Notification ID',
+                    notifId,
+                    colors,
+                  ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.copy, size: 14, color: AppColors.textTertiary),
+                  icon: const Icon(
+                    Icons.copy,
+                    size: 14,
+                    color: AppColors.textTertiary,
+                  ),
                   tooltip: 'Copy Notification ID',
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: notifId));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notification ID copied to clipboard')),
+                      const SnackBar(
+                        content: Text('Notification ID copied to clipboard'),
+                      ),
                     );
                   },
                 ),
               ],
             ),
           ],
-          if (externalId != null) _resultRow('Target External ID', externalId, colors),
+          if (externalId != null)
+            _resultRow('Target External ID', externalId, colors),
           const Divider(color: Colors.white12, height: 16),
-          Text('DELIVERY LIFECYCLE (3 STAGES)', style: TextStyle(color: colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
+          Text(
+            'DELIVERY LIFECYCLE (3 STAGES)',
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
+          ),
           const SizedBox(height: 6),
-          _deliveryStage('Stage 1: Gateway Accepted', lifecycle?['stage1_gatewayAccepted'] == true || result['gatewayAccepted'] == true, colors),
-          _deliveryStage('Stage 2: FCM Transit', true, colors, label: lifecycle?['stage2_fcmTransit']?.toString() ?? 'Dispatched to FCM gateway'),
-          _deliveryStage('Stage 3: Device Display', false, colors, label: lifecycle?['stage3_deviceDisplay']?.toString() ?? 'Pending device confirmation (asynchronous)'),
+          _deliveryStage(
+            'Stage 1: Gateway Accepted',
+            lifecycle?['stage1_gatewayAccepted'] == true ||
+                result['gatewayAccepted'] == true,
+            colors,
+          ),
+          _deliveryStage(
+            'Stage 2: FCM Transit',
+            true,
+            colors,
+            label:
+                lifecycle?['stage2_fcmTransit']?.toString() ??
+                'Dispatched to FCM gateway',
+          ),
+          _deliveryStage(
+            'Stage 3: Device Display',
+            false,
+            colors,
+            label:
+                lifecycle?['stage3_deviceDisplay']?.toString() ??
+                'Pending device confirmation (asynchronous)',
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(8),
@@ -3315,19 +4513,32 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _isCheckingDeliveryReport ? null : () => _fetchLiveDeliveryStatus(notifId),
+                onPressed: _isCheckingDeliveryReport
+                    ? null
+                    : () => _fetchLiveDeliveryStatus(notifId),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: colors.primary,
                   side: BorderSide(color: colors.primary.withOpacity(0.5)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 icon: _isCheckingDeliveryReport
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.sync_rounded, size: 16),
                 label: Text(
-                  _isCheckingDeliveryReport ? 'Checking Delivery Report...' : 'Check Live Delivery Status in OneSignal',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  _isCheckingDeliveryReport
+                      ? 'Checking Delivery Report...'
+                      : 'Check Live Delivery Status in OneSignal',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -3337,25 +4548,55 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141424) : const Color(0xFFF4F6FF),
+                color: isDark
+                    ? const Color(0xFF141424)
+                    : const Color(0xFFF4F6FF),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: colors.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('LIVE ONESIGNAL METRICS', style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                  Text(
+                    'LIVE ONESIGNAL METRICS',
+                    style: TextStyle(
+                      color: colors.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 6),
-                  _resultRow('Successful Deliveries', '${_liveDeliveryReport!['successful'] ?? 0}', colors),
-                  _resultRow('Failed Deliveries', '${_liveDeliveryReport!['failed'] ?? 0}', colors),
-                  _resultRow('Errored Deliveries', '${_liveDeliveryReport!['errored'] ?? 0}', colors),
-                  _resultRow('Remaining In-Flight', '${_liveDeliveryReport!['remaining'] ?? 0}', colors),
+                  _resultRow(
+                    'Successful Deliveries',
+                    '${_liveDeliveryReport!['successful'] ?? 0}',
+                    colors,
+                  ),
+                  _resultRow(
+                    'Failed Deliveries',
+                    '${_liveDeliveryReport!['failed'] ?? 0}',
+                    colors,
+                  ),
+                  _resultRow(
+                    'Errored Deliveries',
+                    '${_liveDeliveryReport!['errored'] ?? 0}',
+                    colors,
+                  ),
+                  _resultRow(
+                    'Remaining In-Flight',
+                    '${_liveDeliveryReport!['remaining'] ?? 0}',
+                    colors,
+                  ),
                   if (_liveDeliveryReport!['actualDeviceReceiptNotice'] != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        _liveDeliveryReport!['actualDeviceReceiptNotice'].toString(),
-                        style: const TextStyle(color: Colors.white54, fontSize: 10, fontStyle: FontStyle.italic),
+                        _liveDeliveryReport!['actualDeviceReceiptNotice']
+                            .toString(),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
                 ],
@@ -3373,11 +4614,18 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(color: colors.textSecondary, fontSize: 12),
+          ),
           Flexible(
             child: Text(
               value,
-              style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -3386,18 +4634,29 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 
-  Widget _deliveryStage(String stage, bool done, ClientThemeColors colors, {String? label}) {
+  Widget _deliveryStage(
+    String stage,
+    bool done,
+    ClientThemeColors colors, {
+    String? label,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 3),
       child: Row(
         children: [
-          Icon(done ? Icons.check_circle_outline : Icons.radio_button_unchecked,
-              size: 14, color: done ? Colors.greenAccent : Colors.white38),
+          Icon(
+            done ? Icons.check_circle_outline : Icons.radio_button_unchecked,
+            size: 14,
+            color: done ? Colors.greenAccent : Colors.white38,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               label != null ? '$stage: $label' : stage,
-              style: TextStyle(color: done ? Colors.greenAccent : Colors.white54, fontSize: 11),
+              style: TextStyle(
+                color: done ? Colors.greenAccent : Colors.white54,
+                fontSize: 11,
+              ),
             ),
           ),
         ],
@@ -3425,7 +4684,9 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
               decoration: BoxDecoration(
                 color: selected
                     ? colors.primary.withOpacity(0.15)
-                    : (colors.isDark ? AppColors.secondaryCard : AppColors.lightSecondaryCard),
+                    : (colors.isDark
+                          ? AppColors.secondaryCard
+                          : AppColors.lightSecondaryCard),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -3467,8 +4728,6 @@ class _AdminMainDashboardScreenState extends State<AdminMainDashboardScreen> {
     );
   }
 }
-
-
 
 class _AdminNotesEditor extends StatefulWidget {
   final String clientId;
@@ -3517,7 +4776,11 @@ class _AdminNotesEditorState extends State<_AdminNotesEditor> {
         children: [
           const Row(
             children: [
-              Icon(Icons.lock_person_outlined, size: 16, color: AppColors.primaryRed),
+              Icon(
+                Icons.lock_person_outlined,
+                size: 16,
+                color: AppColors.primaryRed,
+              ),
               SizedBox(width: 8),
               Text(
                 '9. PRIVATE ADMIN / TRAINER NOTES (CONFIDENTIAL)',
@@ -3542,10 +4805,15 @@ class _AdminNotesEditorState extends State<_AdminNotesEditor> {
             style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
             decoration: InputDecoration(
               hintText: 'e.g. Focus on squat form first 4 weeks. Re-assess knee mobility after phase 1.',
-              hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              hintStyle: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 12,
+              ),
               filled: true,
               fillColor: AppColors.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -3554,24 +4822,48 @@ class _AdminNotesEditorState extends State<_AdminNotesEditor> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                foregroundColor: AppColors.onPrimary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
               ),
               icon: _isSavingNotes
-                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save, size: 14, color: Colors.white),
-              label: const Text('SAVE PRIVATE NOTE', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : const Icon(Icons.save, size: 14, color: Colors.black),
+              label: const Text(
+                'SAVE PRIVATE NOTE',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onPressed: _isSavingNotes
                   ? null
                   : () async {
                       final messenger = ScaffoldMessenger.of(context);
                       setState(() => _isSavingNotes = true);
-                      final success = await widget.onSave(_notesCtrl.text.trim());
+                      final success = await widget.onSave(
+                        _notesCtrl.text.trim(),
+                      );
                       widget.onNoteUpdated(_notesCtrl.text.trim());
                       if (!mounted) return;
                       setState(() => _isSavingNotes = false);
                       messenger.showSnackBar(
                         SnackBar(
-                          content: Text(success ? 'Private trainer notes saved to database.' : 'Note saved locally.'),
+                          content: Text(
+                            success
+                                ? 'Private trainer notes saved to database.'
+                                : 'Note saved locally.',
+                          ),
                           backgroundColor: AppColors.primaryRed,
                         ),
                       );
@@ -3604,7 +4896,8 @@ class _ClientProfileDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<_ClientProfileDetailSheet> createState() => _ClientProfileDetailSheetState();
+  State<_ClientProfileDetailSheet> createState() =>
+      _ClientProfileDetailSheetState();
 }
 
 class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
@@ -3660,30 +4953,51 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final clientId = _clientData['clientId'] ?? _clientData['id'] ?? 'Pending ID';
+    final clientId =
+        _clientData['clientId'] ?? _clientData['id'] ?? 'Pending ID';
     final name = _clientData['name'] ?? 'Athlete';
     final email = _clientData['email'] ?? '';
-    final phone = _clientData['phone']?.toString().isNotEmpty == true ? _clientData['phone'].toString() : 'Not recorded';
-    final joinDate = widget.formatJoinDate(_clientData['createdAt']?.toString());
-    final isOnboarded = _clientData['onboardingCompleted'] == true || _clientData['onboardingCompleted'] == 'true';
-    final fitnessLevel = (_clientData['fitnessLevel']?.toString() ?? 'Not specified').toUpperCase();
-    final primaryGoal = _clientData['primaryGoal']?.toString() ?? 'Not specified';
+    final phone = _clientData['phone']?.toString().isNotEmpty == true
+        ? _clientData['phone'].toString()
+        : 'Not recorded';
+    final joinDate = widget.formatJoinDate(
+      _clientData['createdAt']?.toString(),
+    );
+    final isOnboarded =
+        _clientData['onboardingCompleted'] == true ||
+        _clientData['onboardingCompleted'] == 'true';
+    final fitnessLevel =
+        (_clientData['fitnessLevel']?.toString() ?? 'Not specified')
+            .toUpperCase();
+    final primaryGoal =
+        _clientData['primaryGoal']?.toString() ?? 'Not specified';
     final secondaryGoal = _clientData['secondaryGoal']?.toString() ?? 'None';
     final weight = _clientData['weightKg']?.toString() ?? 'Not recorded';
     final height = _clientData['heightCm']?.toString() ?? 'Not recorded';
     final age = _clientData['age']?.toString() ?? 'Not recorded';
     final gender = _clientData['gender']?.toString() ?? 'Not specified';
-    final trainingExperience = _clientData['trainingExperience']?.toString() ?? 'Not specified';
-    final trainingDaysPerWeek = _clientData['trainingDaysPerWeek']?.toString() ?? '4';
+    final trainingExperience =
+        _clientData['trainingExperience']?.toString() ?? 'Not specified';
+    final trainingDaysPerWeek =
+        _clientData['trainingDaysPerWeek']?.toString() ?? '4';
     final preferredDays = _formatList(_clientData['preferredDays']);
-    final hasInjury = _clientData['hasCurrentInjury'] == true || _clientData['hasCurrentInjury'] == 'true';
+    final hasInjury =
+        _clientData['hasCurrentInjury'] == true ||
+        _clientData['hasCurrentInjury'] == 'true';
     final injuryAreas = _formatList(_clientData['injuryAreas']);
-    final injuryDescription = _clientData['injuryDescription']?.toString() ?? _clientData['injuryDetails']?.toString() ?? 'None';
-    final hasSurgery = _clientData['hasPreviousSurgery'] == true || _clientData['hasPreviousSurgery'] == 'true';
+    final injuryDescription =
+        _clientData['injuryDescription']?.toString() ??
+        _clientData['injuryDetails']?.toString() ??
+        'None';
+    final hasSurgery =
+        _clientData['hasPreviousSurgery'] == true ||
+        _clientData['hasPreviousSurgery'] == 'true';
     final surgeryDetails = _clientData['surgeryDetails']?.toString() ?? 'None';
-    final activityLevel = _clientData['activityLevel']?.toString() ?? 'MODERATE';
+    final activityLevel =
+        _clientData['activityLevel']?.toString() ?? 'MODERATE';
     final sleepHours = _clientData['sleepHours']?.toString() ?? '7–8 hours';
-    final trainingTimePref = _clientData['trainingTimePref']?.toString() ?? 'Flexible';
+    final trainingTimePref =
+        _clientData['trainingTimePref']?.toString() ?? 'Flexible';
     final trainingPreferences = _formatList(_clientData['trainingPreferences']);
 
     return Container(
@@ -3708,7 +5022,10 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   radius: 20,
                   child: Text(
                     name.isNotEmpty ? name[0].toUpperCase() : 'A',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: AppColors.onPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -3718,12 +5035,19 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 16),
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
                       ),
                       if (email.isNotEmpty)
                         Text(
                           email,
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
                       const SizedBox(height: 2),
                       Row(
@@ -3740,7 +5064,10 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                           const SizedBox(width: 8),
                           Text(
                             '• Joined $joinDate',
-                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                            style: const TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
@@ -3752,7 +5079,10 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primaryRed,
+                          ),
                         )
                       : const Icon(Icons.refresh, color: AppColors.primaryRed),
                   tooltip: 'Fetch Latest Database Data',
@@ -3772,14 +5102,31 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
               color: Colors.orange.withOpacity(0.15),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(_fetchError!, style: const TextStyle(color: Colors.orange, fontSize: 11)),
+                    child: Text(
+                      _fetchError!,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                   TextButton(
                     onPressed: _loadLiveProfile,
-                    child: const Text('RETRY', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'RETRY',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -3794,22 +5141,34 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (isOnboarded ? AppColors.success : Colors.orangeAccent).withOpacity(0.12),
+                    color:
+                        (isOnboarded ? AppColors.success : Colors.orangeAccent)
+                            .withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: isOnboarded ? AppColors.success : Colors.orangeAccent),
+                    border: Border.all(
+                      color: isOnboarded
+                          ? AppColors.success
+                          : Colors.orangeAccent,
+                    ),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         isOnboarded ? Icons.check_circle : Icons.pending,
-                        color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                        color: isOnboarded
+                            ? AppColors.success
+                            : Colors.orangeAccent,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isOnboarded ? 'FITNESS ASSESSMENT COMPLETED & SYNCHRONIZED' : 'ASSESSMENT IN PROGRESS / INCOMPLETE',
+                        isOnboarded
+                            ? 'FITNESS ASSESSMENT COMPLETED & SYNCHRONIZED'
+                            : 'ASSESSMENT IN PROGRESS / INCOMPLETE',
                         style: TextStyle(
-                          color: isOnboarded ? AppColors.success : Colors.orangeAccent,
+                          color: isOnboarded
+                              ? AppColors.success
+                              : Colors.orangeAccent,
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.5,
@@ -3838,9 +5197,24 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   icon: Icons.straighten_outlined,
                   items: [
                     {'label': 'Phone Number', 'value': phone},
-                    {'label': 'Current Weight', 'value': weight.isNotEmpty && weight != 'Not recorded' ? '$weight kg' : 'Not recorded'},
-                    {'label': 'Height', 'value': height.isNotEmpty && height != 'Not recorded' ? '$height cm' : 'Not recorded'},
-                    {'label': 'Age', 'value': age.isNotEmpty && age != 'Not recorded' ? '$age years' : 'Not recorded'},
+                    {
+                      'label': 'Current Weight',
+                      'value': weight.isNotEmpty && weight != 'Not recorded'
+                          ? '$weight kg'
+                          : 'Not recorded',
+                    },
+                    {
+                      'label': 'Height',
+                      'value': height.isNotEmpty && height != 'Not recorded'
+                          ? '$height cm'
+                          : 'Not recorded',
+                    },
+                    {
+                      'label': 'Age',
+                      'value': age.isNotEmpty && age != 'Not recorded'
+                          ? '$age years'
+                          : 'Not recorded',
+                    },
                     {'label': 'Gender / Biological Sex', 'value': gender},
                   ],
                 ),
@@ -3851,8 +5225,14 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   title: '3. Training Experience & Availability',
                   icon: Icons.calendar_month_outlined,
                   items: [
-                    {'label': 'Training Experience', 'value': trainingExperience},
-                    {'label': 'Commitment', 'value': '$trainingDaysPerWeek days per week'},
+                    {
+                      'label': 'Training Experience',
+                      'value': trainingExperience,
+                    },
+                    {
+                      'label': 'Commitment',
+                      'value': '$trainingDaysPerWeek days per week',
+                    },
                     {'label': 'Preferred Time', 'value': trainingTimePref},
                     {'label': 'Preferred Days', 'value': preferredDays},
                   ],
@@ -3864,10 +5244,16 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   title: '4. Injury & Pain Screening',
                   icon: Icons.healing_outlined,
                   items: [
-                    {'label': 'Current Injury/Pain', 'value': hasInjury ? 'YES - ACTIVE INJURY REPORTED' : 'NO KNOWN INJURIES'},
+                    {
+                      'label': 'Current Injury/Pain',
+                      'value': hasInjury
+                          ? 'YES - ACTIVE INJURY REPORTED'
+                          : 'NO KNOWN INJURIES',
+                    },
                     if (hasInjury) ...[
                       {'label': 'Affected Areas', 'value': injuryAreas},
-                      if (injuryDescription.isNotEmpty && injuryDescription != 'None')
+                      if (injuryDescription.isNotEmpty &&
+                          injuryDescription != 'None')
                         {'label': 'Description', 'value': injuryDescription},
                     ],
                   ],
@@ -3879,8 +5265,12 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   title: '5. Surgical History & Limitations',
                   icon: Icons.medical_services_outlined,
                   items: [
-                    {'label': 'Previous Surgery', 'value': hasSurgery ? 'YES' : 'NO'},
-                    if (hasSurgery) {'label': 'Surgery Details', 'value': surgeryDetails},
+                    {
+                      'label': 'Previous Surgery',
+                      'value': hasSurgery ? 'YES' : 'NO',
+                    },
+                    if (hasSurgery)
+                      {'label': 'Surgery Details', 'value': surgeryDetails},
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -3890,7 +5280,10 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   title: '6. Daily Activity & Lifestyle (Macro Planner)',
                   icon: Icons.directions_walk_outlined,
                   items: [
-                    {'label': 'Daily Activity Outside Gym', 'value': activityLevel},
+                    {
+                      'label': 'Daily Activity Outside Gym',
+                      'value': activityLevel,
+                    },
                     {'label': 'Average Sleep', 'value': sleepHours},
                   ],
                 ),
@@ -3901,12 +5294,13 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   title: '7. Training Modality Preferences',
                   icon: Icons.fitness_center_outlined,
                   items: [
-                    {'label': 'Enjoyed Modalities', 'value': trainingPreferences},
+                    {
+                      'label': 'Enjoyed Modalities',
+                      'value': trainingPreferences,
+                    },
                   ],
                 ),
                 const SizedBox(height: 14),
-
-
 
                 // 8. Individual Client Management Quick Actions
                 Container(
@@ -3921,7 +5315,11 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.tune, size: 16, color: AppColors.primaryRed),
+                          Icon(
+                            Icons.tune,
+                            size: 16,
+                            color: AppColors.primaryRed,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             '8. INDIVIDUAL CLIENT MANAGEMENT',
@@ -3942,28 +5340,72 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primaryRed,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              foregroundColor: AppColors.onPrimary,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                            icon: const Icon(Icons.fitness_center, size: 14, color: Colors.white),
-                            label: const Text('ASSIGN WORKOUT', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            icon: const Icon(
+                              Icons.fitness_center,
+                              size: 14,
+                              color: Colors.black,
+                            ),
+                            label: const Text(
+                              'ASSIGN WORKOUT',
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: widget.onAssignWorkout,
                           ),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.surfaceElevated,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                            icon: const Icon(Icons.restaurant_menu, size: 14, color: AppColors.primaryRed),
-                            label: const Text('ASSIGN DIET PLAN', style: TextStyle(color: AppColors.primaryRed, fontSize: 11, fontWeight: FontWeight.bold)),
-                            onPressed: () => widget.onAssignDietPlan(_clientData),
+                            icon: const Icon(
+                              Icons.restaurant_menu,
+                              size: 14,
+                              color: AppColors.primaryRed,
+                            ),
+                            label: const Text(
+                              'ASSIGN DIET PLAN',
+                              style: TextStyle(
+                                color: AppColors.primaryRed,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onPressed: () =>
+                                widget.onAssignDietPlan(_clientData),
                           ),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.surfaceElevated,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                            icon: const Icon(Icons.pie_chart, size: 14, color: AppColors.gold),
-                            label: const Text('SET MACROS', style: TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.bold)),
+                            icon: const Icon(
+                              Icons.pie_chart,
+                              size: 14,
+                              color: AppColors.gold,
+                            ),
+                            label: const Text(
+                              'SET MACROS',
+                              style: TextStyle(
+                                color: AppColors.gold,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: () => widget.onSetMacros(_clientData),
                           ),
                         ],
@@ -3977,8 +5419,12 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                 _AdminNotesEditor(
                   clientId: clientId,
                   initialNote: _clientData['adminNotes']?.toString() ?? '',
-                  onSave: (newNote) => widget.workoutRepository.saveAdminNotes(clientId, newNote),
-                  onNoteUpdated: (newNote) => _clientData['adminNotes'] = newNote,
+                  onSave: (newNote) => widget.workoutRepository.saveAdminNotes(
+                    clientId,
+                    newNote,
+                  ),
+                  onNoteUpdated: (newNote) =>
+                      _clientData['adminNotes'] = newNote,
                 ),
                 const SizedBox(height: 14),
 
@@ -3992,12 +5438,19 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.lock_outline, size: 16, color: AppColors.textTertiary),
+                      const Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: AppColors.textTertiary,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Client credentials verified via permanent Client ID ($clientId) and backend bcrypt password hashing. Neon PostgreSQL database is the single source of truth.',
-                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ],
@@ -4052,13 +5505,20 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
                     width: 140,
                     child: Text(
                       item['label']!,
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       item['value']!,
-                      style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -4070,4 +5530,3 @@ class _ClientProfileDetailSheetState extends State<_ClientProfileDetailSheet> {
     );
   }
 }
-

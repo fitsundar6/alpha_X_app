@@ -704,7 +704,10 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryRed,
+                      foregroundColor: AppColors.onPrimary,
+                    ),
                     onPressed: () async {
                       Navigator.of(ctx).pop();
                       final edited = Map<String, dynamic>.from(proposal.payload);
@@ -737,7 +740,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                         );
                       }
                     },
-                    child: const Text('Save Modifications', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text('Save Modifications', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -1176,7 +1179,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                               label: const Text('Retry'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryRed,
-                                foregroundColor: Colors.white,
+                                foregroundColor: AppColors.onPrimary,
                               ),
                             ),
                           ],
@@ -1302,7 +1305,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                 backgroundColor: AppColors.primaryRed,
                 child: Text(
                   name.isNotEmpty ? name[0].toUpperCase() : 'A',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 14),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1389,14 +1392,14 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                       key: const Key('admin_ai_workout_proposal_button'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryRed,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      icon: const Icon(Icons.fitness_center, size: 14),
+                      icon: const Icon(Icons.fitness_center, size: 14, color: Colors.black),
                       label: const Text(
                         'AI Workout Proposal',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -2426,7 +2429,7 @@ class _AdminAiCoachScreenState extends State<AdminAiCoachScreen> with AutomaticK
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                icon: const Icon(Icons.send, color: AppColors.onPrimary, size: 18),
                 onPressed: _isThinking ? null : () => _handleSendMessage(),
               ),
             ),

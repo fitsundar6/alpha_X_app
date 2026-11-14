@@ -11,10 +11,10 @@ import '../../features/progress/data/repositories/weekly_progress_repository.dar
 
 /// The official Alpha X Gym startup splash screen.
 ///
-/// Implements the finalized cinematic loading sequence for "Λ L P H Λ - X":
-/// 1. Phase 1 (0.00 – 0.35): Pure white ambient wordmark reveal with neon tube bloom.
-/// 2. Phase 2 (0.35 – 0.55): In-place morph of letter 'H' into the pure white dumbbell silhouette.
-/// 3. Phase 3 (0.55 – 1.00): 3D camera zoom actor breaches the camera lens directly into app entry.
+/// Implements the finalized cinematic branding reveal:
+/// 1. Pure black canvas with subtle ambient bottom bloom gradient.
+/// 2. Centered official Alpha X Gym brand mark with smooth 4.5s ease-out emergence (scale, opacity, blur).
+/// 3. Synchronized bottom-up tagline reveal: "STARTING POINT OF NEW JOURNEY".
 ///
 /// Error-safe: Features a watchdog timer (widget.animationDuration + 400ms) and tap-to-skip
 /// so app startup and session restoration are never delayed or blocked.
@@ -103,13 +103,11 @@ class AlphaXSplashScreenState extends State<AlphaXSplashScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: navigateToDestination,
         child: SizedBox.expand(
-          child: Center(
-            child: AlphaXLogoAnimation(
-              duration: widget.animationDuration,
-              allowTapToSkip: false, // Handled immediately by outer GestureDetector
-              onComplete: navigateToDestination,
-              showBrandLine: true,
-            ),
+          child: AlphaXLogoAnimation(
+            duration: widget.animationDuration,
+            allowTapToSkip: false, // Handled immediately by outer GestureDetector
+            onComplete: navigateToDestination,
+            showBrandLine: true,
           ),
         ),
       ),

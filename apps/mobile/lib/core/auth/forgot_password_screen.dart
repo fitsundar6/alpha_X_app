@@ -25,7 +25,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  static const Color _goldAccent = Color(0xFFD4A034);
+  static const Color _goldAccent = AppColors.primary;
 
   String? _identifier;
   Map<String, dynamic> _gymContactInfo = {

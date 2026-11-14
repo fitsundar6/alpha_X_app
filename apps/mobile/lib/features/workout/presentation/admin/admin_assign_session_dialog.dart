@@ -319,6 +319,7 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryRed,
+            foregroundColor: AppColors.onPrimary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: _isSaving ? null : _saveAssignment,
@@ -326,9 +327,9 @@ class _AdminAssignSessionDialogState extends State<AdminAssignSessionDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                 )
-              : const Text('Save Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              : const Text('Save Assignment', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
         ),
       ],
     );

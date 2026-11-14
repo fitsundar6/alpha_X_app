@@ -290,6 +290,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
+                            foregroundColor: AppColors.onPrimary,
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           ),
                           onPressed: () {
@@ -302,7 +303,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                               ),
                             );
                           },
-                          child: const Text('ASSIGN', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: const Text('ASSIGN', style: TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     );
@@ -511,10 +512,11 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('SEND PUSH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('SEND PUSH', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1040,11 +1042,12 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.fitness_center, size: 16, color: Colors.white),
-                  label: const Text('ASSIGN WORKOUT', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+                  icon: Icon(Icons.fitness_center, size: 16, color: colors.onPrimary),
+                  label: Text('ASSIGN WORKOUT', style: TextStyle(color: colors.onPrimary, fontSize: 11, fontWeight: FontWeight.w900)),
                   onPressed: _openAssignWorkoutDialog,
                 ),
               ),
@@ -1164,6 +1167,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryRed,
+                        foregroundColor: AppColors.onPrimary,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1177,7 +1181,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                           ),
                         );
                       },
-                      child: const Text('COMPARE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+                      child: const Text('COMPARE', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 11)),
                     ),
                   ],
                 ),
@@ -1253,13 +1257,14 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   ),
                   onPressed: _isSavingNotes ? null : _saveAdminNotes,
                   icon: _isSavingNotes
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.save, size: 16, color: Colors.white),
-                  label: const Text('SAVE COACH NOTES', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: colors.onPrimary))
+                      : Icon(Icons.save, size: 16, color: colors.onPrimary),
+                  label: Text('SAVE COACH NOTES', style: TextStyle(color: colors.onPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -1435,12 +1440,15 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: colors.primary),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
+                    ),
                     onPressed: _openAssignWorkoutDialog,
-                    icon: const Icon(Icons.assignment, size: 16, color: Colors.white),
-                    label: const Text('ASSIGN WORKOUT NOW',
+                    icon: Icon(Icons.assignment, size: 16, color: colors.onPrimary),
+                    label: Text('ASSIGN WORKOUT NOW',
                         style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                            color: colors.onPrimary, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                 ],
               ),
@@ -1564,14 +1572,15 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryRed,
+                      foregroundColor: AppColors.onPrimary,
                       padding:
                           const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
                     onPressed: _openEditFullSplit,
-                    icon: const Icon(Icons.add, size: 15, color: Colors.white),
+                    icon: const Icon(Icons.add, size: 15, color: Colors.black),
                     label: const Text('CREATE WORKOUT PLAN',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontWeight: FontWeight.bold,
                             fontSize: 11)),
                   ),
@@ -2397,7 +2406,7 @@ class _AdminClientDetailScreenState extends State<AdminClientDetailScreen>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? Colors.white : colors.textSecondary,
+                        color: isSelected ? colors.onPrimary : colors.textSecondary,
                       ),
                     ),
                     selected: isSelected,

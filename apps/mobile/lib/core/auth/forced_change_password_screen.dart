@@ -22,7 +22,7 @@ class ForcedChangePasswordScreen extends StatefulWidget {
 }
 
 class _ForcedChangePasswordScreenState extends State<ForcedChangePasswordScreen> {
-  static const Color _goldAccent = Color(0xFFD4A034);
+  static const Color _goldAccent = AppColors.primary;
 
   final _formKey = GlobalKey<FormState>();
   final _currentPasswordController = TextEditingController();

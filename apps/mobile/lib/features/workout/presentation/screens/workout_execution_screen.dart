@@ -359,7 +359,7 @@ class _WorkoutExecutionScreenState extends State<WorkoutExecutionScreen> {
                       backgroundColor: AppColors.surfaceCard,
                       labelStyle: TextStyle(
                         fontSize: 12,
-                        color: isSel ? Colors.white : AppColors.textSecondary,
+                        color: isSel ? AppColors.onPrimary : AppColors.textSecondary,
                         fontWeight: FontWeight.w700,
                       ),
                       onSelected: (val) {
@@ -625,6 +625,7 @@ class _WorkoutExecutionScreenState extends State<WorkoutExecutionScreen> {
                 label: const Text('FINISH WORKOUT SESSION', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.8)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),

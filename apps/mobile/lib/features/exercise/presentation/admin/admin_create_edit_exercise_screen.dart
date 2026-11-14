@@ -170,7 +170,10 @@ class _AdminCreateEditExerciseScreenState
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () {
               final text = textController.text.trim();
               if (text.isNotEmpty) {
@@ -179,7 +182,7 @@ class _AdminCreateEditExerciseScreenState
               }
               Navigator.of(ctx).pop();
             },
-            child: const Text('Add & Select', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: const Text('Add & Select', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -224,7 +227,10 @@ class _AdminCreateEditExerciseScreenState
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
+            ),
             onPressed: () {
               final text = textController.text.trim();
               if (text.isNotEmpty) {
@@ -232,7 +238,7 @@ class _AdminCreateEditExerciseScreenState
               }
               Navigator.of(ctx).pop();
             },
-            child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: const Text('Add', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -478,7 +484,7 @@ class _AdminCreateEditExerciseScreenState
                   labelStyle: TextStyle(
                     fontSize: 11,
                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -714,11 +720,11 @@ class _AdminCreateEditExerciseScreenState
             // Submit Button
             ElevatedButton.icon(
               onPressed: _saveExercise,
-              icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+              icon: const Icon(Icons.check_circle_outline, color: Colors.black),
               label: Text(
                 isEditing ? 'UPDATE EXERCISE' : 'CREATE EXERCISE',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.black,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.0,
                   fontSize: 14,
@@ -726,6 +732,7 @@ class _AdminCreateEditExerciseScreenState
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

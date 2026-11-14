@@ -277,6 +277,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
+                  foregroundColor: AppColors.onPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () {
@@ -286,7 +287,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                 child: const Text(
                   'VIEW VERIFICATION STATUS',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.onPrimary,
                     fontWeight: FontWeight.w900,
                     fontSize: 13,
                     letterSpacing: 0.8,
@@ -614,7 +615,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                             onPressed: _isLoading ? null : _handleCreateAccount,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primaryRed,
-                              disabledBackgroundColor: AppColors.primaryRed.withOpacity(0.5),
+                              foregroundColor: AppColors.onPrimary,
+                              disabledBackgroundColor: const Color(0xFF2A2A2A),
+                              disabledForegroundColor: const Color(0xFF888888),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               elevation: 2,
                             ),
@@ -622,12 +625,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen>
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
                                   )
                                 : const Text(
                                     'CREATE ACCOUNT',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: AppColors.onPrimary,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 14,
                                       letterSpacing: 1.0,

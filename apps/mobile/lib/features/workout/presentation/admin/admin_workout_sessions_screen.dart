@@ -462,14 +462,17 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                   ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _filterChip('ALL', 'All (${widget.workoutRepository.adminSessions.length})'),
-                    const SizedBox(width: 8),
-                    _filterChip('ACTIVE', 'Active'),
-                    const SizedBox(width: 8),
-                    _filterChip('INACTIVE', 'Inactive'),
-                  ],
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _filterChip('ALL', 'All (${widget.workoutRepository.adminSessions.length})'),
+                      const SizedBox(width: 8),
+                      _filterChip('ACTIVE', 'Active'),
+                      const SizedBox(width: 8),
+                      _filterChip('INACTIVE', 'Inactive'),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -492,11 +495,12 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
+                            foregroundColor: AppColors.onPrimary,
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                           ),
                           onPressed: _openCreateSession,
-                          icon: const Icon(Icons.add, color: Colors.white),
-                          label: const Text('Create First Session', style: TextStyle(color: Colors.white)),
+                          icon: const Icon(Icons.add, color: Colors.black),
+                          label: const Text('Create First Session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -514,9 +518,9 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.primaryRed,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Create Session', style: TextStyle(fontWeight: FontWeight.w700)),
+        foregroundColor: AppColors.onPrimary,
+        icon: const Icon(Icons.add, color: Colors.black),
+        label: const Text('Create Session', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700)),
         onPressed: _openCreateSession,
       ),
     );
@@ -538,7 +542,7 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
           ),
@@ -575,12 +579,13 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          if (hasRecommended) ...[
+                          if (hasRecommended)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              margin: const EdgeInsets.only(right: 6),
                               decoration: BoxDecoration(
                                 color: AppColors.glowRed,
                                 borderRadius: BorderRadius.circular(6),
@@ -602,7 +607,6 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                                 ],
                               ),
                             ),
-                          ],
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -621,7 +625,6 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
@@ -858,31 +861,48 @@ class _AdminWorkoutSessionsScreenState extends State<AdminWorkoutSessionsScreen>
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.border, width: 0.8)),
             ),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => _previewSession(session),
-                  icon: const Icon(Icons.visibility_outlined, size: 16, color: AppColors.textSecondary),
-                  label: const Text('Preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () => _openAssignDialog(session),
-                  icon: const Icon(Icons.person_add_outlined, size: 16, color: AppColors.primaryRed),
-                  label: const Text('Assign', style: TextStyle(color: AppColors.primaryRed, fontSize: 12)),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
-                  tooltip: 'Edit Session',
-                  onPressed: () => _openEditSession(session),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                  tooltip: 'Delete Session',
-                  onPressed: () => _confirmDeleteSession(session),
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _previewSession(session),
+                    icon: const Icon(Icons.visibility_outlined, size: 16, color: AppColors.textSecondary),
+                    label: const Text('Preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _openAssignDialog(session),
+                    icon: const Icon(Icons.person_add_outlined, size: 16, color: AppColors.primaryRed),
+                    label: const Text('Assign', style: TextStyle(color: AppColors.primaryRed, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    padding: const EdgeInsets.all(4),
+                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                    tooltip: 'Edit Session',
+                    onPressed: () => _openEditSession(session),
+                  ),
+                  IconButton(
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    padding: const EdgeInsets.all(4),
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                    tooltip: 'Delete Session',
+                    onPressed: () => _confirmDeleteSession(session),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

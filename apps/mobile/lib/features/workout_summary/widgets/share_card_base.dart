@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../../../../core/theme/app_colors.dart';
 import '../models/workout_summary_models.dart';
 
 /// Reusable shareable card wrapper providing:
@@ -27,7 +29,7 @@ class ShareCardBase extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0A0A),
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
@@ -90,11 +92,11 @@ class ShareCardBase extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Thin yellow #FFC400 divider line
+          // Thin white #FFFFFF divider line
           Container(
             height: 1.5,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFC400),
+              color: AppColors.borderActive,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -152,7 +154,7 @@ class ShareCardBase extends StatelessWidget {
       width: 22,
       height: 22,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFC400),
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(

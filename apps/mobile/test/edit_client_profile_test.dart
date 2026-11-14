@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:alpha_x_gym/core/auth/auth_service.dart';
 import 'package:alpha_x_gym/core/auth/secure_token_storage.dart';
+import 'package:alpha_x_gym/core/theme/app_colors.dart';
 import 'package:alpha_x_gym/features/profile/client_edit_profile_screen.dart';
 import 'package:alpha_x_gym/features/profile/admin_edit_client_profile_screen.dart';
 import 'package:alpha_x_gym/features/workout/data/repositories/workout_repository.dart';
@@ -142,6 +143,13 @@ void main() {
 
       // Verify Cancel button is present
       expect(find.text('Cancel'), findsOneWidget);
+
+      // Verify avatar initial 'S' has contrasting onPrimary (black) text on white CircleAvatar
+      final initialFinder = find.text('S');
+      expect(initialFinder, findsOneWidget);
+      final initialTextWidget = tester.widget<Text>(initialFinder);
+      expect(initialTextWidget.style?.color, equals(AppColors.onPrimary));
+      expect(initialTextWidget.style?.color, isNot(Colors.white));
     });
 
     testWidgets('3. ClientEditProfileScreen validates required name length', (tester) async {

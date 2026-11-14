@@ -360,10 +360,11 @@ class _ServerConfigDialogState extends State<ServerConfigDialog> {
           onPressed: _saveAndApply,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryRed,
+            foregroundColor: AppColors.onPrimary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
-          child: const Text('Save & Apply', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          child: const Text('Save & Apply', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         ),
       ],
     );

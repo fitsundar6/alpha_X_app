@@ -627,11 +627,12 @@ class _AiFoodCameraScannerScreenState extends State<AiFoodCameraScannerScreen>
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: _initializeCamera,
-              child: const Text('ENABLE CAMERA ACCESS', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('ENABLE CAMERA ACCESS', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         ),

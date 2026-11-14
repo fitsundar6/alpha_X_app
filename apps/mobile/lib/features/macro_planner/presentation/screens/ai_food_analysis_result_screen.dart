@@ -124,6 +124,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryRed,
+              foregroundColor: AppColors.onPrimary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () {
@@ -135,7 +136,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                 Navigator.of(ctx).pop();
               }
             },
-            child: const Text('UPDATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('UPDATE', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -380,7 +381,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                                  color: isSelected ? AppColors.onPrimary : AppColors.textSecondary,
                                 ),
                               ),
                             ],
@@ -662,7 +663,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
                     )
                   : const Icon(Icons.check_circle_outline, size: 20),
               label: Text(
@@ -671,7 +672,7 @@ class _AiFoodAnalysisResultScreenState extends State<AiFoodAnalysisResultScreen>
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),

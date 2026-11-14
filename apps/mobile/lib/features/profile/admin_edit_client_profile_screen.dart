@@ -306,7 +306,7 @@ class _AdminEditClientProfileScreenState extends State<AdminEditClientProfileScr
                               _nameCtrl.text.trim().isNotEmpty
                                   ? _nameCtrl.text.trim().substring(0, 1).toUpperCase()
                                   : 'C',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26),
+                              style: const TextStyle(color: AppColors.onPrimary, fontWeight: FontWeight.w900, fontSize: 26),
                             )
                           : null,
                     ),
@@ -482,14 +482,16 @@ class _AdminEditClientProfileScreenState extends State<AdminEditClientProfileScr
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.onPrimary,
+                  disabledBackgroundColor: const Color(0xFF2A2A2A),
+                  disabledForegroundColor: const Color(0xFF888888),
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: _isSaving ? null : _save,
                 icon: _isSaving
                     ? const SizedBox(width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                     : const Icon(Icons.save_rounded, size: 20),
                 label: Text(
                   _isSaving ? 'SAVING...' : 'SAVE CLIENT PROFILE',

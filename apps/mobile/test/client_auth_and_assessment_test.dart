@@ -21,6 +21,7 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    AuthService.setTestAdminCredentials(email: 'fitsundar6@gmail.com', password: 'password123');
     auth = AuthService();
     await auth.logout();
     await auth.initialize();
@@ -105,7 +106,7 @@ void main() {
       expect(
         () => auth.registerClientAccount(
           name: 'Hacker',
-          email: AdminConfig.adminEmail,
+          email: AdminConfig.adminEmail.isNotEmpty ? AdminConfig.adminEmail : 'fitsundar6@gmail.com',
           phone: '+1 (555) 000-0000',
           password: 'Password123!',
           confirmPassword: 'Password123!',

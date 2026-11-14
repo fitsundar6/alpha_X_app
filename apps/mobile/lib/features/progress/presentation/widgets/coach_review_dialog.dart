@@ -239,6 +239,7 @@ class _CoachReviewDialogState extends State<CoachReviewDialog> {
                     onPressed: _isSubmitting ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AlphaXColors.redAccent,
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -246,11 +247,11 @@ class _CoachReviewDialogState extends State<CoachReviewDialog> {
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                           )
                         : const Text(
                             'Save Review',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
                           ),
                   ),
                 ],

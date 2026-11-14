@@ -299,7 +299,7 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xFFD4A034))),
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
     );
 
     try {
@@ -350,11 +350,11 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
         backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFD4A034), width: 1.5),
+          side: const BorderSide(color: AppColors.borderActive, width: 1.5),
         ),
         title: Row(
           children: [
-            const Icon(Icons.verified_user_rounded, color: Color(0xFFD4A034), size: 24),
+            const Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 24),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -378,13 +378,13 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFD4A034), width: 2),
+                border: Border.all(color: AppColors.borderActive, width: 2),
               ),
               child: Center(
                 child: SelectableText(
                   code,
                   style: const TextStyle(
-                    color: Color(0xFFD4A034),
+                    color: AppColors.primary,
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 6,
@@ -563,6 +563,7 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryRed,
+                foregroundColor: AppColors.onPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () {
@@ -572,7 +573,7 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                 Navigator.of(ctx).pop();
                 _rejectUser(user, reason: finalReason);
               },
-              child: const Text('Reject User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+              child: const Text('Reject User', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -686,14 +687,14 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                       decoration: BoxDecoration(
                         color: AppColors.surfaceElevated,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFD4A034).withOpacity(0.3)),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.shield_outlined, color: Color(0xFFD4A034), size: 18),
+                              Icon(Icons.shield_outlined, color: AppColors.primary, size: 18),
                               SizedBox(width: 8),
                               Text(
                                 'Athlete Identity Verification & Reset',
@@ -710,14 +711,14 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                           OutlinedButton.icon(
                             key: const Key('admin_issue_reset_code_button'),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFFD4A034), width: 1.2),
+                              side: const BorderSide(color: AppColors.border, width: 1.2),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
-                            icon: const Icon(Icons.key_rounded, color: Color(0xFFD4A034), size: 16),
+                            icon: const Icon(Icons.key_rounded, color: AppColors.primary, size: 16),
                             label: const Text(
                               'GENERATE 6-DIGIT RESET CODE',
-                              style: TextStyle(color: Color(0xFFD4A034), fontWeight: FontWeight.w900, fontSize: 11),
+                              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 11),
                             ),
                             onPressed: () {
                               Navigator.of(ctx).pop();
@@ -788,6 +789,7 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryRed,
+                            foregroundColor: AppColors.onPrimary,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -795,7 +797,7 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                             Navigator.of(ctx).pop();
                             _showRejectDialog(user);
                           },
-                          child: const Text('REJECT USER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          child: const Text('REJECT USER', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12)),
                         ),
                       ),
                     if (status == 'APPROVED')
@@ -1276,7 +1278,9 @@ class _AdminClientVerificationScreenState extends State<AdminClientVerificationS
                   Text(
                     t['label'] as String,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      color: isSelected
+                          ? (isPendingTab ? Colors.white : AppColors.onPrimary)
+                          : AppColors.textSecondary,
                       fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                       fontSize: 12,
                     ),

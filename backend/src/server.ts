@@ -78,11 +78,13 @@ app.use(
   })
 );
 
-// Explicitly allowed production web origins
+// Explicitly allowed production web origins and fixed local development origins
 const allowedOrigins = [
   'https://alpha-x-app.vercel.app',
   'https://alphaxgym.com',
   'https://www.alphaxgym.com',
+  'http://localhost:50000',
+  'http://127.0.0.1:50000',
 ];
 
 if (env.CORS_ORIGIN && env.CORS_ORIGIN !== '*') {
@@ -110,11 +112,11 @@ const corsOptions: cors.CorsOptions = {
     if (!origin) {
       return callback(null, true);
     }
-    // 2. Local development & testing
+    // 2. Local development & testing environments automatically allow local origins
     if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') {
       return callback(null, true);
     }
-    // 3. In production, localhost/127.0.0.1 development origins are allowed ONLY when explicitly enabled via flag
+    // 3. In production, arbitrary localhost/127.0.0.1 development origins are allowed ONLY when explicitly enabled via flag
     const allowLocalhostInProd =
       env.ENABLE_LOCALHOST_CORS ||
       process.env.ENABLE_LOCALHOST_CORS === 'true' ||

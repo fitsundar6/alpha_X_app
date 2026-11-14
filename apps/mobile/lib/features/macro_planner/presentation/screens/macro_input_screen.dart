@@ -439,7 +439,7 @@ class _MacroInputScreenState extends State<MacroInputScreen> {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryRed,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 6,
@@ -550,7 +550,7 @@ class _UnitChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: isSelected ? Colors.white : AppColors.textTertiary,
+            color: isSelected ? AppColors.onPrimary : AppColors.textTertiary,
           ),
         ),
       ),
